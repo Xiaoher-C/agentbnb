@@ -67,6 +67,21 @@ Plans:
 - [x] Reputation system (success rate, response time)
 - [x] Capability Card marketplace (browse and filter)
 
+## Phase 2.1: Smart Onboarding (INSERTED)
+**Goal**: Sub-2-minute onboarding — `agentbnb init` auto-detects API keys, generates draft Capability Cards, and polishes CLI ergonomics to maximize Phase 2 cold start conversion.
+**Requirements**: [ONB-01, ONB-02, ONB-03, ONB-04, ONB-05, ONB-06, ONB-07]
+**Depends on:** Phase 2
+**Plans:** 2 plans
+
+Plans:
+- [ ] 02.1-01-PLAN.md — Onboarding detection + card generation (TDD: onboarding.ts pure functions)
+- [ ] 02.1-02-PLAN.md — CLI integration: wire init with --yes, --no-detect flags + human verify
+
+- [ ] Auto-detect env vars (OPENAI_API_KEY, ELEVENLABS_API_KEY, KLING_API_KEY, etc.)
+- [ ] Scan for running agent processes
+- [ ] Generate draft Capability Card from detected APIs for user confirmation
+- [ ] CLI ergonomics improvements (first-impression polish)
+
 ## Phase 3: UX Layer
 **Goal**: Non-technical users can share agent capabilities.
 
