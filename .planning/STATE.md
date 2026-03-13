@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-current_plan: 2 of 4 (Phase 2) — complete
-status: in_progress
-last_updated: "2026-03-14T00:54:31Z"
+current_plan: 3 of 3 (Phase 2) — complete
+status: phase_complete
+last_updated: "2026-03-14T01:30:00Z"
 progress:
   total_phases: 4
-  completed_phases: 2
-  total_plans: 13
-  completed_plans: 11
+  completed_phases: 3
+  total_plans: 14
+  completed_plans: 14
 ---
 
 # AgentBnB — Project State
@@ -19,18 +19,19 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-13)
 
 **Core value:** Fill the market gap for agent-to-agent capability exchange
-**Current focus:** Phase 2 — Cold Start (web registry, reputation, marketplace)
+**Current focus:** Phase 2 complete — Phase 3 (UX Layer) next
 
 ## Current Phase
 
-**Phase 2: Cold Start** — Build the web-accessible registry, reputation system, and marketplace features.
+**Phase 2: Cold Start** — Complete. All 3 plans executed and verified.
 
-**Current Plan:** 2 of 4 (Phase 2) — complete
+**Current Plan:** 3 of 3 (Phase 2) — complete
 
 ### Progress (Phase 2)
 
 - Reputation Foundation (Plan 01): complete — updateReputation() EWA algorithm in registry store, gateway instrumentation, 133 tests
 - Public Registry Server (Plan 02): complete — Fastify HTTP server with GET /health, GET /cards (FTS5 + 6 filters + sort + pagination + CORS), GET /cards/:id, 16 tests
+- CLI Registry Integration (Plan 03): complete — --registry-port flag, dual-server startup, graceful shutdown, R-013/R-014/R-015 formalized, 136 tests, human-verified
 
 ### Progress (Phase 1 — complete)
 
@@ -91,6 +92,9 @@ See: .planning/PROJECT.md (updated 2026-03-13)
 | 2026-03-14 | 02-02 | Limit capped at 100 server-side to prevent large payload abuse |
 | 2026-03-14 | 02-02 | Post-filter chaining for tag/success_rate/latency keeps SQL simple and preserves FTS5 BM25 ranking |
 | 2026-03-14 | 02-02 | Sort undefined values last: success_rate treats missing as -1, latency treats missing as Infinity |
+| 2026-03-14 | 02-03 | Registry server shares gateway's Database instance — single WAL writer, no lock contention |
+| 2026-03-14 | 02-03 | --registry-port 0 disables registry server entirely — clean opt-out for headless gateway use |
+| 2026-03-14 | 02-03 | Registry server closed before gateway in gracefulShutdown — read-only server stops first |
 
 ## Performance Metrics
 
@@ -107,6 +111,7 @@ See: .planning/PROJECT.md (updated 2026-03-13)
 | 01-cli-mvp | 04 | 10min | 2 | 6 |
 | 02-cold-start | 01 | 8min | 2 | 4 |
 | 02-cold-start | 02 | 15min | 2 | 5 |
+| 02-cold-start | 03 | 5min | 3 | 3 |
 
 ## Session Log
 
@@ -126,6 +131,7 @@ See: .planning/PROJECT.md (updated 2026-03-13)
 | 2026-03-14 | Completed 01-04-PLAN.md — human-verified | Phase 1 CLI MVP complete. `/gsd:plan-phase 2` to continue |
 | 2026-03-14 | Completed 02-01-PLAN.md | Continue with plan 02-02 |
 | 2026-03-14 | Completed 02-02-PLAN.md | Continue with plan 02-03 |
+| 2026-03-14 | Phase 2 complete — human-verified | `/gsd:plan-phase 3` to start UX Layer |
 
 ---
-*Last updated: 2026-03-14 — Phase 2 in progress (02-01 reputation + 02-02 public registry complete). 11/12 plans complete across Phase 0, Phase 1, and Phase 2.*
+*Last updated: 2026-03-14 — Phase 2 complete. 14/14 plans complete across Phase 0, Phase 1, and Phase 2. 136 tests passing.*

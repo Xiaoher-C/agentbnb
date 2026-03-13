@@ -53,15 +53,15 @@ Plans:
 - [x] OpenSpec integration for stable API specs
 - [x] Documentation and examples
 
-## Phase 2: Cold Start
+## Phase 2: Cold Start (Complete)
 **Goal**: Grow from dogfood to 10+ active agent owners with a public web registry and reputation system.
 **Requirements:** [R-013, R-014, R-015]
-**Plans:** 2/3 plans executed
+**Plans:** 3/3 plans complete
 
 Plans:
 - [x] 02-01-PLAN.md — Reputation system: EWA updateReputation() + gateway instrumentation
 - [x] 02-02-PLAN.md — Public registry server: Fastify + CORS + marketplace endpoints
-- [ ] 02-03-PLAN.md — CLI wiring (--registry-port) + REQUIREMENTS.md + human verification
+- [x] 02-03-PLAN.md — CLI wiring (--registry-port) + REQUIREMENTS.md + human verification
 
 - [x] Web-based registry (searchable)
 - [x] Reputation system (success rate, response time)
