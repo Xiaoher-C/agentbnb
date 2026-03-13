@@ -3,14 +3,14 @@
 ## Phase 0: Dogfood (Current)
 **Goal**: Prove the concept by sharing capabilities between 2 OpenClaw agents internally.
 **Requirements:** [R-001, R-002, R-003, R-004, R-005, R-006]
-**Plans:** 4/5 plans executed
+**Plans:** 5/5 plans complete
 
 Plans:
 - [x] 00-01-PLAN.md — Registry: Capability Card schema + SQLite store + FTS5 search
 - [x] 00-02-PLAN.md — Credit system: ledger + escrow hold/settle/release
 - [x] 00-03-PLAN.md — Gateway: Fastify server + JSON-RPC + auth + client
 - [x] 00-04-PLAN.md — CLI: wire all 6 subcommands to real implementations
-- [ ] 00-05-PLAN.md — OpenClaw integration: SOUL.md parser + E2E dogfood test
+- [x] 00-05-PLAN.md — OpenClaw integration: SOUL.md parser + E2E dogfood test
 
 ### 0.1 Foundation
 - [x] Project scaffold (TypeScript, pnpm, Vitest)
@@ -31,9 +31,9 @@ Plans:
 - [x] Settlement: release credits on success, refund on failure
 
 ### 0.4 OpenClaw Integration
-- [ ] OpenClaw skill: publish capabilities from SOUL.md
-- [ ] OpenClaw skill: handle incoming capability requests
-- [ ] Test: 企劃總監 agent shares creative pipeline with engineering agent
+- [x] OpenClaw skill: publish capabilities from SOUL.md
+- [x] OpenClaw skill: handle incoming capability requests
+- [x] Test: 企劃總監 agent shares creative pipeline with engineering agent
 
 ## Phase 1: CLI MVP (Next)
 **Goal**: External users can install and try AgentBnB between two machines.
