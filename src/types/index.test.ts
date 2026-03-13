@@ -20,6 +20,37 @@ describe('CapabilityCardSchema', () => {
     },
   };
 
+  // spec_version tests
+  describe('spec_version field', () => {
+    it('Test 1: card with spec_version 1.0 validates successfully', () => {
+      const card = { ...validCard, spec_version: '1.0' };
+      const result = CapabilityCardSchema.safeParse(card);
+      expect(result.success).toBe(true);
+    });
+
+    it('Test 2: card WITHOUT spec_version validates successfully (default fills 1.0)', () => {
+      // validCard has no spec_version — legacy Phase 0 card
+      const result = CapabilityCardSchema.safeParse(validCard);
+      expect(result.success).toBe(true);
+    });
+
+    it('Test 3: card with spec_version 2.0 is rejected', () => {
+      const card = { ...validCard, spec_version: '2.0' };
+      const result = CapabilityCardSchema.safeParse(card);
+      expect(result.success).toBe(false);
+    });
+
+    it('Test 4: parsed card always has spec_version 1.0 in output regardless of input', () => {
+      // With spec_version provided
+      const withVersion = CapabilityCardSchema.parse({ ...validCard, spec_version: '1.0' });
+      expect(withVersion.spec_version).toBe('1.0');
+
+      // Without spec_version (default fills it)
+      const withoutVersion = CapabilityCardSchema.parse({ ...validCard });
+      expect(withoutVersion.spec_version).toBe('1.0');
+    });
+  });
+
   it('validates a correct L1 Atomic card', () => {
     const result = CapabilityCardSchema.safeParse(validCard);
     expect(result.success).toBe(true);
