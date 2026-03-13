@@ -15,6 +15,7 @@ import { searchCards, filterCards } from '../registry/matcher.js';
 import { openCreditDb, getBalance, bootstrapAgent, getTransactions } from '../credit/ledger.js';
 import { requestCapability } from '../gateway/client.js';
 import { createGatewayServer } from '../gateway/server.js';
+import { createRegistryServer } from '../registry/server.js';
 import { announceGateway, discoverLocalAgents, stopAnnouncement } from '../discovery/mdns.js';
 import type { CapabilityCard } from '../types/index.js';
 
@@ -379,8 +380,9 @@ program
   .description('Start the AgentBnB gateway server')
   .option('--port <port>', 'Port to listen on (overrides config)')
   .option('--handler-url <url>', 'Local capability handler URL', 'http://localhost:8080')
+  .option('--registry-port <port>', 'Public registry API port (0 to disable)', '7701')
   .option('--announce', 'Announce this gateway on the local network via mDNS')
-  .action(async (opts: { port?: string; handlerUrl: string; announce?: boolean }) => {
+  .action(async (opts: { port?: string; handlerUrl: string; registryPort: string; announce?: boolean }) => {
     const config = loadConfig();
     if (!config) {
       console.error('Error: not initialized. Run `agentbnb init` first.');
@@ -388,6 +390,7 @@ program
     }
 
     const port = opts.port ? parseInt(opts.port, 10) : config.gateway_port;
+    const registryPort = parseInt(opts.registryPort, 10);
     const registryDb = openDatabase(config.db_path);
     const creditDb = openCreditDb(config.credit_db_path);
 
@@ -399,10 +402,16 @@ program
       handlerUrl: opts.handlerUrl,
     });
 
+    // Start public registry server if registry-port > 0
+    let registryServer: ReturnType<typeof createRegistryServer> | null = null;
+
     const gracefulShutdown = async () => {
-      console.log('\nShutting down gateway...');
+      console.log('\nShutting down...');
       if (opts.announce) {
         await stopAnnouncement();
+      }
+      if (registryServer) {
+        await registryServer.close();
       }
       await server.close();
       registryDb.close();
@@ -417,12 +426,21 @@ program
       await server.listen({ port, host: '0.0.0.0' });
       console.log(`Gateway running on port ${port}`);
 
+      if (registryPort > 0) {
+        registryServer = createRegistryServer({ registryDb, silent: false });
+        await registryServer.listen({ port: registryPort, host: '0.0.0.0' });
+        console.log(`Registry API: http://0.0.0.0:${registryPort}/cards`);
+      }
+
       if (opts.announce) {
         announceGateway(config.owner, port);
         console.log('Announcing on local network via mDNS');
       }
     } catch (err) {
-      console.error('Failed to start gateway:', err);
+      console.error('Failed to start:', err);
+      if (registryServer) {
+        await registryServer.close().catch(() => {});
+      }
       registryDb.close();
       creditDb.close();
       process.exit(1);
