@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-current_plan: 5 of 5 (Phase 0)
-status: phase-complete
-last_updated: "2026-03-13T22:15:00Z"
+current_plan: 2 of 4 (Phase 1)
+status: in-progress
+last_updated: "2026-03-13T15:48:30Z"
 progress:
   total_phases: 4
   completed_phases: 1
-  total_plans: 5
-  completed_plans: 5
+  total_plans: 4
+  completed_plans: 2
 ---
 
 # AgentBnB — Project State
@@ -19,15 +19,22 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-13)
 
 **Core value:** Fill the market gap for agent-to-agent capability exchange
-**Current focus:** Phase 0 — Dogfood
+**Current focus:** Phase 1 — CLI MVP
 
 ## Current Phase
 
-**Phase 0: Dogfood** — Prove the concept by sharing capabilities between 2 OpenClaw agents internally.
+**Phase 1: CLI MVP** — Make AgentBnB installable via npm and discoverable via mDNS.
 
-**Current Plan:** 5 of 5 (Phase 0) — complete (human-verified)
+**Current Plan:** 2 of 4 (Phase 1) — complete
 
-### Progress
+### Progress (Phase 1)
+
+- npm Package Foundation (Plan 01): complete — schema v1.0, package.json for publish, tsup build pipeline, 99 tests
+- mDNS Discovery (Plan 02): complete — bonjour-service announce/browse/cleanup, 4 tests, loopback verified, 99 tests
+- API Key Exchange (Plan 03): pending
+- Examples + README (Plan 04): pending
+
+### Phase 0 Progress (complete)
 
 - Foundation (Plan 00): complete — TypeScript types, schema validation, AgentBnBError
 - Registry (Plan 01): complete — SQLite registry, FTS5 search, owner isolation
@@ -56,6 +63,12 @@ See: .planning/PROJECT.md (updated 2026-03-13)
 | 2026-03-13 | 00-05 | SOUL.md parser uses regex (no markdown library) — avoids new dependencies per plan spec |
 | 2026-03-13 | 00-05 | parseSoulMd defaults to level 2 Pipeline — per RESEARCH.md open question resolution |
 | 2026-03-13 | 00-05 | createRequestHandler returns raw handler result — gateway JSON-RPC layer wraps in { result }, no double-wrapping |
+| 2026-03-13 | 01-01 | tsup array config isolates shebang banner to CLI entry — universal banner causes double-shebang and SyntaxError |
+| 2026-03-13 | 01-01 | createRequire used for package.json version in ESM CLI — idiomatic pattern, resolveJsonModule already enabled |
+| 2026-03-13 | 01-01 | exports types condition placed first per publint requirement — conditions are order-sensitive for TypeScript resolution |
+| 2026-03-13 | 01-02 | Browse before announce in tests — browser must be listening before publication or initial query cycle misses the service |
+| 2026-03-13 | 01-02 | Module-level Bonjour singleton lazy-initialized to avoid multiple instances on the same multicast socket |
+| 2026-03-13 | 01-02 | IPv4 preference via addresses.filter(addr => !addr.includes(':')) — avoids link-local IPv6 noise |
 
 ## Performance Metrics
 
@@ -66,6 +79,8 @@ See: .planning/PROJECT.md (updated 2026-03-13)
 | 00-dogfood | 03 | 7min | 2 | 5 |
 | 00-dogfood | 04 | 15min | 2 | 5 |
 | 00-dogfood | 05 | 5min | 1 | 3 |
+| 01-cli-mvp | 01 | 8min | 2 | 5 |
+| 01-cli-mvp | 02 | 3min | 1 | 5 |
 
 ## Session Log
 
@@ -78,6 +93,8 @@ See: .planning/PROJECT.md (updated 2026-03-13)
 | 2026-03-13 | Completed 00-04-PLAN.md | Continue with plan 05 |
 | 2026-03-13 | Checkpoint: 00-05 Task 1 complete, awaiting human-verify | Run `pnpm test:run`, `pnpm typecheck`, and CLI manual verification |
 | 2026-03-13 | Phase 0 complete — human-verified | `/gsd:plan-phase 1` to start CLI MVP |
+| 2026-03-13 | Completed 01-01-PLAN.md | Continue with plan 01-02 |
+| 2026-03-13 | Completed 01-02-PLAN.md | Continue with plan 01-03 |
 
 ---
-*Last updated: 2026-03-13 — Phase 0 Dogfood complete, all 91 tests passing*
+*Last updated: 2026-03-13 — Phase 1 Plan 02 complete, 99 tests passing (4 new mDNS tests), typecheck clean*

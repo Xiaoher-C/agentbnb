@@ -38,10 +38,10 @@ Plans:
 ## Phase 1: CLI MVP (Current)
 **Goal**: External users can install and try AgentBnB between two machines.
 **Requirements:** [R-007, R-008, R-009, R-010, R-011, R-012]
-**Plans:** 4 plans
+**Plans:** 2/4 plans executed
 
 Plans:
-- [ ] 01-01-PLAN.md — npm publish pipeline + Capability Card spec v1.0 freeze
+- [x] 01-01-PLAN.md — npm publish pipeline + Capability Card spec v1.0 freeze
 - [ ] 01-02-PLAN.md — mDNS discovery module (bonjour-service)
 - [ ] 01-03-PLAN.md — Peer management (connect/peers) + CLI wiring for discovery
 - [ ] 01-04-PLAN.md — Documentation, examples, init LAN IP fix + human verification

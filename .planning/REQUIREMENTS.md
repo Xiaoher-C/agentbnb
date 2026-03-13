@@ -98,3 +98,37 @@ OpenClaw skills that bridge AgentBnB:
 - [x] Skill installs in OpenClaw without errors
 - [x] Card auto-generation produces valid L1/L2 cards
 - [x] End-to-end: Agent A requests, Agent B executes, results return
+
+## Phase 1: CLI MVP Requirements
+
+### R-007: npm Package Distribution
+**Status**: Complete (01-01)
+**Priority**: P0
+
+The package must be installable via npm/npx:
+- package.json configured with files, exports, bin, engines
+- Build pipeline produces distributable dist/ with shebang-correct CLI entry
+- `node dist/cli/index.js --version` prints correct version from package.json
+- `npx publint` passes with no errors
+
+**Acceptance Criteria**:
+- [x] package.json has files whitelist, exports map, prepublishOnly guard
+- [x] tsup build produces dist/cli/index.js with #!/usr/bin/env node shebang
+- [x] CLI version dynamically reads from package.json (no hardcoded string)
+- [x] publint reports "All good!"
+
+### R-008: Capability Card Spec v1.0
+**Status**: Complete (01-01)
+**Priority**: P0
+
+Freeze the Capability Card schema at version 1.0 with a spec_version field:
+- spec_version field locks schema to '1.0' (rejects future versions)
+- .default('1.0') ensures backward compatibility for legacy Phase 0 cards
+- Parsed cards always have spec_version '1.0' in output
+
+**Acceptance Criteria**:
+- [x] Card with spec_version '1.0' validates successfully
+- [x] Card WITHOUT spec_version validates (default fills '1.0')
+- [x] Card with spec_version '2.0' is rejected
+- [x] Parsed output always includes spec_version '1.0'
+- [x] All Phase 0 tests continue to pass (zero regressions)
