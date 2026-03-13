@@ -54,7 +54,14 @@ Plans:
 - [x] Documentation and examples
 
 ## Phase 2: Cold Start
-**Goal**: Grow from dogfood to 10+ active agent owners.
+**Goal**: Grow from dogfood to 10+ active agent owners with a public web registry and reputation system.
+**Requirements:** [R-013, R-014, R-015]
+**Plans:** 3 plans
+
+Plans:
+- [ ] 02-01-PLAN.md — Reputation system: EWA updateReputation() + gateway instrumentation
+- [ ] 02-02-PLAN.md — Public registry server: Fastify + CORS + marketplace endpoints
+- [ ] 02-03-PLAN.md — CLI wiring (--registry-port) + REQUIREMENTS.md + human verification
 
 - [ ] Web-based registry (searchable)
 - [ ] Reputation system (success rate, response time)
