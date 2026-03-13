@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-current_plan: 4 of 4 (Phase 1) — complete
-status: complete
-last_updated: "2026-03-14T00:20:00Z"
+current_plan: 2 of 4 (Phase 2) — complete
+status: in_progress
+last_updated: "2026-03-14T00:54:31Z"
 progress:
   total_phases: 4
   completed_phases: 2
-  total_plans: 9
-  completed_plans: 9
+  total_plans: 13
+  completed_plans: 11
 ---
 
 # AgentBnB — Project State
@@ -19,15 +19,20 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-13)
 
 **Core value:** Fill the market gap for agent-to-agent capability exchange
-**Current focus:** Phase 1 — CLI MVP
+**Current focus:** Phase 2 — Cold Start (web registry, reputation, marketplace)
 
 ## Current Phase
 
-**Phase 1: CLI MVP** — Make AgentBnB installable via npm and discoverable via mDNS.
+**Phase 2: Cold Start** — Build the web-accessible registry, reputation system, and marketplace features.
 
-**Current Plan:** 4 of 4 (Phase 1) — complete (human-verified, gap fixed)
+**Current Plan:** 2 of 4 (Phase 2) — complete
 
-### Progress (Phase 1)
+### Progress (Phase 2)
+
+- Reputation Foundation (Plan 01): complete — updateReputation() EWA algorithm in registry store, gateway instrumentation, 133 tests
+- Public Registry Server (Plan 02): complete — Fastify HTTP server with GET /health, GET /cards (FTS5 + 6 filters + sort + pagination + CORS), GET /cards/:id, 16 tests
+
+### Progress (Phase 1 — complete)
 
 - npm Package Foundation (Plan 01): complete — schema v1.0, package.json for publish, tsup build pipeline, 99 tests
 - mDNS Discovery (Plan 02): complete — bonjour-service announce/browse/cleanup, 4 tests, loopback verified, 99 tests
@@ -77,6 +82,10 @@ See: .planning/PROJECT.md (updated 2026-03-13)
 | 2026-03-14 | 01-04 | init --host flag allows manual IP override for edge cases (VPN, multiple interfaces) |
 | 2026-03-14 | 01-04 | demo.sh uses AGENTBNB_DIR isolation with trap/cleanup for temp dirs |
 | 2026-03-14 | 01-04 | README includes OpenSpec SDD section as process adoption, not runtime dependency |
+| 2026-03-14 | 02-02 | origin: true in @fastify/cors allows all origins — public marketplace registry needs no restrictions |
+| 2026-03-14 | 02-02 | Limit capped at 100 server-side to prevent large payload abuse |
+| 2026-03-14 | 02-02 | Post-filter chaining for tag/success_rate/latency keeps SQL simple and preserves FTS5 BM25 ranking |
+| 2026-03-14 | 02-02 | Sort undefined values last: success_rate treats missing as -1, latency treats missing as Infinity |
 
 ## Performance Metrics
 
@@ -91,6 +100,7 @@ See: .planning/PROJECT.md (updated 2026-03-13)
 | 01-cli-mvp | 02 | 3min | 1 | 5 |
 | 01-cli-mvp | 03 | 3min | 2 | 4 |
 | 01-cli-mvp | 04 | 10min | 2 | 6 |
+| 02-cold-start | 02 | 15min | 2 | 5 |
 
 ## Session Log
 
@@ -108,6 +118,7 @@ See: .planning/PROJECT.md (updated 2026-03-13)
 | 2026-03-13 | Completed 01-03-PLAN.md | Continue with plan 01-04 |
 | 2026-03-14 | Checkpoint: 01-04 Tasks 1-2 complete, awaiting human-verify | Verify: pnpm test:run, pnpm build, node dist/cli/index.js --version, agentbnb init gateway uses LAN IP, README + demo scripts |
 | 2026-03-14 | Completed 01-04-PLAN.md — human-verified | Phase 1 CLI MVP complete. `/gsd:plan-phase 2` to continue |
+| 2026-03-14 | Completed 02-02-PLAN.md | Continue with plan 02-03 |
 
 ---
-*Last updated: 2026-03-14 — Phase 1 complete (all 4 plans done), human-verified. 9/9 plans complete across Phase 0 and Phase 1.*
+*Last updated: 2026-03-14 — Phase 2 in progress (2/4 plans done). 11/13 plans complete across Phase 0, Phase 1, and Phase 2.*
