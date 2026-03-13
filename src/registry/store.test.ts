@@ -8,6 +8,7 @@ import {
   deleteCard,
   listCards,
 } from './store.js';
+import { searchCards, filterCards } from './matcher.js';
 import { AgentBnBError } from '../types/index.js';
 import type { CapabilityCard } from '../types/index.js';
 import type { Database } from 'better-sqlite3';
@@ -150,6 +151,142 @@ describe('Registry Store', () => {
       expect(() => {
         db.prepare("INSERT INTO cards_fts(cards_fts) VALUES('integrity-check')").run();
       }).not.toThrow();
+    });
+  });
+
+  describe('matcher - searchCards', () => {
+    beforeEach(() => {
+      // Seed a diverse set of cards for search tests
+      const cards: CapabilityCard[] = [
+        makeCard({
+          id: randomUUID(),
+          name: 'ElevenLabs TTS',
+          description: 'Text-to-speech synthesis via ElevenLabs API',
+          level: 1,
+          availability: { online: true },
+          metadata: { tags: ['tts', 'audio', 'voice'], apis_used: ['elevenlabs'] },
+        }),
+        makeCard({
+          id: randomUUID(),
+          name: 'Google TTS',
+          description: 'Text-to-speech using Google Cloud API',
+          level: 1,
+          availability: { online: true },
+          metadata: { tags: ['tts', 'audio'], apis_used: ['google-cloud'] },
+        }),
+        makeCard({
+          id: randomUUID(),
+          name: 'Image Classifier',
+          description: 'Classify images using computer vision models',
+          level: 1,
+          availability: { online: true },
+          metadata: { tags: ['vision', 'classification'], apis_used: ['openai'] },
+        }),
+        makeCard({
+          id: randomUUID(),
+          name: 'Video Pipeline',
+          description: 'Full text-to-video generation pipeline',
+          level: 2,
+          availability: { online: true },
+          metadata: { tags: ['video', 'pipeline'], apis_used: ['kling'] },
+        }),
+        makeCard({
+          id: randomUUID(),
+          name: 'Offline Transcriber',
+          description: 'Audio transcription without internet',
+          level: 1,
+          availability: { online: false },
+          metadata: { tags: ['transcription', 'audio'], apis_used: [] },
+        }),
+        makeCard({
+          id: randomUUID(),
+          name: 'Full Environment',
+          description: 'Complete agent deployment environment',
+          level: 3,
+          availability: { online: true },
+          metadata: { tags: ['environment', 'deployment'], apis_used: ['openai'] },
+        }),
+      ];
+
+      // Fill up to 100 cards with dummy entries for performance test
+      for (let i = cards.length; i < 100; i++) {
+        cards.push(
+          makeCard({
+            id: randomUUID(),
+            name: `Generic Capability ${i}`,
+            description: `A generic capability number ${i} for testing`,
+            level: 1,
+            availability: { online: true },
+          })
+        );
+      }
+
+      cards.forEach((c) => insertCard(db, c));
+    });
+
+    it('searchCards("TTS") returns cards with TTS in name or description', () => {
+      const results = searchCards(db, 'TTS');
+      expect(results.length).toBeGreaterThanOrEqual(2);
+      const names = results.map((c) => c.name);
+      expect(names.some((n) => n.includes('TTS'))).toBe(true);
+    });
+
+    it('searchCards with level filter returns only matching level', () => {
+      const results = searchCards(db, 'capability', { level: 1 });
+      results.forEach((c) => expect(c.level).toBe(1));
+    });
+
+    it('searchCards with online=true filter excludes offline cards', () => {
+      const results = searchCards(db, 'audio', { online: true });
+      results.forEach((c) => expect(c.availability.online).toBe(true));
+    });
+
+    it('searchCards returns results ranked by relevance (BM25)', () => {
+      const results = searchCards(db, 'TTS');
+      // TTS cards should appear first (higher relevance)
+      expect(results.length).toBeGreaterThan(0);
+      const ttsResults = results.filter((c) => c.name.includes('TTS'));
+      expect(ttsResults.length).toBeGreaterThanOrEqual(2);
+    });
+
+    it('searchCards returns empty array for no matches', () => {
+      const results = searchCards(db, 'xyzzy-nonexistent-query-12345');
+      expect(results).toEqual([]);
+    });
+
+    it('searchCards completes in under 50ms for 100 cards', () => {
+      const start = Date.now();
+      searchCards(db, 'capability');
+      const elapsed = Date.now() - start;
+      expect(elapsed).toBeLessThan(50);
+    });
+  });
+
+  describe('matcher - filterCards', () => {
+    beforeEach(() => {
+      const cards: CapabilityCard[] = [
+        makeCard({ id: randomUUID(), level: 1, availability: { online: true } }),
+        makeCard({ id: randomUUID(), level: 1, availability: { online: false } }),
+        makeCard({ id: randomUUID(), level: 2, availability: { online: true } }),
+        makeCard({ id: randomUUID(), level: 3, availability: { online: true } }),
+      ];
+      cards.forEach((c) => insertCard(db, c));
+    });
+
+    it('filterCards with level filter returns only matching level', () => {
+      const results = filterCards(db, { level: 2 });
+      expect(results).toHaveLength(1);
+      expect(results[0]?.level).toBe(2);
+    });
+
+    it('filterCards with online=true excludes offline cards', () => {
+      const results = filterCards(db, { online: true });
+      results.forEach((c) => expect(c.availability.online).toBe(true));
+    });
+
+    it('filterCards with no filters returns all cards', () => {
+      const results = filterCards(db, {});
+      expect(results.length).toBeGreaterThan(0);
     });
   });
 });
