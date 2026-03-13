@@ -82,6 +82,11 @@ See: .planning/PROJECT.md (updated 2026-03-13)
 | 2026-03-14 | 01-04 | init --host flag allows manual IP override for edge cases (VPN, multiple interfaces) |
 | 2026-03-14 | 01-04 | demo.sh uses AGENTBNB_DIR isolation with trap/cleanup for temp dirs |
 | 2026-03-14 | 01-04 | README includes OpenSpec SDD section as process adoption, not runtime dependency |
+| 2026-03-14 | 02-01 | EWA alpha=0.1 gives 90% weight to history, smoothing single outlier results |
+| 2026-03-14 | 02-01 | Bootstrap uses observed value as prior — first execution sets concrete reputation rather than guessing |
+| 2026-03-14 | 02-01 | success_rate rounded to 3 decimal places; avg_latency_ms to integer — precision appropriate for display |
+| 2026-03-14 | 02-01 | Silent no-op for non-existent cardId in updateReputation() — gateway must not crash if card deleted mid-execution |
+| 2026-03-14 | 02-01 | startMs timer placed before fetch() to capture full round-trip latency in avg_latency_ms |
 | 2026-03-14 | 02-02 | origin: true in @fastify/cors allows all origins — public marketplace registry needs no restrictions |
 | 2026-03-14 | 02-02 | Limit capped at 100 server-side to prevent large payload abuse |
 | 2026-03-14 | 02-02 | Post-filter chaining for tag/success_rate/latency keeps SQL simple and preserves FTS5 BM25 ranking |
@@ -100,6 +105,7 @@ See: .planning/PROJECT.md (updated 2026-03-13)
 | 01-cli-mvp | 02 | 3min | 1 | 5 |
 | 01-cli-mvp | 03 | 3min | 2 | 4 |
 | 01-cli-mvp | 04 | 10min | 2 | 6 |
+| 02-cold-start | 01 | 8min | 2 | 4 |
 | 02-cold-start | 02 | 15min | 2 | 5 |
 
 ## Session Log
@@ -118,7 +124,8 @@ See: .planning/PROJECT.md (updated 2026-03-13)
 | 2026-03-13 | Completed 01-03-PLAN.md | Continue with plan 01-04 |
 | 2026-03-14 | Checkpoint: 01-04 Tasks 1-2 complete, awaiting human-verify | Verify: pnpm test:run, pnpm build, node dist/cli/index.js --version, agentbnb init gateway uses LAN IP, README + demo scripts |
 | 2026-03-14 | Completed 01-04-PLAN.md — human-verified | Phase 1 CLI MVP complete. `/gsd:plan-phase 2` to continue |
+| 2026-03-14 | Completed 02-01-PLAN.md | Continue with plan 02-02 |
 | 2026-03-14 | Completed 02-02-PLAN.md | Continue with plan 02-03 |
 
 ---
-*Last updated: 2026-03-14 — Phase 2 in progress (2/4 plans done). 11/13 plans complete across Phase 0, Phase 1, and Phase 2.*
+*Last updated: 2026-03-14 — Phase 2 in progress (02-01 reputation + 02-02 public registry complete). 11/12 plans complete across Phase 0, Phase 1, and Phase 2.*

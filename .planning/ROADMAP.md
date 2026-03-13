@@ -59,13 +59,13 @@ Plans:
 **Plans:** 2/3 plans executed
 
 Plans:
-- [ ] 02-01-PLAN.md — Reputation system: EWA updateReputation() + gateway instrumentation
-- [ ] 02-02-PLAN.md — Public registry server: Fastify + CORS + marketplace endpoints
+- [x] 02-01-PLAN.md — Reputation system: EWA updateReputation() + gateway instrumentation
+- [x] 02-02-PLAN.md — Public registry server: Fastify + CORS + marketplace endpoints
 - [ ] 02-03-PLAN.md — CLI wiring (--registry-port) + REQUIREMENTS.md + human verification
 
-- [ ] Web-based registry (searchable)
-- [ ] Reputation system (success rate, response time)
-- [ ] Capability Card marketplace (browse and filter)
+- [x] Web-based registry (searchable)
+- [x] Reputation system (success rate, response time)
+- [x] Capability Card marketplace (browse and filter)
 
 ## Phase 3: UX Layer
 **Goal**: Non-technical users can share agent capabilities.
