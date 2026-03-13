@@ -2,6 +2,15 @@
 
 ## Phase 0: Dogfood (Current)
 **Goal**: Prove the concept by sharing capabilities between 2 OpenClaw agents internally.
+**Requirements:** [R-001, R-002, R-003, R-004, R-005, R-006]
+**Plans:** 5 plans
+
+Plans:
+- [ ] 00-01-PLAN.md — Registry: Capability Card schema + SQLite store + FTS5 search
+- [ ] 00-02-PLAN.md — Credit system: ledger + escrow hold/settle/release
+- [ ] 00-03-PLAN.md — Gateway: Fastify server + JSON-RPC + auth + client
+- [ ] 00-04-PLAN.md — CLI: wire all 6 subcommands to real implementations
+- [ ] 00-05-PLAN.md — OpenClaw integration: SOUL.md parser + E2E dogfood test
 
 ### 0.1 Foundation
 - [x] Project scaffold (TypeScript, pnpm, Vitest)
