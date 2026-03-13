@@ -2,6 +2,7 @@
 
 import { Command } from 'commander';
 import { readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { randomBytes } from 'node:crypto';
 import { join } from 'node:path';
 
@@ -14,12 +15,15 @@ import { requestCapability } from '../gateway/client.js';
 import { createGatewayServer } from '../gateway/server.js';
 import type { CapabilityCard } from '../types/index.js';
 
+const require = createRequire(import.meta.url);
+const pkg = require('../../package.json') as { version: string };
+
 const program = new Command();
 
 program
   .name('agentbnb')
   .description('P2P Agent Capability Sharing Protocol — Airbnb for AI agent pipelines')
-  .version('0.0.1');
+  .version(pkg.version);
 
 // ---------------------------------------------------------------------------
 // init

@@ -1,6 +1,6 @@
 {
   "name": "agentbnb",
-  "version": "0.0.1",
+  "version": "1.0.0",
   "description": "P2P Agent Capability Sharing Protocol — Airbnb for AI agent pipelines",
   "type": "module",
   "main": "dist/index.js",
@@ -8,13 +8,21 @@
   "bin": {
     "agentbnb": "dist/cli/index.js"
   },
+  "files": ["dist", "README.md", "LICENSE"],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
   "scripts": {
-    "build": "tsup src/index.ts src/cli/index.ts --format esm --dts",
+    "build": "tsup",
     "dev": "tsx watch src/cli/index.ts",
     "test": "vitest",
     "test:run": "vitest run",
     "lint": "eslint src/",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "pnpm run build && pnpm run typecheck && pnpm run test:run"
   },
   "keywords": [
     "ai",
