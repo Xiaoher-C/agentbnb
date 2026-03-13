@@ -304,6 +304,116 @@ describe('CLI: serve --registry-port', () => {
   });
 });
 
+describe('CLI: init onboarding', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = mkdtempSync(join(tmpdir(), 'agentbnb-test-'));
+  });
+
+  afterEach(() => {
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('--no-detect creates config but publishes zero cards, stdout has no "Detected"', () => {
+    const { status, stdout } = runCli('init --owner test --no-detect', tmpDir);
+    expect(status).toBe(0);
+    expect(stdout).toContain('AgentBnB initialized');
+    expect(stdout).not.toContain('Detected');
+
+    // Verify no cards published
+    const discoverResult = runCli('discover --json', tmpDir);
+    const cards = JSON.parse(discoverResult.stdout) as unknown[];
+    expect(cards.length).toBe(0);
+  });
+
+  it('--yes with OPENAI_API_KEY publishes a draft card and stdout contains "OpenAI"', () => {
+    const cliPath = join(import.meta.dirname ?? __dirname, 'index.ts');
+    const result = execSync(
+      `npx tsx ${cliPath} init --owner test --yes`,
+      {
+        env: { ...process.env, AGENTBNB_DIR: tmpDir, OPENAI_API_KEY: 'test-key-value' },
+        encoding: 'utf-8',
+        timeout: 15000,
+      },
+    ) as unknown as string;
+    expect(result).toContain('OpenAI');
+
+    // Check card was published
+    const discoverResult = runCli('discover --json', tmpDir);
+    const cards = JSON.parse(discoverResult.stdout) as Array<{ name: string }>;
+    expect(cards.length).toBeGreaterThanOrEqual(1);
+    expect(cards.some((c) => c.name.includes('OpenAI'))).toBe(true);
+  });
+
+  it('--yes without any known env vars publishes zero cards, stdout says "No API keys detected"', () => {
+    // Strip all known API keys from env
+    const cleanEnv = { ...process.env, AGENTBNB_DIR: tmpDir };
+    const knownKeys = [
+      'OPENAI_API_KEY', 'ANTHROPIC_API_KEY', 'ELEVENLABS_API_KEY',
+      'KLING_API_KEY', 'STABILITY_API_KEY', 'REPLICATE_API_TOKEN',
+      'GOOGLE_API_KEY', 'AZURE_OPENAI_API_KEY', 'COHERE_API_KEY', 'MISTRAL_API_KEY',
+    ];
+    for (const key of knownKeys) {
+      delete cleanEnv[key];
+    }
+
+    const cliPath = join(import.meta.dirname ?? __dirname, 'index.ts');
+    const result = execSync(
+      `npx tsx ${cliPath} init --owner test --yes`,
+      { env: cleanEnv, encoding: 'utf-8', timeout: 15000 },
+    ) as unknown as string;
+    expect(result).toContain('No API keys detected');
+  });
+
+  it('--no-detect --json does NOT contain "detected" or "draft" keys', () => {
+    const { status, stdout } = runCli('init --owner test --no-detect --json', tmpDir);
+    expect(status).toBe(0);
+
+    const parsed = JSON.parse(stdout) as Record<string, unknown>;
+    expect(parsed).not.toHaveProperty('detected_keys');
+    expect(parsed).not.toHaveProperty('published_cards');
+  });
+
+  it('existing init behavior preserved: config.json created, credits bootstrapped', () => {
+    const { status, stdout } = runCli('init --owner preserved-test', tmpDir);
+    expect(status).toBe(0);
+    expect(stdout).toContain('AgentBnB initialized');
+
+    const configPath = join(tmpDir, 'config.json');
+    expect(existsSync(configPath)).toBe(true);
+
+    const config = JSON.parse(readFileSync(configPath, 'utf-8')) as Record<string, unknown>;
+    expect(config.owner).toBe('preserved-test');
+    expect(typeof config.token).toBe('string');
+
+    // Credits bootstrapped
+    const statusResult = runCli('status', tmpDir);
+    expect(statusResult.stdout).toContain('100');
+  });
+
+  it('non-TTY without --yes: detects key, prints detection, does NOT publish, shows skip notice', () => {
+    const cliPath = join(import.meta.dirname ?? __dirname, 'index.ts');
+    // execSync spawns a child process (non-TTY), so this is naturally non-TTY
+    const result = execSync(
+      `npx tsx ${cliPath} init --owner test`,
+      {
+        env: { ...process.env, AGENTBNB_DIR: tmpDir, OPENAI_API_KEY: 'test-key-value' },
+        encoding: 'utf-8',
+        timeout: 15000,
+      },
+    ) as unknown as string;
+
+    expect(result).toContain('Detected');
+    expect(result).toContain('--yes');
+
+    // No card published (non-TTY skip)
+    const discoverResult = runCli('discover --json', tmpDir);
+    const cards = JSON.parse(discoverResult.stdout) as unknown[];
+    expect(cards.length).toBe(0);
+  });
+});
+
 describe('CLI: --help', () => {
   it('all commands have --help registered in program', async () => {
     // Import program to verify commands are registered
