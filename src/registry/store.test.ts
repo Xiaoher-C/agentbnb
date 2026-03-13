@@ -7,6 +7,7 @@ import {
   updateCard,
   deleteCard,
   listCards,
+  updateReputation,
 } from './store.js';
 import { searchCards, filterCards } from './matcher.js';
 import { AgentBnBError } from '../types/index.js';
@@ -287,6 +288,78 @@ describe('Registry Store', () => {
     it('filterCards with no filters returns all cards', () => {
       const results = filterCards(db, {});
       expect(results.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('updateReputation', () => {
+    it('Test 1: success=true on card with no prior reputation sets success_rate near 1.0 and avg_latency_ms near observed', () => {
+      const card = makeCard({ metadata: {} });
+      insertCard(db, card);
+
+      updateReputation(db, card.id, true, 500);
+
+      const updated = getCard(db, card.id);
+      expect(updated?.metadata?.success_rate).toBeDefined();
+      expect(updated?.metadata?.success_rate).toBeCloseTo(1.0, 2);
+      expect(updated?.metadata?.avg_latency_ms).toBeDefined();
+      expect(updated?.metadata?.avg_latency_ms).toBeCloseTo(500, -1);
+    });
+
+    it('Test 2: success=false on card with success_rate=1.0 decreases success_rate to ~0.9 (EWA alpha=0.1)', () => {
+      const card = makeCard({ metadata: { success_rate: 1.0 } });
+      insertCard(db, card);
+
+      updateReputation(db, card.id, false, 100);
+
+      const updated = getCard(db, card.id);
+      // EWA: 0.1 * 0 + 0.9 * 1.0 = 0.9
+      expect(updated?.metadata?.success_rate).toBeCloseTo(0.9, 3);
+    });
+
+    it('Test 3: success=true updates avg_latency_ms using EWA (alpha=0.1)', () => {
+      const card = makeCard({ metadata: { avg_latency_ms: 1000 } });
+      insertCard(db, card);
+
+      updateReputation(db, card.id, true, 500);
+
+      const updated = getCard(db, card.id);
+      // EWA: 0.1 * 500 + 0.9 * 1000 = 950
+      expect(updated?.metadata?.avg_latency_ms).toBeCloseTo(950, 0);
+    });
+
+    it('Test 4: updateReputation on a non-existent card is a silent no-op', () => {
+      expect(() => updateReputation(db, 'non-existent-id', true, 100)).not.toThrow();
+    });
+
+    it('Test 5: After updateReputation(), getCard() returns updated metadata values', () => {
+      const card = makeCard({ metadata: {} });
+      insertCard(db, card);
+
+      updateReputation(db, card.id, true, 200);
+
+      const updated = getCard(db, card.id);
+      expect(updated?.metadata?.success_rate).toBeDefined();
+      expect(updated?.metadata?.avg_latency_ms).toBeDefined();
+      expect(typeof updated?.metadata?.success_rate).toBe('number');
+      expect(typeof updated?.metadata?.avg_latency_ms).toBe('number');
+    });
+
+    it('Test 6: updateReputation() preserves existing metadata fields (apis_used, tags)', () => {
+      const card = makeCard({
+        metadata: {
+          apis_used: ['elevenlabs'],
+          tags: ['tts', 'audio'],
+        },
+      });
+      insertCard(db, card);
+
+      updateReputation(db, card.id, true, 300);
+
+      const updated = getCard(db, card.id);
+      expect(updated?.metadata?.apis_used).toEqual(['elevenlabs']);
+      expect(updated?.metadata?.tags).toEqual(['tts', 'audio']);
+      expect(updated?.metadata?.success_rate).toBeDefined();
+      expect(updated?.metadata?.avg_latency_ms).toBeDefined();
     });
   });
 });
