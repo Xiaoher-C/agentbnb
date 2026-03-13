@@ -5,6 +5,7 @@ import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { randomBytes } from 'node:crypto';
 import { join } from 'node:path';
+import { networkInterfaces } from 'node:os';
 
 import { loadConfig, saveConfig, getConfigDir } from './config.js';
 import { loadPeers, savePeer, removePeer, findPeer } from './peers.js';
@@ -19,6 +20,20 @@ import type { CapabilityCard } from '../types/index.js';
 
 const require = createRequire(import.meta.url);
 const pkg = require('../../package.json') as { version: string };
+
+/**
+ * Detect the LAN (non-loopback) IPv4 address of this machine.
+ * Falls back to 'localhost' if no external interface is found.
+ */
+function getLanIp(): string {
+  const nets = networkInterfaces();
+  for (const ifaces of Object.values(nets)) {
+    for (const iface of ifaces ?? []) {
+      if (iface.family === 'IPv4' && !iface.internal) return iface.address;
+    }
+  }
+  return 'localhost';
+}
 
 const program = new Command();
 
@@ -36,18 +51,20 @@ program
   .description('Initialize AgentBnB config and create agent identity')
   .option('--owner <name>', 'Agent owner name')
   .option('--port <port>', 'Gateway port', '7700')
+  .option('--host <ip>', 'Override gateway host IP (default: auto-detected LAN IP)')
   .option('--json', 'Output as JSON')
-  .action(async (opts: { owner?: string; port: string; json?: boolean }) => {
+  .action(async (opts: { owner?: string; port: string; host?: string; json?: boolean }) => {
     const owner = opts.owner ?? `agent-${randomBytes(4).toString('hex')}`;
     const token = randomBytes(32).toString('hex');
     const configDir = getConfigDir();
     const dbPath = join(configDir, 'registry.db');
     const creditDbPath = join(configDir, 'credit.db');
     const port = parseInt(opts.port, 10);
+    const ip = opts.host ?? getLanIp();
 
     const config = {
       owner,
-      gateway_url: `http://localhost:${port}`,
+      gateway_url: `http://${ip}:${port}`,
       gateway_port: port,
       db_path: dbPath,
       credit_db_path: creditDbPath,
@@ -62,13 +79,14 @@ program
     creditDb.close();
 
     if (opts.json) {
-      console.log(JSON.stringify({ success: true, owner, config_dir: configDir, token }, null, 2));
+      console.log(JSON.stringify({ success: true, owner, config_dir: configDir, token, gateway_url: config.gateway_url }, null, 2));
     } else {
       console.log(`AgentBnB initialized.`);
       console.log(`  Owner:   ${owner}`);
       console.log(`  Token:   ${token}`);
       console.log(`  Config:  ${configDir}/config.json`);
       console.log(`  Credits: 100 (starter grant)`);
+      console.log(`  Gateway: http://${ip}:${port}`);
     }
   });
 
