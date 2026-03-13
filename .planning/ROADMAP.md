@@ -1,6 +1,6 @@
 # AgentBnB Roadmap
 
-## Phase 0: Dogfood (Current)
+## Phase 0: Dogfood (Complete)
 **Goal**: Prove the concept by sharing capabilities between 2 OpenClaw agents internally.
 **Requirements:** [R-001, R-002, R-003, R-004, R-005, R-006]
 **Plans:** 5/5 plans complete
@@ -35,8 +35,16 @@ Plans:
 - [x] OpenClaw skill: handle incoming capability requests
 - [x] Test: 企劃總監 agent shares creative pipeline with engineering agent
 
-## Phase 1: CLI MVP (Next)
+## Phase 1: CLI MVP (Current)
 **Goal**: External users can install and try AgentBnB between two machines.
+**Requirements:** [R-007, R-008, R-009, R-010, R-011, R-012]
+**Plans:** 4 plans
+
+Plans:
+- [ ] 01-01-PLAN.md — npm publish pipeline + Capability Card spec v1.0 freeze
+- [ ] 01-02-PLAN.md — mDNS discovery module (bonjour-service)
+- [ ] 01-03-PLAN.md — Peer management (connect/peers) + CLI wiring for discovery
+- [ ] 01-04-PLAN.md — Documentation, examples, init LAN IP fix + human verification
 
 - [ ] npm package: `npx agentbnb init`
 - [ ] Capability Card spec v1.0 (stable schema)
