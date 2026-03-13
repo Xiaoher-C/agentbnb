@@ -7,8 +7,11 @@ import { randomBytes } from 'node:crypto';
 import { join } from 'node:path';
 import { networkInterfaces } from 'node:os';
 
+import { createInterface } from 'node:readline';
+
 import { loadConfig, saveConfig, getConfigDir } from './config.js';
 import { loadPeers, savePeer, removePeer, findPeer } from './peers.js';
+import { detectApiKeys, detectOpenPorts, buildDraftCard, KNOWN_API_KEYS } from './onboarding.js';
 import { CapabilityCardSchema } from '../types/index.js';
 import { openDatabase, insertCard } from '../registry/store.js';
 import { searchCards, filterCards } from '../registry/matcher.js';
@@ -21,6 +24,23 @@ import type { CapabilityCard } from '../types/index.js';
 
 const require = createRequire(import.meta.url);
 const pkg = require('../../package.json') as { version: string };
+
+/**
+ * Interactive confirm prompt using readline.
+ * Returns true if user answers 'y' or 'Y', false otherwise.
+ */
+async function confirm(question: string): Promise<boolean> {
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+  try {
+    return await new Promise<boolean>((resolve) => {
+      rl.question(question, (answer) => {
+        resolve(answer.trim().toLowerCase() === 'y');
+      });
+    });
+  } finally {
+    rl.close();
+  }
+}
 
 /**
  * Detect the LAN (non-loopback) IPv4 address of this machine.
@@ -53,8 +73,10 @@ program
   .option('--owner <name>', 'Agent owner name')
   .option('--port <port>', 'Gateway port', '7700')
   .option('--host <ip>', 'Override gateway host IP (default: auto-detected LAN IP)')
+  .option('--yes', 'Auto-confirm all draft cards (non-interactive)')
+  .option('--no-detect', 'Skip API key detection')
   .option('--json', 'Output as JSON')
-  .action(async (opts: { owner?: string; port: string; host?: string; json?: boolean }) => {
+  .action(async (opts: { owner?: string; port: string; host?: string; yes?: boolean; detect?: boolean; json?: boolean }) => {
     const owner = opts.owner ?? `agent-${randomBytes(4).toString('hex')}`;
     const token = randomBytes(32).toString('hex');
     const configDir = getConfigDir();
@@ -79,8 +101,88 @@ program
     bootstrapAgent(creditDb, owner, 100);
     creditDb.close();
 
+    // --- Onboarding detection flow ---
+    // Commander negates --no-detect into opts.detect (false when --no-detect is passed)
+    const skipDetect = opts.detect === false;
+    let detectedKeys: string[] = [];
+    let detectedPorts: number[] = [];
+    const publishedCards: Array<{ id: string; name: string }> = [];
+
+    if (!skipDetect) {
+      detectedKeys = detectApiKeys(KNOWN_API_KEYS);
+      detectedPorts = await detectOpenPorts([7700, 7701, 8080, 3000, 8000, 11434]);
+
+      if (detectedKeys.length > 0) {
+        if (!opts.json) {
+          console.log(`\nDetected ${detectedKeys.length} API key${detectedKeys.length > 1 ? 's' : ''}: ${detectedKeys.join(', ')}`);
+        }
+
+        if (detectedPorts.length > 0 && !opts.json) {
+          console.log(`Found services on ports: ${detectedPorts.join(', ')}`);
+        }
+
+        // Build draft cards
+        const drafts = detectedKeys
+          .map((key) => buildDraftCard(key, owner))
+          .filter((card): card is CapabilityCard => card !== null);
+
+        if (opts.yes) {
+          // Auto-publish all draft cards
+          const db = openDatabase(dbPath);
+          try {
+            for (const card of drafts) {
+              insertCard(db, card);
+              publishedCards.push({ id: card.id, name: card.name });
+              if (!opts.json) {
+                console.log(`Published: ${card.name} (${card.id})`);
+              }
+            }
+          } finally {
+            db.close();
+          }
+        } else if (process.stdout.isTTY) {
+          // Interactive confirmation for each draft card
+          const db = openDatabase(dbPath);
+          try {
+            for (const card of drafts) {
+              const yes = await confirm(`Publish "${card.name}"? [y/N] `);
+              if (yes) {
+                insertCard(db, card);
+                publishedCards.push({ id: card.id, name: card.name });
+                console.log(`Published: ${card.name} (${card.id})`);
+              } else {
+                console.log(`Skipped: ${card.name}`);
+              }
+            }
+          } finally {
+            db.close();
+          }
+        } else {
+          // Non-TTY without --yes: skip publishing with notice
+          if (!opts.json) {
+            console.log('Non-interactive environment detected. Re-run with --yes to auto-publish draft cards.');
+          }
+        }
+      } else {
+        if (!opts.json) {
+          console.log('\nNo API keys detected. You can manually publish cards with `agentbnb publish`.');
+        }
+      }
+    }
+
     if (opts.json) {
-      console.log(JSON.stringify({ success: true, owner, config_dir: configDir, token, gateway_url: config.gateway_url }, null, 2));
+      const jsonOutput: Record<string, unknown> = {
+        success: true,
+        owner,
+        config_dir: configDir,
+        token,
+        gateway_url: config.gateway_url,
+      };
+      if (!skipDetect) {
+        jsonOutput.detected_keys = detectedKeys;
+        jsonOutput.published_cards = publishedCards;
+      }
+      console.log(JSON.stringify(jsonOutput, null, 2));
     } else {
       console.log(`AgentBnB initialized.`);
       console.log(`  Owner:   ${owner}`);
