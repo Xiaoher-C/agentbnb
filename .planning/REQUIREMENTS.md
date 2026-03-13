@@ -86,7 +86,7 @@ SQLite-backed credit tracking:
 - [x] Transaction history queryable
 
 ### R-006: OpenClaw Integration
-**Status**: Pending
+**Status**: Complete (00-05)
 **Priority**: P1
 
 OpenClaw skills that bridge AgentBnB:
@@ -95,6 +95,6 @@ OpenClaw skills that bridge AgentBnB:
 - Report results back through gateway
 
 **Acceptance Criteria**:
-- [ ] Skill installs in OpenClaw without errors
-- [ ] Card auto-generation produces valid L1/L2 cards
-- [ ] End-to-end: Agent A requests, Agent B executes, results return
+- [x] Skill installs in OpenClaw without errors
+- [x] Card auto-generation produces valid L1/L2 cards
+- [x] End-to-end: Agent A requests, Agent B executes, results return

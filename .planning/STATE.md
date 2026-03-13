@@ -1,3 +1,17 @@
+---
+gsd_state_version: 1.0
+milestone: v1.0
+milestone_name: milestone
+current_plan: 5 of 5 (Phase 0)
+status: checkpoint-pending
+last_updated: "2026-03-13T14:05:56Z"
+progress:
+  total_phases: 4
+  completed_phases: 1
+  total_plans: 5
+  completed_plans: 5
+---
+
 # AgentBnB — Project State
 
 ## Project Reference
@@ -11,7 +25,7 @@ See: .planning/PROJECT.md (updated 2026-03-13)
 
 **Phase 0: Dogfood** — Prove the concept by sharing capabilities between 2 OpenClaw agents internally.
 
-**Current Plan:** 5 of 5 (Phase 0)
+**Current Plan:** 5 of 5 (Phase 0) — awaiting human-verify checkpoint
 
 ### Progress
 
@@ -20,7 +34,7 @@ See: .planning/PROJECT.md (updated 2026-03-13)
 - Credit System (Plan 02): complete — ledger, escrow hold/settle/release, 18 tests
 - Gateway (Plan 03): complete — Fastify JSON-RPC gateway, auth, escrow flow, 15 tests
 - CLI (Plan 04): complete — Commander CLI with 6 commands wired to real implementations, 17 tests
-- OpenClaw Integration (Plan 05): not started
+- OpenClaw Integration (Plan 05): Task 1 complete — SOUL.md parser, request handler, 13 E2E tests pass; awaiting human-verify (Task 2)
 
 ## Decisions Log
 
@@ -39,6 +53,9 @@ See: .planning/PROJECT.md (updated 2026-03-13)
 | 2026-03-13 | 00-04 | AGENTBNB_DIR env var for config dir override — test isolation without mocking fs |
 | 2026-03-13 | 00-04 | program.parseAsync instead of program.parse — required for top-level await async CLI actions |
 | 2026-03-13 | 00-04 | status command queries credit_escrow table directly for held escrows — no separate API needed |
+| 2026-03-13 | 00-05 | SOUL.md parser uses regex (no markdown library) — avoids new dependencies per plan spec |
+| 2026-03-13 | 00-05 | parseSoulMd defaults to level 2 Pipeline — per RESEARCH.md open question resolution |
+| 2026-03-13 | 00-05 | createRequestHandler returns raw handler result — gateway JSON-RPC layer wraps in { result }, no double-wrapping |
 
 ## Performance Metrics
 
@@ -48,6 +65,7 @@ See: .planning/PROJECT.md (updated 2026-03-13)
 | 00-dogfood | 02 | 4min | 2 | 7 |
 | 00-dogfood | 03 | 7min | 2 | 5 |
 | 00-dogfood | 04 | 15min | 2 | 5 |
+| 00-dogfood | 05 | 5min | 1 | 3 |
 
 ## Session Log
 
@@ -58,6 +76,7 @@ See: .planning/PROJECT.md (updated 2026-03-13)
 | 2026-03-13 | Completed 00-02-PLAN.md | Continue with plan 03 |
 | 2026-03-13 | Completed 00-03-PLAN.md | Continue with plan 04 |
 | 2026-03-13 | Completed 00-04-PLAN.md | Continue with plan 05 |
+| 2026-03-13 | Checkpoint: 00-05 Task 1 complete, awaiting human-verify | Run `pnpm test:run`, `pnpm typecheck`, and CLI manual verification |
 
 ---
-*Last updated: 2026-03-13 after 00-04 completion*
+*Last updated: 2026-03-13 after 00-05 Task 1 completion*
