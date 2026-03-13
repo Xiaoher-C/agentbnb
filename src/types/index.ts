@@ -19,6 +19,7 @@ export const IOSchemaSchema = z.object({
  * Level 3 (Environment): Full deployment with all dependencies
  */
 export const CapabilityCardSchema = z.object({
+  spec_version: z.literal('1.0').default('1.0'),
   id: z.string().uuid(),
   owner: z.string().min(1),
   name: z.string().min(1).max(100),
