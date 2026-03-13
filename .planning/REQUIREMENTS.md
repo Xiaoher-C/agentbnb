@@ -132,3 +132,60 @@ Freeze the Capability Card schema at version 1.0 with a spec_version field:
 - [x] Card with spec_version '2.0' is rejected
 - [x] Parsed output always includes spec_version '1.0'
 - [x] All Phase 0 tests continue to pass (zero regressions)
+
+## Phase 2: Cold Start Requirements
+
+### R-013: Web-Based Registry
+**Status**: In Progress (02-02)
+**Priority**: P0
+
+Public HTTP REST API exposing the capability card registry for external discovery:
+- Separate Fastify server instance (not on the gateway)
+- CORS enabled for browser access
+- GET /health — server status
+- GET /cards — paginated list with filters and search
+- GET /cards/:id — single card by UUID
+- Read-only: no write endpoints
+
+**Acceptance Criteria**:
+- [ ] GET /cards returns paginated response { total, limit, offset, items }
+- [ ] FTS5 search via ?q= parameter
+- [ ] Filters: level, online, tag, min_success_rate, max_latency_ms
+- [ ] Sort: success_rate (desc), latency (asc)
+- [ ] CORS headers present on all responses
+- [ ] Registry accessible at http://host:7701/cards via `agentbnb serve`
+
+### R-014: Reputation System
+**Status**: In Progress (02-01)
+**Priority**: P0
+
+Per-card reputation tracking updated after each capability execution:
+- Exponentially weighted average (EWA) with alpha=0.1
+- success_rate: 0.0-1.0, updated on success (1) and failure (0)
+- avg_latency_ms: updated with observed execution latency
+- Gateway automatically records reputation after settle (success) and release (failure)
+- First execution bootstraps from undefined to concrete value
+
+**Acceptance Criteria**:
+- [ ] updateReputation() updates success_rate and avg_latency_ms using EWA
+- [ ] Gateway calls updateReputation() after every capability.execute
+- [ ] Reputation data persists in SQLite (survives restart)
+- [ ] Re-publishing a card preserves existing reputation data
+
+### R-015: Capability Card Marketplace
+**Status**: In Progress (02-02)
+**Priority**: P1
+
+Browse and filter capabilities with reputation-aware sorting:
+- Pagination: limit (default 20, max 100) + offset
+- Tag filtering via metadata.tags
+- Reputation filtering (min_success_rate, max_latency_ms)
+- Sort by success_rate or latency
+- Unrated cards (undefined success_rate) sort after rated cards
+
+**Acceptance Criteria**:
+- [ ] Pagination returns correct slices with total count
+- [ ] Tag filter matches cards with specified tag
+- [ ] Reputation filters exclude cards below threshold
+- [ ] Sort by success_rate puts highest first, unrated last
+- [ ] Sort by latency puts fastest first, unrated last
