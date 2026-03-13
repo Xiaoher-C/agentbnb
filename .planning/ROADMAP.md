@@ -3,7 +3,7 @@
 ## Phase 0: Dogfood (Current)
 **Goal**: Prove the concept by sharing capabilities between 2 OpenClaw agents internally.
 **Requirements:** [R-001, R-002, R-003, R-004, R-005, R-006]
-**Plans:** 5 plans
+**Plans:** 2/5 plans executed
 
 Plans:
 - [x] 00-01-PLAN.md — Registry: Capability Card schema + SQLite store + FTS5 search

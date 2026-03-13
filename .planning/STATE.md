@@ -25,6 +25,9 @@ See: .planning/PROJECT.md (updated 2026-03-13)
 
 | Date | Phase-Plan | Decision |
 |------|-----------|----------|
+| 2026-03-13 | 00-01 | FTS5 query words wrapped in double-quotes to prevent hyphen/operator interpretation |
+| 2026-03-13 | 00-01 | Store cards as JSON blob in data column — schemaless updates without migrations |
+| 2026-03-13 | 00-01 | filterCards separate from searchCards for browse-without-query use case |
 | 2026-03-13 | 00-02 | Idempotent bootstrap via INSERT OR IGNORE + result.changes check |
 | 2026-03-13 | 00-02 | ESCROW_ALREADY_SETTLED error covers both settled and released terminal states |
 | 2026-03-13 | 00-02 | INSERT OR IGNORE auto-creates recipient balance row in settleEscrow() |
@@ -34,6 +37,7 @@ See: .planning/PROJECT.md (updated 2026-03-13)
 
 | Phase | Plan | Duration | Tasks | Files |
 |-------|------|----------|-------|-------|
+| 00-dogfood | 01 | 5min | 2 | 4 |
 | 00-dogfood | 02 | 4min | 2 | 7 |
 
 ## Session Log
@@ -41,7 +45,8 @@ See: .planning/PROJECT.md (updated 2026-03-13)
 | Date | Stopped At | Resume With |
 |------|-----------|-------------|
 | 2026-03-13 | Project initialized | `/gsd:discuss-phase 0` or `/gsd:plan-phase 0` |
+| 2026-03-13 | Completed 00-01-PLAN.md | Continue with plan 02 |
 | 2026-03-13 | Completed 00-02-PLAN.md | Continue with plan 03 |
 
 ---
-*Last updated: 2026-03-13 after 00-02 completion*
+*Last updated: 2026-03-13 after 00-01 and 00-02 completion*

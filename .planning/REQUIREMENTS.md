@@ -3,7 +3,7 @@
 ## Phase 0: Dogfood Requirements
 
 ### R-001: Capability Card Schema
-**Status**: Pending
+**Status**: Complete (00-01)
 **Priority**: P0
 
 The system must define a TypeScript schema for Capability Cards with:
@@ -15,13 +15,13 @@ The system must define a TypeScript schema for Capability Cards with:
 - Validation via Zod
 
 **Acceptance Criteria**:
-- [ ] Zod schema validates correct cards
-- [ ] Zod schema rejects malformed cards
-- [ ] All three levels can be represented
-- [ ] Schema is exported as TypeScript types
+- [x] Zod schema validates correct cards
+- [x] Zod schema rejects malformed cards
+- [x] All three levels can be represented
+- [x] Schema is exported as TypeScript types
 
 ### R-002: Local Registry
-**Status**: Pending
+**Status**: Complete (00-01)
 **Priority**: P0
 
 SQLite-backed storage for Capability Cards with:
@@ -31,9 +31,9 @@ SQLite-backed storage for Capability Cards with:
 - Owner-based access control (only owner can update/delete)
 
 **Acceptance Criteria**:
-- [ ] Can store and retrieve 100+ cards
-- [ ] Search returns relevant results in <50ms
-- [ ] Owner isolation enforced
+- [x] Can store and retrieve 100+ cards
+- [x] Search returns relevant results in <50ms
+- [x] Owner isolation enforced
 
 ### R-003: CLI Interface
 **Status**: Pending
