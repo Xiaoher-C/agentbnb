@@ -222,6 +222,62 @@ export function deleteCard(db: Database.Database, id: string, owner: string): vo
 }
 
 /**
+ * Updates the reputation metadata of a CapabilityCard using Exponentially Weighted Averages (EWA).
+ *
+ * Updates both `success_rate` and `avg_latency_ms` in the card's metadata using an
+ * alpha of 0.1. If no prior reputation exists, bootstraps from the observed values.
+ * If the card does not exist, returns silently (no-op). All other metadata fields
+ * (apis_used, tags) are preserved.
+ *
+ * @param db - Open database instance.
+ * @param cardId - UUID of the card to update.
+ * @param success - Whether the capability execution succeeded.
+ * @param latencyMs - Observed execution latency in milliseconds.
+ */
+export function updateReputation(
+  db: Database.Database,
+  cardId: string,
+  success: boolean,
+  latencyMs: number
+): void {
+  const existing = getCard(db, cardId);
+  if (!existing) return;
+
+  const ALPHA = 0.1;
+  const observed = success ? 1.0 : 0.0;
+
+  const prevSuccessRate = existing.metadata?.success_rate;
+  const prevLatency = existing.metadata?.avg_latency_ms;
+
+  const newSuccessRate =
+    prevSuccessRate === undefined
+      ? observed
+      : ALPHA * observed + (1 - ALPHA) * prevSuccessRate;
+
+  const newLatency =
+    prevLatency === undefined
+      ? latencyMs
+      : ALPHA * latencyMs + (1 - ALPHA) * prevLatency;
+
+  const now = new Date().toISOString();
+  const updatedMetadata = {
+    ...existing.metadata,
+    success_rate: Math.round(newSuccessRate * 1000) / 1000,
+    avg_latency_ms: Math.round(newLatency),
+  };
+
+  const updatedCard = { ...existing, metadata: updatedMetadata, updated_at: now };
+
+  const stmt = db.prepare(`
+    UPDATE capability_cards
+    SET data = ?, updated_at = ?
+    WHERE id = ?
+  `);
+
+  stmt.run(JSON.stringify(updatedCard), now, cardId);
+}
+
+/**
  * Lists CapabilityCards, optionally filtered by owner.
  *
  * @param db - Open database instance.
