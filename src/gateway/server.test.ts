@@ -3,7 +3,7 @@ import Fastify from 'fastify';
 import type { FastifyInstance } from 'fastify';
 import { randomUUID } from 'node:crypto';
 import { createGatewayServer } from './server.js';
-import { openDatabase, insertCard } from '../registry/store.js';
+import { openDatabase, insertCard, getCard } from '../registry/store.js';
 import { openCreditDb, bootstrapAgent } from '../credit/ledger.js';
 import { requestCapability } from './client.js';
 import type { CapabilityCard } from '../types/index.js';
@@ -289,6 +289,162 @@ describe('Gateway Server', () => {
     } finally {
       await errorGateway.close();
       await errorHandler.server.close();
+    }
+  });
+});
+
+// ─── Reputation tracking tests ────────────────────────────────────────────────
+
+describe('Gateway Reputation Tracking', () => {
+  let registryDb: Database.Database;
+  let creditDb: Database.Database;
+  let gateway: FastifyInstance;
+  let mockHandler: { server: FastifyInstance; url: string };
+  let testCard: CapabilityCard;
+  const validToken = 'reputation-test-token';
+
+  beforeEach(async () => {
+    registryDb = openDatabase(':memory:');
+    creditDb = openCreditDb(':memory:');
+
+    bootstrapAgent(creditDb, 'requester-agent', 1000);
+
+    testCard = makeCard({ id: randomUUID() });
+    insertCard(registryDb, testCard);
+
+    mockHandler = await createMockHandler({ output: 'success result' });
+
+    gateway = createGatewayServer({
+      registryDb,
+      creditDb,
+      tokens: [validToken],
+      handlerUrl: mockHandler.url,
+      timeoutMs: 5000,
+      silent: true,
+    });
+
+    await gateway.ready();
+  });
+
+  afterEach(async () => {
+    await gateway.close();
+    await mockHandler.server.close();
+    registryDb.close();
+    creditDb.close();
+  });
+
+  it('Test 1: After successful execution (200), card success_rate is updated (not undefined)', async () => {
+    await gateway.inject({
+      method: 'POST',
+      url: '/rpc',
+      headers: { authorization: `Bearer ${validToken}` },
+      payload: {
+        jsonrpc: '2.0',
+        method: 'capability.execute',
+        params: { card_id: testCard.id, requester: 'requester-agent' },
+        id: 'r-1',
+      },
+    });
+
+    const updated = getCard(registryDb, testCard.id);
+    expect(updated?.metadata?.success_rate).toBeDefined();
+    expect(typeof updated?.metadata?.success_rate).toBe('number');
+  });
+
+  it('Test 2: After failed execution (handler 500), success_rate reflects failure', async () => {
+    const errorHandler = await createMockHandler({ error: 'internal error' }, 500);
+
+    const errorGateway = createGatewayServer({
+      registryDb,
+      creditDb,
+      tokens: [validToken],
+      handlerUrl: errorHandler.url,
+      timeoutMs: 5000,
+      silent: true,
+    });
+    await errorGateway.ready();
+
+    try {
+      await errorGateway.inject({
+        method: 'POST',
+        url: '/rpc',
+        headers: { authorization: `Bearer ${validToken}` },
+        payload: {
+          jsonrpc: '2.0',
+          method: 'capability.execute',
+          params: { card_id: testCard.id, requester: 'requester-agent' },
+          id: 'r-2',
+        },
+      });
+
+      const updated = getCard(registryDb, testCard.id);
+      expect(updated?.metadata?.success_rate).toBeDefined();
+      // Bootstrap with success=false: rate should be 0.0
+      expect(updated?.metadata?.success_rate).toBe(0.0);
+    } finally {
+      await errorGateway.close();
+      await errorHandler.server.close();
+    }
+  });
+
+  it('Test 3: After successful execution, avg_latency_ms is set to a positive number', async () => {
+    await gateway.inject({
+      method: 'POST',
+      url: '/rpc',
+      headers: { authorization: `Bearer ${validToken}` },
+      payload: {
+        jsonrpc: '2.0',
+        method: 'capability.execute',
+        params: { card_id: testCard.id, requester: 'requester-agent' },
+        id: 'r-3',
+      },
+    });
+
+    const updated = getCard(registryDb, testCard.id);
+    expect(updated?.metadata?.avg_latency_ms).toBeDefined();
+    expect(updated?.metadata?.avg_latency_ms).toBeGreaterThan(0);
+  });
+
+  it('Test 4: After timeout (AbortError), success_rate reflects failure', async () => {
+    const slowHandler = Fastify({ logger: false });
+    slowHandler.post('/', async (_req, reply) => {
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+      return reply.send({ output: 'too slow' });
+    });
+    await slowHandler.listen({ port: 0, host: '127.0.0.1' });
+    const slowAddr = slowHandler.server.address();
+    const slowUrl = `http://127.0.0.1:${(slowAddr as { port: number }).port}`;
+
+    const timeoutGateway = createGatewayServer({
+      registryDb,
+      creditDb,
+      tokens: [validToken],
+      handlerUrl: slowUrl,
+      timeoutMs: 50, // Very short timeout to trigger AbortError
+      silent: true,
+    });
+    await timeoutGateway.ready();
+
+    try {
+      await timeoutGateway.inject({
+        method: 'POST',
+        url: '/rpc',
+        headers: { authorization: `Bearer ${validToken}` },
+        payload: {
+          jsonrpc: '2.0',
+          method: 'capability.execute',
+          params: { card_id: testCard.id, requester: 'requester-agent' },
+          id: 'r-4',
+        },
+      });
+
+      const updated = getCard(registryDb, testCard.id);
+      expect(updated?.metadata?.success_rate).toBeDefined();
+      // Bootstrap with success=false: rate should be 0.0
+      expect(updated?.metadata?.success_rate).toBe(0.0);
+    } finally {
+      await timeoutGateway.close();
+      await slowHandler.close();
     }
   });
 });
