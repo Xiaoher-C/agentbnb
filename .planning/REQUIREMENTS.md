@@ -70,7 +70,7 @@ HTTP server (Fastify) that:
 - [ ] Timeout handling (configurable per card)
 
 ### R-005: Credit Ledger
-**Status**: Pending
+**Status**: Complete (00-02)
 **Priority**: P1
 
 SQLite-backed credit tracking:
@@ -81,9 +81,9 @@ SQLite-backed credit tracking:
 - Initial credit grant for new agents (bootstrap)
 
 **Acceptance Criteria**:
-- [ ] Double-entry bookkeeping (every debit has a credit)
-- [ ] Escrow prevents overspending
-- [ ] Transaction history queryable
+- [x] Double-entry bookkeeping (every debit has a credit)
+- [x] Escrow prevents overspending
+- [x] Transaction history queryable
 
 ### R-006: OpenClaw Integration
 **Status**: Pending
