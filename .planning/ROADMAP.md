@@ -35,23 +35,23 @@ Plans:
 - [x] OpenClaw skill: handle incoming capability requests
 - [x] Test: 企劃總監 agent shares creative pipeline with engineering agent
 
-## Phase 1: CLI MVP (Current)
+## Phase 1: CLI MVP (Complete)
 **Goal**: External users can install and try AgentBnB between two machines.
 **Requirements:** [R-007, R-008, R-009, R-010, R-011, R-012]
 **Plans:** 4/4 plans complete
 
 Plans:
 - [x] 01-01-PLAN.md — npm publish pipeline + Capability Card spec v1.0 freeze
-- [ ] 01-02-PLAN.md — mDNS discovery module (bonjour-service)
-- [ ] 01-03-PLAN.md — Peer management (connect/peers) + CLI wiring for discovery
-- [ ] 01-04-PLAN.md — Documentation, examples, init LAN IP fix + human verification
+- [x] 01-02-PLAN.md — mDNS discovery module (bonjour-service)
+- [x] 01-03-PLAN.md — Peer management (connect/peers) + CLI wiring for discovery
+- [x] 01-04-PLAN.md — Documentation, examples, init LAN IP fix + human verification
 
-- [ ] npm package: `npx agentbnb init`
-- [ ] Capability Card spec v1.0 (stable schema)
-- [ ] P2P discovery (mDNS or simple relay server)
-- [ ] Authentication: API key exchange
-- [ ] OpenSpec integration for stable API specs
-- [ ] Documentation and examples
+- [x] npm package: `npx agentbnb init`
+- [x] Capability Card spec v1.0 (stable schema)
+- [x] P2P discovery (mDNS or simple relay server)
+- [x] Authentication: API key exchange
+- [x] OpenSpec integration for stable API specs
+- [x] Documentation and examples
 
 ## Phase 2: Cold Start
 **Goal**: Grow from dogfood to 10+ active agent owners.

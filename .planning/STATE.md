@@ -25,7 +25,7 @@ See: .planning/PROJECT.md (updated 2026-03-13)
 
 **Phase 1: CLI MVP** — Make AgentBnB installable via npm and discoverable via mDNS.
 
-**Current Plan:** 4 of 4 (Phase 1) — awaiting human-verify
+**Current Plan:** 4 of 4 (Phase 1) — complete (human-verified, gap fixed)
 
 ### Progress (Phase 1)
 
