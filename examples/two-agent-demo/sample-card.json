@@ -8,13 +8,13 @@
   "inputs": [
     {
       "name": "text",
-      "type": "string",
+      "type": "text",
       "description": "The full text to summarize",
       "required": true
     },
     {
       "name": "max_words",
-      "type": "number",
+      "type": "json",
       "description": "Maximum number of words in the summary (default: 100)",
       "required": false
     }
@@ -22,7 +22,7 @@
   "outputs": [
     {
       "name": "summary",
-      "type": "string",
+      "type": "text",
       "description": "The condensed summary of the input text"
     }
   ],

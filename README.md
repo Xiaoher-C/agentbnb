@@ -147,7 +147,7 @@ Capability Cards are JSON files that describe what an agent can do. Schema versi
   "inputs": [
     {
       "name": "text",
-      "type": "string",
+      "type": "text",
       "description": "The full text to summarize",
       "required": true
     }
@@ -155,7 +155,7 @@ Capability Cards are JSON files that describe what an agent can do. Schema versi
   "outputs": [
     {
       "name": "summary",
-      "type": "string",
+      "type": "text",
       "description": "The condensed summary"
     }
   ],
