@@ -53,7 +53,7 @@ Commander-based CLI with subcommands:
 - [ ] Config stored in ~/.agentbnb/config.json
 
 ### R-004: Gateway Server
-**Status**: Pending
+**Status**: Complete (00-03)
 **Priority**: P0
 
 HTTP server (Fastify) that:
@@ -64,10 +64,10 @@ HTTP server (Fastify) that:
 - Tracks credit usage
 
 **Acceptance Criteria**:
-- [ ] Server starts on configurable port
-- [ ] Health check endpoint
-- [ ] Request/response logging
-- [ ] Timeout handling (configurable per card)
+- [x] Server starts on configurable port
+- [x] Health check endpoint
+- [x] Request/response logging
+- [x] Timeout handling (configurable per card)
 
 ### R-005: Credit Ledger
 **Status**: Complete (00-02)

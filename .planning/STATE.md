@@ -11,14 +11,14 @@ See: .planning/PROJECT.md (updated 2026-03-13)
 
 **Phase 0: Dogfood** — Prove the concept by sharing capabilities between 2 OpenClaw agents internally.
 
-**Current Plan:** 3 of 5 (Phase 0)
+**Current Plan:** 4 of 5 (Phase 0)
 
 ### Progress
 
 - Foundation (Plan 00): complete — TypeScript types, schema validation, AgentBnBError
 - Registry (Plan 01): complete — SQLite registry, FTS5 search, owner isolation
 - Credit System (Plan 02): complete — ledger, escrow hold/settle/release, 18 tests
-- Gateway: not started
+- Gateway (Plan 03): complete — Fastify JSON-RPC gateway, auth, escrow flow, 15 tests
 - CLI + OpenClaw Integration: not started
 
 ## Decisions Log
@@ -32,6 +32,9 @@ See: .planning/PROJECT.md (updated 2026-03-13)
 | 2026-03-13 | 00-02 | ESCROW_ALREADY_SETTLED error covers both settled and released terminal states |
 | 2026-03-13 | 00-02 | INSERT OR IGNORE auto-creates recipient balance row in settleEscrow() |
 | 2026-03-13 | 00-02 | pnpm.onlyBuiltDependencies needed for better-sqlite3 native binding in pnpm 10 |
+| 2026-03-13 | 00-03 | Auth hook added to root Fastify instance (not plugin) — plugin scope encapsulation prevents hooks from applying to parent routes |
+| 2026-03-13 | 00-03 | Requester identity from params.requester (not from token) — token is auth, requester is credit identity |
+| 2026-03-13 | 00-03 | createGatewayServer() returns synchronously — Fastify queues plugin init; caller calls .ready() or .listen() |
 
 ## Performance Metrics
 
@@ -39,6 +42,7 @@ See: .planning/PROJECT.md (updated 2026-03-13)
 |-------|------|----------|-------|-------|
 | 00-dogfood | 01 | 5min | 2 | 4 |
 | 00-dogfood | 02 | 4min | 2 | 7 |
+| 00-dogfood | 03 | 7min | 2 | 5 |
 
 ## Session Log
 
@@ -47,6 +51,7 @@ See: .planning/PROJECT.md (updated 2026-03-13)
 | 2026-03-13 | Project initialized | `/gsd:discuss-phase 0` or `/gsd:plan-phase 0` |
 | 2026-03-13 | Completed 00-01-PLAN.md | Continue with plan 02 |
 | 2026-03-13 | Completed 00-02-PLAN.md | Continue with plan 03 |
+| 2026-03-13 | Completed 00-03-PLAN.md | Continue with plan 04 |
 
 ---
-*Last updated: 2026-03-13 after 00-01 and 00-02 completion*
+*Last updated: 2026-03-13 after 00-03 completion*
