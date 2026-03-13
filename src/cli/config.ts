@@ -8,7 +8,11 @@ import { join } from 'node:path';
 export interface AgentBnBConfig {
   /** Agent owner identifier (chosen at init). */
   owner: string;
-  /** URL of the remote gateway to connect to. */
+  /**
+   * URL of this agent's own gateway.
+   * For multi-machine scenarios, use the LAN IP (e.g., http://192.168.1.50:7700)
+   * so other agents can reach it. LAN IP auto-detection is planned for Plan 04.
+   */
   gateway_url: string;
   /** Port this agent's own gateway listens on. */
   gateway_port: number;

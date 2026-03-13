@@ -7,12 +7,14 @@ import { randomBytes } from 'node:crypto';
 import { join } from 'node:path';
 
 import { loadConfig, saveConfig, getConfigDir } from './config.js';
+import { loadPeers, savePeer, removePeer, findPeer } from './peers.js';
 import { CapabilityCardSchema } from '../types/index.js';
 import { openDatabase, insertCard } from '../registry/store.js';
 import { searchCards, filterCards } from '../registry/matcher.js';
 import { openCreditDb, getBalance, bootstrapAgent, getTransactions } from '../credit/ledger.js';
 import { requestCapability } from '../gateway/client.js';
 import { createGatewayServer } from '../gateway/server.js';
+import { announceGateway, discoverLocalAgents, stopAnnouncement } from '../discovery/mdns.js';
 import type { CapabilityCard } from '../types/index.js';
 
 const require = createRequire(import.meta.url);
@@ -137,8 +139,41 @@ program
   .description('Search available capabilities in the registry')
   .option('--level <level>', 'Filter by level (1, 2, or 3)')
   .option('--online', 'Only show online capabilities')
+  .option('--local', 'Browse for agents on the local network via mDNS')
   .option('--json', 'Output as JSON')
-  .action(async (query: string | undefined, opts: { level?: string; online?: boolean; json?: boolean }) => {
+  .action(async (query: string | undefined, opts: { level?: string; online?: boolean; local?: boolean; json?: boolean }) => {
+    // --local: browse mDNS instead of querying local registry
+    if (opts.local) {
+      const discovered: Array<{ name: string; url: string; owner: string }> = [];
+
+      const browser = discoverLocalAgents((agent) => {
+        discovered.push(agent);
+      });
+
+      // Wait 3 seconds for mDNS responses
+      await new Promise<void>((resolve) => setTimeout(resolve, 3000));
+      browser.stop();
+
+      if (opts.json) {
+        console.log(JSON.stringify(discovered, null, 2));
+        return;
+      }
+
+      if (discovered.length === 0) {
+        console.log('No agents found on local network.');
+        return;
+      }
+
+      const col = (s: string, w: number) => s.slice(0, w).padEnd(w);
+      console.log(col('Name', 24) + '  ' + col('URL', 32) + '  ' + col('Owner', 20));
+      console.log('-'.repeat(80));
+      for (const agent of discovered) {
+        console.log(col(agent.name, 24) + '  ' + col(agent.url, 32) + '  ' + col(agent.owner, 20));
+      }
+      console.log(`\n${discovered.length} agent(s) found on local network`);
+      return;
+    }
+
     const config = loadConfig();
     if (!config) {
       console.error('Error: not initialized. Run `agentbnb init` first.');
@@ -202,8 +237,9 @@ program
   .command('request <card-id>')
   .description('Request a capability from another agent via the gateway')
   .option('--params <json>', 'Input parameters as JSON string', '{}')
+  .option('--peer <name>', 'Peer name to send request to (resolves URL+token from peer registry)')
   .option('--json', 'Output as JSON')
-  .action(async (cardId: string, opts: { params: string; json?: boolean }) => {
+  .action(async (cardId: string, opts: { params: string; peer?: string; json?: boolean }) => {
     const config = loadConfig();
     if (!config) {
       console.error('Error: not initialized. Run `agentbnb init` first.');
@@ -218,10 +254,27 @@ program
       process.exit(1);
     }
 
+    // Resolve gateway URL and token: use --peer if provided, otherwise use config
+    let gatewayUrl: string;
+    let token: string;
+
+    if (opts.peer) {
+      const peer = findPeer(opts.peer);
+      if (!peer) {
+        console.error(`Error: Peer not found: ${opts.peer}. Run \`agentbnb peers\` to see registered peers.`);
+        process.exit(1);
+      }
+      gatewayUrl = peer.url;
+      token = peer.token;
+    } else {
+      gatewayUrl = config.gateway_url;
+      token = config.token;
+    }
+
     try {
       const result = await requestCapability({
-        gatewayUrl: config.gateway_url,
-        token: config.token,
+        gatewayUrl,
+        token,
         cardId,
         params,
       });
@@ -308,7 +361,8 @@ program
   .description('Start the AgentBnB gateway server')
   .option('--port <port>', 'Port to listen on (overrides config)')
   .option('--handler-url <url>', 'Local capability handler URL', 'http://localhost:8080')
-  .action(async (opts: { port?: string; handlerUrl: string }) => {
+  .option('--announce', 'Announce this gateway on the local network via mDNS')
+  .action(async (opts: { port?: string; handlerUrl: string; announce?: boolean }) => {
     const config = loadConfig();
     if (!config) {
       console.error('Error: not initialized. Run `agentbnb init` first.');
@@ -329,6 +383,9 @@ program
 
     const gracefulShutdown = async () => {
       console.log('\nShutting down gateway...');
+      if (opts.announce) {
+        await stopAnnouncement();
+      }
       await server.close();
       registryDb.close();
       creditDb.close();
@@ -341,10 +398,84 @@ program
     try {
       await server.listen({ port, host: '0.0.0.0' });
       console.log(`Gateway running on port ${port}`);
+
+      if (opts.announce) {
+        announceGateway(config.owner, port);
+        console.log('Announcing on local network via mDNS');
+      }
     } catch (err) {
       console.error('Failed to start gateway:', err);
       registryDb.close();
       creditDb.close();
+      process.exit(1);
+    }
+  });
+
+// ---------------------------------------------------------------------------
+// connect
+// ---------------------------------------------------------------------------
+
+program
+  .command('connect <name> <url> <token>')
+  .description('Register a remote peer agent (store URL + token for reuse)')
+  .option('--json', 'Output as JSON')
+  .action(async (name: string, url: string, token: string, opts: { json?: boolean }) => {
+    const config = loadConfig();
+    if (!config) {
+      console.error('Error: not initialized. Run `agentbnb init` first.');
+      process.exit(1);
+    }
+
+    savePeer({ name, url, token, added_at: new Date().toISOString() });
+
+    if (opts.json) {
+      console.log(JSON.stringify({ success: true, name, url }, null, 2));
+    } else {
+      console.log(`Connected to peer: ${name} at ${url}`);
+    }
+  });
+
+// ---------------------------------------------------------------------------
+// peers
+// ---------------------------------------------------------------------------
+
+const peersCommand = program
+  .command('peers')
+  .description('List registered peer agents');
+
+peersCommand
+  .option('--json', 'Output as JSON')
+  .action(async (opts: { json?: boolean }) => {
+    const peers = loadPeers();
+
+    if (opts.json) {
+      console.log(JSON.stringify(peers, null, 2));
+      return;
+    }
+
+    if (peers.length === 0) {
+      console.log('No peers registered. Use `agentbnb connect` to add one.');
+      return;
+    }
+
+    const col = (s: string, w: number) => s.slice(0, w).padEnd(w);
+    console.log(col('Name', 20) + '  ' + col('URL', 36) + '  ' + col('Added', 20));
+    console.log('-'.repeat(80));
+    for (const peer of peers) {
+      console.log(col(peer.name, 20) + '  ' + col(peer.url, 36) + '  ' + col(peer.added_at.slice(0, 19), 20));
+    }
+    console.log(`\n${peers.length} peer(s)`);
+  });
+
+peersCommand
+  .command('remove <name>')
+  .description('Remove a registered peer')
+  .action(async (name: string) => {
+    const removed = removePeer(name);
+    if (removed) {
+      console.log(`Peer removed: ${name}`);
+    } else {
+      console.error(`Peer not found: ${name}`);
       process.exit(1);
     }
   });
