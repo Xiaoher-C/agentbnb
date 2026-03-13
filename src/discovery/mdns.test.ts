@@ -1,4 +1,4 @@
-import { describe, it, expect, afterAll, afterEach, beforeEach } from 'vitest';
+import { describe, it, expect, afterEach, afterAll } from 'vitest';
 import {
   announceGateway,
   discoverLocalAgents,
@@ -7,23 +7,21 @@ import {
 } from './mdns.js';
 
 /**
- * mDNS tests use real network multicast.
- * Each test cleans up (stopAnnouncement + browser.stop) in afterEach/afterAll.
+ * mDNS tests use real network multicast (loopback via same process).
+ * Each test cleans up in afterEach to avoid port conflicts.
+ * Browse BEFORE announce so the browser is listening when the service is published.
  */
 
 describe('mDNS discovery module', () => {
   afterEach(async () => {
-    // Always clean up after each test to avoid port conflicts
     await stopAnnouncement();
   });
 
   afterAll(async () => {
-    // Final cleanup
     await stopAnnouncement();
   });
 
   it('Test 1: announceGateway publishes a service and returns without error', () => {
-    // Should not throw
     expect(() => announceGateway('test-agent-1', 17701)).not.toThrow();
   });
 
@@ -31,27 +29,24 @@ describe('mDNS discovery module', () => {
     const owner = 'test-agent-loopback';
     const port = 17702;
 
-    // Announce first
-    announceGateway(owner, port);
-
-    // Then browse and wait for up event (up to 3 seconds)
+    // Start browsing FIRST so the browser is listening before announcement
     const found = await new Promise<DiscoveredAgent | null>((resolve) => {
       let browser: { stop: () => void } | null = null;
       const timeout = setTimeout(() => {
         browser?.stop();
         resolve(null);
-      }, 3000);
+      }, 4000);
 
-      browser = discoverLocalAgents(
-        (agent) => {
-          if (agent.owner === owner) {
-            clearTimeout(timeout);
-            browser?.stop();
-            resolve(agent);
-          }
-        },
-        undefined,
-      );
+      browser = discoverLocalAgents((agent) => {
+        if (agent.owner === owner) {
+          clearTimeout(timeout);
+          browser?.stop();
+          resolve(agent);
+        }
+      });
+
+      // Announce after browser is started
+      announceGateway(owner, port);
     });
 
     expect(found).not.toBeNull();
@@ -62,31 +57,27 @@ describe('mDNS discovery module', () => {
 
   it('Test 3: stopAnnouncement cleans up without error', async () => {
     announceGateway('test-agent-cleanup', 17703);
-    // Should not throw on first call
+    // First call should resolve cleanly
     await expect(stopAnnouncement()).resolves.toBeUndefined();
-    // Should be idempotent - second call also should not throw
+    // Second call should also be safe (idempotent — no instance to destroy)
     await expect(stopAnnouncement()).resolves.toBeUndefined();
   });
 
   it('Test 4: Multiple agents can announce and all are discovered', async () => {
     const agents = [
-      { owner: 'multi-agent-a', port: 17704 },
-      { owner: 'multi-agent-b', port: 17705 },
+      { owner: 'multi-agent-a', port: 17706 },
+      { owner: 'multi-agent-b', port: 17707 },
     ];
 
-    for (const agent of agents) {
-      announceGateway(agent.owner, agent.port);
-    }
-
-    // Discover and collect found agents (up to 3 seconds)
     const foundOwners: string[] = [];
     await new Promise<void>((resolve) => {
       let browser: { stop: () => void } | null = null;
       const timeout = setTimeout(() => {
         browser?.stop();
         resolve();
-      }, 3000);
+      }, 4000);
 
+      // Start browsing first
       browser = discoverLocalAgents((agent) => {
         const matchingAgent = agents.find((a) => a.owner === agent.owner);
         if (matchingAgent && !foundOwners.includes(agent.owner)) {
@@ -98,9 +89,14 @@ describe('mDNS discovery module', () => {
           }
         }
       });
+
+      // Announce all agents after browser is started
+      for (const agent of agents) {
+        announceGateway(agent.owner, agent.port);
+      }
     });
 
-    // At least one of the agents should be found (loopback mDNS may find both)
+    // At minimum, one agent should be discoverable on loopback
     expect(foundOwners.length).toBeGreaterThanOrEqual(1);
   });
 });

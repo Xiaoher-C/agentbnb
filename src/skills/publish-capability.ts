@@ -162,6 +162,7 @@ export function publishFromSoul(
       : capsSummary.slice(0, 500);
 
   const card: CapabilityCard = {
+    spec_version: '1.0',
     id: randomUUID(),
     owner,
     name: parsed.name || 'Unknown Agent',
