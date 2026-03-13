@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import Fastify from 'fastify';
-import { openDatabase, insertCard } from '../registry/store.js';
+import { openDatabase } from '../registry/store.js';
 import { openCreditDb, bootstrapAgent, getBalance } from '../credit/ledger.js';
 import { createGatewayServer } from '../gateway/server.js';
 import { requestCapability } from '../gateway/client.js';
@@ -51,7 +51,7 @@ describe('parseSoulMd', () => {
     const soul = `# Agent Name\n\n## Some Capability\nCapability details.`;
     const result = parseSoulMd(soul);
     expect(result.name).toBe('Agent Name');
-    // description should be empty string or capability name — not crash
+    // description should be empty string — not crash
     expect(typeof result.description).toBe('string');
   });
 });
@@ -81,8 +81,9 @@ describe('createRequestHandler', () => {
     const CARD_ID = 'test-card-id';
     const handlerFn = createRequestHandler({
       [CARD_ID]: async (params) => {
+        // Echo the text back as-is to verify params flow through
         const input = (params as Record<string, unknown>).text as string;
-        return { summary: input.slice(0, 10) };
+        return { echo: input };
       },
     });
 
@@ -98,8 +99,9 @@ describe('createRequestHandler', () => {
     });
 
     expect(res.statusCode).toBe(200);
-    const body = JSON.parse(res.body) as { result: { summary: string } };
-    expect(body.result.summary).toBe('Hello World!');
+    // Handler returns result directly (no wrapping) — gateway JSON-RPC layer wraps in { result }
+    const body = JSON.parse(res.body) as { echo: string };
+    expect(body.echo).toBe('Hello World!');
 
     await app.close();
   });
@@ -164,7 +166,7 @@ Takes a long text input and returns a concise summary by extracting the first se
     const handlerFn = createRequestHandler({
       [HANDLER_CARD_ID]: async (params) => {
         const text = (params as Record<string, unknown>).text as string;
-        // Simple "summarizer": take first sentence
+        // Simple "summarizer": take first sentence (split on .!?)
         const firstSentence = text.split(/[.!?]/)[0]?.trim() ?? text;
         return { summary: firstSentence };
       },
@@ -197,14 +199,14 @@ Takes a long text input and returns a concise summary by extracting the first se
     creditDb.close();
   });
 
-  it('Agent A can discover Agent B\'s capability via search', () => {
+  it("Agent A can discover Agent B's capability via search", () => {
     const results = searchCards(registryDb, 'summarize');
     expect(results.length).toBeGreaterThan(0);
     const found = results.find((c) => c.id === cardId);
     expect(found).toBeDefined();
   });
 
-  it('Agent A receives summarized text result from Agent B\'s gateway', async () => {
+  it("Agent A receives summarized text result from Agent B's gateway", async () => {
     const result = await requestCapability({
       gatewayUrl: `http://127.0.0.1:${gatewayPort}`,
       token: TOKEN,
@@ -215,16 +217,19 @@ Takes a long text input and returns a concise summary by extracting the first se
       },
     });
 
+    // The handler returns { summary: firstSentence } directly,
+    // and the gateway wraps it as JSON-RPC result, so requestCapability
+    // returns { summary: firstSentence }
     const typed = result as { summary: string };
     expect(typed.summary).toBe('The quick brown fox jumped over the lazy dog');
   });
 
-  it('Agent A\'s balance decreased by card pricing (10 credits)', () => {
+  it("Agent A's balance decreased by card pricing (10 credits)", () => {
     const balance = getBalance(creditDb, AGENT_A);
     expect(balance).toBe(90); // 100 - 10
   });
 
-  it('Agent B\'s balance increased by card pricing (10 credits)', () => {
+  it("Agent B's balance increased by card pricing (10 credits)", () => {
     const balance = getBalance(creditDb, AGENT_B);
     expect(balance).toBe(110); // 100 + 10
   });
