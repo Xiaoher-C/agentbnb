@@ -1,0 +1,40 @@
+{
+  "id": "11111111-1111-1111-1111-111111111111",
+  "owner": "alice",
+  "name": "text-summarizer",
+  "description": "Summarizes long text into a concise paragraph using an LLM. Ideal for pipeline preprocessing.",
+  "spec_version": "1.0",
+  "level": 1,
+  "inputs": [
+    {
+      "name": "text",
+      "type": "string",
+      "description": "The full text to summarize",
+      "required": true
+    },
+    {
+      "name": "max_words",
+      "type": "number",
+      "description": "Maximum number of words in the summary (default: 100)",
+      "required": false
+    }
+  ],
+  "outputs": [
+    {
+      "name": "summary",
+      "type": "string",
+      "description": "The condensed summary of the input text"
+    }
+  ],
+  "pricing": {
+    "credits_per_call": 5
+  },
+  "availability": {
+    "online": true
+  },
+  "metadata": {
+    "apis_used": ["openai"],
+    "avg_latency_ms": 800,
+    "success_rate": 0.98
+  }
+}
