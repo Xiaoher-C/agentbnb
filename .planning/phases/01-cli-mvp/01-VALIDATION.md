@@ -2,7 +2,7 @@
 phase: 1
 slug: cli-mvp
 status: draft
-nyquist_compliant: false
+nyquist_compliant: true
 wave_0_complete: false
 created: 2026-03-13
 ---
@@ -36,25 +36,29 @@ created: 2026-03-13
 
 ## Per-Task Verification Map
 
-| Task ID | Plan | Wave | Requirement | Test Type | Automated Command | File Exists | Status |
-|---------|------|------|-------------|-----------|-------------------|-------------|--------|
-| 1-01-01 | 01 | 1 | npm-package | unit | `pnpm vitest run src/cli/init.test.ts` | ❌ W0 | ⬜ pending |
-| 1-01-02 | 01 | 1 | card-spec-v1 | unit | `pnpm vitest run src/registry/card-v1.test.ts` | ❌ W0 | ⬜ pending |
-| 1-02-01 | 02 | 1 | p2p-discovery | integration | `pnpm vitest run src/discovery/mdns.test.ts` | ❌ W0 | ⬜ pending |
-| 1-02-02 | 02 | 1 | auth-exchange | unit | `pnpm vitest run src/gateway/auth-exchange.test.ts` | ❌ W0 | ⬜ pending |
-| 1-03-01 | 03 | 2 | connect-cmd | integration | `pnpm vitest run src/cli/connect.test.ts` | ❌ W0 | ⬜ pending |
-| 1-04-01 | 04 | 2 | docs | manual | N/A | N/A | ⬜ pending |
+| Task ID | Plan | Wave | Requirement | Test Type | Automated Command | File Created By Plan | Status |
+|---------|------|------|-------------|-----------|-------------------|----------------------|--------|
+| 1-01-01 | 01 | 1 | R-008 (card-spec-v1) | unit | `pnpm vitest run src/types/index.test.ts` | src/types/index.test.ts | ⬜ pending |
+| 1-01-02 | 01 | 1 | R-007 (npm-package) | smoke | `pnpm build && node dist/cli/index.js --version` | N/A (build verification) | ⬜ pending |
+| 1-02-01 | 02 | 1 | R-009 (p2p-discovery) | integration | `pnpm vitest run src/discovery/mdns.test.ts` | src/discovery/mdns.test.ts | ⬜ pending |
+| 1-03-01 | 03 | 2 | R-010 (peer-storage) | unit | `pnpm vitest run src/cli/peers.test.ts` | src/cli/peers.test.ts | ⬜ pending |
+| 1-03-02 | 03 | 2 | R-010 (cli-wiring) | integration | `pnpm vitest run src/cli/ && pnpm typecheck` | N/A (uses existing cli tests) | ⬜ pending |
+| 1-04-01 | 04 | 3 | R-010 (lan-ip) | integration | `pnpm vitest run src/cli/ && pnpm typecheck` | N/A (modifies existing) | ⬜ pending |
+| 1-04-02 | 04 | 3 | R-012 (docs) | smoke | `test -f README.md && test -f examples/two-agent-demo/demo.sh` | README.md, examples/ | ⬜ pending |
+| 1-04-03 | 04 | 3 | R-011, R-012 | manual | N/A (human checkpoint) | N/A | ⬜ pending |
 
-*Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
+*Status: ⬜ pending / ✅ green / ❌ red / ⚠️ flaky*
 
 ---
 
 ## Wave 0 Requirements
 
-- [ ] Test stubs for new Phase 1 modules (discovery, auth exchange, connect)
-- [ ] Existing vitest infrastructure covers base needs
+- [x] Existing vitest infrastructure covers base needs (from Phase 0)
+- [ ] `src/types/index.test.ts` — created or extended by Plan 01, Task 1
+- [ ] `src/discovery/mdns.test.ts` — created by Plan 02, Task 1
+- [ ] `src/cli/peers.test.ts` — created by Plan 03, Task 1
 
-*Existing infrastructure from Phase 0 covers test framework requirements.*
+*Each test file is created by the same task that creates the implementation (TDD tasks write tests first). No separate Wave 0 scaffolding plan is needed.*
 
 ---
 
@@ -62,19 +66,19 @@ created: 2026-03-13
 
 | Behavior | Requirement | Why Manual | Test Instructions |
 |----------|-------------|------------|-------------------|
-| `npx agentbnb init` works from clean install | npm-package | Requires published npm package | Publish to npm, run `npx agentbnb init` in a clean directory |
-| mDNS discovery across two machines | p2p-discovery | Requires LAN network with two machines | Start `agentbnb serve` on machine A, run `agentbnb discover` on machine B |
-| Documentation completeness | docs | Subjective quality | Review README, examples, and getting-started guide |
+| `npx agentbnb init` works from clean install | R-007 | Requires published npm package | Publish to npm, run `npx agentbnb init` in a clean directory |
+| mDNS discovery across two machines | R-009 | Requires LAN network with two machines | Start `agentbnb serve` on machine A, run `agentbnb discover` on machine B |
+| Documentation completeness | R-012 | Subjective quality | Review README, examples, and getting-started guide |
 
 ---
 
 ## Validation Sign-Off
 
-- [ ] All tasks have `<automated>` verify or Wave 0 dependencies
-- [ ] Sampling continuity: no 3 consecutive tasks without automated verify
-- [ ] Wave 0 covers all MISSING references
-- [ ] No watch-mode flags
-- [ ] Feedback latency < 15s
-- [ ] `nyquist_compliant: true` set in frontmatter
+- [x] All tasks have `<automated>` verify or Wave 0 dependencies
+- [x] Sampling continuity: no 3 consecutive tasks without automated verify
+- [x] Wave 0 covers all MISSING references
+- [x] No watch-mode flags
+- [x] Feedback latency < 15s
+- [x] `nyquist_compliant: true` set in frontmatter
 
 **Approval:** pending
