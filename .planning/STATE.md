@@ -19,7 +19,7 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-13)
 
 **Core value:** Fill the market gap for agent-to-agent capability exchange
-**Current focus:** Phase 2 complete — Phase 3 (UX Layer) next
+**Current focus:** Phase 2.1 — Smart Onboarding (auto-detect API keys, draft Capability Cards, CLI polish)
 
 ## Current Phase
 
@@ -133,5 +133,9 @@ See: .planning/PROJECT.md (updated 2026-03-13)
 | 2026-03-14 | Completed 02-02-PLAN.md | Continue with plan 02-03 |
 | 2026-03-14 | Phase 2 complete — human-verified | `/gsd:plan-phase 3` to start UX Layer |
 
+## Roadmap Evolution
+
+- Phase 2.1 inserted after Phase 2: Smart onboarding — auto-detect API keys, generate draft Capability Cards, CLI ergonomics (URGENT). Directly enables Phase 2 cold start conversion. Phase 3 (UX Layer) deferred.
+
 ---
-*Last updated: 2026-03-14 — Phase 2 complete. 14/14 plans complete across Phase 0, Phase 1, and Phase 2. 136 tests passing.*
+*Last updated: 2026-03-14 — Phase 2.1 inserted. 14/14 plans complete across Phase 0-2. 136 tests passing.*
