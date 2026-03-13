@@ -27,8 +27,8 @@ export const CapabilityCardSchema = z.object({
   inputs: z.array(IOSchemaSchema),
   outputs: z.array(IOSchemaSchema),
   pricing: z.object({
-    credits_per_call: z.number().nonneg(),
-    credits_per_minute: z.number().nonneg().optional(),
+    credits_per_call: z.number().nonnegative(),
+    credits_per_minute: z.number().nonnegative().optional(),
   }),
   availability: z.object({
     online: z.boolean(),
@@ -36,7 +36,7 @@ export const CapabilityCardSchema = z.object({
   }),
   metadata: z.object({
     apis_used: z.array(z.string()).optional(),
-    avg_latency_ms: z.number().nonneg().optional(),
+    avg_latency_ms: z.number().nonnegative().optional(),
     success_rate: z.number().min(0).max(1).optional(),
     tags: z.array(z.string()).optional(),
   }).optional(),
