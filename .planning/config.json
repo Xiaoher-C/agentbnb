@@ -1,0 +1,20 @@
+{
+  "project_name": "AgentBnB",
+  "description": "P2P Agent Capability Sharing Protocol — Airbnb for AI agent pipelines",
+  "granularity": "standard",
+  "git": {
+    "auto_commit": true,
+    "branch_per_phase": true,
+    "branch_prefix": "gsd/"
+  },
+  "models": {
+    "planning": "opus",
+    "execution": "sonnet",
+    "verification": "sonnet"
+  },
+  "workflow": {
+    "discuss_phase": true,
+    "nyquist_validation": true,
+    "auto_advance": false
+  }
+}
