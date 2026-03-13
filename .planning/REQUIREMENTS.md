@@ -36,7 +36,7 @@ SQLite-backed storage for Capability Cards with:
 - [x] Owner isolation enforced
 
 ### R-003: CLI Interface
-**Status**: Pending
+**Status**: Complete (00-04)
 **Priority**: P0
 
 Commander-based CLI with subcommands:
@@ -48,9 +48,9 @@ Commander-based CLI with subcommands:
 - `agentbnb serve` — Start the gateway server
 
 **Acceptance Criteria**:
-- [ ] All commands have --help output
-- [ ] JSON and table output formats
-- [ ] Config stored in ~/.agentbnb/config.json
+- [x] All commands have --help output
+- [x] JSON and table output formats
+- [x] Config stored in ~/.agentbnb/config.json
 
 ### R-004: Gateway Server
 **Status**: Complete (00-03)

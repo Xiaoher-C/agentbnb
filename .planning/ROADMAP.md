@@ -3,13 +3,13 @@
 ## Phase 0: Dogfood (Current)
 **Goal**: Prove the concept by sharing capabilities between 2 OpenClaw agents internally.
 **Requirements:** [R-001, R-002, R-003, R-004, R-005, R-006]
-**Plans:** 3/5 plans executed
+**Plans:** 4/5 plans executed
 
 Plans:
 - [x] 00-01-PLAN.md — Registry: Capability Card schema + SQLite store + FTS5 search
 - [x] 00-02-PLAN.md — Credit system: ledger + escrow hold/settle/release
 - [x] 00-03-PLAN.md — Gateway: Fastify server + JSON-RPC + auth + client
-- [ ] 00-04-PLAN.md — CLI: wire all 6 subcommands to real implementations
+- [x] 00-04-PLAN.md — CLI: wire all 6 subcommands to real implementations
 - [ ] 00-05-PLAN.md — OpenClaw integration: SOUL.md parser + E2E dogfood test
 
 ### 0.1 Foundation
@@ -19,9 +19,9 @@ Plans:
 - [x] SQLite-backed local registry
 
 ### 0.2 Core Loop
-- [ ] CLI: `agentbnb publish` — register a Capability Card
-- [ ] CLI: `agentbnb discover` — search available capabilities
-- [ ] CLI: `agentbnb request` — request a capability from another agent
+- [x] CLI: `agentbnb publish` — register a Capability Card
+- [x] CLI: `agentbnb discover` — search available capabilities
+- [x] CLI: `agentbnb request` — request a capability from another agent
 - [x] Gateway: HTTP server to receive and forward requests
 - [x] Gateway: Client to send requests to other agents
 
