@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-current_plan: 1 of 2 (Phase 2.1) — complete
+current_plan: 2 of 2 (Phase 2.1) — complete
 status: in_progress
-last_updated: "2026-03-13T18:19:00Z"
+last_updated: "2026-03-14T19:30:00Z"
 progress:
   total_phases: 5
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 14
-  completed_plans: 13
+  completed_plans: 14
 ---
 
 # AgentBnB — Project State
@@ -19,17 +19,18 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-13)
 
 **Core value:** Fill the market gap for agent-to-agent capability exchange
-**Current focus:** Phase 2.1 — Smart Onboarding (auto-detect API keys, draft Capability Cards, CLI polish)
+**Current focus:** Phase 2.1 complete. Next: `/gsd:verify-work` or refinement tasks.
 
 ## Current Phase
 
-**Phase 2.1: Smart Onboarding** — In Progress. 1 of 2 plans complete.
+**Phase 2.1: Smart Onboarding** — Complete. 2 of 2 plans complete. 10/10 must-haves verified.
 
-**Current Plan:** 1 of 2 (Phase 2.1) — complete
+**Current Plan:** 2 of 2 (Phase 2.1) — complete
 
 ### Progress (Phase 2.1)
 
 - Onboarding Detection + Card Generation (Plan 01): complete — TDD pure functions: detectApiKeys, isPortOpen, detectOpenPorts, buildDraftCard, 10 API templates, 21 tests, 157 total
+- CLI Integration (Plan 02): complete — --yes, --no-detect flags, non-TTY guard, interactive confirmation, 6 tests, 163 total
 
 ### Progress (Phase 2 -- complete)
 
@@ -118,6 +119,7 @@ See: .planning/PROJECT.md (updated 2026-03-13)
 | 02-cold-start | 02 | 15min | 2 | 5 |
 | 02-cold-start | 03 | 5min | 3 | 3 |
 | 02.1-smart-onboarding | 01 | 2min | 1 | 2 |
+| 02.1-smart-onboarding | 02 | 3min | 1 | 2 |
 
 ## Session Log
 
@@ -139,10 +141,11 @@ See: .planning/PROJECT.md (updated 2026-03-13)
 | 2026-03-14 | Completed 02-02-PLAN.md | Continue with plan 02-03 |
 | 2026-03-14 | Phase 2 complete — human-verified | `/gsd:plan-phase 3` to start UX Layer |
 | 2026-03-14 | Completed 02.1-01-PLAN.md | Continue with plan 02.1-02 |
+| 2026-03-14 | Phase 2.1 complete — 10/10 verified, 163 tests | `/gsd:verify-work` or refinement tasks |
 
 ## Roadmap Evolution
 
 - Phase 2.1 inserted after Phase 2: Smart onboarding — auto-detect API keys, generate draft Capability Cards, CLI ergonomics (URGENT). Directly enables Phase 2 cold start conversion. Phase 3 (UX Layer) deferred.
 
 ---
-*Last updated: 2026-03-14 — Phase 2.1 Plan 01 complete. 15/16 plans complete across Phase 0-2.1. 157 tests passing.*
+*Last updated: 2026-03-14 — Phase 2.1 complete. 16/16 plans complete across Phase 0-2.1. 163 tests passing.*
