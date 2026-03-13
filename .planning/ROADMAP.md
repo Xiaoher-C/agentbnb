@@ -74,7 +74,7 @@ Plans:
 **Plans:** 2 plans
 
 Plans:
-- [ ] 02.1-01-PLAN.md — Onboarding detection + card generation (TDD: onboarding.ts pure functions)
+- [x] 02.1-01-PLAN.md — Onboarding detection + card generation (TDD: onboarding.ts pure functions)
 - [ ] 02.1-02-PLAN.md — CLI integration: wire init with --yes, --no-detect flags + human verify
 
 - [ ] Auto-detect env vars (OPENAI_API_KEY, ELEVENLABS_API_KEY, KLING_API_KEY, etc.)
