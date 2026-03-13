@@ -1,6 +1,6 @@
 import Fastify, { type FastifyInstance } from 'fastify';
 import type Database from 'better-sqlite3';
-import { getCard } from '../registry/store.js';
+import { getCard, updateReputation } from '../registry/store.js';
 import { getBalance } from '../credit/ledger.js';
 import { holdEscrow, settleEscrow, releaseEscrow } from '../credit/escrow.js';
 import { AgentBnBError } from '../types/index.js';
@@ -152,6 +152,7 @@ export function createGatewayServer(opts: GatewayOptions): FastifyInstance {
     // Execute at handler URL with configurable timeout via AbortController
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
+    const startMs = Date.now();
 
     try {
       const response = await fetch(handlerUrl, {
@@ -165,6 +166,7 @@ export function createGatewayServer(opts: GatewayOptions): FastifyInstance {
 
       if (!response.ok) {
         releaseEscrow(creditDb, escrowId);
+        updateReputation(registryDb, cardId, false, Date.now() - startMs);
         return reply.send({
           jsonrpc: '2.0',
           id,
@@ -174,11 +176,13 @@ export function createGatewayServer(opts: GatewayOptions): FastifyInstance {
 
       const result = (await response.json()) as unknown;
       settleEscrow(creditDb, escrowId, card.owner);
+      updateReputation(registryDb, cardId, true, Date.now() - startMs);
 
       return reply.send({ jsonrpc: '2.0', id, result });
     } catch (err) {
       clearTimeout(timer);
       releaseEscrow(creditDb, escrowId);
+      updateReputation(registryDb, cardId, false, Date.now() - startMs);
 
       const isTimeout = err instanceof Error && err.name === 'AbortError';
       return reply.send({
