@@ -1,15 +1,15 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.0
-milestone_name: milestone
+milestone: v1.1
+milestone_name: Upgrade
 current_plan: Not started
 status: unknown
-last_updated: "2026-03-14T17:09:57.458Z"
+last_updated: "2026-03-14T19:06:01.092Z"
 progress:
-  total_phases: 7
-  completed_phases: 5
-  total_plans: 17
-  completed_plans: 17
+  total_phases: 8
+  completed_phases: 6
+  total_plans: 18
+  completed_plans: 18
 ---
 
 # AgentBnB — Project State
@@ -19,13 +19,17 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-13)
 
 **Core value:** Fill the market gap for agent-to-agent capability exchange
-**Current focus:** Phase 2.1 complete. Next: `/gsd:verify-work` or refinement tasks.
+**Current focus:** Phase 2.25 complete. Next: Phase 2.3 Remote Registry Discovery.
 
 ## Current Phase
 
-**Phase 2.2: Agent Hub** — In progress. 1 of 2 plans complete.
+**Phase 2.25: Schema v1.1 Upgrade** — Complete. 1 of 1 plans complete.
 
-**Current Plan:** Not started
+**Current Plan:** Completed 02.25-01
+
+### Progress (Phase 2.25)
+
+- Schema v1.1 Upgrade (Plan 01): complete — _internal and free_tier fields added to CapabilityCardSchema, server/CLI stripping, Hub free-tier badge, 8 new tests
 
 ### Progress (Phase 2.2)
 
@@ -113,6 +117,10 @@ See: .planning/PROJECT.md (updated 2026-03-13)
 | 2026-03-14 | 02.2-02 | Client-side category filter in useCards because /cards API has no category query param |
 | 2026-03-14 | 02.2-02 | LucideIcon type (not React.ComponentType) used for icon lookup Record to satisfy strict TS propTypes compatibility |
 | 2026-03-14 | 02.2-02 | availableCategories computed from allCards (pre-filter) so dropdown always reflects full registry contents |
+| 2026-03-15 | 02.25-01 | _internal stored in SQLite via schema but stripped at API boundary — enables private card metadata without schema migration complexity |
+| 2026-03-15 | 02.25-01 | free_tier: 0 is valid (disabled state), only negative values rejected — nonnegative() aligns with credits_per_call pattern |
+| 2026-03-15 | 02.25-01 | Hub badge guard uses !== undefined && > 0 — explicit undefined check needed because 0 is falsy but valid |
+| 2026-03-15 | 02.25-01 | CLI stripping applied before both --json and table output paths — single strip covers all output modes |
 
 ## Performance Metrics
 
@@ -136,6 +144,7 @@ See: .planning/PROJECT.md (updated 2026-03-13)
 | Phase 02.2-agent-hub P01 | 12min | 2 tasks | 14 files |
 | 02.2-agent-hub | 02 | 18min | 3 | 16 |
 | Phase 02.2-agent-hub P02 | 18min | 3 tasks | 16 files |
+| Phase 02.25-schema-v1-1-upgrade P01 | 7min | 2 tasks | 8 files |
 
 ## Session Log
 
@@ -161,6 +170,7 @@ See: .planning/PROJECT.md (updated 2026-03-13)
 | 2026-03-14 | Phase 2.2 context gathered | `/gsd:plan-phase 2.2` |
 | 2026-03-14 | Completed 02.2-01-PLAN.md | Continue with plan 02.2-02 |
 | 2026-03-14 | Completed 02.2-02-PLAN.md — Phase 2.2 complete | `/gsd:verify-work` or next phase |
+| 2026-03-15 | Completed 02.25-01-PLAN.md — _internal and free_tier schema fields, server/CLI stripping, Hub badge | Continue with Phase 2.3 (Remote Registry) |
 
 ## Roadmap Evolution
 

@@ -104,7 +104,7 @@ Plans:
 **Goal**: Add _internal and free_tier fields to CapabilityCardSchema, strip _internal from API/CLI responses, render free-tier badges in Hub. Additive optional fields, backward compatible with v1.0. powered_by already implemented (commit 7946aab).
 **Requirements**: [SCH-02, SCH-03, SCH-04, SCH-05, SCH-06]
 **Depends on:** Phase 2.2
-**Plans:** 1 plan
+**Plans:** 1/1 plans complete
 
 Plans:
 - [ ] 02.25-01-PLAN.md — Schema _internal + free_tier fields, server/CLI stripping, Hub free-tier badge
