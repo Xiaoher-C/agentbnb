@@ -166,6 +166,7 @@ See: .planning/PROJECT.md (updated 2026-03-13)
 
 - Phase 2.1 inserted after Phase 2: Smart onboarding — auto-detect API keys, generate draft Capability Cards, CLI ergonomics (URGENT). Directly enables Phase 2 cold start conversion. Phase 3 (UX Layer) deferred.
 - Phase 2.2 inserted after Phase 2.1: Agent Hub — public read-only capability browser at `/hub`. Cold-start accelerator for recruiting agent owners. React SPA embedded in Fastify, no new backend needed.
+- Phase 2.25 inserted before Phase 2.3: Schema v1.1 Upgrade — add powered_by, _internal, free_tier fields to CapabilityCardSchema. Additive optional fields, backward compatible. Must land before Remote Registry goes live.
 
 ---
-*Last updated: 2026-03-14 — Phase 2.2 complete. 17/17 plans complete across Phase 0-2.2. 25 hub tests + 163 core tests passing.*
+*Last updated: 2026-03-15 — Phase 2.2 complete. Phase 2.25 (Schema v1.1) and 2.3 (Remote Registry) queued. 17/17 plans complete across Phase 0-2.2.*

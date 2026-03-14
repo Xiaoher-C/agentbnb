@@ -100,10 +100,26 @@ Plans:
 - [ ] Visual identity: boring-avatars identicons, lucide-react category icons, level badges, status indicators
 - [ ] Responsive card grid with credit cost, success rate, "Request" button
 
+## Phase 2.25: Schema v1.1 Upgrade
+**Goal**: Add powered_by, _internal, and free_tier fields to CapabilityCardSchema — additive optional fields, backward compatible with v1.0 cards. No breaking changes.
+**Requirements**: TBD
+**Depends on:** Phase 2.2
+**Plans:** 0 plans
+
+- [ ] `powered_by` — `z.array(z.object({ provider, model?, tier? })).optional()` — public, shown on Hub
+- [ ] `_internal` — `z.record(z.unknown()).optional()` — stripped from discover/Hub API responses, never transmitted
+- [ ] `free_tier` — `z.number().nonnegative().optional()` in pricing — monthly free request count per capability
+- [ ] Hub rendering updates for new fields
+- [ ] Registry server strips `_internal` from API responses
+- [ ] Tests: cards with/without new fields validate, `_internal` stripped from discover results
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 2.25 to break down)
+
 ## Phase 2.3: Remote Registry Discovery
 **Goal**: Enable CLI discovery of capabilities from remote registry servers, completing the cross-machine discovery loop that Phase 2's registry API created.
 **Requirements**: [RRD-01, RRD-02]
-**Depends on:** Phase 2
+**Depends on:** Phase 2.25
 **Gap Closure:** Closes integration gap (CLI discover → Registry HTTP) and broken flow from v1.0 audit
 
 - [ ] `agentbnb discover --registry <url>` fetches from remote GET /cards endpoint
