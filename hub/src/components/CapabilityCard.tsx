@@ -66,6 +66,23 @@ export default function CapabilityCard({ card, expanded, onToggle }: CapabilityC
         {overflow > 0 && <CategoryChip category={categories[0]} overflowCount={overflow} />}
       </div>
 
+      {/* Powered by row */}
+      {card.powered_by && card.powered_by.length > 0 && (
+        <div className="mt-3 flex items-center gap-1 text-xs text-slate-500">
+          <span className="text-slate-600 mr-1">Powered by</span>
+          {card.powered_by.map((entry, i) => (
+            <span key={i} className="flex items-center">
+              {i > 0 && <span className="mx-1 text-slate-600">→</span>}
+              <span className="text-slate-300">
+                {entry.provider}
+                {entry.model && <span className="text-slate-500 ml-0.5">{entry.model}</span>}
+                {entry.tier && <span className="text-slate-500 ml-0.5">{entry.tier}</span>}
+              </span>
+            </span>
+          ))}
+        </div>
+      )}
+
       {/* Stats row */}
       <div className="mt-3 flex items-center gap-3 text-xs text-slate-400">
         <span className="flex items-center gap-1.5">

@@ -32,6 +32,9 @@
   "availability": {
     "online": true
   },
+  "powered_by": [
+    { "provider": "OpenAI", "model": "GPT-4o" }
+  ],
   "metadata": {
     "apis_used": ["openai"],
     "avg_latency_ms": 800,

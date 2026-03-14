@@ -4,6 +4,12 @@
  * Avoids importing from the parent project's src/types.
  */
 
+export interface PoweredByEntry {
+  provider: string;
+  model?: string;
+  tier?: string;
+}
+
 export interface HubCard {
   id: string;
   owner: string;
@@ -14,6 +20,7 @@ export interface HubCard {
   outputs: Array<{ name: string; type: string; description?: string; required?: boolean }>;
   pricing: { credits_per_call: number; credits_per_minute?: number };
   availability: { online: boolean; schedule?: string };
+  powered_by?: PoweredByEntry[];
   metadata?: {
     apis_used?: string[];
     avg_latency_ms?: number;

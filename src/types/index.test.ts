@@ -127,4 +127,65 @@ describe('CapabilityCardSchema', () => {
     const result = CapabilityCardSchema.safeParse(bad);
     expect(result.success).toBe(false);
   });
+
+  describe('powered_by field', () => {
+    it('accepts a card without powered_by (backward compat)', () => {
+      const result = CapabilityCardSchema.safeParse(validCard);
+      expect(result.success).toBe(true);
+    });
+
+    it('accepts a card with powered_by array', () => {
+      const card = {
+        ...validCard,
+        powered_by: [
+          { provider: 'OpenAI', model: 'GPT-4o' },
+          { provider: 'ElevenLabs', tier: 'Pro' },
+        ],
+      };
+      const result = CapabilityCardSchema.safeParse(card);
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.powered_by).toHaveLength(2);
+        expect(result.data.powered_by![0].provider).toBe('OpenAI');
+        expect(result.data.powered_by![0].model).toBe('GPT-4o');
+        expect(result.data.powered_by![1].tier).toBe('Pro');
+      }
+    });
+
+    it('accepts powered_by with provider only (model and tier optional)', () => {
+      const card = {
+        ...validCard,
+        powered_by: [{ provider: 'Replicate' }],
+      };
+      const result = CapabilityCardSchema.safeParse(card);
+      expect(result.success).toBe(true);
+    });
+
+    it('rejects powered_by entry with empty provider', () => {
+      const card = {
+        ...validCard,
+        powered_by: [{ provider: '' }],
+      };
+      const result = CapabilityCardSchema.safeParse(card);
+      expect(result.success).toBe(false);
+    });
+
+    it('accepts an L2 pipeline card with multi-step powered_by chain', () => {
+      const pipeline = {
+        ...validCard,
+        level: 2 as const,
+        name: 'Creative Pipeline',
+        powered_by: [
+          { provider: 'OpenAI', model: 'GPT-4o' },
+          { provider: 'Kling', model: 'v1.5' },
+          { provider: 'ElevenLabs', tier: 'Pro' },
+        ],
+      };
+      const result = CapabilityCardSchema.safeParse(pipeline);
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.powered_by).toHaveLength(3);
+      }
+    });
+  });
 });

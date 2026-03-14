@@ -12,6 +12,16 @@ export const IOSchemaSchema = z.object({
 });
 
 /**
+ * Describes a tool or model powering a capability.
+ * Public-facing — shown on Hub cards as the tool chain.
+ */
+export const PoweredBySchema = z.object({
+  provider: z.string().min(1),
+  model: z.string().optional(),
+  tier: z.string().optional(),
+});
+
+/**
  * Capability Card — the core unit of AgentBnB
  *
  * Level 1 (Atomic): Single API capability (e.g. ElevenLabs TTS)
@@ -35,6 +45,7 @@ export const CapabilityCardSchema = z.object({
     online: z.boolean(),
     schedule: z.string().optional(), // cron expression
   }),
+  powered_by: z.array(PoweredBySchema).optional(),
   metadata: z.object({
     apis_used: z.array(z.string()).optional(),
     avg_latency_ms: z.number().nonnegative().optional(),
@@ -47,6 +58,7 @@ export const CapabilityCardSchema = z.object({
 
 export type CapabilityCard = z.infer<typeof CapabilityCardSchema>;
 export type IOSchema = z.infer<typeof IOSchemaSchema>;
+export type PoweredBy = z.infer<typeof PoweredBySchema>;
 
 /**
  * Custom error base class

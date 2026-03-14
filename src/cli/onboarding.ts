@@ -24,6 +24,7 @@ interface CardTemplate {
   inputs: IOSchema[];
   outputs: IOSchema[];
   pricing: { credits_per_call: number };
+  powered_by: Array<{ provider: string; model?: string; tier?: string }>;
   metadata: { apis_used: string[]; tags: string[] };
 }
 
@@ -56,6 +57,7 @@ export const API_TEMPLATES: Record<string, CardTemplate> = {
     inputs: [{ name: 'prompt', type: 'text', required: true }],
     outputs: [{ name: 'completion', type: 'text', required: true }],
     pricing: { credits_per_call: 5 },
+    powered_by: [{ provider: 'OpenAI', model: 'GPT-4o' }],
     metadata: { apis_used: ['openai'], tags: ['llm', 'text', 'generation'] },
   },
   ANTHROPIC_API_KEY: {
@@ -65,6 +67,7 @@ export const API_TEMPLATES: Record<string, CardTemplate> = {
     inputs: [{ name: 'prompt', type: 'text', required: true }],
     outputs: [{ name: 'response', type: 'text', required: true }],
     pricing: { credits_per_call: 5 },
+    powered_by: [{ provider: 'Anthropic', model: 'Claude' }],
     metadata: { apis_used: ['anthropic'], tags: ['llm', 'text', 'reasoning'] },
   },
   ELEVENLABS_API_KEY: {
@@ -74,6 +77,7 @@ export const API_TEMPLATES: Record<string, CardTemplate> = {
     inputs: [{ name: 'text', type: 'text', required: true }],
     outputs: [{ name: 'audio', type: 'audio', required: true }],
     pricing: { credits_per_call: 10 },
+    powered_by: [{ provider: 'ElevenLabs' }],
     metadata: { apis_used: ['elevenlabs'], tags: ['tts', 'audio', 'voice'] },
   },
   KLING_API_KEY: {
@@ -83,6 +87,7 @@ export const API_TEMPLATES: Record<string, CardTemplate> = {
     inputs: [{ name: 'prompt', type: 'text', required: true }],
     outputs: [{ name: 'video', type: 'video', required: true }],
     pricing: { credits_per_call: 50 },
+    powered_by: [{ provider: 'Kling', model: 'v1.5' }],
     metadata: { apis_used: ['kling'], tags: ['video', 'generation', 'ai'] },
   },
   STABILITY_API_KEY: {
@@ -92,6 +97,7 @@ export const API_TEMPLATES: Record<string, CardTemplate> = {
     inputs: [{ name: 'prompt', type: 'text', required: true }],
     outputs: [{ name: 'image', type: 'image', required: true }],
     pricing: { credits_per_call: 8 },
+    powered_by: [{ provider: 'Stability AI', model: 'SDXL' }],
     metadata: { apis_used: ['stability'], tags: ['image', 'generation', 'diffusion'] },
   },
   REPLICATE_API_TOKEN: {
@@ -101,6 +107,7 @@ export const API_TEMPLATES: Record<string, CardTemplate> = {
     inputs: [{ name: 'input', type: 'json', required: true }],
     outputs: [{ name: 'output', type: 'json', required: true }],
     pricing: { credits_per_call: 10 },
+    powered_by: [{ provider: 'Replicate' }],
     metadata: { apis_used: ['replicate'], tags: ['ml', 'inference'] },
   },
   GOOGLE_API_KEY: {
@@ -110,6 +117,7 @@ export const API_TEMPLATES: Record<string, CardTemplate> = {
     inputs: [{ name: 'prompt', type: 'text', required: true }],
     outputs: [{ name: 'response', type: 'text', required: true }],
     pricing: { credits_per_call: 5 },
+    powered_by: [{ provider: 'Google', model: 'Gemini' }],
     metadata: { apis_used: ['google'], tags: ['llm', 'multimodal', 'text'] },
   },
   AZURE_OPENAI_API_KEY: {
@@ -119,6 +127,7 @@ export const API_TEMPLATES: Record<string, CardTemplate> = {
     inputs: [{ name: 'prompt', type: 'text', required: true }],
     outputs: [{ name: 'completion', type: 'text', required: true }],
     pricing: { credits_per_call: 5 },
+    powered_by: [{ provider: 'Azure OpenAI' }],
     metadata: { apis_used: ['azure-openai'], tags: ['llm', 'text', 'azure'] },
   },
   COHERE_API_KEY: {
@@ -128,6 +137,7 @@ export const API_TEMPLATES: Record<string, CardTemplate> = {
     inputs: [{ name: 'text', type: 'text', required: true }],
     outputs: [{ name: 'response', type: 'text', required: true }],
     pricing: { credits_per_call: 3 },
+    powered_by: [{ provider: 'Cohere' }],
     metadata: { apis_used: ['cohere'], tags: ['llm', 'embeddings', 'text'] },
   },
   MISTRAL_API_KEY: {
@@ -137,6 +147,7 @@ export const API_TEMPLATES: Record<string, CardTemplate> = {
     inputs: [{ name: 'prompt', type: 'text', required: true }],
     outputs: [{ name: 'response', type: 'text', required: true }],
     pricing: { credits_per_call: 4 },
+    powered_by: [{ provider: 'Mistral' }],
     metadata: { apis_used: ['mistral'], tags: ['llm', 'text', 'generation'] },
   },
 };
@@ -227,6 +238,7 @@ export function buildDraftCard(
     outputs: template.outputs,
     pricing: template.pricing,
     availability: { online: true },
+    powered_by: template.powered_by,
     metadata: {
       apis_used: template.metadata.apis_used,
       tags: template.metadata.tags,
