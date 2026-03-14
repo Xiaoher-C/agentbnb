@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { execSync, type SpawnSyncReturns } from 'node:child_process';
+import { execSync, spawn, type SpawnSyncReturns, type ChildProcess } from 'node:child_process';
 import { mkdtempSync, writeFileSync, existsSync, rmSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -456,5 +456,140 @@ describe('CLI: --help', () => {
         rmSync(tmpDir, { recursive: true, force: true });
       }
     }
+  });
+});
+
+describe('CLI: discover --registry (integration)', () => {
+  let tmpDir: string;
+  let port: number;
+  let serverProcess: ChildProcess;
+
+  beforeEach(async () => {
+    tmpDir = mkdtempSync(join(tmpdir(), 'agentbnb-registry-test-'));
+    runCli('init --owner test-agent', tmpDir);
+
+    // Spawn registry server as a separate background process so that CLI subprocesses
+    // (spawned via execSync) can reach it over the loopback interface.
+    // The server writes its actual port to a temp file when ready.
+    const portFile = join(tmpDir, 'server.port');
+    const serverScript = join(import.meta.dirname ?? __dirname, 'test-registry-server.ts');
+
+    await new Promise<void>((resolve, reject) => {
+      serverProcess = spawn('npx', ['tsx', serverScript, portFile], {
+        stdio: 'ignore',
+        detached: false,
+      });
+
+      serverProcess.on('error', reject);
+
+      // Poll for port file to appear (server ready signal)
+      const deadline = Date.now() + 10_000;
+      const poll = setInterval(() => {
+        try {
+          const content = readFileSync(portFile, 'utf-8').trim();
+          if (content.length > 0) {
+            clearInterval(poll);
+            port = parseInt(content, 10);
+            resolve();
+          }
+        } catch {
+          // File not yet written
+        }
+        if (Date.now() > deadline) {
+          clearInterval(poll);
+          reject(new Error('Registry server did not start within 10s'));
+        }
+      }, 50);
+    });
+  });
+
+  afterEach(() => {
+    serverProcess.kill('SIGTERM');
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('discovers cards from remote registry via --registry flag', () => {
+    const { status, stdout } = runCli(`discover --registry http://127.0.0.1:${port}`, tmpDir);
+    expect(status).toBe(0);
+    expect(stdout).toContain('Remote Voice Synth');
+    expect(stdout).toContain('[remote]');
+  });
+
+  it('discover --registry --json includes source field', () => {
+    const { status, stdout } = runCli(`discover --registry http://127.0.0.1:${port} --json`, tmpDir);
+    expect(status).toBe(0);
+
+    const cards = JSON.parse(stdout) as Array<Record<string, unknown>>;
+    const remoteCard = cards.find((c) => c.name === 'Remote Voice Synth');
+    expect(remoteCard).toBeDefined();
+    expect(remoteCard?.source).toBe('remote');
+  });
+
+  it('discover --registry with --tag filters results', () => {
+    const { status, stdout } = runCli(`discover --registry http://127.0.0.1:${port} --tag nlp`, tmpDir);
+    expect(status).toBe(0);
+    expect(stdout).toContain('NLP Classifier');
+  });
+
+  it('shows error when explicit --registry is unreachable', () => {
+    const { status, stderr } = runCli('discover --registry http://127.0.0.1:19999', tmpDir);
+    expect(status).not.toBe(0);
+    expect(stderr).toContain('Cannot reach');
+  });
+
+  it('config set registry + discover uses saved default', () => {
+    const setResult = runCli(`config set registry http://127.0.0.1:${port}`, tmpDir);
+    expect(setResult.status).toBe(0);
+
+    const { status, stdout } = runCli('discover', tmpDir);
+    expect(status).toBe(0);
+    expect(stdout).toContain('Remote Voice Synth');
+    expect(stdout).toContain('[remote]');
+  });
+
+  it('config default registry unreachable degrades to local results', () => {
+    // Set a bad registry URL as default
+    runCli('config set registry http://127.0.0.1:19999', tmpDir);
+
+    // Publish a local card
+    const cardPath = join(tmpDir, 'local-card.json');
+    writeFileSync(cardPath, makeCardJson('c3d4e5f6-a7b8-9012-cdef-123456789012', 'Local Fallback Card'));
+    runCli(`publish ${cardPath}`, tmpDir);
+
+    // Discover should degrade gracefully: local results returned, warning about registry failure.
+    // execSync on success returns stdout only; capture stderr separately via shell redirect.
+    const cliPath = join(import.meta.dirname ?? __dirname, 'index.ts');
+    let combinedOut = '';
+    let exitStatus = 0;
+    try {
+      combinedOut = execSync(
+        `npx tsx ${cliPath} discover 2>&1`,
+        {
+          env: { ...process.env, AGENTBNB_DIR: tmpDir },
+          encoding: 'utf-8',
+          timeout: 15000,
+        }
+      ) as unknown as string;
+    } catch (err) {
+      const e = err as SpawnSyncReturns<string>;
+      combinedOut = ((e.stdout as string | null) ?? '') + ((e.stderr as string | null) ?? '');
+      exitStatus = (e.status as number | null) ?? 1;
+    }
+    expect(exitStatus).toBe(0);
+    expect(combinedOut).toContain('Local Fallback Card');
+    expect(combinedOut).toContain('Cannot reach');
+  });
+
+  it('config get registry returns saved value', () => {
+    runCli('config set registry http://example.com:7701', tmpDir);
+    const { status, stdout } = runCli('config get registry', tmpDir);
+    expect(status).toBe(0);
+    expect(stdout).toContain('http://example.com:7701');
+  });
+
+  it('config set unknown key is rejected', () => {
+    const { status, stderr } = runCli('config set foobar value', tmpDir);
+    expect(status).not.toBe(0);
+    expect(stderr).toContain('Unknown config key');
   });
 });
