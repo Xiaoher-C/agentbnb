@@ -22,6 +22,8 @@ export interface AgentBnBConfig {
   credit_db_path: string;
   /** Bearer token for this agent's gateway auth. */
   token: string;
+  /** Optional default remote registry URL (e.g. http://host:7701). */
+  registry?: string;
 }
 
 /**
