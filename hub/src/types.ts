@@ -18,7 +18,7 @@ export interface HubCard {
   level: 1 | 2 | 3;
   inputs: Array<{ name: string; type: string; description?: string; required?: boolean }>;
   outputs: Array<{ name: string; type: string; description?: string; required?: boolean }>;
-  pricing: { credits_per_call: number; credits_per_minute?: number };
+  pricing: { credits_per_call: number; credits_per_minute?: number; free_tier?: number };
   availability: { online: boolean; schedule?: string };
   powered_by?: PoweredByEntry[];
   metadata?: {

@@ -97,6 +97,12 @@ export default function CapabilityCard({ card, expanded, onToggle }: CapabilityC
         )}
         <span className="text-slate-600">·</span>
         <span className="text-indigo-400">{formatCredits(card.pricing)}</span>
+        {card.pricing.free_tier !== undefined && card.pricing.free_tier > 0 && (
+          <>
+            <span className="text-slate-600">·</span>
+            <span className="text-emerald-400">{card.pricing.free_tier} free/mo</span>
+          </>
+        )}
       </div>
 
       {/* Expanded content */}
