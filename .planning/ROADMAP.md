@@ -101,20 +101,21 @@ Plans:
 - [ ] Responsive card grid with credit cost, success rate, "Request" button
 
 ## Phase 2.25: Schema v1.1 Upgrade
-**Goal**: Add powered_by, _internal, and free_tier fields to CapabilityCardSchema — additive optional fields, backward compatible with v1.0 cards. No breaking changes.
-**Requirements**: TBD
+**Goal**: Add _internal and free_tier fields to CapabilityCardSchema, strip _internal from API/CLI responses, render free-tier badges in Hub. Additive optional fields, backward compatible with v1.0. powered_by already implemented (commit 7946aab).
+**Requirements**: [SCH-02, SCH-03, SCH-04, SCH-05, SCH-06]
 **Depends on:** Phase 2.2
-**Plans:** 0 plans
-
-- [ ] `powered_by` — `z.array(z.object({ provider, model?, tier? })).optional()` — public, shown on Hub
-- [ ] `_internal` — `z.record(z.unknown()).optional()` — stripped from discover/Hub API responses, never transmitted
-- [ ] `free_tier` — `z.number().nonnegative().optional()` in pricing — monthly free request count per capability
-- [ ] Hub rendering updates for new fields
-- [ ] Registry server strips `_internal` from API responses
-- [ ] Tests: cards with/without new fields validate, `_internal` stripped from discover results
+**Plans:** 1 plan
 
 Plans:
-- [ ] TBD (run /gsd:plan-phase 2.25 to break down)
+- [ ] 02.25-01-PLAN.md — Schema _internal + free_tier fields, server/CLI stripping, Hub free-tier badge
+
+- [x] `powered_by` — already implemented (commit 7946aab)
+- [ ] `_internal` — `z.record(z.unknown()).optional()` — stripped from discover/Hub API responses, never transmitted
+- [ ] `free_tier` — `z.number().nonnegative().optional()` in pricing — monthly free request count per capability
+- [ ] Hub rendering updates for free_tier badge
+- [ ] Registry server strips `_internal` from API responses
+- [ ] CLI discover strips `_internal` from output
+- [ ] Tests: cards with/without new fields validate, `_internal` stripped from discover results
 
 ## Phase 2.3: Remote Registry Discovery
 **Goal**: Enable CLI discovery of capabilities from remote registry servers, completing the cross-machine discovery loop that Phase 2's registry API created.
