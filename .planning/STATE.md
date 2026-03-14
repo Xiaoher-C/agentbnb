@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Upgrade
-current_plan: Not started
-status: unknown
-last_updated: "2026-03-14T19:13:24.688Z"
+current_plan: Phase 02.3 Plan 01 complete
+status: in_progress
+last_updated: "2026-03-14T19:37:19Z"
 progress:
   total_phases: 8
   completed_phases: 6
-  total_plans: 18
-  completed_plans: 18
+  total_plans: 20
+  completed_plans: 19
 ---
 
 # AgentBnB — Project State
@@ -25,7 +25,11 @@ See: .planning/PROJECT.md (updated 2026-03-13)
 
 **Phase 2.25: Schema v1.1 Upgrade** — Complete. 1 of 1 plans complete.
 
-**Current Plan:** Not started
+**Current Plan:** Phase 02.3 Plan 01 complete
+
+### Progress (Phase 2.3)
+
+- Remote Registry Fetch + CLI Integration (Plan 01): complete — fetchRemoteCards(), mergeResults(), RegistryTimeoutError/ConnectionError/AuthError, discover --registry/--tag flags, config set/get, source tagging with [local]/[remote] column, 20 unit tests
 
 ### Progress (Phase 2.25)
 
@@ -121,6 +125,11 @@ See: .planning/PROJECT.md (updated 2026-03-13)
 | 2026-03-15 | 02.25-01 | free_tier: 0 is valid (disabled state), only negative values rejected — nonnegative() aligns with credits_per_call pattern |
 | 2026-03-15 | 02.25-01 | Hub badge guard uses !== undefined && > 0 — explicit undefined check needed because 0 is falsy but valid |
 | 2026-03-15 | 02.25-01 | CLI stripping applied before both --json and table output paths — single strip covers all output modes |
+| 2026-03-14 | 02.3-01 | vi.stubGlobal fetch for unit tests avoids new test dependencies |
+| 2026-03-14 | 02.3-01 | Explicit --registry failure exits 1; config.registry default failure degrades gracefully with local results |
+| 2026-03-14 | 02.3-01 | Source column only added to discover table when remote results present — local-only format unchanged to preserve existing tests |
+| 2026-03-14 | 02.3-01 | config set key validated against allowlist ['registry'] to prevent arbitrary key pollution |
+| 2026-03-14 | 02.3-01 | --tag applied client-side for local registry results (GET /cards has no tag query param) |
 
 ## Performance Metrics
 
@@ -145,6 +154,7 @@ See: .planning/PROJECT.md (updated 2026-03-13)
 | 02.2-agent-hub | 02 | 18min | 3 | 16 |
 | Phase 02.2-agent-hub P02 | 18min | 3 tasks | 16 files |
 | Phase 02.25-schema-v1-1-upgrade P01 | 7min | 2 tasks | 8 files |
+| Phase 02.3-remote-registry-discovery P01 | 15min | 2 tasks | 4 files |
 
 ## Session Log
 
@@ -171,6 +181,7 @@ See: .planning/PROJECT.md (updated 2026-03-13)
 | 2026-03-14 | Completed 02.2-01-PLAN.md | Continue with plan 02.2-02 |
 | 2026-03-14 | Completed 02.2-02-PLAN.md — Phase 2.2 complete | `/gsd:verify-work` or next phase |
 | 2026-03-15 | Completed 02.25-01-PLAN.md — _internal and free_tier schema fields, server/CLI stripping, Hub badge | Continue with Phase 2.3 (Remote Registry) |
+| 2026-03-14 | Completed 02.3-01-PLAN.md — fetchRemoteCards, mergeResults, discover --registry/--tag, config set/get | Phase 2.3 Plan 01 complete |
 
 ## Roadmap Evolution
 
@@ -179,4 +190,4 @@ See: .planning/PROJECT.md (updated 2026-03-13)
 - Phase 2.25 inserted before Phase 2.3: Schema v1.1 Upgrade — add powered_by, _internal, free_tier fields to CapabilityCardSchema. Additive optional fields, backward compatible. Must land before Remote Registry goes live.
 
 ---
-*Last updated: 2026-03-15 — Phase 2.2 complete. Phase 2.25 (Schema v1.1) and 2.3 (Remote Registry) queued. 17/17 plans complete across Phase 0-2.2.*
+*Last updated: 2026-03-14 — Phase 2.3 Plan 01 complete. fetchRemoteCards + mergeResults + discover --registry + config set/get. 19/20 plans complete.*
