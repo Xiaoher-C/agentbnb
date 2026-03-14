@@ -194,6 +194,33 @@ describe('CLI: discover', () => {
     expect(Array.isArray(cards)).toBe(true);
     expect(cards.length).toBe(2);
   });
+
+  it('strips _internal from discover --json output', () => {
+    // Publish a card with _internal data
+    const cardPath = join(tmpDir, 'cardInternal.json');
+    writeFileSync(cardPath, JSON.stringify({
+      id: '00000000-0000-0000-0000-000000000099',
+      owner: 'test-agent',
+      name: 'Internal Test',
+      description: 'Card with _internal field',
+      level: 1,
+      inputs: [{ name: 'text', type: 'text', required: true }],
+      outputs: [{ name: 'result', type: 'text', required: true }],
+      pricing: { credits_per_call: 5 },
+      availability: { online: true },
+      metadata: {},
+      _internal: { secret_key: 'do-not-expose', debug_mode: true },
+    }));
+    runCli(`publish ${cardPath}`, tmpDir);
+
+    const { status, stdout } = runCli('discover --json', tmpDir);
+    expect(status).toBe(0);
+
+    const cards = JSON.parse(stdout) as Array<Record<string, unknown>>;
+    const internalCard = cards.find((c) => c.name === 'Internal Test');
+    expect(internalCard).toBeDefined();
+    expect(internalCard).not.toHaveProperty('_internal');
+  });
 });
 
 describe('CLI: status', () => {

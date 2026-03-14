@@ -190,6 +190,62 @@ Browse and filter capabilities with reputation-aware sorting:
 - [ ] Sort by success_rate puts highest first, unrated last
 - [ ] Sort by latency puts fastest first, unrated last
 
+## Phase 2.25: Schema v1.1 Upgrade Requirements
+
+### SCH-02: _internal Field
+**Status**: Complete (02.25-01)
+**Priority**: P0
+
+Add `_internal: z.record(z.unknown()).optional()` to CapabilityCardSchema for private per-card metadata stored in SQLite but never transmitted.
+
+**Acceptance Criteria**:
+- [x] Cards with `_internal` field validate successfully
+- [x] Cards without `_internal` still validate (backward compat)
+- [x] `_internal` accepts arbitrary key-value data
+
+### SCH-03: free_tier in Pricing
+**Status**: Complete (02.25-01)
+**Priority**: P0
+
+Add `free_tier: z.number().nonnegative().optional()` to pricing object for monthly free request count.
+
+**Acceptance Criteria**:
+- [x] Cards with `free_tier` in pricing validate successfully
+- [x] Cards without `free_tier` still validate (backward compat)
+- [x] Negative `free_tier` values are rejected
+
+### SCH-04: Server Strips _internal
+**Status**: Complete (02.25-01)
+**Priority**: P0
+
+Registry server must strip `_internal` from all API responses.
+
+**Acceptance Criteria**:
+- [x] GET /cards response never contains `_internal` field
+- [x] GET /cards/:id response never contains `_internal` field
+
+### SCH-05: Hub Free-Tier Badge
+**Status**: Complete (02.25-01)
+**Priority**: P1
+
+Hub renders free-tier badge when `free_tier > 0`.
+
+**Acceptance Criteria**:
+- [x] Hub renders "N free/mo" badge when free_tier > 0
+- [x] Hub does not render badge when free_tier absent or 0
+
+### SCH-06: Schema v1.1 Tests
+**Status**: Complete (02.25-01)
+**Priority**: P0
+
+Tests covering all new fields and stripping behavior.
+
+**Acceptance Criteria**:
+- [x] Schema validation tests for _internal and free_tier
+- [x] Server stripping tests for both endpoints
+- [x] CLI discover strips _internal from output
+- [x] Hub badge rendering tests
+
 ## Phase 2.3: Remote Registry Discovery Requirements
 
 ### RRD-01: CLI Remote Registry Query
