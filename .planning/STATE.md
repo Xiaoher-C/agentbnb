@@ -142,10 +142,12 @@ See: .planning/PROJECT.md (updated 2026-03-13)
 | 2026-03-14 | Phase 2 complete — human-verified | `/gsd:plan-phase 3` to start UX Layer |
 | 2026-03-14 | Completed 02.1-01-PLAN.md | Continue with plan 02.1-02 |
 | 2026-03-14 | Phase 2.1 complete — 10/10 verified, 163 tests | `/gsd:verify-work` or refinement tasks |
+| 2026-03-14 | Phase 2.2 context gathered | `/gsd:plan-phase 2.2` |
 
 ## Roadmap Evolution
 
 - Phase 2.1 inserted after Phase 2: Smart onboarding — auto-detect API keys, generate draft Capability Cards, CLI ergonomics (URGENT). Directly enables Phase 2 cold start conversion. Phase 3 (UX Layer) deferred.
+- Phase 2.2 inserted after Phase 2.1: Agent Hub — public read-only capability browser at `/hub`. Cold-start accelerator for recruiting agent owners. React SPA embedded in Fastify, no new backend needed.
 
 ---
 *Last updated: 2026-03-14 — Phase 2.1 complete. 16/16 plans complete across Phase 0-2.1. 163 tests passing.*
