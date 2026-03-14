@@ -100,6 +100,16 @@ Plans:
 - [ ] Visual identity: boring-avatars identicons, lucide-react category icons, level badges, status indicators
 - [ ] Responsive card grid with credit cost, success rate, "Request" button
 
+## Phase 2.3: Remote Registry Discovery
+**Goal**: Enable CLI discovery of capabilities from remote registry servers, completing the cross-machine discovery loop that Phase 2's registry API created.
+**Requirements**: [RRD-01, RRD-02]
+**Depends on:** Phase 2
+**Gap Closure:** Closes integration gap (CLI discover → Registry HTTP) and broken flow from v1.0 audit
+
+- [ ] `agentbnb discover --registry <url>` fetches from remote GET /cards endpoint
+- [ ] Query/filter params (q, level, online, tag) forwarded to HTTP request
+- [ ] Integration test: discover via registry URL returns remote cards
+
 ## Phase 3: UX Layer
 **Goal**: Non-technical users can share agent capabilities.
 

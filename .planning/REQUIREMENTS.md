@@ -136,7 +136,7 @@ Freeze the Capability Card schema at version 1.0 with a spec_version field:
 ## Phase 2: Cold Start Requirements
 
 ### R-013: Web-Based Registry
-**Status**: In Progress (02-02)
+**Status**: Complete (02-02)
 **Priority**: P0
 
 Public HTTP REST API exposing the capability card registry for external discovery:
@@ -156,7 +156,7 @@ Public HTTP REST API exposing the capability card registry for external discover
 - [ ] Registry accessible at http://host:7701/cards via `agentbnb serve`
 
 ### R-014: Reputation System
-**Status**: In Progress (02-01)
+**Status**: Complete (02-01)
 **Priority**: P0
 
 Per-card reputation tracking updated after each capability execution:
@@ -173,7 +173,7 @@ Per-card reputation tracking updated after each capability execution:
 - [ ] Re-publishing a card preserves existing reputation data
 
 ### R-015: Capability Card Marketplace
-**Status**: In Progress (02-02)
+**Status**: Complete (02-02)
 **Priority**: P1
 
 Browse and filter capabilities with reputation-aware sorting:
@@ -189,3 +189,37 @@ Browse and filter capabilities with reputation-aware sorting:
 - [ ] Reputation filters exclude cards below threshold
 - [ ] Sort by success_rate puts highest first, unrated last
 - [ ] Sort by latency puts fastest first, unrated last
+
+## Phase 2.3: Remote Registry Discovery Requirements
+
+### RRD-01: CLI Remote Registry Query
+**Status**: Pending (02.3)
+**Priority**: P0
+
+The `agentbnb discover` command must support querying a remote registry HTTP API:
+- `--registry <url>` option specifies the registry server URL (e.g., `http://host:7701`)
+- Fetches from `GET <url>/cards` with query/filter params forwarded
+- Supports same filters as local discover: q, level, online, tag
+- Results displayed in same table/JSON format as local discover
+- Graceful error handling for unreachable or invalid registry URLs
+
+**Acceptance Criteria**:
+- [ ] `agentbnb discover --registry http://host:7701` returns remote cards
+- [ ] Query param `--query` forwarded as `?q=` to remote API
+- [ ] Filter params (--level, --online, --tag) forwarded to remote API
+- [ ] `--json` output works with remote results
+- [ ] Timeout and connection errors produce actionable error messages
+
+### RRD-02: Remote Discovery Integration Test
+**Status**: Pending (02.3)
+**Priority**: P0
+
+End-to-end test proving cross-machine discovery works:
+- Start registry server, publish cards, discover via HTTP from CLI
+- Validates the full flow: init → publish → serve → discover (remote) → see results
+
+**Acceptance Criteria**:
+- [ ] Integration test starts registry server on random port
+- [ ] Test publishes card, then discovers it via `--registry http://localhost:<port>`
+- [ ] Test verifies discovered card matches published card
+- [ ] Test covers error case (unreachable registry)
