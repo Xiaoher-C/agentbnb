@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-current_plan: 2 of 2 (Phase 2.1) — complete
+current_plan: 1 of 2 (Phase 2.2) — complete
 status: in_progress
-last_updated: "2026-03-14T19:30:00Z"
+last_updated: "2026-03-14T10:30:00Z"
 progress:
-  total_phases: 5
+  total_phases: 6
   completed_phases: 4
-  total_plans: 14
-  completed_plans: 14
+  total_plans: 17
+  completed_plans: 16
 ---
 
 # AgentBnB — Project State
@@ -23,9 +23,13 @@ See: .planning/PROJECT.md (updated 2026-03-13)
 
 ## Current Phase
 
-**Phase 2.1: Smart Onboarding** — Complete. 2 of 2 plans complete. 10/10 must-haves verified.
+**Phase 2.2: Agent Hub** — In progress. 1 of 2 plans complete.
 
-**Current Plan:** 2 of 2 (Phase 2.1) — complete
+**Current Plan:** 1 of 2 (Phase 2.2) — complete
+
+### Progress (Phase 2.2)
+
+- Hub Scaffold + Category Utilities (Plan 01): complete — Vite+React+Tailwind scaffold in hub/, 15-category inference, level badges, status indicators, 21 tests
 
 ### Progress (Phase 2.1)
 
@@ -101,6 +105,9 @@ See: .planning/PROJECT.md (updated 2026-03-13)
 | 2026-03-14 | 02-03 | --registry-port 0 disables registry server entirely — clean opt-out for headless gateway use |
 | 2026-03-14 | 02-03 | Registry server closed before gateway in gracefulShutdown — read-only server stops first |
 | 2026-03-14 | 02.1-01 | Comment text avoids literal process.env[ pattern to pass source-level security test |
+| 2026-03-14 | 02.2-01 | vitest triple-slash reference needed in vite.config.ts for test block to type-check under tsc --noEmit |
+| 2026-03-14 | 02.2-01 | StatusColor is two-state only (emerald/rose); three-state deferred until backend exposes idle metrics |
+| 2026-03-14 | 02.2-01 | badge-dot/badge-connected/badge-block embedded in style strings so tests can match via regex |
 
 ## Performance Metrics
 
@@ -120,6 +127,8 @@ See: .planning/PROJECT.md (updated 2026-03-13)
 | 02-cold-start | 03 | 5min | 3 | 3 |
 | 02.1-smart-onboarding | 01 | 2min | 1 | 2 |
 | 02.1-smart-onboarding | 02 | 3min | 1 | 2 |
+| 02.2-agent-hub | 01 | 12min | 2 | 14 |
+| Phase 02.2-agent-hub P01 | 12min | 2 tasks | 14 files |
 
 ## Session Log
 
@@ -143,6 +152,7 @@ See: .planning/PROJECT.md (updated 2026-03-13)
 | 2026-03-14 | Completed 02.1-01-PLAN.md | Continue with plan 02.1-02 |
 | 2026-03-14 | Phase 2.1 complete — 10/10 verified, 163 tests | `/gsd:verify-work` or refinement tasks |
 | 2026-03-14 | Phase 2.2 context gathered | `/gsd:plan-phase 2.2` |
+| 2026-03-14 | Completed 02.2-01-PLAN.md | Continue with plan 02.2-02 |
 
 ## Roadmap Evolution
 
