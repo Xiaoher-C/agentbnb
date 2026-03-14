@@ -82,6 +82,24 @@ Plans:
 - [x] Generate draft Capability Card from detected APIs for user confirmation
 - [x] CLI ergonomics improvements (first-impression polish)
 
+## Phase 2.2: Agent Hub
+**Goal**: Build a public, read-only capability browser page served at `/hub` -- a cold-start accelerator for recruiting agent owners.
+**Requirements**: [HUB-01, HUB-02, HUB-03, HUB-04, HUB-05]
+**Depends on:** Phase 2.1
+**Plans:** 3 plans
+
+Plans:
+- [ ] 02.2-01-PLAN.md — Scaffold Vite+React+Tailwind project + category mapping utilities
+- [ ] 02.2-02-PLAN.md — React UI components (card grid, search/filter, stats bar) + data hook
+- [ ] 02.2-03-PLAN.md — Fastify static serving integration + human verification
+
+- [ ] React SPA embedded in Fastify at `/hub` on port 7701
+- [ ] Fetch from existing `/cards` endpoint, poll every 30s
+- [ ] Search + filter (Level, Category, online status)
+- [ ] Header stats bar (agents online, total capabilities, exchanges)
+- [ ] Visual identity: boring-avatars identicons, lucide-react category icons, level badges, status indicators
+- [ ] Responsive card grid with credit cost, success rate, "Request" button
+
 ## Phase 3: UX Layer
 **Goal**: Non-technical users can share agent capabilities.
 
