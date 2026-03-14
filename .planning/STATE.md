@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Upgrade
 current_plan: Phase 02.3 Plan 01 complete
-status: in_progress
-last_updated: "2026-03-14T19:37:19Z"
+status: unknown
+last_updated: "2026-03-14T19:49:28.924Z"
 progress:
   total_phases: 8
-  completed_phases: 6
+  completed_phases: 7
   total_plans: 20
-  completed_plans: 19
+  completed_plans: 20
 ---
 
 # AgentBnB — Project State
@@ -25,11 +25,12 @@ See: .planning/PROJECT.md (updated 2026-03-13)
 
 **Phase 2.25: Schema v1.1 Upgrade** — Complete. 1 of 1 plans complete.
 
-**Current Plan:** Phase 02.3 Plan 01 complete
+**Current Plan:** Phase 02.3 Plan 02 — at human-verify checkpoint (Task 1 complete)
 
 ### Progress (Phase 2.3)
 
 - Remote Registry Fetch + CLI Integration (Plan 01): complete — fetchRemoteCards(), mergeResults(), RegistryTimeoutError/ConnectionError/AuthError, discover --registry/--tag flags, config set/get, source tagging with [local]/[remote] column, 20 unit tests
+- Integration Tests (Plan 02): Task 1 complete — 8 cross-process integration tests, background Fastify server fixture (test-registry-server.ts), port-file polling pattern, 35 total CLI tests pass. At human-verify checkpoint.
 
 ### Progress (Phase 2.25)
 
@@ -130,6 +131,9 @@ See: .planning/PROJECT.md (updated 2026-03-13)
 | 2026-03-14 | 02.3-01 | Source column only added to discover table when remote results present — local-only format unchanged to preserve existing tests |
 | 2026-03-14 | 02.3-01 | config set key validated against allowlist ['registry'] to prevent arbitrary key pollution |
 | 2026-03-14 | 02.3-01 | --tag applied client-side for local registry results (GET /cards has no tag query param) |
+| 2026-03-14 | 02.3-02 | Spawn registry server as background subprocess for integration tests — vitest worker isolation blocks loopback access from execSync children to in-process sockets |
+| 2026-03-14 | 02.3-02 | Port-file polling pattern for server-ready signal — server writes ephemeral port to file once listening, test polls until file appears |
+| 2026-03-14 | 02.3-02 | Shell 2>&1 redirect for graceful-degradation test stderr capture — execSync on exit 0 discards stderr, redirect merges streams at shell level |
 
 ## Performance Metrics
 
@@ -155,6 +159,7 @@ See: .planning/PROJECT.md (updated 2026-03-13)
 | Phase 02.2-agent-hub P02 | 18min | 3 tasks | 16 files |
 | Phase 02.25-schema-v1-1-upgrade P01 | 7min | 2 tasks | 8 files |
 | Phase 02.3-remote-registry-discovery P01 | 15min | 2 tasks | 4 files |
+| Phase 02.3-remote-registry-discovery P02 | 8 | 1 tasks | 2 files |
 
 ## Session Log
 
@@ -182,6 +187,7 @@ See: .planning/PROJECT.md (updated 2026-03-13)
 | 2026-03-14 | Completed 02.2-02-PLAN.md — Phase 2.2 complete | `/gsd:verify-work` or next phase |
 | 2026-03-15 | Completed 02.25-01-PLAN.md — _internal and free_tier schema fields, server/CLI stripping, Hub badge | Continue with Phase 2.3 (Remote Registry) |
 | 2026-03-14 | Completed 02.3-01-PLAN.md — fetchRemoteCards, mergeResults, discover --registry/--tag, config set/get | Phase 2.3 Plan 01 complete |
+| 2026-03-14 | Checkpoint: 02.3-02 Task 1 complete, awaiting human-verify | Run `pnpm test:run`, `npx tsc --noEmit`, and optional CLI manual verification |
 
 ## Roadmap Evolution
 

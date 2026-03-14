@@ -267,7 +267,7 @@ The `agentbnb discover` command must support querying a remote registry HTTP API
 - [ ] Timeout and connection errors produce actionable error messages
 
 ### RRD-02: Remote Discovery Integration Test
-**Status**: Pending (02.3)
+**Status**: Complete (02.3-02)
 **Priority**: P0
 
 End-to-end test proving cross-machine discovery works:
