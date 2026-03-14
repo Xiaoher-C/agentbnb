@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-current_plan: 1 of 2 (Phase 2.2) — complete
+current_plan: 2 of 2 (Phase 2.2) — complete
 status: in_progress
-last_updated: "2026-03-14T10:30:00Z"
+last_updated: "2026-03-14T10:50:00Z"
 progress:
   total_phases: 6
-  completed_phases: 4
+  completed_phases: 5
   total_plans: 17
-  completed_plans: 16
+  completed_plans: 17
 ---
 
 # AgentBnB — Project State
@@ -25,11 +25,12 @@ See: .planning/PROJECT.md (updated 2026-03-13)
 
 **Phase 2.2: Agent Hub** — In progress. 1 of 2 plans complete.
 
-**Current Plan:** 1 of 2 (Phase 2.2) — complete
+**Current Plan:** 2 of 2 (Phase 2.2) — complete
 
 ### Progress (Phase 2.2)
 
 - Hub Scaffold + Category Utilities (Plan 01): complete — Vite+React+Tailwind scaffold in hub/, 15-category inference, level badges, status indicators, 21 tests
+- Hub UI Components + Data Layer (Plan 02): complete — 10 React components (StatusDot, LevelBadge, CategoryChip, SkeletonCard, EmptyState, ErrorState, StatsBar, SearchFilter, CapabilityCard, CardGrid), useCards hook with 30s polling, App.tsx full wiring, 25 tests
 
 ### Progress (Phase 2.1)
 
@@ -108,6 +109,10 @@ See: .planning/PROJECT.md (updated 2026-03-13)
 | 2026-03-14 | 02.2-01 | vitest triple-slash reference needed in vite.config.ts for test block to type-check under tsc --noEmit |
 | 2026-03-14 | 02.2-01 | StatusColor is two-state only (emerald/rose); three-state deferred until backend exposes idle metrics |
 | 2026-03-14 | 02.2-01 | badge-dot/badge-connected/badge-block embedded in style strings so tests can match via regex |
+| 2026-03-14 | 02.2-02 | jsdom + @testing-library/react added for component tests; vitest environment switched from node to jsdom |
+| 2026-03-14 | 02.2-02 | Client-side category filter in useCards because /cards API has no category query param |
+| 2026-03-14 | 02.2-02 | LucideIcon type (not React.ComponentType) used for icon lookup Record to satisfy strict TS propTypes compatibility |
+| 2026-03-14 | 02.2-02 | availableCategories computed from allCards (pre-filter) so dropdown always reflects full registry contents |
 
 ## Performance Metrics
 
@@ -129,6 +134,8 @@ See: .planning/PROJECT.md (updated 2026-03-13)
 | 02.1-smart-onboarding | 02 | 3min | 1 | 2 |
 | 02.2-agent-hub | 01 | 12min | 2 | 14 |
 | Phase 02.2-agent-hub P01 | 12min | 2 tasks | 14 files |
+| 02.2-agent-hub | 02 | 18min | 3 | 16 |
+| Phase 02.2-agent-hub P02 | 18min | 3 tasks | 16 files |
 
 ## Session Log
 
@@ -153,6 +160,7 @@ See: .planning/PROJECT.md (updated 2026-03-13)
 | 2026-03-14 | Phase 2.1 complete — 10/10 verified, 163 tests | `/gsd:verify-work` or refinement tasks |
 | 2026-03-14 | Phase 2.2 context gathered | `/gsd:plan-phase 2.2` |
 | 2026-03-14 | Completed 02.2-01-PLAN.md | Continue with plan 02.2-02 |
+| 2026-03-14 | Completed 02.2-02-PLAN.md — Phase 2.2 complete | `/gsd:verify-work` or next phase |
 
 ## Roadmap Evolution
 
@@ -160,4 +168,4 @@ See: .planning/PROJECT.md (updated 2026-03-13)
 - Phase 2.2 inserted after Phase 2.1: Agent Hub — public read-only capability browser at `/hub`. Cold-start accelerator for recruiting agent owners. React SPA embedded in Fastify, no new backend needed.
 
 ---
-*Last updated: 2026-03-14 — Phase 2.1 complete. 16/16 plans complete across Phase 0-2.1. 163 tests passing.*
+*Last updated: 2026-03-14 — Phase 2.2 complete. 17/17 plans complete across Phase 0-2.2. 25 hub tests + 163 core tests passing.*

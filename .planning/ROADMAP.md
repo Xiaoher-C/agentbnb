@@ -86,7 +86,7 @@ Plans:
 **Goal**: Build a public, read-only capability browser page served at `/hub` -- a cold-start accelerator for recruiting agent owners.
 **Requirements**: [HUB-01, HUB-02, HUB-03, HUB-04, HUB-05]
 **Depends on:** Phase 2.1
-**Plans:** 1/3 plans executed
+**Plans:** 2/3 plans executed
 
 Plans:
 - [ ] 02.2-01-PLAN.md — Scaffold Vite+React+Tailwind project + category mapping utilities
