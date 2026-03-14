@@ -10,6 +10,8 @@ import { networkInterfaces } from 'node:os';
 import { createInterface } from 'node:readline';
 
 import { loadConfig, saveConfig, getConfigDir } from './config.js';
+import { fetchRemoteCards, mergeResults } from './remote-registry.js';
+import type { TaggedCard } from './remote-registry.js';
 import { loadPeers, savePeer, removePeer, findPeer } from './peers.js';
 import { detectApiKeys, detectOpenPorts, buildDraftCard, KNOWN_API_KEYS } from './onboarding.js';
 import { CapabilityCardSchema } from '../types/index.js';
@@ -261,8 +263,10 @@ program
   .option('--level <level>', 'Filter by level (1, 2, or 3)')
   .option('--online', 'Only show online capabilities')
   .option('--local', 'Browse for agents on the local network via mDNS')
+  .option('--registry <url>', 'Remote registry URL to query (e.g., http://host:7701)')
+  .option('--tag <tag>', 'Filter by metadata tag')
   .option('--json', 'Output as JSON')
-  .action(async (query: string | undefined, opts: { level?: string; online?: boolean; local?: boolean; json?: boolean }) => {
+  .action(async (query: string | undefined, opts: { level?: string; online?: boolean; local?: boolean; registry?: string; tag?: string; json?: boolean }) => {
     // --local: browse mDNS instead of querying local registry
     if (opts.local) {
       const discovered: Array<{ name: string; url: string; owner: string }> = [];
@@ -303,54 +307,128 @@ program
 
     const db = openDatabase(config.db_path);
 
-    let cards: CapabilityCard[];
+    let localCards: CapabilityCard[];
     try {
       const level = opts.level ? (parseInt(opts.level, 10) as 1 | 2 | 3) : undefined;
       const filters = { level, online: opts.online };
 
       if (query && query.trim().length > 0) {
-        cards = searchCards(db, query, filters);
+        localCards = searchCards(db, query, filters);
       } else {
-        cards = filterCards(db, filters);
+        localCards = filterCards(db, filters);
       }
     } finally {
       db.close();
     }
 
-    // Strip _internal from all cards before output — private metadata must not be transmitted
-    cards = cards.map(({ _internal: _, ...rest }) => rest as CapabilityCard);
+    // Apply --tag client-side for local cards (local registry has no tag query param)
+    if (opts.tag) {
+      localCards = localCards.filter((c) => c.metadata?.tags?.includes(opts.tag!));
+    }
+
+    // Strip _internal from all local cards before output — private metadata must not be transmitted
+    localCards = localCards.map(({ _internal: _, ...rest }) => rest as CapabilityCard);
+
+    // Determine remote registry URL
+    const registryUrl = opts.registry ?? config.registry ?? undefined;
+    const isExplicitRegistry = Boolean(opts.registry);
+
+    let outputCards: TaggedCard[] | CapabilityCard[];
+    let hasRemote = false;
+
+    if (registryUrl) {
+      // Fetch remote cards and merge
+      try {
+        let remoteCards = await fetchRemoteCards(registryUrl, {
+          q: query,
+          level: opts.level ? parseInt(opts.level, 10) : undefined,
+          online: opts.online,
+          tag: opts.tag,
+        });
+        // Strip _internal from remote cards as well
+        remoteCards = remoteCards.map(({ _internal: _, ...rest }) => rest as CapabilityCard);
+        hasRemote = true;
+        outputCards = mergeResults(localCards, remoteCards, Boolean(query && query.trim().length > 0));
+      } catch (err) {
+        if (isExplicitRegistry) {
+          // Explicit --registry failure: print error and exit 1
+          const msg = err instanceof Error ? err.message : String(err);
+          console.error(msg);
+          process.exit(1);
+          return; // unreachable, satisfies TS definite assignment
+        } else {
+          // Config default failure: warn and degrade gracefully to local results
+          const msg = err instanceof Error ? err.message : String(err);
+          console.error(`Warning: ${msg}`);
+          // Tag local cards as local and continue
+          outputCards = localCards.map((c) => ({ ...c, source: 'local' as const }));
+        }
+      }
+    } else {
+      // No registry: local only
+      outputCards = localCards;
+    }
 
     if (opts.json) {
-      console.log(JSON.stringify(cards, null, 2));
+      console.log(JSON.stringify(outputCards, null, 2));
       return;
     }
 
-    if (cards.length === 0) {
+    if (outputCards.length === 0) {
       console.log('No capabilities found.');
       return;
     }
 
     // Table output
     const col = (s: string, w: number) => s.slice(0, w).padEnd(w);
-    console.log(
-      col('ID', 16) + '  ' +
-      col('Name', 32) + '  ' +
-      col('Lvl', 3) + '  ' +
-      col('Credits', 7) + '  ' +
-      col('Online', 6)
-    );
-    console.log('-'.repeat(72));
-    for (const card of cards) {
-      const shortId = card.id.slice(0, 8) + '...';
+
+    if (hasRemote) {
+      // Extended table with Source column
       console.log(
-        col(shortId, 16) + '  ' +
-        col(card.name, 32) + '  ' +
-        col(String(card.level), 3) + '  ' +
-        col(String(card.pricing.credits_per_call), 7) + '  ' +
-        col(card.availability.online ? 'yes' : 'no', 6)
+        col('ID', 16) + '  ' +
+        col('Name', 28) + '  ' +
+        col('Lvl', 3) + '  ' +
+        col('Credits', 7) + '  ' +
+        col('Online', 6) + '  ' +
+        col('Source', 8)
       );
+      console.log('-'.repeat(80));
+      for (const card of outputCards as TaggedCard[]) {
+        const shortId = card.id.slice(0, 8) + '...';
+        const source = 'source' in card ? (card as TaggedCard).source : 'local';
+        const sourceTag = source === 'remote' ? '[remote]' : '[local]';
+        console.log(
+          col(shortId, 16) + '  ' +
+          col(card.name, 28) + '  ' +
+          col(String(card.level), 3) + '  ' +
+          col(String(card.pricing.credits_per_call), 7) + '  ' +
+          col(card.availability.online ? 'yes' : 'no', 6) + '  ' +
+          col(sourceTag, 8)
+        );
+      }
+    } else {
+      // Standard local-only table (preserved format)
+      console.log(
+        col('ID', 16) + '  ' +
+        col('Name', 32) + '  ' +
+        col('Lvl', 3) + '  ' +
+        col('Credits', 7) + '  ' +
+        col('Online', 6)
+      );
+      console.log('-'.repeat(72));
+      for (const card of outputCards) {
+        const shortId = card.id.slice(0, 8) + '...';
+        console.log(
+          col(shortId, 16) + '  ' +
+          col(card.name, 32) + '  ' +
+          col(String(card.level), 3) + '  ' +
+          col(String(card.pricing.credits_per_call), 7) + '  ' +
+          col(card.availability.online ? 'yes' : 'no', 6)
+        );
+      }
     }
-    console.log(`\n${cards.length} result(s)`);
+
+    console.log(`\n${outputCards.length} result(s)`);
   });
 
 // ---------------------------------------------------------------------------
@@ -619,6 +697,49 @@ peersCommand
       console.error(`Peer not found: ${name}`);
       process.exit(1);
     }
+  });
+
+// ---------------------------------------------------------------------------
+// config
+// ---------------------------------------------------------------------------
+
+const configCmd = program
+  .command('config')
+  .description('Get or set AgentBnB configuration values');
+
+configCmd
+  .command('set <key> <value>')
+  .description('Set a configuration value')
+  .action((key: string, value: string) => {
+    const allowedKeys = ['registry'];
+    if (!allowedKeys.includes(key)) {
+      console.error(`Unknown config key: ${key}. Valid keys: ${allowedKeys.join(', ')}`);
+      process.exit(1);
+    }
+
+    const config = loadConfig();
+    if (!config) {
+      console.error('Error: not initialized. Run `agentbnb init` first.');
+      process.exit(1);
+    }
+
+    (config as unknown as Record<string, unknown>)[key] = value;
+    saveConfig(config);
+    console.log(`Set ${key} = ${value}`);
+  });
+
+configCmd
+  .command('get <key>')
+  .description('Get a configuration value')
+  .action((key: string) => {
+    const config = loadConfig();
+    if (!config) {
+      console.error('Error: not initialized. Run `agentbnb init` first.');
+      process.exit(1);
+    }
+
+    const value = (config as unknown as Record<string, unknown>)[key];
+    console.log(value !== undefined ? String(value) : '(not set)');
   });
 
 // ---------------------------------------------------------------------------
