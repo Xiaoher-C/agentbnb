@@ -4,7 +4,7 @@ milestone: v1.1
 milestone_name: Upgrade
 current_plan: Not started
 status: unknown
-last_updated: "2026-03-14T19:06:01.092Z"
+last_updated: "2026-03-14T19:13:24.688Z"
 progress:
   total_phases: 8
   completed_phases: 6
@@ -25,7 +25,7 @@ See: .planning/PROJECT.md (updated 2026-03-13)
 
 **Phase 2.25: Schema v1.1 Upgrade** — Complete. 1 of 1 plans complete.
 
-**Current Plan:** Completed 02.25-01
+**Current Plan:** Not started
 
 ### Progress (Phase 2.25)
 
