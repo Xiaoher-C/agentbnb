@@ -376,6 +376,47 @@ describe('createRegistryServer', () => {
     await server.close();
   });
 
+  // Test 17: GET /cards does not expose _internal field
+  it('GET /cards does not expose _internal field', async () => {
+    const cardWithInternal = makeCard({
+      name: 'Private Card',
+      description: 'Has internal metadata',
+    });
+    // Cast to insert _internal field which is valid in the schema but should be stripped
+    insertCard(db, { ...cardWithInternal, _internal: { secret: 'sensitive-value' } } as CapabilityCard);
+
+    const server = createRegistryServer({ registryDb: db, silent: true });
+    await server.ready();
+
+    const response = await server.inject({ method: 'GET', url: '/cards' });
+    expect(response.statusCode).toBe(200);
+    const body = response.json();
+    expect(body.items).toHaveLength(1);
+    expect(body.items[0]._internal).toBeUndefined();
+
+    await server.close();
+  });
+
+  // Test 18: GET /cards/:id does not expose _internal field
+  it('GET /cards/:id does not expose _internal field', async () => {
+    const cardWithInternal = makeCard({
+      name: 'Secret Card',
+      description: 'Has sensitive internal data',
+    });
+    insertCard(db, { ...cardWithInternal, _internal: { key: 'top-secret' } } as CapabilityCard);
+
+    const server = createRegistryServer({ registryDb: db, silent: true });
+    await server.ready();
+
+    const response = await server.inject({ method: 'GET', url: `/cards/${cardWithInternal.id}` });
+    expect(response.statusCode).toBe(200);
+    const body = response.json();
+    expect(body.id).toBe(cardWithInternal.id);
+    expect(body._internal).toBeUndefined();
+
+    await server.close();
+  });
+
   // Test 16: Response headers include access-control-allow-origin (CORS)
   it('Response headers include CORS access-control-allow-origin', async () => {
     const server = createRegistryServer({ registryDb: db, silent: true });

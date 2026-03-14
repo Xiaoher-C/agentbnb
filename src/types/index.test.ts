@@ -128,6 +128,60 @@ describe('CapabilityCardSchema', () => {
     expect(result.success).toBe(false);
   });
 
+  describe('_internal field', () => {
+    it('accepts a card with _internal object (private metadata)', () => {
+      const card = {
+        ...validCard,
+        _internal: { secret: 'x', source: 'manual' },
+      };
+      const result = CapabilityCardSchema.safeParse(card);
+      expect(result.success).toBe(true);
+    });
+
+    it('accepts a card without _internal (backward compat)', () => {
+      // validCard has no _internal — existing cards should remain valid
+      const result = CapabilityCardSchema.safeParse(validCard);
+      expect(result.success).toBe(true);
+    });
+  });
+
+  describe('free_tier field', () => {
+    it('accepts a card without free_tier (backward compat)', () => {
+      const result = CapabilityCardSchema.safeParse(validCard);
+      expect(result.success).toBe(true);
+    });
+
+    it('accepts free_tier: 100 (positive integer)', () => {
+      const card = {
+        ...validCard,
+        pricing: { credits_per_call: 5, free_tier: 100 },
+      };
+      const result = CapabilityCardSchema.safeParse(card);
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.pricing.free_tier).toBe(100);
+      }
+    });
+
+    it('accepts free_tier: 0 (zero is valid — disabled, not negative)', () => {
+      const card = {
+        ...validCard,
+        pricing: { credits_per_call: 5, free_tier: 0 },
+      };
+      const result = CapabilityCardSchema.safeParse(card);
+      expect(result.success).toBe(true);
+    });
+
+    it('rejects free_tier: -1 (negative is invalid)', () => {
+      const card = {
+        ...validCard,
+        pricing: { credits_per_call: 5, free_tier: -1 },
+      };
+      const result = CapabilityCardSchema.safeParse(card);
+      expect(result.success).toBe(false);
+    });
+  });
+
   describe('powered_by field', () => {
     it('accepts a card without powered_by (backward compat)', () => {
       const result = CapabilityCardSchema.safeParse(validCard);

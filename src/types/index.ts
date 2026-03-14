@@ -40,12 +40,19 @@ export const CapabilityCardSchema = z.object({
   pricing: z.object({
     credits_per_call: z.number().nonnegative(),
     credits_per_minute: z.number().nonnegative().optional(),
+    /** Number of free monthly calls. Shown as a "N free/mo" badge in the Hub. */
+    free_tier: z.number().nonnegative().optional(),
   }),
   availability: z.object({
     online: z.boolean(),
     schedule: z.string().optional(), // cron expression
   }),
   powered_by: z.array(PoweredBySchema).optional(),
+  /**
+   * Private per-card metadata. Stripped from all API and CLI responses —
+   * never transmitted beyond the local store.
+   */
+  _internal: z.record(z.unknown()).optional(),
   metadata: z.object({
     apis_used: z.array(z.string()).optional(),
     avg_latency_ms: z.number().nonnegative().optional(),

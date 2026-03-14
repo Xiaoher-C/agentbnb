@@ -30,6 +30,18 @@ interface PaginatedCards {
 }
 
 /**
+ * Strips the `_internal` field from a card before sending it over the network.
+ * `_internal` is private per-card metadata — it must never be transmitted to clients.
+ *
+ * @param card - Full capability card (possibly containing _internal)
+ * @returns Card without the _internal field
+ */
+function stripInternal(card: CapabilityCard): Omit<CapabilityCard, '_internal'> {
+  const { _internal: _, ...publicCard } = card;
+  return publicCard;
+}
+
+/**
  * Creates a public, read-only Fastify HTTP server exposing capability cards.
  *
  * Endpoints:
@@ -163,9 +175,9 @@ export function createRegistryServer(opts: RegistryServerOptions): FastifyInstan
     }
 
     const total = cards.length;
-    const items = cards.slice(offset, offset + limit);
+    const items = cards.slice(offset, offset + limit).map(stripInternal);
 
-    const result: PaginatedCards = { total, limit, offset, items };
+    const result: PaginatedCards = { total, limit, offset, items: items as CapabilityCard[] };
     return reply.send(result);
   });
 
@@ -182,7 +194,7 @@ export function createRegistryServer(opts: RegistryServerOptions): FastifyInstan
       return reply.code(404).send({ error: 'Not found' });
     }
 
-    return reply.send(card);
+    return reply.send(stripInternal(card));
   });
 
   return server;

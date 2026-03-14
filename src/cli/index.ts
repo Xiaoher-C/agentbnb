@@ -317,6 +317,9 @@ program
       db.close();
     }
 
+    // Strip _internal from all cards before output — private metadata must not be transmitted
+    cards = cards.map(({ _internal: _, ...rest }) => rest as CapabilityCard);
+
     if (opts.json) {
       console.log(JSON.stringify(cards, null, 2));
       return;
