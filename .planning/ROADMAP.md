@@ -122,6 +122,11 @@ Plans:
 **Requirements**: [RRD-01, RRD-02]
 **Depends on:** Phase 2.25
 **Gap Closure:** Closes integration gap (CLI discover → Registry HTTP) and broken flow from v1.0 audit
+**Plans:** 2 plans
+
+Plans:
+- [ ] 02.3-01-PLAN.md — Remote fetch module + config command + discover wiring
+- [ ] 02.3-02-PLAN.md — Integration tests + human verification
 
 - [ ] `agentbnb discover --registry <url>` fetches from remote GET /cards endpoint
 - [ ] Query/filter params (q, level, online, tag) forwarded to HTTP request
