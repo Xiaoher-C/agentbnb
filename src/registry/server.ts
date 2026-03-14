@@ -1,5 +1,9 @@
 import Fastify, { type FastifyInstance } from 'fastify';
 import cors from '@fastify/cors';
+import fastifyStatic from '@fastify/static';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { existsSync } from 'node:fs';
 import type Database from 'better-sqlite3';
 import { getCard } from './store.js';
 import { searchCards, filterCards } from './matcher.js';
@@ -45,6 +49,29 @@ export function createRegistryServer(opts: RegistryServerOptions): FastifyInstan
 
   // Register CORS — allow all origins for public marketplace discovery
   void server.register(cors, { origin: true });
+
+  // Register static file serving for the hub SPA (optional — skipped if hub not built)
+  // Resolve hub/dist/ relative to this file's compiled location in dist/registry/server.js
+  const __filename = fileURLToPath(import.meta.url);
+  const __dirname = dirname(__filename);
+  const hubDistCandidates = [
+    join(__dirname, '../../hub/dist'),   // When running from dist/registry/server.js
+    join(__dirname, '../../../hub/dist'), // Fallback for alternative layouts
+  ];
+  const hubDistDir = hubDistCandidates.find((p) => existsSync(p));
+
+  if (hubDistDir) {
+    void server.register(fastifyStatic, {
+      root: hubDistDir,
+      prefix: '/hub/',
+      decorateReply: false,
+    });
+
+    // Redirect /hub (no trailing slash) to /hub/ so assets resolve correctly
+    server.get('/hub', async (_request, reply) => {
+      return reply.redirect('/hub/');
+    });
+  }
 
   /**
    * GET /health — Liveness probe for the registry server.
