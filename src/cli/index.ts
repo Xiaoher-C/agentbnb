@@ -10,6 +10,7 @@ import { networkInterfaces } from 'node:os';
 import { createInterface } from 'node:readline';
 
 import { loadConfig, saveConfig, getConfigDir } from './config.js';
+import { DEFAULT_AUTONOMY_CONFIG } from '../autonomy/tiers.js';
 import { fetchRemoteCards, mergeResults } from './remote-registry.js';
 import type { TaggedCard } from './remote-registry.js';
 import { loadPeers, savePeer, removePeer, findPeer } from './peers.js';
@@ -729,7 +730,7 @@ configCmd
   .command('set <key> <value>')
   .description('Set a configuration value')
   .action((key: string, value: string) => {
-    const allowedKeys = ['registry'];
+    const allowedKeys = ['registry', 'tier1', 'tier2'];
     if (!allowedKeys.includes(key)) {
       console.error(`Unknown config key: ${key}. Valid keys: ${allowedKeys.join(', ')}`);
       process.exit(1);
@@ -739,6 +740,42 @@ configCmd
     if (!config) {
       console.error('Error: not initialized. Run `agentbnb init` first.');
       process.exit(1);
+    }
+
+    if (key === 'tier1' || key === 'tier2') {
+      const parsed = parseInt(value, 10);
+      if (isNaN(parsed) || parsed < 0) {
+        console.error(`Error: ${key} must be a non-negative integer, got: ${value}`);
+        process.exit(1);
+      }
+
+      // Initialize autonomy config from defaults if not yet set
+      if (!config.autonomy) {
+        config.autonomy = { ...DEFAULT_AUTONOMY_CONFIG };
+      }
+
+      if (key === 'tier1') {
+        config.autonomy.tier1_max_credits = parsed;
+        if (parsed >= config.autonomy.tier2_max_credits && config.autonomy.tier2_max_credits > 0) {
+          console.warn(
+            `Warning: tier1 (${parsed}) >= tier2 (${config.autonomy.tier2_max_credits}). ` +
+              `Tier 2 will never be reached — consider increasing tier2.`
+          );
+        }
+        saveConfig(config);
+        console.log(`Set tier1 = ${parsed} (auto-execute threshold: <${parsed} credits)`);
+      } else {
+        config.autonomy.tier2_max_credits = parsed;
+        if (config.autonomy.tier1_max_credits >= parsed && parsed > 0) {
+          console.warn(
+            `Warning: tier2 (${parsed}) <= tier1 (${config.autonomy.tier1_max_credits}). ` +
+              `Tier 2 will never be reached — consider decreasing tier1.`
+          );
+        }
+        saveConfig(config);
+        console.log(`Set tier2 = ${parsed} (notify threshold: <${parsed} credits)`);
+      }
+      return;
     }
 
     (config as unknown as Record<string, unknown>)[key] = value;
@@ -754,6 +791,16 @@ configCmd
     if (!config) {
       console.error('Error: not initialized. Run `agentbnb init` first.');
       process.exit(1);
+    }
+
+    if (key === 'tier1') {
+      console.log(String(config.autonomy?.tier1_max_credits ?? 0));
+      return;
+    }
+
+    if (key === 'tier2') {
+      console.log(String(config.autonomy?.tier2_max_credits ?? 0));
+      return;
     }
 
     const value = (config as unknown as Record<string, unknown>)[key];
