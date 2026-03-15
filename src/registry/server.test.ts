@@ -1,7 +1,7 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { createRegistryServer } from './server.js';
-import { openDatabase } from './store.js';
-import { insertCard } from './store.js';
+import { openDatabase, insertCard } from './store.js';
+import { openCreditDb, bootstrapAgent } from '../credit/ledger.js';
 import type { CapabilityCard } from '../types/index.js';
 import type Database from 'better-sqlite3';
 
@@ -429,6 +429,404 @@ describe('createRegistryServer', () => {
     });
     expect(response.statusCode).toBe(200);
     expect(response.headers['access-control-allow-origin']).toBeDefined();
+
+    await server.close();
+  });
+});
+
+describe('createRegistryServer — owner endpoints', () => {
+  let db: Database.Database;
+  let creditDb: Database.Database;
+  const OWNER = 'test-owner';
+  const API_KEY = 'test-api-key';
+
+  beforeEach(() => {
+    db = openDatabase(':memory:');
+    creditDb = openCreditDb(':memory:');
+    bootstrapAgent(creditDb, OWNER, 250);
+  });
+
+  function makeOwnerCard(overrides: Partial<CapabilityCard> = {}): CapabilityCard {
+    return {
+      spec_version: '1.0',
+      id: crypto.randomUUID(),
+      owner: OWNER,
+      name: 'Owner Capability',
+      description: 'A capability owned by test-owner',
+      level: 1,
+      inputs: [],
+      outputs: [],
+      pricing: { credits_per_call: 5 },
+      availability: { online: true },
+      metadata: {},
+      ...overrides,
+    };
+  }
+
+  // Test: GET /me with valid Bearer token returns 200 + { owner, balance }
+  it('GET /me with valid Bearer token returns 200 + { owner, balance }', async () => {
+    const server = createRegistryServer({
+      registryDb: db,
+      silent: true,
+      ownerApiKey: API_KEY,
+      ownerName: OWNER,
+      creditDb,
+    });
+    await server.ready();
+
+    const response = await server.inject({
+      method: 'GET',
+      url: '/me',
+      headers: { authorization: `Bearer ${API_KEY}` },
+    });
+    expect(response.statusCode).toBe(200);
+    const body = response.json() as { owner: string; balance: number };
+    expect(body.owner).toBe(OWNER);
+    expect(body.balance).toBe(250);
+
+    await server.close();
+  });
+
+  // Test: GET /me with invalid Bearer token returns 401
+  it('GET /me with invalid Bearer token returns 401', async () => {
+    const server = createRegistryServer({
+      registryDb: db,
+      silent: true,
+      ownerApiKey: API_KEY,
+      ownerName: OWNER,
+      creditDb,
+    });
+    await server.ready();
+
+    const response = await server.inject({
+      method: 'GET',
+      url: '/me',
+      headers: { authorization: 'Bearer wrong-key' },
+    });
+    expect(response.statusCode).toBe(401);
+
+    await server.close();
+  });
+
+  // Test: GET /me with no Authorization header returns 401
+  it('GET /me with no Authorization header returns 401', async () => {
+    const server = createRegistryServer({
+      registryDb: db,
+      silent: true,
+      ownerApiKey: API_KEY,
+      ownerName: OWNER,
+      creditDb,
+    });
+    await server.ready();
+
+    const response = await server.inject({ method: 'GET', url: '/me' });
+    expect(response.statusCode).toBe(401);
+
+    await server.close();
+  });
+
+  // Test: GET /requests with valid key returns { items: [...], limit: N } newest-first
+  it('GET /requests with valid key returns { items, limit }', async () => {
+    const server = createRegistryServer({
+      registryDb: db,
+      silent: true,
+      ownerApiKey: API_KEY,
+      ownerName: OWNER,
+      creditDb,
+    });
+    await server.ready();
+
+    const response = await server.inject({
+      method: 'GET',
+      url: '/requests',
+      headers: { authorization: `Bearer ${API_KEY}` },
+    });
+    expect(response.statusCode).toBe(200);
+    const body = response.json() as { items: unknown[]; limit: number };
+    expect(Array.isArray(body.items)).toBe(true);
+    expect(typeof body.limit).toBe('number');
+
+    await server.close();
+  });
+
+  // Test: GET /requests?limit=5 returns at most 5 entries
+  it('GET /requests?limit=5 returns at most 5 entries', async () => {
+    const server = createRegistryServer({
+      registryDb: db,
+      silent: true,
+      ownerApiKey: API_KEY,
+      ownerName: OWNER,
+      creditDb,
+    });
+    await server.ready();
+
+    const response = await server.inject({
+      method: 'GET',
+      url: '/requests?limit=5',
+      headers: { authorization: `Bearer ${API_KEY}` },
+    });
+    expect(response.statusCode).toBe(200);
+    const body = response.json() as { limit: number };
+    expect(body.limit).toBe(5);
+
+    await server.close();
+  });
+
+  // Test: GET /requests?since=24h returns only entries from last 24 hours
+  it('GET /requests?since=24h is accepted without error', async () => {
+    const server = createRegistryServer({
+      registryDb: db,
+      silent: true,
+      ownerApiKey: API_KEY,
+      ownerName: OWNER,
+      creditDb,
+    });
+    await server.ready();
+
+    const response = await server.inject({
+      method: 'GET',
+      url: '/requests?since=24h',
+      headers: { authorization: `Bearer ${API_KEY}` },
+    });
+    expect(response.statusCode).toBe(200);
+
+    await server.close();
+  });
+
+  // Test: GET /draft with valid key returns { cards: CapabilityCard[] } from auto-detected APIs
+  it('GET /draft with valid key returns { cards } from auto-detected APIs', async () => {
+    vi.mock('../cli/onboarding.js', () => ({
+      detectApiKeys: vi.fn().mockReturnValue(['OPENAI_API_KEY']),
+      buildDraftCard: vi.fn().mockReturnValue({
+        spec_version: '1.0',
+        id: 'draft-id-1',
+        owner: OWNER,
+        name: 'OpenAI Text Generation',
+        description: 'Draft card',
+        level: 1,
+        inputs: [],
+        outputs: [],
+        pricing: { credits_per_call: 5 },
+        availability: { online: true },
+        metadata: {},
+      }),
+      KNOWN_API_KEYS: ['OPENAI_API_KEY'],
+    }));
+
+    const server = createRegistryServer({
+      registryDb: db,
+      silent: true,
+      ownerApiKey: API_KEY,
+      ownerName: OWNER,
+      creditDb,
+    });
+    await server.ready();
+
+    const response = await server.inject({
+      method: 'GET',
+      url: '/draft',
+      headers: { authorization: `Bearer ${API_KEY}` },
+    });
+    expect(response.statusCode).toBe(200);
+    const body = response.json() as { cards: unknown[] };
+    expect(Array.isArray(body.cards)).toBe(true);
+
+    await server.close();
+    vi.restoreAllMocks();
+  });
+
+  // Test: GET /draft returns { cards: [] } when no API keys detected
+  it('GET /draft returns { cards: [] } when no API keys detected', async () => {
+    vi.mock('../cli/onboarding.js', () => ({
+      detectApiKeys: vi.fn().mockReturnValue([]),
+      buildDraftCard: vi.fn().mockReturnValue(null),
+      KNOWN_API_KEYS: [],
+    }));
+
+    const server = createRegistryServer({
+      registryDb: db,
+      silent: true,
+      ownerApiKey: API_KEY,
+      ownerName: OWNER,
+      creditDb,
+    });
+    await server.ready();
+
+    const response = await server.inject({
+      method: 'GET',
+      url: '/draft',
+      headers: { authorization: `Bearer ${API_KEY}` },
+    });
+    expect(response.statusCode).toBe(200);
+    const body = response.json() as { cards: unknown[] };
+    expect(body.cards).toEqual([]);
+
+    await server.close();
+    vi.restoreAllMocks();
+  });
+
+  // Test: POST /cards/:id/toggle-online with valid key toggles card.availability.online
+  it('POST /cards/:id/toggle-online toggles card.availability.online', async () => {
+    const card = makeOwnerCard({ availability: { online: true } });
+    insertCard(db, card);
+
+    const server = createRegistryServer({
+      registryDb: db,
+      silent: true,
+      ownerApiKey: API_KEY,
+      ownerName: OWNER,
+      creditDb,
+    });
+    await server.ready();
+
+    const response = await server.inject({
+      method: 'POST',
+      url: `/cards/${card.id}/toggle-online`,
+      headers: { authorization: `Bearer ${API_KEY}` },
+    });
+    expect(response.statusCode).toBe(200);
+    const body = response.json() as { ok: boolean; online: boolean };
+    expect(body.ok).toBe(true);
+    expect(body.online).toBe(false); // toggled from true to false
+
+    await server.close();
+  });
+
+  // Test: POST /cards/:id/toggle-online returns 403 when card belongs to different owner
+  it('POST /cards/:id/toggle-online returns 403 for card owned by different owner', async () => {
+    const card = makeOwnerCard({ owner: 'other-owner' });
+    insertCard(db, card);
+
+    const server = createRegistryServer({
+      registryDb: db,
+      silent: true,
+      ownerApiKey: API_KEY,
+      ownerName: OWNER,
+      creditDb,
+    });
+    await server.ready();
+
+    const response = await server.inject({
+      method: 'POST',
+      url: `/cards/${card.id}/toggle-online`,
+      headers: { authorization: `Bearer ${API_KEY}` },
+    });
+    expect(response.statusCode).toBe(403);
+
+    await server.close();
+  });
+
+  // Test: POST /cards/:id/toggle-online returns 404 for non-existent card
+  it('POST /cards/:id/toggle-online returns 404 for non-existent card', async () => {
+    const server = createRegistryServer({
+      registryDb: db,
+      silent: true,
+      ownerApiKey: API_KEY,
+      ownerName: OWNER,
+      creditDb,
+    });
+    await server.ready();
+
+    const response = await server.inject({
+      method: 'POST',
+      url: '/cards/00000000-0000-0000-0000-000000000000/toggle-online',
+      headers: { authorization: `Bearer ${API_KEY}` },
+    });
+    expect(response.statusCode).toBe(404);
+
+    await server.close();
+  });
+
+  // Test: PATCH /cards/:id with valid key updates description and pricing
+  it('PATCH /cards/:id with valid key updates description and pricing', async () => {
+    const card = makeOwnerCard();
+    insertCard(db, card);
+
+    const server = createRegistryServer({
+      registryDb: db,
+      silent: true,
+      ownerApiKey: API_KEY,
+      ownerName: OWNER,
+      creditDb,
+    });
+    await server.ready();
+
+    const response = await server.inject({
+      method: 'PATCH',
+      url: `/cards/${card.id}`,
+      headers: {
+        authorization: `Bearer ${API_KEY}`,
+        'content-type': 'application/json',
+      },
+      payload: JSON.stringify({
+        description: 'Updated description',
+        pricing: { credits_per_call: 10 },
+      }),
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ ok: true });
+
+    await server.close();
+  });
+
+  // Test: PATCH /cards/:id returns 403 when card belongs to different owner
+  it('PATCH /cards/:id returns 403 for card owned by different owner', async () => {
+    const card = makeOwnerCard({ owner: 'other-owner' });
+    insertCard(db, card);
+
+    const server = createRegistryServer({
+      registryDb: db,
+      silent: true,
+      ownerApiKey: API_KEY,
+      ownerName: OWNER,
+      creditDb,
+    });
+    await server.ready();
+
+    const response = await server.inject({
+      method: 'PATCH',
+      url: `/cards/${card.id}`,
+      headers: {
+        authorization: `Bearer ${API_KEY}`,
+        'content-type': 'application/json',
+      },
+      payload: JSON.stringify({ description: 'Hack' }),
+    });
+    expect(response.statusCode).toBe(403);
+
+    await server.close();
+  });
+
+  // Regression: GET /cards (public) still returns 200 without auth header
+  it('GET /cards still returns 200 without auth header (regression)', async () => {
+    const server = createRegistryServer({
+      registryDb: db,
+      silent: true,
+      ownerApiKey: API_KEY,
+      ownerName: OWNER,
+      creditDb,
+    });
+    await server.ready();
+
+    const response = await server.inject({ method: 'GET', url: '/cards' });
+    expect(response.statusCode).toBe(200);
+
+    await server.close();
+  });
+
+  // Regression: GET /health still returns 200 without auth header
+  it('GET /health still returns 200 without auth header (regression)', async () => {
+    const server = createRegistryServer({
+      registryDb: db,
+      silent: true,
+      ownerApiKey: API_KEY,
+      ownerName: OWNER,
+      creditDb,
+    });
+    await server.ready();
+
+    const response = await server.inject({ method: 'GET', url: '/health' });
+    expect(response.statusCode).toBe(200);
 
     await server.close();
   });
