@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v2.1
 milestone_name: Ship It
 status: planning
-stopped_at: Completed 10-clawHub-installable-skill-02-PLAN.md
-last_updated: "2026-03-15T19:42:58.155Z"
+stopped_at: Completed 10-clawHub-installable-skill 10-01-PLAN.md
+last_updated: "2026-03-15T19:45:39.779Z"
 last_activity: 2026-03-16 — Phase 9 signed off, proceeding to Phase 10
 progress:
   total_phases: 16
   completed_phases: 14
   total_plans: 43
-  completed_plans: 41
+  completed_plans: 42
   percent: 0
 ---
 
@@ -51,6 +51,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 09-hub-ui-redesign P02 | 150s | 2 tasks | 2 files |
 | Phase 09-hub-ui-redesign P04 | 8min | 1 tasks | 4 files |
 | Phase 10-clawHub-installable-skill P02 | 2min | 2 tasks | 2 files |
+| Phase 10-clawHub-installable-skill P01 | 3 | 1 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -71,6 +72,7 @@ Progress: [░░░░░░░░░░] 0%
 - [Phase 09-hub-ui-redesign]: useCountUp hook animates from 0 on every target change for alive feeling; grid overlay at 0.03 opacity included
 - [Phase 10-clawHub-installable-skill]: install.sh uses pnpm-first with npm fallback for CLI install — matches project package manager preference
 - [Phase 10-clawHub-installable-skill]: HEARTBEAT.rules.md uses example defaults (Tier 1:10, Tier 2:50, reserve:20) with pointer to agentbnb openclaw rules for real configured values
+- [Phase 10-clawHub-installable-skill]: bootstrap.ts uses try/catch in deactivate() for idempotent teardown; gatewayToken defaults to randomUUID(); FILE_NOT_FOUND error code for missing SOUL.md
 
 ### Pending Todos
 
@@ -82,8 +84,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-15T19:42:58.153Z
-Stopped at: Completed 10-clawHub-installable-skill-02-PLAN.md
+Last session: 2026-03-15T19:45:39.777Z
+Stopped at: Completed 10-clawHub-installable-skill 10-01-PLAN.md
 Resume file: None
 
 ---

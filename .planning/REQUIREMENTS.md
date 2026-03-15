@@ -80,7 +80,7 @@ Requirements for the Ship It milestone. Each maps to roadmap phases.
 
 ### ClaWHub Installable Skill
 
-- [ ] **CLW-01**: bootstrap.ts with activate()/deactivate() — single entry point that initializes AgentRuntime, publishes card from SOUL.md, starts gateway + IdleMonitor
+- [x] **CLW-01**: bootstrap.ts with activate()/deactivate() — single entry point that initializes AgentRuntime, publishes card from SOUL.md, starts gateway + IdleMonitor
 - [x] **CLW-02**: install.sh post-install script — auto-install CLI, auto-init config, sync capabilities from SOUL.md
 - [ ] **CLW-03**: SKILL.md rewrite as agent-executable instructions — frontmatter metadata, on-install steps, autonomy rules, CLI reference
 - [x] **CLW-04**: HEARTBEAT.rules.md — standalone autonomy rules file for agents to copy-paste into HEARTBEAT.md
@@ -158,7 +158,7 @@ Deferred to future release. Tracked but not in current roadmap.
 | HUI-05 | Phase 9 | Complete |
 | HUI-06 | Phase 9 | Complete |
 | HUI-07 | Phase 9 | Complete |
-| CLW-01 | Phase 10 | Pending |
+| CLW-01 | Phase 10 | Complete |
 | CLW-02 | Phase 10 | Complete |
 | CLW-03 | Phase 10 | Pending |
 | CLW-04 | Phase 10 | Complete |
