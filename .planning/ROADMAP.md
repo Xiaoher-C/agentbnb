@@ -122,7 +122,7 @@ Plans:
 **Requirements**: [RRD-01, RRD-02]
 **Depends on:** Phase 2.25
 **Gap Closure:** Closes integration gap (CLI discover → Registry HTTP) and broken flow from v1.0 audit
-**Plans:** 2 plans
+**Plans:** 2/2 plans complete
 
 Plans:
 - [ ] 02.3-01-PLAN.md — Remote fetch module + config command + discover wiring
