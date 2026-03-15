@@ -3,7 +3,8 @@
 ## Milestones
 
 - ✅ **v1.1 Upgrade** - Phases 0-3 (shipped 2026-03-15)
-- 🚧 **v2.0 Agent Autonomy** - Phases 4-8 (in progress)
+- ✅ **v2.0 Agent Autonomy** - Phases 4-8 (shipped 2026-03-15)
+- 🚧 **v2.1 Ship It** - Phases 9-11 (in progress)
 
 ## Phases
 
@@ -97,17 +98,67 @@ Plans:
 
 </details>
 
+<details>
+<summary>✅ v2.0 Agent Autonomy (Phases 4-8) - SHIPPED 2026-03-15</summary>
+
+### Phase 4: Agent Runtime + Multi-Skill Foundation (Complete)
+**Goal**: Agents can run with a stable centralized runtime that owns all DB handles and background lifecycle, publishing a single multi-skill Capability Card instead of one card per skill.
+**Requirements**: RUN-01, RUN-02, RUN-03, RUN-04
+**Plans:** 3/3 plans complete
+
+Plans:
+- [x] 04-01-PLAN.md — AgentRuntime class: DB handle ownership, SIGTERM handler, orphaned escrow recovery
+- [x] 04-02-PLAN.md — CapabilityCard v2.0 schema: skills[] array, per-skill pricing; SQLite migration + FTS5 trigger update
+- [x] 04-03-PLAN.md — Gateway skill_id routing + human verification
+
+### Phase 5: Autonomy Tiers + Credit Budgeting (Complete)
+**Goal**: Agents operate under safe-by-default autonomy constraints — all autonomous actions are blocked until the owner explicitly configures tiers, and auto-request can never drain credits below a configurable reserve floor.
+**Requirements**: TIER-01, TIER-02, TIER-03, TIER-04, BUD-01, BUD-02, BUD-03
+**Plans:** 2/2 plans complete
+
+Plans:
+- [x] 05-01-PLAN.md — Autonomy tiers module: getAutonomyTier(), AutonomyEvent types, Tier 3 default, config + audit columns
+- [x] 05-02-PLAN.md — BudgetManager with reserve floor, canSpend(), CLI config commands + human verification
+
+### Phase 6: Idle Rate Monitoring + Auto-Share (Complete)
+**Goal**: Agents autonomously monitor their utilization per skill and flip availability online when idle, making idle capacity discoverable without human intervention.
+**Requirements**: IDLE-01, IDLE-02, IDLE-03, IDLE-04, IDLE-05
+**Plans:** 2/2 plans complete
+
+Plans:
+- [x] 06-01-PLAN.md — Data layer helpers: getSkillRequestCount() sliding window query + updateSkillAvailability() + updateSkillIdleRate() with tests
+- [x] 06-02-PLAN.md — IdleMonitor class: croner polling, idle rate computation, tier-gated auto-share + CLI wiring + human verification
+
+### Phase 7: Auto-Request (Complete)
+**Goal**: Agents detect capability gaps and autonomously execute peer requests — finding the best peer, checking the budget, holding escrow, and running the capability — completing the earn/spend loop without human intervention.
+**Requirements**: REQ-01, REQ-02, REQ-03, REQ-04, REQ-05, REQ-06
+**Plans:** 2/2 plans complete
+
+Plans:
+- [x] 07-01-PLAN.md — Tier 3 approval queue: pending_requests table, CRUD module, owner API endpoints, AutonomyEvent extension
+- [x] 07-02-PLAN.md — AutoRequestor class: peer scoring, self-exclusion, budget-gated escrow, failure logging, CLI command + human verification
+
+### Phase 8: OpenClaw Deep Integration (Complete)
+**Goal**: AgentBnB installs as a first-class OpenClaw skill — one command wires up gateway, auto-share, auto-request, and credit management into any OpenClaw agent, with SOUL.md sync generating the multi-skill card and HEARTBEAT.md rules enforcing autonomy policy.
+**Requirements**: OC-01, OC-02, OC-03, OC-04
+**Plans:** 3/3 plans complete
+
+Plans:
+- [x] 08-01-PLAN.md — src/openclaw/ modules: soul-sync (parseSoulMdV2 + publishFromSoulV2), heartbeat-writer, skill lifecycle + status
+- [x] 08-02-PLAN.md — skills/agentbnb/ installable package: SKILL.md manifest + 4 thin adapter files
+- [x] 08-03-PLAN.md — agentbnb openclaw sync|status|rules CLI commands + human verification
+
+</details>
+
 ---
 
-### v2.0 Agent Autonomy (In Progress)
+### v2.1 Ship It (In Progress)
 
-**Milestone Goal:** The agent handles everything. The human says Yes once.
+**Milestone Goal:** Make AgentBnB launchable. Premium Hub UI, one-command OpenClaw skill install, repo ready for public.
 
-- [x] **Phase 4: Agent Runtime + Multi-Skill Foundation** - Centralized runtime scaffold and schema v2.0 with multi-skill cards (completed 2026-03-15)
-- [x] **Phase 5: Autonomy Tiers + Credit Budgeting** - Pure logic modules enforcing safe-by-default autonomous behavior (completed 2026-03-15)
-- [x] **Phase 6: Idle Rate Monitoring + Auto-Share** - First active autonomous behavior: agents share when idle (completed 2026-03-15)
-- [x] **Phase 7: Auto-Request** - Second active autonomous behavior: agents spend credits to fill capability gaps (completed 2026-03-15)
-- [x] **Phase 8: OpenClaw Deep Integration** - Install AgentBnB as an OpenClaw skill with SOUL.md sync and HEARTBEAT.md rules (completed 2026-03-15)
+- [ ] **Phase 9: Hub UI Redesign** - Premium dark SaaS Hub with ambient glow, modal card overlays, and count-up animations — screenshot-worthy
+- [ ] **Phase 10: ClaWHub Installable Skill** - One command puts any OpenClaw agent on the AgentBnB network via a single activate() entry point
+- [ ] **Phase 11: Repo Housekeeping** - Repo documentation reflects current reality and is ready for public launch
 
 ## Phase Details
 
@@ -187,16 +238,71 @@ Plans:
 **Plans:** 3/3 plans complete
 
 Plans:
-- [ ] 08-01-PLAN.md — src/openclaw/ modules: soul-sync (parseSoulMdV2 + publishFromSoulV2), heartbeat-writer, skill lifecycle + status
-- [ ] 08-02-PLAN.md — skills/agentbnb/ installable package: SKILL.md manifest + 4 thin adapter files
-- [ ] 08-03-PLAN.md — agentbnb openclaw sync|status|rules CLI commands + human verification
+- [x] 08-01-PLAN.md — src/openclaw/ modules: soul-sync (parseSoulMdV2 + publishFromSoulV2), heartbeat-writer, skill lifecycle + status
+- [x] 08-02-PLAN.md — skills/agentbnb/ installable package: SKILL.md manifest + 4 thin adapter files
+- [x] 08-03-PLAN.md — agentbnb openclaw sync|status|rules CLI commands + human verification
+
+### Phase 9: Hub UI Redesign
+**Goal**: The Hub is screenshot-worthy — a premium dark SaaS experience with ambient emerald glow, modal card overlays, and count-up animations that communicates quality before a single interaction.
+**Depends on**: Phase 8
+**Requirements**: HUI-01, HUI-02, HUI-03, HUI-04, HUI-05, HUI-06, HUI-07
+**Success Criteria** (what must be TRUE):
+  1. The Hub renders with a dark #08080C background, emerald #10B981 accent, Inter + JetBrains Mono typography, and a radial gradient ambient glow — the aesthetic is immediately distinguishable from a generic Tailwind app
+  2. Clicking any capability card opens a centered 520px modal with backdrop blur, scale-in animation, and body scroll lock — ESC and backdrop click both close it cleanly
+  3. Stats numbers (agents, capabilities, credits) count up from 0 to their real values over 400ms in JetBrains Mono at 32px — visible on every page load
+  4. The search bar, level/category dropdowns, online-only toggle, and pill-style tab switcher all render in the premium dark style with no legacy Tailwind defaults leaking through
+  5. Cards show compact layout with 32px identicon, ghost category chips, level pill badge, and green online indicator — hovering any card lifts it 2px with border brightening
+**Plans**: TBD
+
+Plans:
+- [ ] 09-01: Design system — CSS variables, font imports, base component tokens
+- [ ] 09-02: Card component redesign — compact layout, identicon, ghost chips, level pill, online glow
+- [ ] 09-03: Modal overlay — centered detail modal, backdrop blur, scale animation, ESC/backdrop close, scroll lock
+- [ ] 09-04: Header + stats bar + ambient glow — logo text, 32px JetBrains Mono stats, radial gradient glow
+- [ ] 09-05: Search + filter bar redesign — 48px ghost search, level/category dropdowns, online-only toggle
+- [ ] 09-06: Tabs pill-switcher — Discover/Share/My Agent pills, active fill rgba(255,255,255,0.08)
+- [ ] 09-07: Polish — count-up animation, card hover translateY(-2px), loading states, empty state
+
+### Phase 10: ClaWHub Installable Skill
+**Goal**: One command puts any OpenClaw agent on the AgentBnB network — activate() initializes the runtime, publishes the card, starts the gateway and IdleMonitor, and install.sh handles all setup automatically.
+**Depends on**: Phase 9
+**Requirements**: CLW-01, CLW-02, CLW-03, CLW-04, CLW-05
+**Success Criteria** (what must be TRUE):
+  1. Calling `activate()` from bootstrap.ts brings an OpenClaw agent fully online: AgentRuntime initialized, card published from SOUL.md, gateway listening, IdleMonitor running — one function call, zero additional setup
+  2. Running install.sh after cloning automatically installs the CLI, initializes config, and syncs capabilities from SOUL.md — a new agent can join the network without reading documentation
+  3. SKILL.md contains agent-executable instructions with frontmatter metadata, on-install steps, autonomy rules, and CLI reference — an agent reading it knows exactly what to do without human interpretation
+  4. HEARTBEAT.rules.md contains a standalone autonomy rules block that any agent can copy-paste directly into its HEARTBEAT.md to govern AgentBnB behavior
+  5. The integration test confirms the full lifecycle: mock SOUL.md, activate(), assert card published + gateway listening + IdleMonitor running, deactivate(), assert all resources cleaned up
+**Plans**: TBD
+
+Plans:
+- [ ] 10-01: bootstrap.ts — activate()/deactivate() entry point wiring AgentRuntime, card publish, gateway, IdleMonitor
+- [ ] 10-02: install.sh — post-install automation: CLI install, config init, SOUL.md sync
+- [ ] 10-03: SKILL.md rewrite — agent-executable instructions with frontmatter, on-install, autonomy rules, CLI reference
+- [ ] 10-04: HEARTBEAT.rules.md — standalone autonomy rules file for copy-paste into HEARTBEAT.md
+- [ ] 10-05: Integration test — full activate()/deactivate() lifecycle with assertions
+
+### Phase 11: Repo Housekeeping
+**Goal**: The repo is ready for public launch — CLAUDE.md reflects current reality, README.md has the new tagline and architecture story, and AGENT-NATIVE-PROTOCOL.md is committed at root.
+**Depends on**: Phase 10
+**Requirements**: DOC-01, DOC-02, DOC-03
+**Success Criteria** (what must be TRUE):
+  1. CLAUDE.md accurately reflects v1.1 (8 phases, 24 plans, 302+ tests), v2.0 (5 phases, 12 plans), and v2.1, with agent-first philosophy and current architecture — no stale references
+  2. README.md opens with the new tagline, shows a multi-skill cards JSON example, explains autonomy tiers and auto-share/auto-request, and includes the Hub screenshot — a new visitor understands the project in under 2 minutes
+  3. AGENT-NATIVE-PROTOCOL.md exists at the repo root and is committed — it is the design bible referenced throughout the codebase and must be publicly accessible
+**Plans**: TBD
+
+Plans:
+- [ ] 11-01: CLAUDE.md update — reflect v1.1, v2.0, v2.1, agent-first philosophy, updated architecture
+- [ ] 11-02: README.md rewrite — tagline, multi-skill JSON example, autonomy tiers, Hub screenshot, OpenClaw integration, author update
+- [ ] 11-03: AGENT-NATIVE-PROTOCOL.md — ensure committed and accessible at repo root
 
 ---
 
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 4 → 5 → 6 → 7 → 8
+Phases execute in numeric order: 9 → 10 → 11
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
@@ -212,4 +318,7 @@ Phases execute in numeric order: 4 → 5 → 6 → 7 → 8
 | 5. Autonomy Tiers + Credit Budgeting | v2.0 | 2/2 | Complete | 2026-03-15 |
 | 6. Idle Rate Monitoring + Auto-Share | v2.0 | 2/2 | Complete | 2026-03-15 |
 | 7. Auto-Request | v2.0 | 2/2 | Complete | 2026-03-15 |
-| 8. OpenClaw Deep Integration | 3/3 | Complete   | 2026-03-15 | - |
+| 8. OpenClaw Deep Integration | v2.0 | 3/3 | Complete | 2026-03-15 |
+| 9. Hub UI Redesign | v2.1 | 0/7 | Not started | - |
+| 10. ClaWHub Installable Skill | v2.1 | 0/5 | Not started | - |
+| 11. Repo Housekeeping | v2.1 | 0/3 | Not started | - |
