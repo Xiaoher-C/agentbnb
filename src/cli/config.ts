@@ -2,6 +2,7 @@ import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import type { AutonomyConfig } from '../autonomy/tiers.js';
+import type { BudgetConfig } from '../credit/budget.js';
 
 /**
  * AgentBnB local agent configuration stored at ~/.agentbnb/config.json
@@ -33,6 +34,13 @@ export interface AgentBnBConfig {
    * Set via `agentbnb config set tier1 <N>` and `agentbnb config set tier2 <N>`.
    */
   autonomy?: AutonomyConfig;
+  /**
+   * Credit budget configuration controlling the reserve floor.
+   * The reserve floor prevents auto-request from draining credits to zero.
+   * Defaults to 20 credit reserve when not configured.
+   * Set via `agentbnb config set reserve <N>`.
+   */
+  budget?: BudgetConfig;
 }
 
 /**

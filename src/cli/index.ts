@@ -11,6 +11,7 @@ import { createInterface } from 'node:readline';
 
 import { loadConfig, saveConfig, getConfigDir } from './config.js';
 import { DEFAULT_AUTONOMY_CONFIG } from '../autonomy/tiers.js';
+import { DEFAULT_BUDGET_CONFIG } from '../credit/budget.js';
 import { fetchRemoteCards, mergeResults } from './remote-registry.js';
 import type { TaggedCard } from './remote-registry.js';
 import { loadPeers, savePeer, removePeer, findPeer } from './peers.js';
@@ -730,7 +731,7 @@ configCmd
   .command('set <key> <value>')
   .description('Set a configuration value')
   .action((key: string, value: string) => {
-    const allowedKeys = ['registry', 'tier1', 'tier2'];
+    const allowedKeys = ['registry', 'tier1', 'tier2', 'reserve'];
     if (!allowedKeys.includes(key)) {
       console.error(`Unknown config key: ${key}. Valid keys: ${allowedKeys.join(', ')}`);
       process.exit(1);
@@ -778,6 +779,24 @@ configCmd
       return;
     }
 
+    if (key === 'reserve') {
+      const parsed = parseInt(value, 10);
+      if (isNaN(parsed) || parsed < 0) {
+        console.error(`Error: reserve must be a non-negative integer, got: ${value}`);
+        process.exit(1);
+      }
+
+      // Initialize budget config from defaults if not yet set
+      if (!config.budget) {
+        config.budget = { ...DEFAULT_BUDGET_CONFIG };
+      }
+
+      config.budget.reserve_credits = parsed;
+      saveConfig(config);
+      console.log(`Set reserve = ${parsed} (credit reserve floor: ${parsed} credits)`);
+      return;
+    }
+
     (config as unknown as Record<string, unknown>)[key] = value;
     saveConfig(config);
     console.log(`Set ${key} = ${value}`);
@@ -800,6 +819,11 @@ configCmd
 
     if (key === 'tier2') {
       console.log(String(config.autonomy?.tier2_max_credits ?? 0));
+      return;
+    }
+
+    if (key === 'reserve') {
+      console.log(String(config.budget?.reserve_credits ?? DEFAULT_BUDGET_CONFIG.reserve_credits));
       return;
     }
 
