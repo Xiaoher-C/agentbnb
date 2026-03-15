@@ -105,7 +105,7 @@ Plans:
 
 - [x] **Phase 4: Agent Runtime + Multi-Skill Foundation** - Centralized runtime scaffold and schema v2.0 with multi-skill cards (completed 2026-03-15)
 - [x] **Phase 5: Autonomy Tiers + Credit Budgeting** - Pure logic modules enforcing safe-by-default autonomous behavior (completed 2026-03-15)
-- [ ] **Phase 6: Idle Rate Monitoring + Auto-Share** - First active autonomous behavior: agents share when idle
+- [x] **Phase 6: Idle Rate Monitoring + Auto-Share** - First active autonomous behavior: agents share when idle (completed 2026-03-15)
 - [ ] **Phase 7: Auto-Request** - Second active autonomous behavior: agents spend credits to fill capability gaps
 - [ ] **Phase 8: OpenClaw Deep Integration** - Install AgentBnB as an OpenClaw skill with SOUL.md sync and HEARTBEAT.md rules
 
@@ -153,7 +153,7 @@ Plans:
   3. Idle rate is computed from real `request_log` data using a sliding 60-minute window — not hardcoded or estimated
   4. The `capacity.calls_per_hour` field on each skill is owner-declared (default 60) and visible in the published card
   5. `agentbnb serve` starts the IdleMonitor background loop automatically; stopping the server stops the loop cleanly
-**Plans:** 1/2 plans executed
+**Plans:** 2/2 plans complete
 
 Plans:
 - [ ] 06-01-PLAN.md — Data layer helpers: getSkillRequestCount() sliding window query + updateSkillAvailability() + updateSkillIdleRate() with tests
@@ -210,6 +210,6 @@ Phases execute in numeric order: 4 → 5 → 6 → 7 → 8
 | 3. UX Layer | v1.1 | 4/4 | Complete | 2026-03-15 |
 | 4. Agent Runtime + Multi-Skill Foundation | v2.0 | 3/3 | Complete | 2026-03-15 |
 | 5. Autonomy Tiers + Credit Budgeting | v2.0 | 2/2 | Complete | 2026-03-15 |
-| 6. Idle Rate Monitoring + Auto-Share | 1/2 | In Progress|  | - |
+| 6. Idle Rate Monitoring + Auto-Share | 2/2 | Complete   | 2026-03-15 | - |
 | 7. Auto-Request | v2.0 | 0/2 | Not started | - |
 | 8. OpenClaw Deep Integration | v2.0 | 0/3 | Not started | - |

@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Agent Autonomy
 status: planning
-stopped_at: "Completed 06-01-PLAN.md — data layer helpers for IdleMonitor: getSkillRequestCount, updateSkillAvailability, updateSkillIdleRate"
-last_updated: "2026-03-15T12:43:09.581Z"
+stopped_at: "Completed 06-02 Tasks 1+2 — IdleMonitor class + serve wiring; awaiting checkpoint:human-verify at Task 3"
+last_updated: "2026-03-15T12:55:27.937Z"
 last_activity: 2026-03-15 — v2.0 Agent Autonomy roadmap created (Phases 4-8)
 progress:
   total_phases: 13
-  completed_phases: 10
+  completed_phases: 11
   total_plans: 31
-  completed_plans: 30
+  completed_plans: 31
   percent: 38
 ---
 
@@ -54,6 +54,7 @@ Progress: [████████░░░░░░░░░░░░] 38% (v1
 | Phase 05-autonomy-tiers-credit-budgeting P02 | 2 | 1 tasks | 4 files |
 | Phase 05-autonomy-tiers-credit-budgeting P02 | 30 | 2 tasks | 4 files |
 | Phase 06-idle-rate-monitoring-auto-share P01 | 9 | 2 tasks | 4 files |
+| Phase 06-idle-rate-monitoring-auto-share P02 | 12 | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -90,6 +91,9 @@ Recent decisions affecting current work:
 - [Phase 05-02]: DEFAULT_BUDGET_CONFIG.reserve_credits = 20 — matches v2.0 init decision; owner must explicitly set lower floor
 - [Phase Phase 06-01]: getSkillRequestCount SQL uses AND action_type IS NULL to exclude autonomy audit events — prevents auto_share events from artificially deflating idle rate
 - [Phase Phase 06-01]: updateSkillAvailability and updateSkillIdleRate use raw JSON read/mutate/write (not updateCard/Zod) — v2.0 skill shapes are rejected by v1.0 Zod schema
+- [Phase Phase 06-02]: IdleMonitor passes 0 credits to getAutonomyTier() — auto-share is zero-cost but tier config still gates it
+- [Phase Phase 06-02]: Cron constructed paused:true + void this.poll() fire-and-forget — croner callbacks are not async-aware
+- [Phase Phase 06-02]: v1.0 cards detected via Array.isArray(skills) — skip without error, no schema change needed
 
 ### Pending Todos
 
@@ -103,8 +107,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-15T12:43:09.579Z
-Stopped at: Completed 06-01-PLAN.md — data layer helpers for IdleMonitor: getSkillRequestCount, updateSkillAvailability, updateSkillIdleRate
+Last session: 2026-03-15T12:55:27.934Z
+Stopped at: Completed 06-02 Tasks 1+2 — IdleMonitor class + serve wiring; awaiting checkpoint:human-verify at Task 3
 Resume file: None
 
 ---
