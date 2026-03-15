@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Agent Autonomy
 status: planning
-stopped_at: Completed 07-02-PLAN.md — AutoRequestor, peer scoring, CLI --query command; awaiting human verification
-last_updated: "2026-03-15T14:37:09.369Z"
+stopped_at: Completed 07-02-PLAN.md — AutoRequestor human-verified, Phase 7 complete
+last_updated: "2026-03-15T15:03:29.218Z"
 last_activity: 2026-03-15 — v2.0 Agent Autonomy roadmap created (Phases 4-8)
 progress:
   total_phases: 13
@@ -57,6 +57,7 @@ Progress: [████████░░░░░░░░░░░░] 38% (v1
 | Phase 06-idle-rate-monitoring-auto-share P02 | 12 | 2 tasks | 3 files |
 | Phase 07-auto-request P01 | 12 | 2 tasks | 6 files |
 | Phase 07-auto-request P02 | 6 | 2 tasks | 3 files |
+| Phase 07-auto-request P02 | 6 | 3 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -104,6 +105,9 @@ Recent decisions affecting current work:
 - [Phase 07-02]: scorePeers uses multiplicative composite of 3 normalized dimensions (success_rate * cost_efficiency * idle_rate)
 - [Phase 07-02]: Zero-cost card maps cost_efficiency to 1 (not Infinity) — prevents NaN in normalization; missing idle_rate defaults to 1.0
 - [Phase 07-02]: CLI request [card-id] made optional — --query triggers AutoRequestor; missing both prints help
+- [Phase 07-02]: scorePeers uses multiplicative composite of 3 normalized dimensions (success_rate * cost_efficiency * idle_rate)
+- [Phase 07-02]: Zero-cost card maps cost_efficiency to 1 (max), not Infinity — prevents NaN in normalization
+- [Phase 07-02]: Missing _internal.idle_rate defaults to 1.0 (maximally idle) — benefit of the doubt when no telemetry
 
 ### Pending Todos
 
@@ -117,8 +121,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-15T14:37:09.367Z
-Stopped at: Completed 07-02-PLAN.md — AutoRequestor, peer scoring, CLI --query command; awaiting human verification
+Last session: 2026-03-15T15:03:29.213Z
+Stopped at: Completed 07-02-PLAN.md — AutoRequestor human-verified, Phase 7 complete
 Resume file: None
 
 ---
