@@ -11,6 +11,7 @@ import { createInterface } from 'node:readline';
 
 import { loadConfig, saveConfig, getConfigDir } from './config.js';
 import { DEFAULT_AUTONOMY_CONFIG } from '../autonomy/tiers.js';
+import { IdleMonitor } from '../autonomy/idle-monitor.js';
 import { DEFAULT_BUDGET_CONFIG } from '../credit/budget.js';
 import { fetchRemoteCards, mergeResults } from './remote-registry.js';
 import type { TaggedCard } from './remote-registry.js';
@@ -590,6 +591,17 @@ program
     });
     await runtime.start();
 
+    // Start IdleMonitor background loop
+    const autonomyConfig = config.autonomy ?? DEFAULT_AUTONOMY_CONFIG;
+    const idleMonitor = new IdleMonitor({
+      owner: config.owner,
+      db: runtime.registryDb,
+      autonomyConfig,
+    });
+    const idleJob = idleMonitor.start();
+    runtime.registerJob(idleJob);
+    console.log('IdleMonitor started (60s poll interval, 70% idle threshold)');
+
     const server = createGatewayServer({
       port,
       registryDb: runtime.registryDb,
@@ -731,7 +743,7 @@ configCmd
   .command('set <key> <value>')
   .description('Set a configuration value')
   .action((key: string, value: string) => {
-    const allowedKeys = ['registry', 'tier1', 'tier2', 'reserve'];
+    const allowedKeys = ['registry', 'tier1', 'tier2', 'reserve', 'idle-threshold'];
     if (!allowedKeys.includes(key)) {
       console.error(`Unknown config key: ${key}. Valid keys: ${allowedKeys.join(', ')}`);
       process.exit(1);
@@ -797,6 +809,18 @@ configCmd
       return;
     }
 
+    if (key === 'idle-threshold') {
+      const parsed = parseFloat(value);
+      if (isNaN(parsed) || parsed < 0 || parsed > 1) {
+        console.error('Error: idle-threshold must be a number between 0 and 1');
+        process.exit(1);
+      }
+      (config as unknown as Record<string, unknown>)['idle_threshold'] = parsed;
+      saveConfig(config);
+      console.log(`Set idle-threshold = ${parsed} (idle rate threshold for auto-share)`);
+      return;
+    }
+
     (config as unknown as Record<string, unknown>)[key] = value;
     saveConfig(config);
     console.log(`Set ${key} = ${value}`);
@@ -824,6 +848,12 @@ configCmd
 
     if (key === 'reserve') {
       console.log(String(config.budget?.reserve_credits ?? DEFAULT_BUDGET_CONFIG.reserve_credits));
+      return;
+    }
+
+    if (key === 'idle-threshold') {
+      const val = (config as unknown as Record<string, unknown>)['idle_threshold'];
+      console.log(val !== undefined ? String(val) : '0.70');
       return;
     }
 
