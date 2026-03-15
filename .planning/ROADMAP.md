@@ -140,8 +140,8 @@ Plans:
 **Plans:** 2/2 plans complete
 
 Plans:
-- [ ] 05-01-PLAN.md — Autonomy tiers module: getAutonomyTier(), AutonomyEvent types, Tier 3 default, config + audit columns
-- [ ] 05-02-PLAN.md — BudgetManager with reserve floor, canSpend(), CLI config commands + human verification
+- [x] 05-01-PLAN.md — Autonomy tiers module: getAutonomyTier(), AutonomyEvent types, Tier 3 default, config + audit columns
+- [x] 05-02-PLAN.md — BudgetManager with reserve floor, canSpend(), CLI config commands + human verification
 
 ### Phase 6: Idle Rate Monitoring + Auto-Share
 **Goal**: Agents autonomously monitor their utilization per skill and flip availability online when idle, making idle capacity discoverable without human intervention.
@@ -153,11 +153,11 @@ Plans:
   3. Idle rate is computed from real `request_log` data using a sliding 60-minute window — not hardcoded or estimated
   4. The `capacity.calls_per_hour` field on each skill is owner-declared (default 60) and visible in the published card
   5. `agentbnb serve` starts the IdleMonitor background loop automatically; stopping the server stops the loop cleanly
-**Plans**: TBD
+**Plans:** 2 plans
 
 Plans:
-- [ ] 06-01: capacity.calls_per_hour on skill schema + per-skill idle rate in _internal + getSkillRequestCount() in request-log.ts
-- [ ] 06-02: src/autonomy/idle-monitor.ts — croner polling, sliding window computation, auto-share trigger via tiers + human verification
+- [ ] 06-01-PLAN.md — Data layer helpers: getSkillRequestCount() sliding window query + updateSkillAvailability() + updateSkillIdleRate() with tests
+- [ ] 06-02-PLAN.md — IdleMonitor class: croner polling, idle rate computation, tier-gated auto-share + CLI wiring + human verification
 
 ### Phase 7: Auto-Request
 **Goal**: Agents detect capability gaps and autonomously execute peer requests — finding the best peer, checking the budget, holding escrow, and running the capability — completing the earn/spend loop without human intervention.
@@ -209,7 +209,7 @@ Phases execute in numeric order: 4 → 5 → 6 → 7 → 8
 | 2.3. Remote Registry | v1.1 | 2/2 | Complete | 2026-03-15 |
 | 3. UX Layer | v1.1 | 4/4 | Complete | 2026-03-15 |
 | 4. Agent Runtime + Multi-Skill Foundation | v2.0 | 3/3 | Complete | 2026-03-15 |
-| 5. Autonomy Tiers + Credit Budgeting | 2/2 | Complete   | 2026-03-15 | - |
-| 6. Idle Rate Monitoring + Auto-Share | v2.0 | 0/2 | Not started | - |
+| 5. Autonomy Tiers + Credit Budgeting | v2.0 | 2/2 | Complete | 2026-03-15 |
+| 6. Idle Rate Monitoring + Auto-Share | v2.0 | 0/2 | Planning complete | - |
 | 7. Auto-Request | v2.0 | 0/2 | Not started | - |
 | 8. OpenClaw Deep Integration | v2.0 | 0/3 | Not started | - |
