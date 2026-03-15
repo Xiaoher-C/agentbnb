@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Agent Autonomy
 status: planning
-stopped_at: Completed 04-02-PLAN.md — multi-skill schema v2.0 and SQLite migration
-last_updated: "2026-03-15T10:44:02.772Z"
+stopped_at: Completed 04-03-PLAN.md task 1 — gateway skill_id routing; awaiting human-verify checkpoint (Task 2)
+last_updated: "2026-03-15T11:01:26.431Z"
 last_activity: 2026-03-15 — v2.0 Agent Autonomy roadmap created (Phases 4-8)
 progress:
   total_phases: 13
-  completed_phases: 8
+  completed_phases: 9
   total_plans: 27
-  completed_plans: 26
+  completed_plans: 27
   percent: 38
 ---
 
@@ -48,6 +48,7 @@ Progress: [████████░░░░░░░░░░░░] 38% (v1
 *Updated after each plan completion*
 | Phase 04-agent-runtime-multi-skill-foundation P01 | 4 | 2 tasks | 4 files |
 | Phase 04-agent-runtime-multi-skill-foundation P02 | 11 | 2 tasks | 4 files |
+| Phase 04-agent-runtime-multi-skill-foundation P03 | 25 | 1 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -67,6 +68,9 @@ Recent decisions affecting current work:
 - [Phase 04-02]: FTS5 uses content="" (contentless) — content=capability_cards fails rebuild because FTS columns are not physical columns in base table
 - [Phase 04-02]: Migration is a single db.transaction(): card update + trigger DROP/recreate + FTS delete-all + repopulate + user_version = 2
 - [Phase 04-02]: skill_id for migrated v1.0 cards = skill-{card.id} — stable, readable, avoids breaking cached references
+- [Phase 04-03]: Cast getCard() result via unknown narrowing to check for skills[] property instead of changing store.ts return type
+- [Phase 04-03]: Handler dispatch: handlers[skill_id] ?? handlers[card_id] — skill key first, card key as fallback, no registry lookup needed
+- [Phase 04-03]: resolvedSkillId set to skill.id for v2.0 cards, undefined for v1.0 — ensures consistent null coalesce in all insertRequestLog calls
 
 ### Pending Todos
 
@@ -80,8 +84,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-15T10:44:02.770Z
-Stopped at: Completed 04-02-PLAN.md — multi-skill schema v2.0 and SQLite migration
+Last session: 2026-03-15T11:01:26.429Z
+Stopped at: Completed 04-03-PLAN.md task 1 — gateway skill_id routing; awaiting human-verify checkpoint (Task 2)
 Resume file: None
 
 ---
