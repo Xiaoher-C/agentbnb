@@ -1,6 +1,7 @@
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
+import type { AutonomyConfig } from '../autonomy/tiers.js';
 
 /**
  * AgentBnB local agent configuration stored at ~/.agentbnb/config.json
@@ -26,6 +27,12 @@ export interface AgentBnBConfig {
   registry?: string;
   /** API key for authenticating Hub dashboard access. 64-char hex string generated on init. */
   api_key?: string;
+  /**
+   * Autonomy tier configuration controlling how much credit spending is auto-approved.
+   * Defaults to Tier 3 (all actions require owner approval) when not configured.
+   * Set via `agentbnb config set tier1 <N>` and `agentbnb config set tier2 <N>`.
+   */
+  autonomy?: AutonomyConfig;
 }
 
 /**

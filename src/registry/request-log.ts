@@ -25,6 +25,17 @@ export interface RequestLogEntry {
    * Null for v1.0 cards (no skills[] array). Used by Phase 6 for per-skill idle rate tracking.
    */
   skill_id?: string | null;
+  /**
+   * Type of autonomous action that created this log entry.
+   * Only set for autonomy audit events (e.g. 'auto_share', 'auto_request').
+   * Null for regular capability request log entries.
+   */
+  action_type?: string | null;
+  /**
+   * The autonomy tier (1, 2, or 3) that was invoked for this audit event.
+   * Only set for autonomy audit events. Null for regular request log entries.
+   */
+  tier_invoked?: number | null;
 }
 
 /**
@@ -72,6 +83,20 @@ export function createRequestLogTable(db: Database.Database): void {
   } catch {
     // Column already exists — ignore
   }
+
+  // Add action_type column for autonomy audit events (Phase 5+).
+  try {
+    db.exec('ALTER TABLE request_log ADD COLUMN action_type TEXT');
+  } catch {
+    // Column already exists — ignore
+  }
+
+  // Add tier_invoked column for autonomy audit events (Phase 5+).
+  try {
+    db.exec('ALTER TABLE request_log ADD COLUMN tier_invoked INTEGER');
+  } catch {
+    // Column already exists — ignore
+  }
 }
 
 /**
@@ -82,8 +107,8 @@ export function createRequestLogTable(db: Database.Database): void {
  */
 export function insertRequestLog(db: Database.Database, entry: RequestLogEntry): void {
   const stmt = db.prepare(`
-    INSERT INTO request_log (id, card_id, card_name, requester, status, latency_ms, credits_charged, created_at, skill_id)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO request_log (id, card_id, card_name, requester, status, latency_ms, credits_charged, created_at, skill_id, action_type, tier_invoked)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
   stmt.run(
@@ -95,7 +120,9 @@ export function insertRequestLog(db: Database.Database, entry: RequestLogEntry):
     entry.latency_ms,
     entry.credits_charged,
     entry.created_at,
-    entry.skill_id ?? null
+    entry.skill_id ?? null,
+    entry.action_type ?? null,
+    entry.tier_invoked ?? null
   );
 }
 
@@ -117,7 +144,7 @@ export function getRequestLog(
   if (since !== undefined) {
     const cutoff = new Date(Date.now() - SINCE_MS[since]).toISOString();
     const stmt = db.prepare(`
-      SELECT id, card_id, card_name, requester, status, latency_ms, credits_charged, created_at, skill_id
+      SELECT id, card_id, card_name, requester, status, latency_ms, credits_charged, created_at, skill_id, action_type, tier_invoked
       FROM request_log
       WHERE created_at >= ?
       ORDER BY created_at DESC
