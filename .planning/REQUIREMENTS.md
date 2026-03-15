@@ -81,9 +81,9 @@ Requirements for the Ship It milestone. Each maps to roadmap phases.
 ### ClaWHub Installable Skill
 
 - [ ] **CLW-01**: bootstrap.ts with activate()/deactivate() — single entry point that initializes AgentRuntime, publishes card from SOUL.md, starts gateway + IdleMonitor
-- [ ] **CLW-02**: install.sh post-install script — auto-install CLI, auto-init config, sync capabilities from SOUL.md
+- [x] **CLW-02**: install.sh post-install script — auto-install CLI, auto-init config, sync capabilities from SOUL.md
 - [ ] **CLW-03**: SKILL.md rewrite as agent-executable instructions — frontmatter metadata, on-install steps, autonomy rules, CLI reference
-- [ ] **CLW-04**: HEARTBEAT.rules.md — standalone autonomy rules file for agents to copy-paste into HEARTBEAT.md
+- [x] **CLW-04**: HEARTBEAT.rules.md — standalone autonomy rules file for agents to copy-paste into HEARTBEAT.md
 - [ ] **CLW-05**: Integration test — mock SOUL.md, activate(), assert card published + gateway listening + IdleMonitor running, deactivate(), assert cleanup
 
 ### Repo Housekeeping
@@ -159,9 +159,9 @@ Deferred to future release. Tracked but not in current roadmap.
 | HUI-06 | Phase 9 | Complete |
 | HUI-07 | Phase 9 | Complete |
 | CLW-01 | Phase 10 | Pending |
-| CLW-02 | Phase 10 | Pending |
+| CLW-02 | Phase 10 | Complete |
 | CLW-03 | Phase 10 | Pending |
-| CLW-04 | Phase 10 | Pending |
+| CLW-04 | Phase 10 | Complete |
 | CLW-05 | Phase 10 | Pending |
 | DOC-01 | Phase 11 | Pending |
 | DOC-02 | Phase 11 | Pending |
