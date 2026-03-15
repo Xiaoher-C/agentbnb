@@ -156,7 +156,7 @@ Plans:
 
 **Milestone Goal:** Make AgentBnB launchable. Premium Hub UI, one-command OpenClaw skill install, repo ready for public.
 
-- [x] **Phase 9: Hub UI Redesign** - Premium dark SaaS Hub with ambient glow, modal card overlays, and count-up animations — screenshot-worthy (completed 2026-03-15)
+- [x] **Phase 9: Hub UI Redesign** - Premium dark SaaS Hub with ambient glow, modal card overlays, and count-up animations — screenshot-worthy (completed 2026-03-16)
 - [ ] **Phase 10: ClaWHub Installable Skill** - One command puts any OpenClaw agent on the AgentBnB network via a single activate() entry point
 - [ ] **Phase 11: Repo Housekeeping** - Repo documentation reflects current reality and is ready for public launch
 
@@ -255,10 +255,10 @@ Plans:
 **Plans:** 4/4 plans complete
 
 Plans:
-- [ ] 09-01-PLAN.md — Design system (CSS vars, fonts, Tailwind config) + card component redesign (HUI-01, HUI-02)
-- [ ] 09-02-PLAN.md — Modal overlay with backdrop blur, scale animation, ESC/backdrop close, scroll lock (HUI-03)
-- [ ] 09-03-PLAN.md — Header + stats bar + ambient glow + search/filter bar + pill tab switcher (HUI-04, HUI-05, HUI-06)
-- [ ] 09-04-PLAN.md — Polish: count-up animation, empty/error state theming, visual audit + human verification (HUI-07)
+- [x] 09-01-PLAN.md — Design system (CSS vars, fonts, Tailwind config) + card component redesign (HUI-01, HUI-02)
+- [x] 09-02-PLAN.md — Modal overlay with backdrop blur, scale animation, ESC/backdrop close, scroll lock (HUI-03)
+- [x] 09-03-PLAN.md — Header + stats bar + ambient glow + search/filter bar + pill tab switcher (HUI-04, HUI-05, HUI-06)
+- [x] 09-04-PLAN.md — Polish: count-up animation, empty/error state theming, visual audit + human verification (HUI-07)
 
 ### Phase 10: ClaWHub Installable Skill
 **Goal**: One command puts any OpenClaw agent on the AgentBnB network — activate() initializes the runtime, publishes the card, starts the gateway and IdleMonitor, and install.sh handles all setup automatically.
@@ -270,14 +270,12 @@ Plans:
   3. SKILL.md contains agent-executable instructions with frontmatter metadata, on-install steps, autonomy rules, and CLI reference — an agent reading it knows exactly what to do without human interpretation
   4. HEARTBEAT.rules.md contains a standalone autonomy rules block that any agent can copy-paste directly into its HEARTBEAT.md to govern AgentBnB behavior
   5. The integration test confirms the full lifecycle: mock SOUL.md, activate(), assert card published + gateway listening + IdleMonitor running, deactivate(), assert all resources cleaned up
-**Plans**: TBD
+**Plans:** 3 plans
 
 Plans:
-- [ ] 10-01: bootstrap.ts — activate()/deactivate() entry point wiring AgentRuntime, card publish, gateway, IdleMonitor
-- [ ] 10-02: install.sh — post-install automation: CLI install, config init, SOUL.md sync
-- [ ] 10-03: SKILL.md rewrite — agent-executable instructions with frontmatter, on-install, autonomy rules, CLI reference
-- [ ] 10-04: HEARTBEAT.rules.md — standalone autonomy rules file for copy-paste into HEARTBEAT.md
-- [ ] 10-05: Integration test — full activate()/deactivate() lifecycle with assertions
+- [ ] 10-01-PLAN.md — bootstrap.ts: activate()/deactivate() entry point wiring AgentRuntime, card publish, gateway, IdleMonitor (CLW-01)
+- [ ] 10-02-PLAN.md — install.sh + HEARTBEAT.rules.md: post-install automation + standalone autonomy rules (CLW-02, CLW-04)
+- [ ] 10-03-PLAN.md — SKILL.md rewrite + integration test: agent-executable instructions + full lifecycle test (CLW-03, CLW-05)
 
 ### Phase 11: Repo Housekeeping
 **Goal**: The repo is ready for public launch — CLAUDE.md reflects current reality, README.md has the new tagline and architecture story, and AGENT-NATIVE-PROTOCOL.md is committed at root.
@@ -316,6 +314,6 @@ Phases execute in numeric order: 9 → 10 → 11
 | 6. Idle Rate Monitoring + Auto-Share | v2.0 | 2/2 | Complete | 2026-03-15 |
 | 7. Auto-Request | v2.0 | 2/2 | Complete | 2026-03-15 |
 | 8. OpenClaw Deep Integration | v2.0 | 3/3 | Complete | 2026-03-15 |
-| 9. Hub UI Redesign | 4/4 | Complete   | 2026-03-15 | - |
-| 10. ClaWHub Installable Skill | v2.1 | 0/5 | Not started | - |
+| 9. Hub UI Redesign | v2.1 | 4/4 | Complete | 2026-03-16 |
+| 10. ClaWHub Installable Skill | v2.1 | 0/3 | Not started | - |
 | 11. Repo Housekeeping | v2.1 | 0/3 | Not started | - |
