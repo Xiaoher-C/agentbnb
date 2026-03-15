@@ -18,6 +18,7 @@ import { CapabilityCardSchema } from '../types/index.js';
 import { openDatabase, insertCard } from '../registry/store.js';
 import { searchCards, filterCards } from '../registry/matcher.js';
 import { openCreditDb, getBalance, bootstrapAgent, getTransactions } from '../credit/ledger.js';
+import { AgentRuntime } from '../runtime/agent-runtime.js';
 import { requestCapability } from '../gateway/client.js';
 import { createGatewayServer } from '../gateway/server.js';
 import { createRegistryServer } from '../registry/server.js';
@@ -579,13 +580,18 @@ program
 
     const port = opts.port ? parseInt(opts.port, 10) : config.gateway_port;
     const registryPort = parseInt(opts.registryPort, 10);
-    const registryDb = openDatabase(config.db_path);
-    const creditDb = openCreditDb(config.credit_db_path);
+
+    const runtime = new AgentRuntime({
+      registryDbPath: config.db_path,
+      creditDbPath: config.credit_db_path,
+      owner: config.owner,
+    });
+    await runtime.start();
 
     const server = createGatewayServer({
       port,
-      registryDb,
-      creditDb,
+      registryDb: runtime.registryDb,
+      creditDb: runtime.creditDb,
       tokens: [config.token],
       handlerUrl: opts.handlerUrl,
     });
@@ -602,8 +608,7 @@ program
         await registryServer.close();
       }
       await server.close();
-      registryDb.close();
-      creditDb.close();
+      await runtime.shutdown();
       process.exit(0);
     };
 
@@ -619,11 +624,11 @@ program
           console.warn('No API key found. Run `agentbnb init` to enable dashboard features.');
         }
         registryServer = createRegistryServer({
-          registryDb,
+          registryDb: runtime.registryDb,
           silent: false,
           ownerName: config.owner,
           ownerApiKey: config.api_key,
-          creditDb,
+          creditDb: runtime.creditDb,
         });
         await registryServer.listen({ port: registryPort, host: '0.0.0.0' });
         console.log(`Registry API: http://0.0.0.0:${registryPort}/cards`);
@@ -638,8 +643,7 @@ program
       if (registryServer) {
         await registryServer.close().catch(() => {});
       }
-      registryDb.close();
-      creditDb.close();
+      await runtime.shutdown();
       process.exit(1);
     }
   });
