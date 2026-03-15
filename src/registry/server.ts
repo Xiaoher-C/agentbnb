@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { existsSync } from 'node:fs';
 import type Database from 'better-sqlite3';
 import { getCard, updateCard } from './store.js';
+import { listPendingRequests, resolvePendingRequest } from '../autonomy/pending-requests.js';
 import { searchCards, filterCards } from './matcher.js';
 import { getRequestLog } from './request-log.js';
 import type { SincePeriod } from './request-log.js';
@@ -320,6 +321,50 @@ export function createRegistryServer(opts: RegistryServerOptions): FastifyInstan
               return reply.code(404).send({ error: 'Not found' });
             }
           }
+          throw err;
+        }
+      });
+
+      /**
+       * GET /me/pending-requests — Lists all pending Tier 3 approval queue entries.
+       *
+       * Returns an array of PendingRequest objects with status='pending', newest first.
+       */
+      ownerRoutes.get('/me/pending-requests', async (_request, reply) => {
+        const rows = listPendingRequests(db);
+        return reply.send(rows);
+      });
+
+      /**
+       * POST /me/pending-requests/:id/approve — Approves a pending Tier 3 request.
+       *
+       * Returns 200 with { status: 'approved', id } on success.
+       * Returns 404 if the request id does not exist.
+       */
+      ownerRoutes.post('/me/pending-requests/:id/approve', async (request, reply) => {
+        const { id } = request.params as { id: string };
+        try {
+          resolvePendingRequest(db, id, 'approved');
+          return reply.send({ status: 'approved', id });
+        } catch (err) {
+          if (err instanceof AgentBnBError) return reply.status(404).send({ error: err.message });
+          throw err;
+        }
+      });
+
+      /**
+       * POST /me/pending-requests/:id/reject — Rejects a pending Tier 3 request.
+       *
+       * Returns 200 with { status: 'rejected', id } on success.
+       * Returns 404 if the request id does not exist.
+       */
+      ownerRoutes.post('/me/pending-requests/:id/reject', async (request, reply) => {
+        const { id } = request.params as { id: string };
+        try {
+          resolvePendingRequest(db, id, 'rejected');
+          return reply.send({ status: 'rejected', id });
+        } catch (err) {
+          if (err instanceof AgentBnBError) return reply.status(404).send({ error: err.message });
           throw err;
         }
       });

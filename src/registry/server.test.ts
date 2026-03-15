@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { createRegistryServer } from './server.js';
 import { openDatabase, insertCard } from './store.js';
 import { openCreditDb, bootstrapAgent } from '../credit/ledger.js';
+import { createPendingRequest } from '../autonomy/pending-requests.js';
 import type { CapabilityCard } from '../types/index.js';
 import type Database from 'better-sqlite3';
 
@@ -831,6 +832,197 @@ describe('createRegistryServer — owner endpoints', () => {
 
     const response = await server.inject({ method: 'GET', url: '/health' });
     expect(response.statusCode).toBe(200);
+
+    await server.close();
+  });
+});
+
+describe('createRegistryServer — pending-requests endpoints', () => {
+  let db: Database.Database;
+  let creditDb: Database.Database;
+  const OWNER = 'test-owner';
+  const API_KEY = 'test-api-key';
+
+  beforeEach(() => {
+    db = openDatabase(':memory:');
+    creditDb = openCreditDb(':memory:');
+    bootstrapAgent(creditDb, OWNER, 250);
+  });
+
+  function makeServer() {
+    return createRegistryServer({
+      registryDb: db,
+      silent: true,
+      ownerApiKey: API_KEY,
+      ownerName: OWNER,
+      creditDb,
+    });
+  }
+
+  it('GET /me/pending-requests returns 200 with empty array when no pending requests', async () => {
+    const server = makeServer();
+    await server.ready();
+
+    const response = await server.inject({
+      method: 'GET',
+      url: '/me/pending-requests',
+      headers: { authorization: `Bearer ${API_KEY}` },
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual([]);
+
+    await server.close();
+  });
+
+  it('GET /me/pending-requests returns only status=pending rows', async () => {
+    const id1 = createPendingRequest(db, {
+      skill_query: 'pending query',
+      max_cost_credits: 50,
+      credits: 10,
+    });
+    const id2 = createPendingRequest(db, {
+      skill_query: 'another pending query',
+      max_cost_credits: 30,
+      credits: 8,
+    });
+
+    // Resolve id2 — should not appear
+    const { resolvePendingRequest } = await import('../autonomy/pending-requests.js');
+    resolvePendingRequest(db, id2, 'approved');
+
+    const server = makeServer();
+    await server.ready();
+
+    const response = await server.inject({
+      method: 'GET',
+      url: '/me/pending-requests',
+      headers: { authorization: `Bearer ${API_KEY}` },
+    });
+    expect(response.statusCode).toBe(200);
+    const body = response.json() as Array<{ id: string }>;
+    expect(body).toHaveLength(1);
+    expect(body[0].id).toBe(id1);
+
+    await server.close();
+  });
+
+  it('POST /me/pending-requests/:id/approve returns 200 and sets status=approved', async () => {
+    const id = createPendingRequest(db, {
+      skill_query: 'approve this',
+      max_cost_credits: 20,
+      credits: 5,
+    });
+
+    const server = makeServer();
+    await server.ready();
+
+    const response = await server.inject({
+      method: 'POST',
+      url: `/me/pending-requests/${id}/approve`,
+      headers: { authorization: `Bearer ${API_KEY}` },
+    });
+    expect(response.statusCode).toBe(200);
+    const body = response.json() as { status: string; id: string };
+    expect(body.status).toBe('approved');
+    expect(body.id).toBe(id);
+
+    // Should no longer be in pending list
+    const listResponse = await server.inject({
+      method: 'GET',
+      url: '/me/pending-requests',
+      headers: { authorization: `Bearer ${API_KEY}` },
+    });
+    expect(listResponse.json()).toHaveLength(0);
+
+    await server.close();
+  });
+
+  it('POST /me/pending-requests/:id/reject returns 200 and sets status=rejected', async () => {
+    const id = createPendingRequest(db, {
+      skill_query: 'reject this',
+      max_cost_credits: 20,
+      credits: 5,
+    });
+
+    const server = makeServer();
+    await server.ready();
+
+    const response = await server.inject({
+      method: 'POST',
+      url: `/me/pending-requests/${id}/reject`,
+      headers: { authorization: `Bearer ${API_KEY}` },
+    });
+    expect(response.statusCode).toBe(200);
+    const body = response.json() as { status: string; id: string };
+    expect(body.status).toBe('rejected');
+    expect(body.id).toBe(id);
+
+    await server.close();
+  });
+
+  it('POST /me/pending-requests/:id/approve with invalid id returns 404', async () => {
+    const server = makeServer();
+    await server.ready();
+
+    const response = await server.inject({
+      method: 'POST',
+      url: '/me/pending-requests/nonexistent-id/approve',
+      headers: { authorization: `Bearer ${API_KEY}` },
+    });
+    expect(response.statusCode).toBe(404);
+
+    await server.close();
+  });
+
+  it('POST /me/pending-requests/:id/reject with invalid id returns 404', async () => {
+    const server = makeServer();
+    await server.ready();
+
+    const response = await server.inject({
+      method: 'POST',
+      url: '/me/pending-requests/nonexistent-id/reject',
+      headers: { authorization: `Bearer ${API_KEY}` },
+    });
+    expect(response.statusCode).toBe(404);
+
+    await server.close();
+  });
+
+  it('GET /me/pending-requests returns 401 without auth header', async () => {
+    const server = makeServer();
+    await server.ready();
+
+    const response = await server.inject({
+      method: 'GET',
+      url: '/me/pending-requests',
+    });
+    expect(response.statusCode).toBe(401);
+
+    await server.close();
+  });
+
+  it('POST /me/pending-requests/:id/approve returns 401 without auth header', async () => {
+    const server = makeServer();
+    await server.ready();
+
+    const response = await server.inject({
+      method: 'POST',
+      url: '/me/pending-requests/some-id/approve',
+    });
+    expect(response.statusCode).toBe(401);
+
+    await server.close();
+  });
+
+  it('POST /me/pending-requests/:id/reject returns 401 without auth header', async () => {
+    const server = makeServer();
+    await server.ready();
+
+    const response = await server.inject({
+      method: 'POST',
+      url: '/me/pending-requests/some-id/reject',
+    });
+    expect(response.statusCode).toBe(401);
 
     await server.close();
   });
