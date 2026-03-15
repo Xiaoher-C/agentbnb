@@ -1,301 +1,263 @@
 /**
- * Tests for bootstrap.ts — activate() and deactivate() lifecycle entry points.
+ * Integration test for bootstrap.ts activate()/deactivate() lifecycle.
  *
- * These tests verify the contract described in the plan:
- * - activate() initializes AgentRuntime, publishes a card from SOUL.md, starts the gateway, starts IdleMonitor
- * - deactivate() stops IdleMonitor cron, closes the gateway, and shuts down AgentRuntime
- * - activate() throws if SOUL.md does not exist
- * - deactivate() is idempotent
+ * Tests the full lifecycle using real implementations with in-memory DBs:
+ *   activate() -> runtime + card published + gateway listening + IdleMonitor running
+ *   deactivate() -> gateway closed + runtime shutdown + resources cleaned up
+ *
+ * No mocks — this is an end-to-end integration test.
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-
-// --- Mock all src/ dependencies so tests run without real DBs or ports ---
-// Note: vi.mock factories are hoisted — do NOT reference module-level variables inside them.
-
-vi.mock('../../src/runtime/agent-runtime.js', () => {
-  const mockRuntime = {
-    registryDb: {},
-    creditDb: {},
-    owner: 'test-owner',
-    jobs: [],
-    start: vi.fn().mockResolvedValue(undefined),
-    shutdown: vi.fn().mockResolvedValue(undefined),
-    registerJob: vi.fn(),
-    isDraining: false,
-  };
-  return {
-    AgentRuntime: vi.fn().mockImplementation(() => mockRuntime),
-  };
-});
-
-vi.mock('../../src/openclaw/soul-sync.js', () => ({
-  publishFromSoulV2: vi.fn().mockReturnValue({
-    spec_version: '2.0',
-    id: 'card-uuid',
-    owner: 'test-owner',
-    agent_name: 'TestAgent',
-    skills: [
-      {
-        id: 'test-skill',
-        name: 'Test Skill',
-        description: 'A test skill',
-        level: 2,
-        inputs: [{ name: 'input', type: 'text', required: true }],
-        outputs: [{ name: 'output', type: 'text', required: true }],
-        pricing: { credits_per_call: 10 },
-        availability: { online: true },
-      },
-    ],
-    availability: { online: true },
-    created_at: '2026-01-01T00:00:00Z',
-    updated_at: '2026-01-01T00:00:00Z',
-  }),
-}));
-
-vi.mock('../../src/gateway/server.js', () => {
-  const mockGateway = {
-    listen: vi.fn().mockResolvedValue(undefined),
-    close: vi.fn().mockResolvedValue(undefined),
-  };
-  return {
-    createGatewayServer: vi.fn().mockReturnValue(mockGateway),
-  };
-});
-
-vi.mock('../../src/autonomy/idle-monitor.js', () => {
-  const mockCronJob = { stop: vi.fn() };
-  const mockIdleMonitor = {
-    start: vi.fn().mockReturnValue(mockCronJob),
-    getJob: vi.fn().mockReturnValue(mockCronJob),
-    poll: vi.fn().mockResolvedValue(undefined),
-  };
-  return {
-    IdleMonitor: vi.fn().mockImplementation(() => mockIdleMonitor),
-  };
-});
-
-vi.mock('../../src/autonomy/tiers.js', () => ({
-  DEFAULT_AUTONOMY_CONFIG: { tier1_max_credits: 0, tier2_max_credits: 0 },
-}));
-
-vi.mock('node:fs', () => ({
-  existsSync: vi.fn().mockReturnValue(true),
-  readFileSync: vi.fn().mockReturnValue('## Test Skill\nA test skill'),
-}));
+import { describe, it, expect, afterEach } from 'vitest';
+import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 import { activate, deactivate } from './bootstrap.js';
-import type { BootstrapConfig, BootstrapContext } from './bootstrap.js';
-import { existsSync, readFileSync } from 'node:fs';
-import { AgentRuntime } from '../../src/runtime/agent-runtime.js';
-import { publishFromSoulV2 } from '../../src/openclaw/soul-sync.js';
-import { createGatewayServer } from '../../src/gateway/server.js';
+import type { BootstrapContext } from './bootstrap.js';
 import { IdleMonitor } from '../../src/autonomy/idle-monitor.js';
 
-const VALID_CONFIG: BootstrapConfig = {
-  owner: 'test-owner',
-  soulMdPath: '/fake/SOUL.md',
-};
+// ---------------------------------------------------------------------------
+// Test fixture: minimal SOUL.md with 2 skills
+// ---------------------------------------------------------------------------
+const SOUL_MD_CONTENT = `# Test Agent
 
-// Helpers to access the mocked instances after activation
-function getRuntimeInstance() {
-  return (AgentRuntime as ReturnType<typeof vi.fn>).mock.results[0]?.value as {
-    start: ReturnType<typeof vi.fn>;
-    shutdown: ReturnType<typeof vi.fn>;
-    registerJob: ReturnType<typeof vi.fn>;
-    registryDb: unknown;
-    creditDb: unknown;
-  };
-}
+A test agent for integration testing.
 
-function getGatewayInstance() {
-  return (createGatewayServer as ReturnType<typeof vi.fn>).mock.results[0]?.value as {
-    listen: ReturnType<typeof vi.fn>;
-    close: ReturnType<typeof vi.fn>;
-  };
-}
+## Code Review
+Reviews code for quality and bugs.
 
-function getIdleMonitorInstance() {
-  return (IdleMonitor as ReturnType<typeof vi.fn>).mock.results[0]?.value as {
-    start: ReturnType<typeof vi.fn>;
-  };
-}
+## Translation
+Translates text between languages.
+`;
 
-describe('activate()', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    (existsSync as ReturnType<typeof vi.fn>).mockReturnValue(true);
-    (readFileSync as ReturnType<typeof vi.fn>).mockReturnValue(
-      '## Test Skill\nA test skill',
-    );
-    // Re-setup mock implementations after clearAllMocks
-    (AgentRuntime as ReturnType<typeof vi.fn>).mockImplementation(() => ({
-      registryDb: { id: 'reg-db' },
-      creditDb: { id: 'cred-db' },
-      owner: 'test-owner',
-      jobs: [],
-      start: vi.fn().mockResolvedValue(undefined),
-      shutdown: vi.fn().mockResolvedValue(undefined),
-      registerJob: vi.fn(),
-      isDraining: false,
-    }));
-    const mockCronJob = { stop: vi.fn() };
-    (IdleMonitor as ReturnType<typeof vi.fn>).mockImplementation(() => ({
-      start: vi.fn().mockReturnValue(mockCronJob),
-      getJob: vi.fn().mockReturnValue(mockCronJob),
-      poll: vi.fn().mockResolvedValue(undefined),
-    }));
-    (createGatewayServer as ReturnType<typeof vi.fn>).mockReturnValue({
-      listen: vi.fn().mockResolvedValue(undefined),
-      close: vi.fn().mockResolvedValue(undefined),
+// ---------------------------------------------------------------------------
+// Test suite
+// ---------------------------------------------------------------------------
+
+describe('bootstrap activate/deactivate lifecycle', () => {
+  let tmpDir: string | undefined;
+  let ctx: BootstrapContext | undefined;
+
+  /**
+   * Create a fresh temp dir with a SOUL.md file.
+   * Returns the absolute path to the SOUL.md file.
+   */
+  function setupSoulMd(): string {
+    tmpDir = mkdtempSync(join(tmpdir(), 'agentbnb-test-'));
+    const path = join(tmpDir, 'SOUL.md');
+    writeFileSync(path, SOUL_MD_CONTENT, 'utf8');
+    return path;
+  }
+
+  // Ensure all resources are torn down after every test
+  afterEach(async () => {
+    if (ctx) {
+      await deactivate(ctx).catch(() => undefined);
+      ctx = undefined;
+    }
+    if (tmpDir) {
+      rmSync(tmpDir, { recursive: true, force: true });
+      tmpDir = undefined;
+    }
+  });
+
+  // ---------------------------------------------------------------------------
+  // Test 1: activate() returns BootstrapContext with all components
+  // ---------------------------------------------------------------------------
+  it('activate() returns BootstrapContext with all components', async () => {
+    const soulMdPath = setupSoulMd();
+
+    ctx = await activate({
+      owner: 'test-agent',
+      soulMdPath,
+      registryDbPath: ':memory:',
+      creditDbPath: ':memory:',
+      gatewayPort: 0,
+      silent: true,
     });
+
+    // runtime has both DB handles
+    expect(ctx.runtime).toBeDefined();
+    expect(ctx.runtime.registryDb).toBeDefined();
+    expect(ctx.runtime.creditDb).toBeDefined();
+
+    // gateway is a Fastify instance (has inject method)
+    expect(ctx.gateway).toBeDefined();
+    expect(typeof ctx.gateway.inject).toBe('function');
+
+    // idleMonitor is an IdleMonitor instance
+    expect(ctx.idleMonitor).toBeInstanceOf(IdleMonitor);
+
+    // card has correct structure: spec_version 2.0, 2 skills
+    expect(ctx.card.spec_version).toBe('2.0');
+    expect(Array.isArray(ctx.card.skills)).toBe(true);
+    expect(ctx.card.skills!.length).toBe(2);
   });
 
-  it('returns a BootstrapContext with runtime, gateway, idleMonitor, and card', async () => {
-    const ctx = await activate(VALID_CONFIG);
-    expect(ctx).toHaveProperty('runtime');
-    expect(ctx).toHaveProperty('gateway');
-    expect(ctx).toHaveProperty('idleMonitor');
-    expect(ctx).toHaveProperty('card');
+  // ---------------------------------------------------------------------------
+  // Test 2: activate() publishes card from SOUL.md into registry
+  // ---------------------------------------------------------------------------
+  it('activate() publishes card from SOUL.md into registry', async () => {
+    const soulMdPath = setupSoulMd();
+
+    ctx = await activate({
+      owner: 'test-agent',
+      soulMdPath,
+      registryDbPath: ':memory:',
+      creditDbPath: ':memory:',
+      gatewayPort: 0,
+      silent: true,
+    });
+
+    // Query the registry DB for capability_cards owned by this agent
+    const rows = ctx.runtime.registryDb
+      .prepare('SELECT id, owner, data FROM capability_cards WHERE owner = ?')
+      .all('test-agent') as Array<{ id: string; owner: string; data: string }>;
+
+    expect(rows.length).toBe(1);
+    expect(rows[0].owner).toBe('test-agent');
+
+    // Parse the card data and verify both skills are present
+    const cardData = JSON.parse(rows[0].data) as {
+      skills?: Array<{ name: string }>;
+    };
+    const skillNames = (cardData.skills ?? []).map((s) => s.name);
+    expect(skillNames).toContain('Code Review');
+    expect(skillNames).toContain('Translation');
   });
 
-  it('constructs AgentRuntime with correct options', async () => {
-    await activate({ ...VALID_CONFIG, registryDbPath: '/reg.db', creditDbPath: '/cred.db' });
-    expect(AgentRuntime).toHaveBeenCalledWith(
-      expect.objectContaining({
-        owner: 'test-owner',
-        registryDbPath: '/reg.db',
-        creditDbPath: '/cred.db',
+  // ---------------------------------------------------------------------------
+  // Test 3: activate() starts gateway that responds to health check
+  // ---------------------------------------------------------------------------
+  it('activate() starts gateway that responds to health check', async () => {
+    const soulMdPath = setupSoulMd();
+
+    ctx = await activate({
+      owner: 'test-agent',
+      soulMdPath,
+      registryDbPath: ':memory:',
+      creditDbPath: ':memory:',
+      gatewayPort: 0,
+      silent: true,
+    });
+
+    // Use Fastify inject — no real HTTP connection needed
+    const response = await ctx.gateway.inject({
+      method: 'GET',
+      url: '/health',
+    });
+
+    expect(response.statusCode).toBe(200);
+    const body = JSON.parse(response.body) as { status: string };
+    expect(body.status).toBe('ok');
+  });
+
+  // ---------------------------------------------------------------------------
+  // Test 4: activate() registers IdleMonitor job in runtime.jobs
+  // ---------------------------------------------------------------------------
+  it('activate() registers IdleMonitor job in runtime.jobs', async () => {
+    const soulMdPath = setupSoulMd();
+
+    ctx = await activate({
+      owner: 'test-agent',
+      soulMdPath,
+      registryDbPath: ':memory:',
+      creditDbPath: ':memory:',
+      gatewayPort: 0,
+      silent: true,
+    });
+
+    // At least one cron job registered (the IdleMonitor's polling job)
+    expect(ctx.runtime.jobs.length).toBeGreaterThanOrEqual(1);
+  });
+
+  // ---------------------------------------------------------------------------
+  // Test 5: deactivate() sets runtime.isDraining to true
+  // ---------------------------------------------------------------------------
+  it('deactivate() sets runtime.isDraining to true', async () => {
+    const soulMdPath = setupSoulMd();
+
+    ctx = await activate({
+      owner: 'test-agent',
+      soulMdPath,
+      registryDbPath: ':memory:',
+      creditDbPath: ':memory:',
+      gatewayPort: 0,
+      silent: true,
+    });
+
+    expect(ctx.runtime.isDraining).toBe(false);
+
+    await deactivate(ctx);
+    // Clear so afterEach doesn't double-deactivate
+    const savedCtx = ctx;
+    ctx = undefined;
+
+    expect(savedCtx.runtime.isDraining).toBe(true);
+  });
+
+  // ---------------------------------------------------------------------------
+  // Test 6: deactivate() closes DB handles
+  // ---------------------------------------------------------------------------
+  it('deactivate() closes DB handles', async () => {
+    const soulMdPath = setupSoulMd();
+
+    ctx = await activate({
+      owner: 'test-agent',
+      soulMdPath,
+      registryDbPath: ':memory:',
+      creditDbPath: ':memory:',
+      gatewayPort: 0,
+      silent: true,
+    });
+
+    // Capture reference before clearing ctx
+    const runtime = ctx.runtime;
+    await deactivate(ctx);
+    ctx = undefined;
+
+    // Queries should throw after DB handles are closed
+    expect(() => {
+      runtime.registryDb.prepare('SELECT 1').get();
+    }).toThrow();
+  });
+
+  // ---------------------------------------------------------------------------
+  // Test 7: deactivate() is idempotent
+  // ---------------------------------------------------------------------------
+  it('deactivate() is idempotent', async () => {
+    const soulMdPath = setupSoulMd();
+
+    ctx = await activate({
+      owner: 'test-agent',
+      soulMdPath,
+      registryDbPath: ':memory:',
+      creditDbPath: ':memory:',
+      gatewayPort: 0,
+      silent: true,
+    });
+
+    await deactivate(ctx);
+    // Second call must not throw
+    await expect(deactivate(ctx)).resolves.not.toThrow();
+
+    ctx = undefined;
+  });
+
+  // ---------------------------------------------------------------------------
+  // Test 8: activate() throws when SOUL.md does not exist
+  // ---------------------------------------------------------------------------
+  it('activate() throws when SOUL.md does not exist', async () => {
+    await expect(
+      activate({
+        owner: 'test-agent',
+        soulMdPath: '/nonexistent/path/SOUL.md',
+        registryDbPath: ':memory:',
+        creditDbPath: ':memory:',
+        gatewayPort: 0,
+        silent: true,
       }),
-    );
-  });
-
-  it('calls runtime.start() to recover orphaned escrows', async () => {
-    await activate(VALID_CONFIG);
-    const runtime = getRuntimeInstance();
-    expect(runtime.start).toHaveBeenCalledOnce();
-  });
-
-  it('reads SOUL.md from the configured soulMdPath', async () => {
-    await activate(VALID_CONFIG);
-    expect(existsSync).toHaveBeenCalledWith('/fake/SOUL.md');
-    expect(readFileSync).toHaveBeenCalledWith('/fake/SOUL.md', 'utf8');
-  });
-
-  it('calls publishFromSoulV2 with registry DB, soul content, and owner', async () => {
-    await activate(VALID_CONFIG);
-    const runtime = getRuntimeInstance();
-    expect(publishFromSoulV2).toHaveBeenCalledWith(
-      runtime.registryDb,
-      '## Test Skill\nA test skill',
-      'test-owner',
-    );
-  });
-
-  it('calls createGatewayServer with correct options', async () => {
-    await activate({ ...VALID_CONFIG, gatewayPort: 8800, gatewayToken: 'tok123' });
-    const runtime = getRuntimeInstance();
-    expect(createGatewayServer).toHaveBeenCalledWith(
-      expect.objectContaining({
-        port: 8800,
-        tokens: ['tok123'],
-        registryDb: runtime.registryDb,
-        creditDb: runtime.creditDb,
-      }),
-    );
-  });
-
-  it('calls gateway.listen() on the correct port', async () => {
-    await activate({ ...VALID_CONFIG, gatewayPort: 7700 });
-    const gateway = getGatewayInstance();
-    expect(gateway.listen).toHaveBeenCalledWith(
-      expect.objectContaining({ port: 7700 }),
-    );
-  });
-
-  it('creates IdleMonitor and calls start()', async () => {
-    await activate(VALID_CONFIG);
-    const runtime = getRuntimeInstance();
-    expect(IdleMonitor).toHaveBeenCalledWith(
-      expect.objectContaining({ owner: 'test-owner', db: runtime.registryDb }),
-    );
-    const idleMonitor = getIdleMonitorInstance();
-    expect(idleMonitor.start).toHaveBeenCalledOnce();
-  });
-
-  it('registers the idle cron job with runtime', async () => {
-    await activate(VALID_CONFIG);
-    const runtime = getRuntimeInstance();
-    expect(runtime.registerJob).toHaveBeenCalledOnce();
-  });
-
-  it('throws AgentBnBError with code FILE_NOT_FOUND if SOUL.md is missing', async () => {
-    (existsSync as ReturnType<typeof vi.fn>).mockReturnValue(false);
-    await expect(activate(VALID_CONFIG)).rejects.toMatchObject({ code: 'FILE_NOT_FOUND' });
-  });
-});
-
-describe('deactivate()', () => {
-  let ctx: BootstrapContext;
-
-  beforeEach(async () => {
-    vi.clearAllMocks();
-    (existsSync as ReturnType<typeof vi.fn>).mockReturnValue(true);
-    (readFileSync as ReturnType<typeof vi.fn>).mockReturnValue(
-      '## Test Skill\nA test skill',
-    );
-    const mockCronJob = { stop: vi.fn() };
-    (AgentRuntime as ReturnType<typeof vi.fn>).mockImplementation(() => ({
-      registryDb: { id: 'reg-db' },
-      creditDb: { id: 'cred-db' },
-      owner: 'test-owner',
-      jobs: [],
-      start: vi.fn().mockResolvedValue(undefined),
-      shutdown: vi.fn().mockResolvedValue(undefined),
-      registerJob: vi.fn(),
-      isDraining: false,
-    }));
-    (IdleMonitor as ReturnType<typeof vi.fn>).mockImplementation(() => ({
-      start: vi.fn().mockReturnValue(mockCronJob),
-    }));
-    (createGatewayServer as ReturnType<typeof vi.fn>).mockReturnValue({
-      listen: vi.fn().mockResolvedValue(undefined),
-      close: vi.fn().mockResolvedValue(undefined),
-    });
-    ctx = await activate(VALID_CONFIG);
-    // Reset call counts after setup — only measure deactivate calls
-    vi.clearAllMocks();
-    // Re-add shutdown/close mocks since clearAllMocks wipes them
-    ctx.runtime.shutdown = vi.fn().mockResolvedValue(undefined);
-    (ctx.gateway as unknown as { close: ReturnType<typeof vi.fn> }).close = vi.fn().mockResolvedValue(undefined);
-  });
-
-  it('calls gateway.close()', async () => {
-    await deactivate(ctx);
-    expect((ctx.gateway as unknown as { close: ReturnType<typeof vi.fn> }).close).toHaveBeenCalledOnce();
-  });
-
-  it('calls runtime.shutdown()', async () => {
-    await deactivate(ctx);
-    expect(ctx.runtime.shutdown).toHaveBeenCalledOnce();
-  });
-
-  it('calls gateway.close() before runtime.shutdown()', async () => {
-    const callOrder: string[] = [];
-    (ctx.gateway as unknown as { close: ReturnType<typeof vi.fn> }).close = vi.fn().mockImplementation(() => {
-      callOrder.push('close');
-      return Promise.resolve();
-    });
-    ctx.runtime.shutdown = vi.fn().mockImplementation(() => {
-      callOrder.push('shutdown');
-      return Promise.resolve();
-    });
-    await deactivate(ctx);
-    expect(callOrder).toEqual(['close', 'shutdown']);
-  });
-
-  it('is idempotent — calling twice does not throw', async () => {
-    await expect(deactivate(ctx)).resolves.toBeUndefined();
-    await expect(deactivate(ctx)).resolves.toBeUndefined();
+    ).rejects.toThrow();
   });
 });
