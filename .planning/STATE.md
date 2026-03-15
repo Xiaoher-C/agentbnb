@@ -2,9 +2,9 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Upgrade
-current_plan: Phase 02.3 Plan 02 complete
+current_plan: Not started
 status: unknown
-last_updated: "2026-03-15T03:31:55.372Z"
+last_updated: "2026-03-15T03:37:07.066Z"
 progress:
   total_phases: 8
   completed_phases: 7
@@ -25,7 +25,7 @@ See: .planning/PROJECT.md (updated 2026-03-13)
 
 **Phase 2.25: Schema v1.1 Upgrade** — Complete. 1 of 1 plans complete.
 
-**Current Plan:** Phase 02.3 Plan 02 complete — Phase 2.3 Remote Registry Discovery done
+**Current Plan:** Not started
 
 ### Progress (Phase 2.3 — complete)
 
