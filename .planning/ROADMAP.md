@@ -133,9 +133,20 @@ Plans:
 - [ ] Integration test: discover via registry URL returns remote cards
 
 ## Phase 3: UX Layer
-**Goal**: Non-technical users can share agent capabilities.
+**Goal**: Non-technical users can share agent capabilities via the Hub's authenticated owner features: dashboard monitoring, one-click sharing, and mobile-responsive status page.
+**Requirements**: [UX-01, UX-02, UX-03, UX-04, UX-05, UX-06, UX-07, UX-08, UX-09, UX-10, UX-11, UX-12, UX-13, UX-14]
+**Depends on:** Phase 2.3
+**Plans:** 3 plans
 
-- [ ] Web dashboard
-- [ ] One-click capability sharing
-- [ ] Visual pipeline builder
-- [ ] Mobile monitoring
+Plans:
+- [ ] 03-01-PLAN.md — Backend data layer: API key in config, request_log module, gateway logging
+- [ ] 03-02-PLAN.md — Auth-protected owner endpoints on registry server (GET /me, GET /requests, toggle, patch)
+- [ ] 03-03-PLAN.md — Hub frontend: auth, tab navigation, owner dashboard, share page, status monitoring
+
+- [ ] API key generation in `agentbnb init` and config storage
+- [ ] Request log table + gateway logging after settle/release
+- [ ] Auth-protected owner endpoints (GET /me, GET /requests, toggle-online, PATCH cards)
+- [ ] Hub tab navigation: Discover (existing) | Share | My Agent
+- [ ] Owner dashboard with published cards, request history, credit monitoring
+- [ ] One-click sharing page with local server detection
+- [ ] Mobile-responsive layout for all Hub pages
