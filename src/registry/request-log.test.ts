@@ -4,6 +4,7 @@ import {
   createRequestLogTable,
   insertRequestLog,
   getRequestLog,
+  getSkillRequestCount,
   type RequestLogEntry,
 } from './request-log.js';
 import type Database from 'better-sqlite3';
@@ -79,6 +80,192 @@ describe('request-log: insertRequestLog', () => {
 
     const all = db.prepare('SELECT id, status FROM request_log').all() as { id: string; status: string }[];
     expect(all).toHaveLength(3);
+  });
+});
+
+// -----------------------------------------------------------------------
+// Task 1 — getSkillRequestCount sliding-window query (Plan 06-01)
+// -----------------------------------------------------------------------
+
+describe('request-log: getSkillRequestCount', () => {
+  let db: Database.Database;
+
+  beforeEach(() => {
+    db = openDatabase(':memory:');
+  });
+
+  it('returns 0 for a skill with no requests in the window', () => {
+    const count = getSkillRequestCount(db, 'skill-a', 60 * 60 * 1000);
+    expect(count).toBe(0);
+  });
+
+  it('returns correct count for a skill with N successful requests in the 60-minute window', () => {
+    const now = Date.now();
+    const inWindow = new Date(now - 10 * 60 * 1000).toISOString(); // 10 min ago
+    for (let i = 0; i < 5; i++) {
+      insertRequestLog(db, {
+        id: `req-in-${i}`,
+        card_id: 'card-1',
+        card_name: 'Card',
+        requester: 'agent',
+        status: 'success',
+        latency_ms: 100,
+        credits_charged: 5,
+        created_at: inWindow,
+        skill_id: 'skill-a',
+        action_type: null,
+      });
+    }
+    const count = getSkillRequestCount(db, 'skill-a', 60 * 60 * 1000);
+    expect(count).toBe(5);
+  });
+
+  it('does NOT count requests outside the sliding window', () => {
+    const now = Date.now();
+    const windowMs = 60 * 60 * 1000; // 60 minutes
+    const outOfWindow = new Date(now - windowMs - 1000).toISOString(); // 61 min ago
+    const inWindow = new Date(now - 30 * 60 * 1000).toISOString(); // 30 min ago
+
+    insertRequestLog(db, {
+      id: 'req-old',
+      card_id: 'card-1',
+      card_name: 'Card',
+      requester: 'agent',
+      status: 'success',
+      latency_ms: 100,
+      credits_charged: 5,
+      created_at: outOfWindow,
+      skill_id: 'skill-a',
+      action_type: null,
+    });
+    insertRequestLog(db, {
+      id: 'req-new',
+      card_id: 'card-1',
+      card_name: 'Card',
+      requester: 'agent',
+      status: 'success',
+      latency_ms: 100,
+      credits_charged: 5,
+      created_at: inWindow,
+      skill_id: 'skill-a',
+      action_type: null,
+    });
+
+    const count = getSkillRequestCount(db, 'skill-a', windowMs);
+    expect(count).toBe(1); // Only in-window request counted
+  });
+
+  it('excludes autonomy audit rows (action_type IS NOT NULL) even if skill_id matches and status is success', () => {
+    const now = Date.now();
+    const inWindow = new Date(now - 5 * 60 * 1000).toISOString(); // 5 min ago
+
+    // Regular request
+    insertRequestLog(db, {
+      id: 'req-regular',
+      card_id: 'card-1',
+      card_name: 'Card',
+      requester: 'agent',
+      status: 'success',
+      latency_ms: 100,
+      credits_charged: 5,
+      created_at: inWindow,
+      skill_id: 'skill-a',
+      action_type: null,
+    });
+    // Audit event (auto_share) — must NOT be counted
+    insertRequestLog(db, {
+      id: 'req-audit',
+      card_id: 'card-1',
+      card_name: 'Card',
+      requester: 'agent',
+      status: 'success',
+      latency_ms: 10,
+      credits_charged: 0,
+      created_at: inWindow,
+      skill_id: 'skill-a',
+      action_type: 'auto_share',
+    });
+
+    const count = getSkillRequestCount(db, 'skill-a', 60 * 60 * 1000);
+    expect(count).toBe(1); // Only regular request counted
+  });
+
+  it('excludes failed/timeout requests from count', () => {
+    const now = Date.now();
+    const inWindow = new Date(now - 5 * 60 * 1000).toISOString();
+
+    insertRequestLog(db, {
+      id: 'req-fail',
+      card_id: 'card-1',
+      card_name: 'Card',
+      requester: 'agent',
+      status: 'failure',
+      latency_ms: 100,
+      credits_charged: 0,
+      created_at: inWindow,
+      skill_id: 'skill-a',
+      action_type: null,
+    });
+    insertRequestLog(db, {
+      id: 'req-timeout',
+      card_id: 'card-1',
+      card_name: 'Card',
+      requester: 'agent',
+      status: 'timeout',
+      latency_ms: 30000,
+      credits_charged: 0,
+      created_at: inWindow,
+      skill_id: 'skill-a',
+      action_type: null,
+    });
+    insertRequestLog(db, {
+      id: 'req-success',
+      card_id: 'card-1',
+      card_name: 'Card',
+      requester: 'agent',
+      status: 'success',
+      latency_ms: 100,
+      credits_charged: 5,
+      created_at: inWindow,
+      skill_id: 'skill-a',
+      action_type: null,
+    });
+
+    const count = getSkillRequestCount(db, 'skill-a', 60 * 60 * 1000);
+    expect(count).toBe(1); // Only success counted
+  });
+
+  it('does NOT count requests for a different skill_id', () => {
+    const now = Date.now();
+    const inWindow = new Date(now - 5 * 60 * 1000).toISOString();
+
+    insertRequestLog(db, {
+      id: 'req-skill-b',
+      card_id: 'card-1',
+      card_name: 'Card',
+      requester: 'agent',
+      status: 'success',
+      latency_ms: 100,
+      credits_charged: 5,
+      created_at: inWindow,
+      skill_id: 'skill-b',
+      action_type: null,
+    });
+    insertRequestLog(db, {
+      id: 'req-skill-a',
+      card_id: 'card-1',
+      card_name: 'Card',
+      requester: 'agent',
+      status: 'success',
+      latency_ms: 100,
+      credits_charged: 5,
+      created_at: inWindow,
+      skill_id: 'skill-a',
+      action_type: null,
+    });
+
+    const count = getSkillRequestCount(db, 'skill-a', 60 * 60 * 1000);
+    expect(count).toBe(1); // Only skill-a counted
   });
 });
 

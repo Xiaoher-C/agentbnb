@@ -127,6 +127,30 @@ export function insertRequestLog(db: Database.Database, entry: RequestLogEntry):
 }
 
 /**
+ * Returns the count of successful capability requests for a specific skill within
+ * a sliding time window. Autonomy audit rows (action_type IS NOT NULL) are excluded
+ * so that auto_share / auto_request events do not inflate the request count.
+ *
+ * @param db - Open database instance.
+ * @param skillId - The skill ID to count requests for.
+ * @param windowMs - The sliding window duration in milliseconds (e.g. 60 * 60 * 1000 for 60 min).
+ * @returns Number of successful non-audit requests for the skill within the window.
+ */
+export function getSkillRequestCount(
+  db: Database.Database,
+  skillId: string,
+  windowMs: number
+): number {
+  const cutoff = new Date(Date.now() - windowMs).toISOString();
+  const stmt = db.prepare(
+    `SELECT COUNT(*) as cnt FROM request_log
+     WHERE skill_id = ? AND created_at >= ? AND status = 'success' AND action_type IS NULL`
+  );
+  const row = stmt.get(skillId, cutoff) as { cnt: number };
+  return row.cnt;
+}
+
+/**
  * Retrieves request log entries from the database, newest first.
  *
  * @param db - Open database instance.
