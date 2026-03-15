@@ -137,7 +137,7 @@ Plans:
   3. Tier 2 actions write an audit event to `request_log` with `action_type` and `tier_invoked` fields visible in request history
   4. `BudgetManager.canSpend()` blocks any auto-request when the agent's balance is at or below the reserve floor (default 20cr)
   5. Owner can change reserve and tier thresholds via `agentbnb config set reserve <N>` and `agentbnb config set tier1 <N>`
-**Plans:** 2 plans
+**Plans:** 1/2 plans executed
 
 Plans:
 - [ ] 05-01-PLAN.md — Autonomy tiers module: getAutonomyTier(), AutonomyEvent types, Tier 3 default, config + audit columns
@@ -209,7 +209,7 @@ Phases execute in numeric order: 4 → 5 → 6 → 7 → 8
 | 2.3. Remote Registry | v1.1 | 2/2 | Complete | 2026-03-15 |
 | 3. UX Layer | v1.1 | 4/4 | Complete | 2026-03-15 |
 | 4. Agent Runtime + Multi-Skill Foundation | v2.0 | 3/3 | Complete | 2026-03-15 |
-| 5. Autonomy Tiers + Credit Budgeting | v2.0 | 0/2 | Not started | - |
+| 5. Autonomy Tiers + Credit Budgeting | 1/2 | In Progress|  | - |
 | 6. Idle Rate Monitoring + Auto-Share | v2.0 | 0/2 | Not started | - |
 | 7. Auto-Request | v2.0 | 0/2 | Not started | - |
 | 8. OpenClaw Deep Integration | v2.0 | 0/3 | Not started | - |

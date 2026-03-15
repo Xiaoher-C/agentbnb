@@ -37,10 +37,10 @@ Requirements for the Agent Autonomy milestone. Each maps to roadmap phases.
 
 ### Autonomy Tiers
 
-- [ ] **TIER-01**: Autonomy tier configuration stored in `~/.agentbnb/config.json` — Tier 1 (<10cr auto), Tier 2 (10-50cr notify-after), Tier 3 (>50cr ask-before)
-- [ ] **TIER-02**: Default tier is Tier 3 (most restrictive) — all autonomous actions blocked until owner explicitly configures tiers
-- [ ] **TIER-03**: `getAutonomyTier(creditAmount)` enforced before every autonomous action (auto-share, auto-request)
-- [ ] **TIER-04**: Tier 2 "notify after" writes audit event to request_log with `action_type` and `tier_invoked` fields
+- [x] **TIER-01**: Autonomy tier configuration stored in `~/.agentbnb/config.json` — Tier 1 (<10cr auto), Tier 2 (10-50cr notify-after), Tier 3 (>50cr ask-before)
+- [x] **TIER-02**: Default tier is Tier 3 (most restrictive) — all autonomous actions blocked until owner explicitly configures tiers
+- [x] **TIER-03**: `getAutonomyTier(creditAmount)` enforced before every autonomous action (auto-share, auto-request)
+- [x] **TIER-04**: Tier 2 "notify after" writes audit event to request_log with `action_type` and `tier_invoked` fields
 
 ### Credit Budgeting
 
@@ -105,10 +105,10 @@ Deferred to future release. Tracked but not in current roadmap.
 | IDLE-03 | Phase 6 | Pending |
 | IDLE-04 | Phase 6 | Pending |
 | IDLE-05 | Phase 6 | Pending |
-| TIER-01 | Phase 5 | Pending |
-| TIER-02 | Phase 5 | Pending |
-| TIER-03 | Phase 5 | Pending |
-| TIER-04 | Phase 5 | Pending |
+| TIER-01 | Phase 5 | Complete |
+| TIER-02 | Phase 5 | Complete |
+| TIER-03 | Phase 5 | Complete |
+| TIER-04 | Phase 5 | Complete |
 | BUD-01 | Phase 5 | Pending |
 | BUD-02 | Phase 5 | Pending |
 | BUD-03 | Phase 5 | Pending |
