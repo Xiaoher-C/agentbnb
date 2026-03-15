@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Agent Autonomy
 status: planning
-stopped_at: "Completed 06-02 Tasks 1+2 — IdleMonitor class + serve wiring; awaiting checkpoint:human-verify at Task 3"
-last_updated: "2026-03-15T12:55:27.937Z"
+stopped_at: Completed 06-02-PLAN.md — IdleMonitor class + serve wiring + human-verify checkpoint approved
+last_updated: "2026-03-15T13:20:58.224Z"
 last_activity: 2026-03-15 — v2.0 Agent Autonomy roadmap created (Phases 4-8)
 progress:
   total_phases: 13
@@ -94,6 +94,7 @@ Recent decisions affecting current work:
 - [Phase Phase 06-02]: IdleMonitor passes 0 credits to getAutonomyTier() — auto-share is zero-cost but tier config still gates it
 - [Phase Phase 06-02]: Cron constructed paused:true + void this.poll() fire-and-forget — croner callbacks are not async-aware
 - [Phase Phase 06-02]: v1.0 cards detected via Array.isArray(skills) — skip without error, no schema change needed
+- [Phase Phase 06-02]: IdleMonitor human-verify checkpoint approved — tests pass, serve starts monitor with log, Ctrl+C shuts down cleanly
 
 ### Pending Todos
 
@@ -107,8 +108,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-15T12:55:27.934Z
-Stopped at: Completed 06-02 Tasks 1+2 — IdleMonitor class + serve wiring; awaiting checkpoint:human-verify at Task 3
+Last session: 2026-03-15T13:20:53.116Z
+Stopped at: Completed 06-02-PLAN.md — IdleMonitor class + serve wiring + human-verify checkpoint approved
 Resume file: None
 
 ---
