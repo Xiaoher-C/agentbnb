@@ -123,9 +123,9 @@ Plans:
 **Plans:** 3/3 plans complete
 
 Plans:
-- [ ] 04-01-PLAN.md — AgentRuntime class: DB handle ownership, SIGTERM handler, orphaned escrow recovery
-- [ ] 04-02-PLAN.md — CapabilityCard v2.0 schema: skills[] array, per-skill pricing; SQLite migration + FTS5 trigger update
-- [ ] 04-03-PLAN.md — Gateway skill_id routing + human verification
+- [x] 04-01-PLAN.md — AgentRuntime class: DB handle ownership, SIGTERM handler, orphaned escrow recovery
+- [x] 04-02-PLAN.md — CapabilityCard v2.0 schema: skills[] array, per-skill pricing; SQLite migration + FTS5 trigger update
+- [x] 04-03-PLAN.md — Gateway skill_id routing + human verification
 
 ### Phase 5: Autonomy Tiers + Credit Budgeting
 **Goal**: Agents operate under safe-by-default autonomy constraints — all autonomous actions are blocked until the owner explicitly configures tiers, and auto-request can never drain credits below a configurable reserve floor.
@@ -137,11 +137,11 @@ Plans:
   3. Tier 2 actions write an audit event to `request_log` with `action_type` and `tier_invoked` fields visible in request history
   4. `BudgetManager.canSpend()` blocks any auto-request when the agent's balance is at or below the reserve floor (default 20cr)
   5. Owner can change reserve and tier thresholds via `agentbnb config set reserve <N>` and `agentbnb config set tier1 <N>`
-**Plans**: TBD
+**Plans:** 2 plans
 
 Plans:
-- [ ] 05-01: src/autonomy/tiers.ts — getAutonomyTier(), AutonomyEvent types, Tier 3 default, config read/write
-- [ ] 05-02: src/credit/budget.ts — BudgetManager with reserve floor, canSpend(), config commands + human verification
+- [ ] 05-01-PLAN.md — Autonomy tiers module: getAutonomyTier(), AutonomyEvent types, Tier 3 default, config + audit columns
+- [ ] 05-02-PLAN.md — BudgetManager with reserve floor, canSpend(), CLI config commands + human verification
 
 ### Phase 6: Idle Rate Monitoring + Auto-Share
 **Goal**: Agents autonomously monitor their utilization per skill and flip availability online when idle, making idle capacity discoverable without human intervention.
@@ -208,7 +208,7 @@ Phases execute in numeric order: 4 → 5 → 6 → 7 → 8
 | 2.25. Schema v1.1 | v1.1 | 1/1 | Complete | 2026-03-15 |
 | 2.3. Remote Registry | v1.1 | 2/2 | Complete | 2026-03-15 |
 | 3. UX Layer | v1.1 | 4/4 | Complete | 2026-03-15 |
-| 4. Agent Runtime + Multi-Skill Foundation | 3/3 | Complete   | 2026-03-15 | - |
+| 4. Agent Runtime + Multi-Skill Foundation | v2.0 | 3/3 | Complete | 2026-03-15 |
 | 5. Autonomy Tiers + Credit Budgeting | v2.0 | 0/2 | Not started | - |
 | 6. Idle Rate Monitoring + Auto-Share | v2.0 | 0/2 | Not started | - |
 | 7. Auto-Request | v2.0 | 0/2 | Not started | - |
