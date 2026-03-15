@@ -6,6 +6,7 @@ import { createGatewayServer } from './server.js';
 import { openDatabase, insertCard, getCard } from '../registry/store.js';
 import { openCreditDb, bootstrapAgent } from '../credit/ledger.js';
 import { requestCapability } from './client.js';
+import { getRequestLog } from '../registry/request-log.js';
 import type { CapabilityCard } from '../types/index.js';
 import type Database from 'better-sqlite3';
 
@@ -442,6 +443,148 @@ describe('Gateway Reputation Tracking', () => {
       expect(updated?.metadata?.success_rate).toBeDefined();
       // Bootstrap with success=false: rate should be 0.0
       expect(updated?.metadata?.success_rate).toBe(0.0);
+    } finally {
+      await timeoutGateway.close();
+      await slowHandler.close();
+    }
+  });
+});
+
+// ─── Request Log tracking tests ───────────────────────────────────────────────
+
+describe('Gateway Request Log Tracking', () => {
+  let registryDb: Database.Database;
+  let creditDb: Database.Database;
+  let gateway: FastifyInstance;
+  let mockHandler: { server: FastifyInstance; url: string };
+  let testCard: CapabilityCard;
+  const validToken = 'request-log-test-token';
+
+  beforeEach(async () => {
+    registryDb = openDatabase(':memory:');
+    creditDb = openCreditDb(':memory:');
+
+    bootstrapAgent(creditDb, 'requester-agent', 1000);
+
+    testCard = makeCard({ id: randomUUID() });
+    insertCard(registryDb, testCard);
+
+    mockHandler = await createMockHandler({ output: 'success result' });
+
+    gateway = createGatewayServer({
+      registryDb,
+      creditDb,
+      tokens: [validToken],
+      handlerUrl: mockHandler.url,
+      timeoutMs: 5000,
+      silent: true,
+    });
+
+    await gateway.ready();
+  });
+
+  afterEach(async () => {
+    await gateway.close();
+    await mockHandler.server.close();
+    registryDb.close();
+    creditDb.close();
+  });
+
+  it('after successful execution, request_log has 1 row with status "success"', async () => {
+    await gateway.inject({
+      method: 'POST',
+      url: '/rpc',
+      headers: { authorization: `Bearer ${validToken}` },
+      payload: {
+        jsonrpc: '2.0',
+        method: 'capability.execute',
+        params: { card_id: testCard.id, requester: 'requester-agent' },
+        id: 'log-1',
+      },
+    });
+
+    const log = getRequestLog(registryDb, 10);
+    expect(log).toHaveLength(1);
+    expect(log[0].status).toBe('success');
+    expect(log[0].card_id).toBe(testCard.id);
+    expect(log[0].card_name).toBe(testCard.name);
+    expect(log[0].requester).toBe('requester-agent');
+    expect(log[0].credits_charged).toBe(testCard.pricing.credits_per_call);
+    expect(log[0].latency_ms).toBeGreaterThanOrEqual(0);
+  });
+
+  it('after failed execution (handler 500), request_log has 1 row with status "failure"', async () => {
+    const errorHandler = await createMockHandler({ error: 'handler error' }, 500);
+    const errorGateway = createGatewayServer({
+      registryDb,
+      creditDb,
+      tokens: [validToken],
+      handlerUrl: errorHandler.url,
+      timeoutMs: 5000,
+      silent: true,
+    });
+    await errorGateway.ready();
+
+    try {
+      await errorGateway.inject({
+        method: 'POST',
+        url: '/rpc',
+        headers: { authorization: `Bearer ${validToken}` },
+        payload: {
+          jsonrpc: '2.0',
+          method: 'capability.execute',
+          params: { card_id: testCard.id, requester: 'requester-agent' },
+          id: 'log-2',
+        },
+      });
+
+      const log = getRequestLog(registryDb, 10);
+      expect(log).toHaveLength(1);
+      expect(log[0].status).toBe('failure');
+      expect(log[0].credits_charged).toBe(0);
+    } finally {
+      await errorGateway.close();
+      await errorHandler.server.close();
+    }
+  });
+
+  it('after timeout, request_log has 1 row with status "timeout"', async () => {
+    const slowHandler = Fastify({ logger: false });
+    slowHandler.post('/', async (_req, reply) => {
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+      return reply.send({ output: 'too slow' });
+    });
+    await slowHandler.listen({ port: 0, host: '127.0.0.1' });
+    const slowAddr = slowHandler.server.address();
+    const slowUrl = `http://127.0.0.1:${(slowAddr as { port: number }).port}`;
+
+    const timeoutGateway = createGatewayServer({
+      registryDb,
+      creditDb,
+      tokens: [validToken],
+      handlerUrl: slowUrl,
+      timeoutMs: 50,
+      silent: true,
+    });
+    await timeoutGateway.ready();
+
+    try {
+      await timeoutGateway.inject({
+        method: 'POST',
+        url: '/rpc',
+        headers: { authorization: `Bearer ${validToken}` },
+        payload: {
+          jsonrpc: '2.0',
+          method: 'capability.execute',
+          params: { card_id: testCard.id, requester: 'requester-agent' },
+          id: 'log-3',
+        },
+      });
+
+      const log = getRequestLog(registryDb, 10);
+      expect(log).toHaveLength(1);
+      expect(log[0].status).toBe('timeout');
+      expect(log[0].credits_charged).toBe(0);
     } finally {
       await timeoutGateway.close();
       await slowHandler.close();

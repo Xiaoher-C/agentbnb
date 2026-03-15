@@ -1,8 +1,10 @@
 import Fastify, { type FastifyInstance } from 'fastify';
 import type Database from 'better-sqlite3';
+import { randomUUID } from 'node:crypto';
 import { getCard, updateReputation } from '../registry/store.js';
 import { getBalance } from '../credit/ledger.js';
 import { holdEscrow, settleEscrow, releaseEscrow } from '../credit/escrow.js';
+import { insertRequestLog } from '../registry/request-log.js';
 import { AgentBnBError } from '../types/index.js';
 
 /**
@@ -167,6 +169,19 @@ export function createGatewayServer(opts: GatewayOptions): FastifyInstance {
       if (!response.ok) {
         releaseEscrow(creditDb, escrowId);
         updateReputation(registryDb, cardId, false, Date.now() - startMs);
+        // Log failed execution — logging failures are silently ignored
+        try {
+          insertRequestLog(registryDb, {
+            id: randomUUID(),
+            card_id: cardId,
+            card_name: card.name,
+            requester,
+            status: 'failure',
+            latency_ms: Date.now() - startMs,
+            credits_charged: 0,
+            created_at: new Date().toISOString(),
+          });
+        } catch { /* silent no-op */ }
         return reply.send({
           jsonrpc: '2.0',
           id,
@@ -177,6 +192,19 @@ export function createGatewayServer(opts: GatewayOptions): FastifyInstance {
       const result = (await response.json()) as unknown;
       settleEscrow(creditDb, escrowId, card.owner);
       updateReputation(registryDb, cardId, true, Date.now() - startMs);
+      // Log successful execution — logging failures are silently ignored
+      try {
+        insertRequestLog(registryDb, {
+          id: randomUUID(),
+          card_id: cardId,
+          card_name: card.name,
+          requester,
+          status: 'success',
+          latency_ms: Date.now() - startMs,
+          credits_charged: card.pricing.credits_per_call,
+          created_at: new Date().toISOString(),
+        });
+      } catch { /* silent no-op */ }
 
       return reply.send({ jsonrpc: '2.0', id, result });
     } catch (err) {
@@ -185,6 +213,20 @@ export function createGatewayServer(opts: GatewayOptions): FastifyInstance {
       updateReputation(registryDb, cardId, false, Date.now() - startMs);
 
       const isTimeout = err instanceof Error && err.name === 'AbortError';
+      // Log timeout or handler error — logging failures are silently ignored
+      try {
+        insertRequestLog(registryDb, {
+          id: randomUUID(),
+          card_id: cardId,
+          card_name: card.name,
+          requester,
+          status: isTimeout ? 'timeout' : 'failure',
+          latency_ms: Date.now() - startMs,
+          credits_charged: 0,
+          created_at: new Date().toISOString(),
+        });
+      } catch { /* silent no-op */ }
+
       return reply.send({
         jsonrpc: '2.0',
         id,
