@@ -1,7 +1,7 @@
 # Requirements: AgentBnB
 
-**Defined:** 2026-03-15
-**Core Value:** Fill the market gap for agent-to-agent capability exchange — the agent handles everything, the human says Yes once.
+**Defined:** 2026-03-15 (v2.0), updated 2026-03-16 (v2.1)
+**Core Value:** Fill the market gap for agent-to-agent capability exchange — make AgentBnB launchable.
 
 ## v1.1 Requirements (Complete)
 
@@ -66,6 +66,34 @@ Requirements for the Agent Autonomy milestone. Each maps to roadmap phases.
 
 ## v2.1 Requirements
 
+Requirements for the Ship It milestone. Each maps to roadmap phases.
+
+### Hub UI Design System
+
+- [ ] **HUI-01**: Design system with CSS variables — dark background (#08080C), emerald accent (#10B981), Inter + JetBrains Mono fonts, text hierarchy via opacity (92%/55%/30%)
+- [ ] **HUI-02**: Card component redesign — compact view with 32px identicon, ghost chips for categories, level pill badge, green online indicator with glow, monospace stats
+- [ ] **HUI-03**: Modal overlay — click card opens centered detail modal (520px, #111117 bg, backdrop blur 12px, scale animation in/out, ESC/backdrop close, body scroll lock)
+- [ ] **HUI-04**: Header + stats bar + ambient glow — logo text, stats numbers (32px JetBrains Mono, emerald green), radial gradient glow (600px radius, 0.08 opacity) behind stats
+- [ ] **HUI-05**: Search + filter bar redesign — full-width ghost search bar (48px, rounded-xl), level/category dropdowns, online-only toggle
+- [ ] **HUI-06**: Tabs pill-switcher — subtle pill-style tab switcher (Discover/Share/My Agent), active fill rgba(255,255,255,0.08), no underline
+- [ ] **HUI-07**: Polish — stats count-up animation (0→value over 400ms), card hover translateY(-2px) with border brighten, loading states, empty state
+
+### ClaWHub Installable Skill
+
+- [ ] **CLW-01**: bootstrap.ts with activate()/deactivate() — single entry point that initializes AgentRuntime, publishes card from SOUL.md, starts gateway + IdleMonitor
+- [ ] **CLW-02**: install.sh post-install script — auto-install CLI, auto-init config, sync capabilities from SOUL.md
+- [ ] **CLW-03**: SKILL.md rewrite as agent-executable instructions — frontmatter metadata, on-install steps, autonomy rules, CLI reference
+- [ ] **CLW-04**: HEARTBEAT.rules.md — standalone autonomy rules file for agents to copy-paste into HEARTBEAT.md
+- [ ] **CLW-05**: Integration test — mock SOUL.md, activate(), assert card published + gateway listening + IdleMonitor running, deactivate(), assert cleanup
+
+### Repo Housekeeping
+
+- [ ] **DOC-01**: CLAUDE.md update — reflect v1.1 (8 phases, 24 plans, 302+ tests), v2.0 (5 phases, 12 plans), current v2.1, agent-first philosophy, updated architecture
+- [ ] **DOC-02**: README.md rewrite — new tagline, multi-skill cards JSON example, autonomy tiers, auto-share/auto-request, Hub screenshot, OpenClaw integration, author update
+- [ ] **DOC-03**: AGENT-NATIVE-PROTOCOL.md in repo root — ensure the design bible is committed and accessible
+
+## Future Requirements
+
 Deferred to future release. Tracked but not in current roadmap.
 
 ### Credit Optimization
@@ -123,11 +151,28 @@ Deferred to future release. Tracked but not in current roadmap.
 | OC-03 | Phase 8 | Complete |
 | OC-04 | Phase 8 | Complete |
 
+| HUI-01 | Phase 9 | Pending |
+| HUI-02 | Phase 9 | Pending |
+| HUI-03 | Phase 9 | Pending |
+| HUI-04 | Phase 9 | Pending |
+| HUI-05 | Phase 9 | Pending |
+| HUI-06 | Phase 9 | Pending |
+| HUI-07 | Phase 9 | Pending |
+| CLW-01 | Phase 10 | Pending |
+| CLW-02 | Phase 10 | Pending |
+| CLW-03 | Phase 10 | Pending |
+| CLW-04 | Phase 10 | Pending |
+| CLW-05 | Phase 10 | Pending |
+| DOC-01 | Phase 11 | Pending |
+| DOC-02 | Phase 11 | Pending |
+| DOC-03 | Phase 11 | Pending |
+
 **Coverage:**
-- v2.0 requirements: 26 total (RUN×4, IDLE×5, TIER×4, BUD×3, REQ×6, OC×4)
-- Mapped to phases: 26
+- v2.0 requirements: 26 total — all Complete
+- v2.1 requirements: 15 total (HUI×7, CLW×5, DOC×3)
+- Mapped to phases: 15
 - Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-03-15*
-*Last updated: 2026-03-15 — traceability confirmed, coverage corrected to 26 (was 23)*
+*Last updated: 2026-03-16 — v2.1 Ship It requirements added (15 requirements, 3 phases)*
