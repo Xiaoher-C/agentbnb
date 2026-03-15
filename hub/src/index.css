@@ -2,12 +2,33 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --color-bg: #08080C;
+  --color-surface: rgba(255, 255, 255, 0.03);
+  --color-surface-hover: rgba(255, 255, 255, 0.06);
+  --color-border: rgba(255, 255, 255, 0.06);
+  --color-border-hover: rgba(255, 255, 255, 0.12);
+  --color-accent: #10B981;
+  --color-accent-glow: rgba(16, 185, 129, 0.4);
+  --color-text-primary: rgba(255, 255, 255, 0.92);
+  --color-text-secondary: rgba(255, 255, 255, 0.55);
+  --color-text-tertiary: rgba(255, 255, 255, 0.30);
+  --color-text-muted: rgba(255, 255, 255, 0.40);
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', 'SF Mono', ui-monospace, monospace;
+  --radius-card: 16px;
+  --radius-modal: 20px;
+  --radius-chip: 9999px;
+}
+
 @layer base {
   body {
-    background-color: #0f172a;
-    color: #f1f5f9;
-    font-family: system-ui, -apple-system, sans-serif;
+    background-color: var(--color-bg);
+    color: var(--color-text-primary);
+    font-family: var(--font-sans);
     margin: 0;
     padding: 0;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 }

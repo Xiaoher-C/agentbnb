@@ -5,16 +5,26 @@ export default {
     extend: {
       colors: {
         hub: {
-          bg: '#0f172a',        // slate-900
-          surface: '#1e293b',   // slate-800
-          border: '#334155',    // slate-700
-          muted: '#64748b',     // slate-500
-          text: '#f1f5f9',      // slate-100
-          accent: '#6366f1',    // indigo-500
-          'accent-hover': '#4f46e5', // indigo-600
-          online: '#10b981',    // emerald-500
-          offline: '#f43f5e',   // rose-500
+          bg: '#08080C',
+          surface: 'rgba(255, 255, 255, 0.03)',
+          'surface-hover': 'rgba(255, 255, 255, 0.06)',
+          border: 'rgba(255, 255, 255, 0.06)',
+          'border-hover': 'rgba(255, 255, 255, 0.12)',
+          accent: '#10B981',
+          'accent-glow': 'rgba(16, 185, 129, 0.4)',
+          'text-primary': 'rgba(255, 255, 255, 0.92)',
+          'text-secondary': 'rgba(255, 255, 255, 0.55)',
+          'text-tertiary': 'rgba(255, 255, 255, 0.30)',
+          'text-muted': 'rgba(255, 255, 255, 0.40)',
         },
+      },
+      fontFamily: {
+        sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
+        mono: ['JetBrains Mono', 'SF Mono', 'ui-monospace', 'monospace'],
+      },
+      borderRadius: {
+        card: '16px',
+        modal: '20px',
       },
     },
   },
