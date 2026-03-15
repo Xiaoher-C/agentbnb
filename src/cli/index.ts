@@ -615,7 +615,16 @@ program
       console.log(`Gateway running on port ${port}`);
 
       if (registryPort > 0) {
-        registryServer = createRegistryServer({ registryDb, silent: false });
+        if (!config.api_key) {
+          console.warn('No API key found. Run `agentbnb init` to enable dashboard features.');
+        }
+        registryServer = createRegistryServer({
+          registryDb,
+          silent: false,
+          ownerName: config.owner,
+          ownerApiKey: config.api_key,
+          creditDb,
+        });
         await registryServer.listen({ port: registryPort, host: '0.0.0.0' });
         console.log(`Registry API: http://0.0.0.0:${registryPort}/cards`);
       }

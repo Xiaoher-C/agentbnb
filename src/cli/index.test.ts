@@ -652,3 +652,68 @@ describe('CLI: discover --registry (integration)', () => {
     expect(stderr).toContain('Unknown config key');
   });
 });
+
+describe('CLI: serve — registry server with API key', () => {
+  let tmpDir: string;
+  let registryPort: number;
+  let serveProcess: ChildProcess;
+
+  beforeEach(async () => {
+    tmpDir = mkdtempSync(join(tmpdir(), 'agentbnb-serve-test-'));
+    runCli('init --owner serve-test-agent', tmpDir);
+
+    // Read the generated api_key from config
+    const configPath = join(tmpDir, 'config.json');
+    const config = JSON.parse(readFileSync(configPath, 'utf-8')) as { api_key: string };
+    expect(typeof config.api_key).toBe('string');
+
+    // Find a free port for registry
+    registryPort = 17800 + Math.floor(Math.random() * 1000);
+
+    // Start the registry server via serve command
+    const cliPath = join(import.meta.dirname ?? __dirname, 'index.ts');
+    serveProcess = spawn(
+      'npx',
+      ['tsx', cliPath, 'serve', '--port', '17799', '--registry-port', String(registryPort)],
+      {
+        env: { ...process.env, AGENTBNB_DIR: tmpDir },
+        stdio: 'pipe',
+      }
+    );
+
+    // Wait for registry server to be ready
+    await new Promise<void>((resolve, reject) => {
+      const timeout = setTimeout(() => reject(new Error('Registry server did not start in time')), 10000);
+      const check = () => {
+        try {
+          execSync(`curl -sf http://127.0.0.1:${registryPort}/health`, { timeout: 500 });
+          clearTimeout(timeout);
+          resolve();
+        } catch {
+          setTimeout(check, 200);
+        }
+      };
+      setTimeout(check, 500);
+    });
+  });
+
+  afterEach(async () => {
+    serveProcess.kill('SIGTERM');
+    await new Promise<void>((resolve) => setTimeout(resolve, 300));
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('GET /me returns owner name and credit balance with valid api_key', async () => {
+    const configPath = join(tmpDir, 'config.json');
+    const config = JSON.parse(readFileSync(configPath, 'utf-8')) as { owner: string; api_key: string };
+
+    const response = execSync(
+      `curl -sf -H "Authorization: Bearer ${config.api_key}" http://127.0.0.1:${registryPort}/me`,
+      { encoding: 'utf-8', timeout: 5000 }
+    ) as unknown as string;
+
+    const body = JSON.parse(response) as { owner: string; balance: number };
+    expect(body.owner).toBe(config.owner);
+    expect(typeof body.balance).toBe('number');
+  });
+});
