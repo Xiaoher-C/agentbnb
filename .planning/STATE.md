@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Agent Autonomy
 status: planning
-stopped_at: Completed 05-02-PLAN.md — BudgetManager reserve enforcement, 14 tests pass, awaiting human-verify checkpoint
-last_updated: "2026-03-15T11:49:17.459Z"
+stopped_at: Completed 05-02-PLAN.md — Phase 5 complete, BudgetManager + autonomy tiers human-verified
+last_updated: "2026-03-15T12:02:15.600Z"
 last_activity: 2026-03-15 — v2.0 Agent Autonomy roadmap created (Phases 4-8)
 progress:
   total_phases: 13
@@ -52,6 +52,7 @@ Progress: [████████░░░░░░░░░░░░] 38% (v1
 | Phase 04-agent-runtime-multi-skill-foundation P03 | 25 | 2 tasks | 4 files |
 | Phase 05-autonomy-tiers-credit-budgeting P01 | 4 | 2 tasks | 5 files |
 | Phase 05-autonomy-tiers-credit-budgeting P02 | 2 | 1 tasks | 4 files |
+| Phase 05-autonomy-tiers-credit-budgeting P02 | 30 | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -83,6 +84,9 @@ Recent decisions affecting current work:
 - [Phase Phase 05-02]: BudgetManager.canSpend(amount <= 0) always returns true — zero-cost calls bypass reserve check for free-tier cards
 - [Phase Phase 05-02]: availableCredits() floors at 0 via Math.max(0, balance - reserve) — prevents negative available credits
 - [Phase Phase 05-02]: DEFAULT_BUDGET_CONFIG.reserve_credits = 20 — Phase 7 auto-request must call canSpend() before every escrow hold
+- [Phase 05-02]: BudgetManager.canSpend(amount <= 0) always returns true — zero-cost calls bypass the reserve check (designed for free-tier cards)
+- [Phase 05-02]: availableCredits() is floored at 0 — never returns negative, preventing misleading UI states when balance < reserve
+- [Phase 05-02]: DEFAULT_BUDGET_CONFIG.reserve_credits = 20 — matches v2.0 init decision; owner must explicitly set lower floor
 
 ### Pending Todos
 
@@ -96,8 +100,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-15T11:49:17.457Z
-Stopped at: Completed 05-02-PLAN.md — BudgetManager reserve enforcement, 14 tests pass, awaiting human-verify checkpoint
+Last session: 2026-03-15T12:02:15.599Z
+Stopped at: Completed 05-02-PLAN.md — Phase 5 complete, BudgetManager + autonomy tiers human-verified
 Resume file: None
 
 ---
