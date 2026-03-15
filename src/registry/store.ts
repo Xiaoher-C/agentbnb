@@ -492,6 +492,96 @@ export function updateReputation(
 }
 
 /**
+ * Updates the online availability flag for a specific skill on a v2.0 card.
+ *
+ * Uses raw JSON read/mutate/write pattern to avoid Zod v1.0 validation rejection
+ * of v2.0 card shapes. Only the target skill's availability.online field is modified;
+ * sibling skills are left unchanged.
+ *
+ * No-op if cardId or skillId is not found.
+ *
+ * @param db - Open database instance.
+ * @param cardId - UUID of the capability card containing the skill.
+ * @param skillId - ID of the specific skill to update.
+ * @param online - New availability online value to set.
+ */
+export function updateSkillAvailability(
+  db: Database.Database,
+  cardId: string,
+  skillId: string,
+  online: boolean
+): void {
+  const row = db.prepare('SELECT data FROM capability_cards WHERE id = ?').get(cardId) as
+    | { data: string }
+    | undefined;
+  if (!row) return;
+
+  const card = JSON.parse(row.data) as Record<string, unknown>;
+  const skills = card['skills'] as Array<Record<string, unknown>> | undefined;
+  if (!skills) return;
+
+  const skill = skills.find((s) => s['id'] === skillId);
+  if (!skill) return;
+
+  const existing = (skill['availability'] as Record<string, unknown> | undefined) ?? {};
+  skill['availability'] = { ...existing, online };
+
+  const now = new Date().toISOString();
+  db.prepare('UPDATE capability_cards SET data = ?, updated_at = ? WHERE id = ?').run(
+    JSON.stringify(card),
+    now,
+    cardId
+  );
+}
+
+/**
+ * Persists the computed idle_rate (and timestamp) to a skill's _internal field.
+ *
+ * Uses raw JSON read/mutate/write pattern to avoid Zod v1.0 validation rejection
+ * of v2.0 card shapes. Merges into any existing _internal keys so pre-existing
+ * fields are never clobbered.
+ *
+ * No-op if cardId or skillId is not found.
+ *
+ * @param db - Open database instance.
+ * @param cardId - UUID of the capability card containing the skill.
+ * @param skillId - ID of the specific skill to update.
+ * @param idleRate - Computed idle rate value (0.0–1.0) to persist.
+ */
+export function updateSkillIdleRate(
+  db: Database.Database,
+  cardId: string,
+  skillId: string,
+  idleRate: number
+): void {
+  const row = db.prepare('SELECT data FROM capability_cards WHERE id = ?').get(cardId) as
+    | { data: string }
+    | undefined;
+  if (!row) return;
+
+  const card = JSON.parse(row.data) as Record<string, unknown>;
+  const skills = card['skills'] as Array<Record<string, unknown>> | undefined;
+  if (!skills) return;
+
+  const skill = skills.find((s) => s['id'] === skillId);
+  if (!skill) return;
+
+  const existing = (skill['_internal'] as Record<string, unknown> | undefined) ?? {};
+  skill['_internal'] = {
+    ...existing,
+    idle_rate: idleRate,
+    idle_rate_computed_at: new Date().toISOString(),
+  };
+
+  const now = new Date().toISOString();
+  db.prepare('UPDATE capability_cards SET data = ?, updated_at = ? WHERE id = ?').run(
+    JSON.stringify(card),
+    now,
+    cardId
+  );
+}
+
+/**
  * Lists CapabilityCards, optionally filtered by owner.
  *
  * @param db - Open database instance.

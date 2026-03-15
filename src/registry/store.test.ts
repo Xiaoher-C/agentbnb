@@ -9,6 +9,8 @@ import {
   listCards,
   updateReputation,
   runMigrations,
+  updateSkillAvailability,
+  updateSkillIdleRate,
 } from './store.js';
 import { searchCards, filterCards } from './matcher.js';
 import { AgentBnBError } from '../types/index.js';
@@ -628,5 +630,152 @@ describe('request_log skill_id', () => {
       // skill_id should be null or undefined when not provided
       expect(logs[0]!.skill_id == null).toBe(true);
     });
+  });
+});
+
+// -----------------------------------------------------------------------
+// Task 2 — updateSkillAvailability and updateSkillIdleRate (Plan 06-01)
+// -----------------------------------------------------------------------
+
+/**
+ * Inserts a v2.0 card with two skills directly into the DB using raw SQL.
+ * Bypasses Zod validation so we can use v2.0 shape in tests.
+ */
+function insertV2CardRaw(
+  db: ReturnType<typeof openDatabase>,
+  cardId: string,
+  owner: string,
+  skillAId: string,
+  skillBId: string,
+  extraInternal?: Record<string, unknown>
+): void {
+  const now = new Date().toISOString();
+  const v2 = {
+    spec_version: '2.0',
+    id: cardId,
+    owner,
+    agent_name: 'Test Agent',
+    skills: [
+      {
+        id: skillAId,
+        name: 'Skill A',
+        description: 'First skill',
+        level: 1,
+        inputs: [],
+        outputs: [],
+        pricing: { credits_per_call: 5 },
+        availability: { online: true },
+        _internal: extraInternal ?? {},
+      },
+      {
+        id: skillBId,
+        name: 'Skill B',
+        description: 'Second skill',
+        level: 1,
+        inputs: [],
+        outputs: [],
+        pricing: { credits_per_call: 3 },
+        availability: { online: true },
+        _internal: {},
+      },
+    ],
+    availability: { online: true },
+    created_at: now,
+    updated_at: now,
+  };
+  db.prepare(
+    'INSERT INTO capability_cards (id, owner, data, created_at, updated_at) VALUES (?, ?, ?, ?, ?)'
+  ).run(cardId, owner, JSON.stringify(v2), now, now);
+}
+
+describe('updateSkillAvailability', () => {
+  let db: ReturnType<typeof openDatabase>;
+  const cardId = 'card-avail-test';
+  const skillAId = 'skill-a-avail';
+  const skillBId = 'skill-b-avail';
+
+  beforeEach(() => {
+    db = openDatabase(':memory:');
+    insertV2CardRaw(db, cardId, 'owner-1', skillAId, skillBId);
+  });
+
+  it('sets skill.availability.online to true for the target skill', () => {
+    updateSkillAvailability(db, cardId, skillAId, true);
+    const row = db.prepare('SELECT data FROM capability_cards WHERE id = ?').get(cardId) as { data: string };
+    const parsed = JSON.parse(row.data) as Record<string, unknown>;
+    const skills = parsed['skills'] as Array<Record<string, unknown>>;
+    const skillA = skills.find((s) => s['id'] === skillAId) as Record<string, unknown> | undefined;
+    expect((skillA?.['availability'] as Record<string, unknown>)?.['online']).toBe(true);
+  });
+
+  it('sets skill.availability.online to false for the target skill', () => {
+    updateSkillAvailability(db, cardId, skillAId, false);
+    const row = db.prepare('SELECT data FROM capability_cards WHERE id = ?').get(cardId) as { data: string };
+    const parsed = JSON.parse(row.data) as Record<string, unknown>;
+    const skills = parsed['skills'] as Array<Record<string, unknown>>;
+    const skillA = skills.find((s) => s['id'] === skillAId) as Record<string, unknown> | undefined;
+    expect((skillA?.['availability'] as Record<string, unknown>)?.['online']).toBe(false);
+  });
+
+  it('does NOT modify sibling skills on the same card', () => {
+    updateSkillAvailability(db, cardId, skillAId, false);
+    const row = db.prepare('SELECT data FROM capability_cards WHERE id = ?').get(cardId) as { data: string };
+    const parsed = JSON.parse(row.data) as Record<string, unknown>;
+    const skills = parsed['skills'] as Array<Record<string, unknown>>;
+    const skillB = skills.find((s) => s['id'] === skillBId) as Record<string, unknown> | undefined;
+    // Skill B should remain online=true
+    expect((skillB?.['availability'] as Record<string, unknown>)?.['online']).toBe(true);
+  });
+
+  it('no-ops if cardId not found', () => {
+    expect(() => updateSkillAvailability(db, 'nonexistent-card', skillAId, false)).not.toThrow();
+  });
+
+  it('no-ops if skillId not found on the card', () => {
+    expect(() => updateSkillAvailability(db, cardId, 'nonexistent-skill', false)).not.toThrow();
+  });
+});
+
+describe('updateSkillIdleRate', () => {
+  let db: ReturnType<typeof openDatabase>;
+  const cardId = 'card-idle-test';
+  const skillAId = 'skill-a-idle';
+  const skillBId = 'skill-b-idle';
+
+  beforeEach(() => {
+    db = openDatabase(':memory:');
+    // Skill A has an existing _internal field with 'some_existing_key'
+    insertV2CardRaw(db, cardId, 'owner-1', skillAId, skillBId, { some_existing_key: 'preserved' });
+  });
+
+  it('writes idle_rate and idle_rate_computed_at to skill._internal', () => {
+    updateSkillIdleRate(db, cardId, skillAId, 0.42);
+    const row = db.prepare('SELECT data FROM capability_cards WHERE id = ?').get(cardId) as { data: string };
+    const parsed = JSON.parse(row.data) as Record<string, unknown>;
+    const skills = parsed['skills'] as Array<Record<string, unknown>>;
+    const skillA = skills.find((s) => s['id'] === skillAId) as Record<string, unknown> | undefined;
+    const internal = skillA?.['_internal'] as Record<string, unknown> | undefined;
+    expect(internal?.['idle_rate']).toBe(0.42);
+    expect(typeof internal?.['idle_rate_computed_at']).toBe('string');
+  });
+
+  it('preserves existing _internal fields (does not overwrite other keys)', () => {
+    updateSkillIdleRate(db, cardId, skillAId, 0.75);
+    const row = db.prepare('SELECT data FROM capability_cards WHERE id = ?').get(cardId) as { data: string };
+    const parsed = JSON.parse(row.data) as Record<string, unknown>;
+    const skills = parsed['skills'] as Array<Record<string, unknown>>;
+    const skillA = skills.find((s) => s['id'] === skillAId) as Record<string, unknown> | undefined;
+    const internal = skillA?.['_internal'] as Record<string, unknown> | undefined;
+    // Existing key must still be present
+    expect(internal?.['some_existing_key']).toBe('preserved');
+    expect(internal?.['idle_rate']).toBe(0.75);
+  });
+
+  it('no-ops if cardId not found', () => {
+    expect(() => updateSkillIdleRate(db, 'nonexistent-card', skillAId, 0.5)).not.toThrow();
+  });
+
+  it('no-ops if skillId not found on the card', () => {
+    expect(() => updateSkillIdleRate(db, cardId, 'nonexistent-skill', 0.5)).not.toThrow();
   });
 });
