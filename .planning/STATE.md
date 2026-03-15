@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Agent Autonomy
 status: planning
-stopped_at: Completed 06-02-PLAN.md — IdleMonitor class + serve wiring + human-verify checkpoint approved
-last_updated: "2026-03-15T13:30:12.410Z"
+stopped_at: Completed 07-01-PLAN.md — pending_requests table, CRUD module, owner endpoints, AutonomyEvent extension
+last_updated: "2026-03-15T14:28:28.272Z"
 last_activity: 2026-03-15 — v2.0 Agent Autonomy roadmap created (Phases 4-8)
 progress:
   total_phases: 13
   completed_phases: 11
-  total_plans: 31
-  completed_plans: 31
+  total_plans: 33
+  completed_plans: 32
   percent: 38
 ---
 
@@ -55,6 +55,7 @@ Progress: [████████░░░░░░░░░░░░] 38% (v1
 | Phase 05-autonomy-tiers-credit-budgeting P02 | 30 | 2 tasks | 4 files |
 | Phase 06-idle-rate-monitoring-auto-share P01 | 9 | 2 tasks | 4 files |
 | Phase 06-idle-rate-monitoring-auto-share P02 | 12 | 2 tasks | 3 files |
+| Phase 07-auto-request P01 | 12 | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -95,6 +96,10 @@ Recent decisions affecting current work:
 - [Phase Phase 06-02]: Cron constructed paused:true + void this.poll() fire-and-forget — croner callbacks are not async-aware
 - [Phase Phase 06-02]: v1.0 cards detected via Array.isArray(skills) — skip without error, no schema change needed
 - [Phase Phase 06-02]: IdleMonitor human-verify checkpoint approved — tests pass, serve starts monitor with log, Ctrl+C shuts down cleanly
+- [Phase 07-auto-request]: pending_requests CREATE TABLE placed in openDatabase() alongside capability_cards — single DB open initializes all tables
+- [Phase 07-auto-request]: resolvePendingRequest uses result.changes === 0 to detect missing id, throws AgentBnBError NOT_FOUND — server maps to 404
+- [Phase 07-auto-request]: auto_request_failed uses AutonomyTier (not literal 3) — failure can occur at any tier
+- [Phase 07-auto-request]: insertAuditEvent handles auto_request_failed via existing request-event cast branch — no special case needed
 
 ### Pending Todos
 
@@ -108,8 +113,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-15T13:20:53.116Z
-Stopped at: Completed 06-02-PLAN.md — IdleMonitor class + serve wiring + human-verify checkpoint approved
+Last session: 2026-03-15T14:28:28.269Z
+Stopped at: Completed 07-01-PLAN.md — pending_requests table, CRUD module, owner endpoints, AutonomyEvent extension
 Resume file: None
 
 ---

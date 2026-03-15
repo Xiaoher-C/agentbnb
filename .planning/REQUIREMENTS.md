@@ -54,8 +54,8 @@ Requirements for the Agent Autonomy milestone. Each maps to roadmap phases.
 - [ ] **REQ-02**: Peer selection scores candidates by `success_rate * (1/credits_per_call) * idle_rate` with min-max normalization
 - [ ] **REQ-03**: Self-exclusion guard filters `candidate.owner !== self.owner` before ranking peers
 - [ ] **REQ-04**: Budget-gated escrow execution: BudgetManager.canSpend() → holdEscrow → JSON-RPC execute → settle/release
-- [ ] **REQ-05**: Tier 3 approval queue: `pending_requests` table + `GET /me/pending-requests` endpoint for owner approval
-- [ ] **REQ-06**: Auto-request failures written to request_log even when no escrow is initiated
+- [x] **REQ-05**: Tier 3 approval queue: `pending_requests` table + `GET /me/pending-requests` endpoint for owner approval
+- [x] **REQ-06**: Auto-request failures written to request_log even when no escrow is initiated
 
 ### OpenClaw Integration
 
@@ -116,8 +116,8 @@ Deferred to future release. Tracked but not in current roadmap.
 | REQ-02 | Phase 7 | Pending |
 | REQ-03 | Phase 7 | Pending |
 | REQ-04 | Phase 7 | Pending |
-| REQ-05 | Phase 7 | Pending |
-| REQ-06 | Phase 7 | Pending |
+| REQ-05 | Phase 7 | Complete |
+| REQ-06 | Phase 7 | Complete |
 | OC-01 | Phase 8 | Pending |
 | OC-02 | Phase 8 | Pending |
 | OC-03 | Phase 8 | Pending |

@@ -169,7 +169,7 @@ Plans:
   3. The agent's own cards are never selected as auto-request peers — self-exclusion is enforced before scoring
   4. A Tier 3 pending request appears in `GET /me/pending-requests` and in the Hub owner dashboard awaiting approval before any escrow is touched
   5. Auto-request failures (peer not found, budget blocked, tier blocked) are written to `request_log` even when no escrow is initiated
-**Plans:** 2 plans
+**Plans:** 1/2 plans executed
 
 Plans:
 - [ ] 07-01-PLAN.md — Tier 3 approval queue: pending_requests table, CRUD module, owner API endpoints, AutonomyEvent extension
@@ -211,5 +211,5 @@ Phases execute in numeric order: 4 → 5 → 6 → 7 → 8
 | 4. Agent Runtime + Multi-Skill Foundation | v2.0 | 3/3 | Complete | 2026-03-15 |
 | 5. Autonomy Tiers + Credit Budgeting | v2.0 | 2/2 | Complete | 2026-03-15 |
 | 6. Idle Rate Monitoring + Auto-Share | v2.0 | 2/2 | Complete | 2026-03-15 |
-| 7. Auto-Request | v2.0 | 0/2 | Planning | - |
+| 7. Auto-Request | 1/2 | In Progress|  | - |
 | 8. OpenClaw Deep Integration | v2.0 | 0/3 | Not started | - |
