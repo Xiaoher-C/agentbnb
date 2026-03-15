@@ -11,30 +11,29 @@ import type { CardsResponse, Category, HubCard } from '../types.js';
 const POLL_INTERVAL_MS = 30_000;
 
 /**
- * Normalize a v2.0 API card (with skills[]) into the v1.0 HubCard shape
- * that all Hub components expect. For multi-skill cards, flattens the first
- * skill's data into the top-level fields.
+ * Normalize a v2.0 API card (with skills[]) into HubCard shapes.
+ * Each skill becomes its own HubCard so all skills are visible in the grid.
+ * v1.0 cards pass through unchanged.
  */
-function normalizeCard(raw: Record<string, unknown>): HubCard {
-  // v2.0 card with skills[] array
+function normalizeCard(raw: Record<string, unknown>): HubCard[] {
+  // v2.0 card with skills[] array — one HubCard per skill
   if (raw.skills && Array.isArray(raw.skills) && raw.skills.length > 0) {
-    const skill = raw.skills[0] as Record<string, unknown>;
-    return {
-      id: raw.id as string,
+    return (raw.skills as Record<string, unknown>[]).map((skill) => ({
+      id: (skill.id as string) || (raw.id as string),
       owner: raw.owner as string,
-      name: (skill.name as string) || (raw.agent_name as string) || 'Unknown',
+      name: (skill.name as string) || (raw.name as string) || 'Unknown',
       description: (skill.description as string) || '',
       level: (skill.level as 1 | 2 | 3) || 1,
       inputs: (skill.inputs as HubCard['inputs']) || [],
       outputs: (skill.outputs as HubCard['outputs']) || [],
       pricing: (skill.pricing as HubCard['pricing']) || { credits_per_call: 0 },
-      availability: (skill.availability as HubCard['availability']) || { online: false },
-      powered_by: raw.powered_by as HubCard['powered_by'],
+      availability: (skill.availability as HubCard['availability']) || (raw.availability as HubCard['availability']) || { online: false },
+      powered_by: (skill.powered_by as HubCard['powered_by']) || (raw.powered_by as HubCard['powered_by']),
       metadata: (skill.metadata as HubCard['metadata']) || (raw.metadata as HubCard['metadata']),
-    };
+    }));
   }
   // v1.0 card — already in HubCard shape
-  return raw as unknown as HubCard;
+  return [raw as unknown as HubCard];
 }
 
 interface UseCardsResult {
@@ -95,7 +94,7 @@ export function useCards(): UseCardsResult {
         throw new Error(`Registry returned ${res.status}`);
       }
       const data = await res.json() as { total: number; limit: number; offset: number; items: Record<string, unknown>[] };
-      setAllCards(data.items.map(normalizeCard));
+      setAllCards(data.items.flatMap(normalizeCard));
       setTotal(data.total);
       setError(null);
     } catch (err) {

@@ -479,7 +479,7 @@ program
       }
 
       const registryDb = openDatabase(join(getConfigDir(), 'registry.db'));
-      const creditDb = openCreditDb(join(getConfigDir(), 'credits.db'));
+      const creditDb = openCreditDb(join(getConfigDir(), 'credit.db'));
       registryDb.pragma('busy_timeout = 5000');
       creditDb.pragma('busy_timeout = 5000');
 

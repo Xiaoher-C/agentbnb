@@ -34,7 +34,7 @@ export default function CapabilityCard({ card, expanded, onToggle }: CapabilityC
       role="article"
       onClick={onToggle}
       className={[
-        'bg-slate-800 rounded-xl border p-4 cursor-pointer transition-all duration-200',
+        'bg-slate-800 rounded-xl border p-4 cursor-pointer transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_4px_12px_rgba(0,0,0,0.15)]',
         expanded
           ? 'border-indigo-500/50 shadow-lg shadow-indigo-500/10'
           : 'border-slate-700 hover:border-indigo-500/50 hover:shadow-lg hover:shadow-indigo-500/5',
