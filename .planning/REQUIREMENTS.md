@@ -23,8 +23,8 @@ Requirements for the Agent Autonomy milestone. Each maps to roadmap phases.
 ### Agent Runtime & Schema
 
 - [x] **RUN-01**: AgentRuntime class owns all DB handles, background timers, and SIGTERM shutdown with orphaned escrow recovery
-- [ ] **RUN-02**: Multi-skill Capability Card schema v2.0 with `skills[]` array — one card per agent, multiple independently-priced skills
-- [ ] **RUN-03**: SQLite v1→v2 card migration preserving existing cards, with FTS5 trigger update to index nested skill names/descriptions
+- [x] **RUN-02**: Multi-skill Capability Card schema v2.0 with `skills[]` array — one card per agent, multiple independently-priced skills
+- [x] **RUN-03**: SQLite v1→v2 card migration preserving existing cards, with FTS5 trigger update to index nested skill names/descriptions
 - [ ] **RUN-04**: Gateway routing accepts `skill_id` for per-skill execution on multi-skill cards
 
 ### Idle Detection & Auto-Share
@@ -97,8 +97,8 @@ Deferred to future release. Tracked but not in current roadmap.
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | RUN-01 | Phase 4 | Complete |
-| RUN-02 | Phase 4 | Pending |
-| RUN-03 | Phase 4 | Pending |
+| RUN-02 | Phase 4 | Complete |
+| RUN-03 | Phase 4 | Complete |
 | RUN-04 | Phase 4 | Pending |
 | IDLE-01 | Phase 6 | Pending |
 | IDLE-02 | Phase 6 | Pending |

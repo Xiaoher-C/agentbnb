@@ -120,7 +120,7 @@ Plans:
   2. An agent can publish one Capability Card containing multiple independently-priced skills in a `skills[]` array
   3. Existing v1.x cards in SQLite are automatically migrated to v2.0 schema with no data loss and FTS5 search continues returning results for skill names nested in the array
   4. A gateway request specifying `{ card_id, skill_id }` routes to the correct skill handler on a multi-skill card
-**Plans:** 1/3 plans executed
+**Plans:** 2/3 plans executed
 
 Plans:
 - [ ] 04-01-PLAN.md — AgentRuntime class: DB handle ownership, SIGTERM handler, orphaned escrow recovery
@@ -208,7 +208,7 @@ Phases execute in numeric order: 4 → 5 → 6 → 7 → 8
 | 2.25. Schema v1.1 | v1.1 | 1/1 | Complete | 2026-03-15 |
 | 2.3. Remote Registry | v1.1 | 2/2 | Complete | 2026-03-15 |
 | 3. UX Layer | v1.1 | 4/4 | Complete | 2026-03-15 |
-| 4. Agent Runtime + Multi-Skill Foundation | 1/3 | In Progress|  | - |
+| 4. Agent Runtime + Multi-Skill Foundation | 2/3 | In Progress|  | - |
 | 5. Autonomy Tiers + Credit Budgeting | v2.0 | 0/2 | Not started | - |
 | 6. Idle Rate Monitoring + Auto-Share | v2.0 | 0/2 | Not started | - |
 | 7. Auto-Request | v2.0 | 0/2 | Not started | - |
