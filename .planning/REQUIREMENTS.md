@@ -44,9 +44,9 @@ Requirements for the Agent Autonomy milestone. Each maps to roadmap phases.
 
 ### Credit Budgeting
 
-- [ ] **BUD-01**: Credit reserve enforcement — block auto-request when balance at or below reserve floor (default 20cr, configurable)
-- [ ] **BUD-02**: BudgetManager.canSpend() wraps every escrow hold from auto-request path — holdEscrow never called directly by auto-request
-- [ ] **BUD-03**: Reserve and tier thresholds configurable via `agentbnb config set reserve <N>` and `agentbnb config set tier1 <N>`
+- [x] **BUD-01**: Credit reserve enforcement — block auto-request when balance at or below reserve floor (default 20cr, configurable)
+- [x] **BUD-02**: BudgetManager.canSpend() wraps every escrow hold from auto-request path — holdEscrow never called directly by auto-request
+- [x] **BUD-03**: Reserve and tier thresholds configurable via `agentbnb config set reserve <N>` and `agentbnb config set tier1 <N>`
 
 ### Auto-Request
 
@@ -109,9 +109,9 @@ Deferred to future release. Tracked but not in current roadmap.
 | TIER-02 | Phase 5 | Complete |
 | TIER-03 | Phase 5 | Complete |
 | TIER-04 | Phase 5 | Complete |
-| BUD-01 | Phase 5 | Pending |
-| BUD-02 | Phase 5 | Pending |
-| BUD-03 | Phase 5 | Pending |
+| BUD-01 | Phase 5 | Complete |
+| BUD-02 | Phase 5 | Complete |
+| BUD-03 | Phase 5 | Complete |
 | REQ-01 | Phase 7 | Pending |
 | REQ-02 | Phase 7 | Pending |
 | REQ-03 | Phase 7 | Pending |

@@ -104,7 +104,7 @@ Plans:
 **Milestone Goal:** The agent handles everything. The human says Yes once.
 
 - [x] **Phase 4: Agent Runtime + Multi-Skill Foundation** - Centralized runtime scaffold and schema v2.0 with multi-skill cards (completed 2026-03-15)
-- [ ] **Phase 5: Autonomy Tiers + Credit Budgeting** - Pure logic modules enforcing safe-by-default autonomous behavior
+- [x] **Phase 5: Autonomy Tiers + Credit Budgeting** - Pure logic modules enforcing safe-by-default autonomous behavior (completed 2026-03-15)
 - [ ] **Phase 6: Idle Rate Monitoring + Auto-Share** - First active autonomous behavior: agents share when idle
 - [ ] **Phase 7: Auto-Request** - Second active autonomous behavior: agents spend credits to fill capability gaps
 - [ ] **Phase 8: OpenClaw Deep Integration** - Install AgentBnB as an OpenClaw skill with SOUL.md sync and HEARTBEAT.md rules
@@ -137,7 +137,7 @@ Plans:
   3. Tier 2 actions write an audit event to `request_log` with `action_type` and `tier_invoked` fields visible in request history
   4. `BudgetManager.canSpend()` blocks any auto-request when the agent's balance is at or below the reserve floor (default 20cr)
   5. Owner can change reserve and tier thresholds via `agentbnb config set reserve <N>` and `agentbnb config set tier1 <N>`
-**Plans:** 1/2 plans executed
+**Plans:** 2/2 plans complete
 
 Plans:
 - [ ] 05-01-PLAN.md — Autonomy tiers module: getAutonomyTier(), AutonomyEvent types, Tier 3 default, config + audit columns
@@ -209,7 +209,7 @@ Phases execute in numeric order: 4 → 5 → 6 → 7 → 8
 | 2.3. Remote Registry | v1.1 | 2/2 | Complete | 2026-03-15 |
 | 3. UX Layer | v1.1 | 4/4 | Complete | 2026-03-15 |
 | 4. Agent Runtime + Multi-Skill Foundation | v2.0 | 3/3 | Complete | 2026-03-15 |
-| 5. Autonomy Tiers + Credit Budgeting | 1/2 | In Progress|  | - |
+| 5. Autonomy Tiers + Credit Budgeting | 2/2 | Complete   | 2026-03-15 | - |
 | 6. Idle Rate Monitoring + Auto-Share | v2.0 | 0/2 | Not started | - |
 | 7. Auto-Request | v2.0 | 0/2 | Not started | - |
 | 8. OpenClaw Deep Integration | v2.0 | 0/3 | Not started | - |

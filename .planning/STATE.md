@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Agent Autonomy
 status: planning
-stopped_at: Completed 05-01-PLAN.md — autonomy tiers module + CLI tier config commands, all 16 tests pass
-last_updated: "2026-03-15T11:45:10.973Z"
+stopped_at: Completed 05-02-PLAN.md — BudgetManager reserve enforcement, 14 tests pass, awaiting human-verify checkpoint
+last_updated: "2026-03-15T11:49:17.459Z"
 last_activity: 2026-03-15 — v2.0 Agent Autonomy roadmap created (Phases 4-8)
 progress:
   total_phases: 13
-  completed_phases: 9
+  completed_phases: 10
   total_plans: 29
-  completed_plans: 28
+  completed_plans: 29
   percent: 38
 ---
 
@@ -51,6 +51,7 @@ Progress: [████████░░░░░░░░░░░░] 38% (v1
 | Phase 04-agent-runtime-multi-skill-foundation P03 | 25 | 1 tasks | 4 files |
 | Phase 04-agent-runtime-multi-skill-foundation P03 | 25 | 2 tasks | 4 files |
 | Phase 05-autonomy-tiers-credit-budgeting P01 | 4 | 2 tasks | 5 files |
+| Phase 05-autonomy-tiers-credit-budgeting P02 | 2 | 1 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -79,6 +80,9 @@ Recent decisions affecting current work:
 - [Phase 05-01]: DEFAULT_AUTONOMY_CONFIG = {0,0} enforces Tier 3 for all amounts until owner configures thresholds via agentbnb config set tier1/tier2
 - [Phase 05-01]: insertAuditEvent writes to request_log with action_type + tier_invoked — audit history co-located with normal request history
 - [Phase 05-01]: Share events use card_id='system'; getAutonomyTier boundary is strict less-than (amount < threshold) for both tiers
+- [Phase Phase 05-02]: BudgetManager.canSpend(amount <= 0) always returns true — zero-cost calls bypass reserve check for free-tier cards
+- [Phase Phase 05-02]: availableCredits() floors at 0 via Math.max(0, balance - reserve) — prevents negative available credits
+- [Phase Phase 05-02]: DEFAULT_BUDGET_CONFIG.reserve_credits = 20 — Phase 7 auto-request must call canSpend() before every escrow hold
 
 ### Pending Todos
 
@@ -92,8 +96,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-15T11:45:10.970Z
-Stopped at: Completed 05-01-PLAN.md — autonomy tiers module + CLI tier config commands, all 16 tests pass
+Last session: 2026-03-15T11:49:17.457Z
+Stopped at: Completed 05-02-PLAN.md — BudgetManager reserve enforcement, 14 tests pass, awaiting human-verify checkpoint
 Resume file: None
 
 ---
