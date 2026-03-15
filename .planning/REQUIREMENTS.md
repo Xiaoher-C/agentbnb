@@ -50,10 +50,10 @@ Requirements for the Agent Autonomy milestone. Each maps to roadmap phases.
 
 ### Auto-Request
 
-- [ ] **REQ-01**: Capability gap detection triggers auto-request flow via structured event when agent lacks required skill
-- [ ] **REQ-02**: Peer selection scores candidates by `success_rate * (1/credits_per_call) * idle_rate` with min-max normalization
-- [ ] **REQ-03**: Self-exclusion guard filters `candidate.owner !== self.owner` before ranking peers
-- [ ] **REQ-04**: Budget-gated escrow execution: BudgetManager.canSpend() → holdEscrow → JSON-RPC execute → settle/release
+- [x] **REQ-01**: Capability gap detection triggers auto-request flow via structured event when agent lacks required skill
+- [x] **REQ-02**: Peer selection scores candidates by `success_rate * (1/credits_per_call) * idle_rate` with min-max normalization
+- [x] **REQ-03**: Self-exclusion guard filters `candidate.owner !== self.owner` before ranking peers
+- [x] **REQ-04**: Budget-gated escrow execution: BudgetManager.canSpend() → holdEscrow → JSON-RPC execute → settle/release
 - [x] **REQ-05**: Tier 3 approval queue: `pending_requests` table + `GET /me/pending-requests` endpoint for owner approval
 - [x] **REQ-06**: Auto-request failures written to request_log even when no escrow is initiated
 
@@ -112,10 +112,10 @@ Deferred to future release. Tracked but not in current roadmap.
 | BUD-01 | Phase 5 | Complete |
 | BUD-02 | Phase 5 | Complete |
 | BUD-03 | Phase 5 | Complete |
-| REQ-01 | Phase 7 | Pending |
-| REQ-02 | Phase 7 | Pending |
-| REQ-03 | Phase 7 | Pending |
-| REQ-04 | Phase 7 | Pending |
+| REQ-01 | Phase 7 | Complete |
+| REQ-02 | Phase 7 | Complete |
+| REQ-03 | Phase 7 | Complete |
+| REQ-04 | Phase 7 | Complete |
 | REQ-05 | Phase 7 | Complete |
 | REQ-06 | Phase 7 | Complete |
 | OC-01 | Phase 8 | Pending |
