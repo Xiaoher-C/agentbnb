@@ -1,21 +1,8 @@
 /**
- * AgentBnB Bootstrap — single-call entry point for OpenClaw skill lifecycle.
+ * AgentBnB Bootstrap — single-call OpenClaw skill lifecycle entry point.
  *
- * A single `activate()` call brings an agent fully online:
- *   1. Initialize AgentRuntime (opens DBs, recovers orphaned escrows)
- *   2. Publish the capability card from SOUL.md
- *   3. Start the gateway HTTP server
- *   4. Start the IdleMonitor background loop
- *
- * A single `deactivate()` call tears everything down cleanly and is idempotent.
- *
- * Usage:
- * ```ts
- * import { activate, deactivate } from './skills/agentbnb/bootstrap.js';
- * const ctx = await activate({ owner: 'alice', soulMdPath: './SOUL.md' });
- * // ... agent is online ...
- * await deactivate(ctx);
- * ```
+ * Usage: `const ctx = await activate({ owner: 'alice', soulMdPath: './SOUL.md' });`
+ * Teardown: `await deactivate(ctx);`
  */
 
 import { existsSync, readFileSync } from 'node:fs';
@@ -33,66 +20,43 @@ import { AgentBnBError } from '../../src/types/index.js';
 import type { AutonomyConfig } from '../../src/autonomy/tiers.js';
 import type { CapabilityCardV2 } from '../../src/types/index.js';
 
-// ---------------------------------------------------------------------------
-// Public interfaces
-// ---------------------------------------------------------------------------
-
-/**
- * Configuration for bringing an AgentBnB agent online.
- * All fields except `owner` and `soulMdPath` have sensible defaults.
- */
+/** Configuration for bringing an AgentBnB agent online. */
 export interface BootstrapConfig {
-  /** Agent owner identifier — used for card ownership and credit ledger. */
+  /** Agent owner identifier. */
   owner: string;
-  /** Absolute path to the SOUL.md file describing the agent's capabilities. */
+  /** Absolute path to SOUL.md. */
   soulMdPath: string;
-  /** Path to the registry SQLite database. Defaults to ~/.agentbnb/registry.db */
+  /** Registry DB path. Defaults to ~/.agentbnb/registry.db */
   registryDbPath?: string;
-  /** Path to the credit SQLite database. Defaults to ~/.agentbnb/credit.db */
+  /** Credit DB path. Defaults to ~/.agentbnb/credit.db */
   creditDbPath?: string;
-  /** Port for the gateway HTTP server. Defaults to 7700. */
+  /** Gateway port. Defaults to 7700. */
   gatewayPort?: number;
   /** Bearer token for gateway auth. Defaults to a random UUID. */
   gatewayToken?: string;
-  /** URL the gateway forwards requests to (local capability handler). Defaults to http://localhost:{gatewayPort}. */
+  /** Handler URL for capability forwarding. Defaults to http://localhost:{gatewayPort}. */
   handlerUrl?: string;
-  /** Autonomy tier configuration. Defaults to DEFAULT_AUTONOMY_CONFIG (Tier 3 — ask-before-acting). */
+  /** Autonomy tier config. Defaults to DEFAULT_AUTONOMY_CONFIG (Tier 3). */
   autonomyConfig?: AutonomyConfig;
-  /** Suppress gateway HTTP logs (useful in tests). Defaults to false. */
+  /** Suppress gateway logs. Defaults to false. */
   silent?: boolean;
 }
 
-/**
- * Live handles returned by activate(). Pass this to deactivate() for clean teardown.
- */
+/** Live handles returned by activate(). Pass to deactivate() for clean teardown. */
 export interface BootstrapContext {
-  /** The AgentRuntime managing DBs and background job lifecycle. */
+  /** AgentRuntime managing DBs and background job lifecycle. */
   runtime: AgentRuntime;
-  /** The Fastify gateway HTTP server instance. */
+  /** Fastify gateway HTTP server instance. */
   gateway: FastifyInstance;
-  /** The IdleMonitor background loop tracking per-skill idle rates. */
+  /** IdleMonitor background loop. */
   idleMonitor: IdleMonitor;
-  /** The published CapabilityCard derived from SOUL.md. */
+  /** Published CapabilityCard derived from SOUL.md. */
   card: CapabilityCardV2;
 }
 
-// ---------------------------------------------------------------------------
-// Public functions
-// ---------------------------------------------------------------------------
-
 /**
- * Brings an AgentBnB agent fully online in a single call.
- *
- * Execution order:
- * 1. Read and validate SOUL.md
- * 2. Construct AgentRuntime and call start() (recovers orphaned escrows)
- * 3. Publish capability card via publishFromSoulV2
- * 4. Create and start gateway HTTP server
- * 5. Create IdleMonitor, call start(), register the Cron job with runtime
- *
- * @param config - Bootstrap configuration options.
- * @returns BootstrapContext with live handles for runtime, gateway, idleMonitor, and card.
- * @throws {AgentBnBError} with code FILE_NOT_FOUND if SOUL.md does not exist at soulMdPath.
+ * Brings an agent fully online: Runtime -> publishCard -> gateway.listen -> IdleMonitor.
+ * @throws {AgentBnBError} FILE_NOT_FOUND if SOUL.md does not exist.
  */
 export async function activate(config: BootstrapConfig): Promise<BootstrapContext> {
   const {
@@ -108,23 +72,16 @@ export async function activate(config: BootstrapConfig): Promise<BootstrapContex
 
   const handlerUrl = config.handlerUrl ?? `http://localhost:${gatewayPort}`;
 
-  // 1. Read SOUL.md — throw if missing
   if (!existsSync(soulMdPath)) {
-    throw new AgentBnBError(
-      `SOUL.md not found at path: ${soulMdPath}`,
-      'FILE_NOT_FOUND',
-    );
+    throw new AgentBnBError(`SOUL.md not found at path: ${soulMdPath}`, 'FILE_NOT_FOUND');
   }
   const soulContent = readFileSync(soulMdPath, 'utf8');
 
-  // 2. Initialize runtime and recover orphaned escrows
   const runtime = new AgentRuntime({ registryDbPath, creditDbPath, owner });
   await runtime.start();
 
-  // 3. Publish capability card from SOUL.md
   const card = publishFromSoulV2(runtime.registryDb, soulContent, owner);
 
-  // 4. Create and start gateway server
   const gateway = createGatewayServer({
     port: gatewayPort,
     registryDb: runtime.registryDb,
@@ -135,7 +92,6 @@ export async function activate(config: BootstrapConfig): Promise<BootstrapContex
   });
   await gateway.listen({ port: gatewayPort, host: '0.0.0.0' });
 
-  // 5. Start IdleMonitor and register its cron job with runtime
   const idleMonitor = new IdleMonitor({ owner, db: runtime.registryDb, autonomyConfig });
   const idleJob = idleMonitor.start();
   runtime.registerJob(idleJob);
@@ -144,15 +100,8 @@ export async function activate(config: BootstrapConfig): Promise<BootstrapContex
 }
 
 /**
- * Tears down all active components cleanly.
- *
- * Execution order:
- * 1. Close the gateway HTTP server (stop accepting new connections)
- * 2. Shutdown the runtime (stops IdleMonitor cron and closes both DBs)
- *
- * Idempotent — safe to call multiple times without throwing.
- *
- * @param ctx - The BootstrapContext returned by activate().
+ * Tears down all active components: gateway.close() then runtime.shutdown().
+ * Idempotent — safe to call multiple times.
  */
 export async function deactivate(ctx: BootstrapContext): Promise<void> {
   try {
