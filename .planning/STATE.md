@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v2.1
 milestone_name: Ship It
 status: planning
-stopped_at: Completed 10-clawHub-installable-skill 10-01-PLAN.md
-last_updated: "2026-03-15T19:45:39.779Z"
+stopped_at: Completed 10-clawHub-installable-skill 10-03-PLAN.md
+last_updated: "2026-03-15T19:51:07.125Z"
 last_activity: 2026-03-16 — Phase 9 signed off, proceeding to Phase 10
 progress:
   total_phases: 16
-  completed_phases: 14
+  completed_phases: 15
   total_plans: 43
-  completed_plans: 42
+  completed_plans: 43
   percent: 0
 ---
 
@@ -52,6 +52,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 09-hub-ui-redesign P04 | 8min | 1 tasks | 4 files |
 | Phase 10-clawHub-installable-skill P02 | 2min | 2 tasks | 2 files |
 | Phase 10-clawHub-installable-skill P01 | 3 | 1 tasks | 2 files |
+| Phase 10-clawHub-installable-skill P03 | 3min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -73,6 +74,9 @@ Progress: [░░░░░░░░░░] 0%
 - [Phase 10-clawHub-installable-skill]: install.sh uses pnpm-first with npm fallback for CLI install — matches project package manager preference
 - [Phase 10-clawHub-installable-skill]: HEARTBEAT.rules.md uses example defaults (Tier 1:10, Tier 2:50, reserve:20) with pointer to agentbnb openclaw rules for real configured values
 - [Phase 10-clawHub-installable-skill]: bootstrap.ts uses try/catch in deactivate() for idempotent teardown; gatewayToken defaults to randomUUID(); FILE_NOT_FOUND error code for missing SOUL.md
+- [Phase Phase 10-clawHub-installable-skill]: SKILL.md uses imperative agent-executable language — answers 'what should I do?' not 'what is this?'
+- [Phase Phase 10-clawHub-installable-skill]: Integration test uses real activate()/deactivate() with :memory: DBs and no mocks — proves actual lifecycle not just call order
+- [Phase Phase 10-clawHub-installable-skill]: Gateway port 0 in tests for OS auto-assignment — eliminates port conflict failures in CI
 
 ### Pending Todos
 
@@ -84,8 +88,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-15T19:45:39.777Z
-Stopped at: Completed 10-clawHub-installable-skill 10-01-PLAN.md
+Last session: 2026-03-15T19:51:07.123Z
+Stopped at: Completed 10-clawHub-installable-skill 10-03-PLAN.md
 Resume file: None
 
 ---

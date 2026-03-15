@@ -157,7 +157,7 @@ Plans:
 **Milestone Goal:** Make AgentBnB launchable. Premium Hub UI, one-command OpenClaw skill install, repo ready for public.
 
 - [x] **Phase 9: Hub UI Redesign** - Premium dark SaaS Hub with ambient glow, modal card overlays, and count-up animations — screenshot-worthy (completed 2026-03-16)
-- [ ] **Phase 10: ClaWHub Installable Skill** - One command puts any OpenClaw agent on the AgentBnB network via a single activate() entry point
+- [x] **Phase 10: ClaWHub Installable Skill** - One command puts any OpenClaw agent on the AgentBnB network via a single activate() entry point (completed 2026-03-15)
 - [ ] **Phase 11: Repo Housekeeping** - Repo documentation reflects current reality and is ready for public launch
 
 ## Phase Details
@@ -270,7 +270,7 @@ Plans:
   3. SKILL.md contains agent-executable instructions with frontmatter metadata, on-install steps, autonomy rules, and CLI reference — an agent reading it knows exactly what to do without human interpretation
   4. HEARTBEAT.rules.md contains a standalone autonomy rules block that any agent can copy-paste directly into its HEARTBEAT.md to govern AgentBnB behavior
   5. The integration test confirms the full lifecycle: mock SOUL.md, activate(), assert card published + gateway listening + IdleMonitor running, deactivate(), assert all resources cleaned up
-**Plans:** 2/3 plans executed
+**Plans:** 3/3 plans complete
 
 Plans:
 - [ ] 10-01-PLAN.md — bootstrap.ts: activate()/deactivate() entry point wiring AgentRuntime, card publish, gateway, IdleMonitor (CLW-01)
@@ -315,5 +315,5 @@ Phases execute in numeric order: 9 → 10 → 11
 | 7. Auto-Request | v2.0 | 2/2 | Complete | 2026-03-15 |
 | 8. OpenClaw Deep Integration | v2.0 | 3/3 | Complete | 2026-03-15 |
 | 9. Hub UI Redesign | v2.1 | 4/4 | Complete | 2026-03-16 |
-| 10. ClaWHub Installable Skill | 2/3 | In Progress|  | - |
+| 10. ClaWHub Installable Skill | 3/3 | Complete   | 2026-03-15 | - |
 | 11. Repo Housekeeping | v2.1 | 0/3 | Not started | - |
