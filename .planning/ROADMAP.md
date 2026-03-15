@@ -315,5 +315,5 @@ Phases execute in numeric order: 9 → 10 → 11
 | 7. Auto-Request | v2.0 | 2/2 | Complete | 2026-03-15 |
 | 8. OpenClaw Deep Integration | v2.0 | 3/3 | Complete | 2026-03-15 |
 | 9. Hub UI Redesign | v2.1 | 4/4 | Complete | 2026-03-16 |
-| 10. ClaWHub Installable Skill | 3/3 | Complete   | 2026-03-15 | - |
+| 10. ClaWHub Installable Skill | 3/3 | Complete    | 2026-03-15 | - |
 | 11. Repo Housekeeping | v2.1 | 0/3 | Not started | - |
