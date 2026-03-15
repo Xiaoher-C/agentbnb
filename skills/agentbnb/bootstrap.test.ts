@@ -11,68 +11,69 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // --- Mock all src/ dependencies so tests run without real DBs or ports ---
+// Note: vi.mock factories are hoisted — do NOT reference module-level variables inside them.
 
-const mockRuntime = {
-  registryDb: { pragma: vi.fn() } as unknown,
-  creditDb: { pragma: vi.fn() } as unknown,
-  owner: 'test-owner',
-  jobs: [] as unknown[],
-  start: vi.fn().mockResolvedValue(undefined),
-  shutdown: vi.fn().mockResolvedValue(undefined),
-  registerJob: vi.fn(),
-  isDraining: false,
-};
-
-const mockGateway = {
-  listen: vi.fn().mockResolvedValue(undefined),
-  close: vi.fn().mockResolvedValue(undefined),
-};
-
-const mockCronJob = { stop: vi.fn() };
-
-const mockIdleMonitor = {
-  start: vi.fn().mockReturnValue(mockCronJob),
-  getJob: vi.fn().mockReturnValue(mockCronJob),
-  poll: vi.fn().mockResolvedValue(undefined),
-};
-
-const mockCard = {
-  spec_version: '2.0' as const,
-  id: 'card-uuid',
-  owner: 'test-owner',
-  agent_name: 'TestAgent',
-  skills: [
-    {
-      id: 'test-skill',
-      name: 'Test Skill',
-      description: 'A test skill',
-      level: 2 as const,
-      inputs: [{ name: 'input', type: 'text' as const, required: true }],
-      outputs: [{ name: 'output', type: 'text' as const, required: true }],
-      pricing: { credits_per_call: 10 },
-      availability: { online: true },
-    },
-  ],
-  availability: { online: true },
-  created_at: '2026-01-01T00:00:00Z',
-  updated_at: '2026-01-01T00:00:00Z',
-};
-
-vi.mock('../../src/runtime/agent-runtime.js', () => ({
-  AgentRuntime: vi.fn().mockImplementation(() => mockRuntime),
-}));
+vi.mock('../../src/runtime/agent-runtime.js', () => {
+  const mockRuntime = {
+    registryDb: {},
+    creditDb: {},
+    owner: 'test-owner',
+    jobs: [],
+    start: vi.fn().mockResolvedValue(undefined),
+    shutdown: vi.fn().mockResolvedValue(undefined),
+    registerJob: vi.fn(),
+    isDraining: false,
+  };
+  return {
+    AgentRuntime: vi.fn().mockImplementation(() => mockRuntime),
+  };
+});
 
 vi.mock('../../src/openclaw/soul-sync.js', () => ({
-  publishFromSoulV2: vi.fn().mockReturnValue(mockCard),
+  publishFromSoulV2: vi.fn().mockReturnValue({
+    spec_version: '2.0',
+    id: 'card-uuid',
+    owner: 'test-owner',
+    agent_name: 'TestAgent',
+    skills: [
+      {
+        id: 'test-skill',
+        name: 'Test Skill',
+        description: 'A test skill',
+        level: 2,
+        inputs: [{ name: 'input', type: 'text', required: true }],
+        outputs: [{ name: 'output', type: 'text', required: true }],
+        pricing: { credits_per_call: 10 },
+        availability: { online: true },
+      },
+    ],
+    availability: { online: true },
+    created_at: '2026-01-01T00:00:00Z',
+    updated_at: '2026-01-01T00:00:00Z',
+  }),
 }));
 
-vi.mock('../../src/gateway/server.js', () => ({
-  createGatewayServer: vi.fn().mockReturnValue(mockGateway),
-}));
+vi.mock('../../src/gateway/server.js', () => {
+  const mockGateway = {
+    listen: vi.fn().mockResolvedValue(undefined),
+    close: vi.fn().mockResolvedValue(undefined),
+  };
+  return {
+    createGatewayServer: vi.fn().mockReturnValue(mockGateway),
+  };
+});
 
-vi.mock('../../src/autonomy/idle-monitor.js', () => ({
-  IdleMonitor: vi.fn().mockImplementation(() => mockIdleMonitor),
-}));
+vi.mock('../../src/autonomy/idle-monitor.js', () => {
+  const mockCronJob = { stop: vi.fn() };
+  const mockIdleMonitor = {
+    start: vi.fn().mockReturnValue(mockCronJob),
+    getJob: vi.fn().mockReturnValue(mockCronJob),
+    poll: vi.fn().mockResolvedValue(undefined),
+  };
+  return {
+    IdleMonitor: vi.fn().mockImplementation(() => mockIdleMonitor),
+  };
+});
 
 vi.mock('../../src/autonomy/tiers.js', () => ({
   DEFAULT_AUTONOMY_CONFIG: { tier1_max_credits: 0, tier2_max_credits: 0 },
@@ -96,6 +97,30 @@ const VALID_CONFIG: BootstrapConfig = {
   soulMdPath: '/fake/SOUL.md',
 };
 
+// Helpers to access the mocked instances after activation
+function getRuntimeInstance() {
+  return (AgentRuntime as ReturnType<typeof vi.fn>).mock.results[0]?.value as {
+    start: ReturnType<typeof vi.fn>;
+    shutdown: ReturnType<typeof vi.fn>;
+    registerJob: ReturnType<typeof vi.fn>;
+    registryDb: unknown;
+    creditDb: unknown;
+  };
+}
+
+function getGatewayInstance() {
+  return (createGatewayServer as ReturnType<typeof vi.fn>).mock.results[0]?.value as {
+    listen: ReturnType<typeof vi.fn>;
+    close: ReturnType<typeof vi.fn>;
+  };
+}
+
+function getIdleMonitorInstance() {
+  return (IdleMonitor as ReturnType<typeof vi.fn>).mock.results[0]?.value as {
+    start: ReturnType<typeof vi.fn>;
+  };
+}
+
 describe('activate()', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -103,11 +128,27 @@ describe('activate()', () => {
     (readFileSync as ReturnType<typeof vi.fn>).mockReturnValue(
       '## Test Skill\nA test skill',
     );
-    mockRuntime.start.mockResolvedValue(undefined);
-    mockGateway.listen.mockResolvedValue(undefined);
-    mockIdleMonitor.start.mockReturnValue(mockCronJob);
-    mockRuntime.registerJob.mockReset();
-    mockRuntime.shutdown.mockResolvedValue(undefined);
+    // Re-setup mock implementations after clearAllMocks
+    (AgentRuntime as ReturnType<typeof vi.fn>).mockImplementation(() => ({
+      registryDb: { id: 'reg-db' },
+      creditDb: { id: 'cred-db' },
+      owner: 'test-owner',
+      jobs: [],
+      start: vi.fn().mockResolvedValue(undefined),
+      shutdown: vi.fn().mockResolvedValue(undefined),
+      registerJob: vi.fn(),
+      isDraining: false,
+    }));
+    const mockCronJob = { stop: vi.fn() };
+    (IdleMonitor as ReturnType<typeof vi.fn>).mockImplementation(() => ({
+      start: vi.fn().mockReturnValue(mockCronJob),
+      getJob: vi.fn().mockReturnValue(mockCronJob),
+      poll: vi.fn().mockResolvedValue(undefined),
+    }));
+    (createGatewayServer as ReturnType<typeof vi.fn>).mockReturnValue({
+      listen: vi.fn().mockResolvedValue(undefined),
+      close: vi.fn().mockResolvedValue(undefined),
+    });
   });
 
   it('returns a BootstrapContext with runtime, gateway, idleMonitor, and card', async () => {
@@ -131,7 +172,8 @@ describe('activate()', () => {
 
   it('calls runtime.start() to recover orphaned escrows', async () => {
     await activate(VALID_CONFIG);
-    expect(mockRuntime.start).toHaveBeenCalledOnce();
+    const runtime = getRuntimeInstance();
+    expect(runtime.start).toHaveBeenCalledOnce();
   });
 
   it('reads SOUL.md from the configured soulMdPath', async () => {
@@ -142,8 +184,9 @@ describe('activate()', () => {
 
   it('calls publishFromSoulV2 with registry DB, soul content, and owner', async () => {
     await activate(VALID_CONFIG);
+    const runtime = getRuntimeInstance();
     expect(publishFromSoulV2).toHaveBeenCalledWith(
-      mockRuntime.registryDb,
+      runtime.registryDb,
       '## Test Skill\nA test skill',
       'test-owner',
     );
@@ -151,34 +194,39 @@ describe('activate()', () => {
 
   it('calls createGatewayServer with correct options', async () => {
     await activate({ ...VALID_CONFIG, gatewayPort: 8800, gatewayToken: 'tok123' });
+    const runtime = getRuntimeInstance();
     expect(createGatewayServer).toHaveBeenCalledWith(
       expect.objectContaining({
         port: 8800,
         tokens: ['tok123'],
-        registryDb: mockRuntime.registryDb,
-        creditDb: mockRuntime.creditDb,
+        registryDb: runtime.registryDb,
+        creditDb: runtime.creditDb,
       }),
     );
   });
 
   it('calls gateway.listen() on the correct port', async () => {
     await activate({ ...VALID_CONFIG, gatewayPort: 7700 });
-    expect(mockGateway.listen).toHaveBeenCalledWith(
+    const gateway = getGatewayInstance();
+    expect(gateway.listen).toHaveBeenCalledWith(
       expect.objectContaining({ port: 7700 }),
     );
   });
 
   it('creates IdleMonitor and calls start()', async () => {
     await activate(VALID_CONFIG);
+    const runtime = getRuntimeInstance();
     expect(IdleMonitor).toHaveBeenCalledWith(
-      expect.objectContaining({ owner: 'test-owner', db: mockRuntime.registryDb }),
+      expect.objectContaining({ owner: 'test-owner', db: runtime.registryDb }),
     );
-    expect(mockIdleMonitor.start).toHaveBeenCalledOnce();
+    const idleMonitor = getIdleMonitorInstance();
+    expect(idleMonitor.start).toHaveBeenCalledOnce();
   });
 
   it('registers the idle cron job with runtime', async () => {
     await activate(VALID_CONFIG);
-    expect(mockRuntime.registerJob).toHaveBeenCalledWith(mockCronJob);
+    const runtime = getRuntimeInstance();
+    expect(runtime.registerJob).toHaveBeenCalledOnce();
   });
 
   it('throws AgentBnBError with code FILE_NOT_FOUND if SOUL.md is missing', async () => {
@@ -196,29 +244,52 @@ describe('deactivate()', () => {
     (readFileSync as ReturnType<typeof vi.fn>).mockReturnValue(
       '## Test Skill\nA test skill',
     );
-    mockRuntime.start.mockResolvedValue(undefined);
-    mockGateway.listen.mockResolvedValue(undefined);
-    mockIdleMonitor.start.mockReturnValue(mockCronJob);
-    mockRuntime.shutdown.mockResolvedValue(undefined);
-    mockGateway.close.mockResolvedValue(undefined);
+    const mockCronJob = { stop: vi.fn() };
+    (AgentRuntime as ReturnType<typeof vi.fn>).mockImplementation(() => ({
+      registryDb: { id: 'reg-db' },
+      creditDb: { id: 'cred-db' },
+      owner: 'test-owner',
+      jobs: [],
+      start: vi.fn().mockResolvedValue(undefined),
+      shutdown: vi.fn().mockResolvedValue(undefined),
+      registerJob: vi.fn(),
+      isDraining: false,
+    }));
+    (IdleMonitor as ReturnType<typeof vi.fn>).mockImplementation(() => ({
+      start: vi.fn().mockReturnValue(mockCronJob),
+    }));
+    (createGatewayServer as ReturnType<typeof vi.fn>).mockReturnValue({
+      listen: vi.fn().mockResolvedValue(undefined),
+      close: vi.fn().mockResolvedValue(undefined),
+    });
     ctx = await activate(VALID_CONFIG);
+    // Reset call counts after setup — only measure deactivate calls
     vi.clearAllMocks();
+    // Re-add shutdown/close mocks since clearAllMocks wipes them
+    ctx.runtime.shutdown = vi.fn().mockResolvedValue(undefined);
+    (ctx.gateway as unknown as { close: ReturnType<typeof vi.fn> }).close = vi.fn().mockResolvedValue(undefined);
   });
 
   it('calls gateway.close()', async () => {
     await deactivate(ctx);
-    expect(mockGateway.close).toHaveBeenCalledOnce();
+    expect((ctx.gateway as unknown as { close: ReturnType<typeof vi.fn> }).close).toHaveBeenCalledOnce();
   });
 
   it('calls runtime.shutdown()', async () => {
     await deactivate(ctx);
-    expect(mockRuntime.shutdown).toHaveBeenCalledOnce();
+    expect(ctx.runtime.shutdown).toHaveBeenCalledOnce();
   });
 
   it('calls gateway.close() before runtime.shutdown()', async () => {
     const callOrder: string[] = [];
-    mockGateway.close.mockImplementation(() => { callOrder.push('close'); return Promise.resolve(); });
-    mockRuntime.shutdown.mockImplementation(() => { callOrder.push('shutdown'); return Promise.resolve(); });
+    (ctx.gateway as unknown as { close: ReturnType<typeof vi.fn> }).close = vi.fn().mockImplementation(() => {
+      callOrder.push('close');
+      return Promise.resolve();
+    });
+    ctx.runtime.shutdown = vi.fn().mockImplementation(() => {
+      callOrder.push('shutdown');
+      return Promise.resolve();
+    });
     await deactivate(ctx);
     expect(callOrder).toEqual(['close', 'shutdown']);
   });
