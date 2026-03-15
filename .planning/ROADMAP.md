@@ -252,7 +252,7 @@ Plans:
   3. Stats numbers (agents, capabilities, credits) count up from 0 to their real values over 400ms in JetBrains Mono at 32px — visible on every page load
   4. The search bar, level/category dropdowns, online-only toggle, and pill-style tab switcher all render in the premium dark style with no legacy Tailwind defaults leaking through
   5. Cards show compact layout with 32px identicon, ghost category chips, level pill badge, and green online indicator — hovering any card lifts it 2px with border brightening
-**Plans:** 4 plans
+**Plans:** 1/4 plans executed
 
 Plans:
 - [ ] 09-01-PLAN.md — Design system (CSS vars, fonts, Tailwind config) + card component redesign (HUI-01, HUI-02)
@@ -316,6 +316,6 @@ Phases execute in numeric order: 9 → 10 → 11
 | 6. Idle Rate Monitoring + Auto-Share | v2.0 | 2/2 | Complete | 2026-03-15 |
 | 7. Auto-Request | v2.0 | 2/2 | Complete | 2026-03-15 |
 | 8. OpenClaw Deep Integration | v2.0 | 3/3 | Complete | 2026-03-15 |
-| 9. Hub UI Redesign | v2.1 | 0/4 | Not started | - |
+| 9. Hub UI Redesign | 1/4 | In Progress|  | - |
 | 10. ClaWHub Installable Skill | v2.1 | 0/5 | Not started | - |
 | 11. Repo Housekeeping | v2.1 | 0/3 | Not started | - |

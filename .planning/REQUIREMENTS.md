@@ -70,8 +70,8 @@ Requirements for the Ship It milestone. Each maps to roadmap phases.
 
 ### Hub UI Design System
 
-- [ ] **HUI-01**: Design system with CSS variables — dark background (#08080C), emerald accent (#10B981), Inter + JetBrains Mono fonts, text hierarchy via opacity (92%/55%/30%)
-- [ ] **HUI-02**: Card component redesign — compact view with 32px identicon, ghost chips for categories, level pill badge, green online indicator with glow, monospace stats
+- [x] **HUI-01**: Design system with CSS variables — dark background (#08080C), emerald accent (#10B981), Inter + JetBrains Mono fonts, text hierarchy via opacity (92%/55%/30%)
+- [x] **HUI-02**: Card component redesign — compact view with 32px identicon, ghost chips for categories, level pill badge, green online indicator with glow, monospace stats
 - [ ] **HUI-03**: Modal overlay — click card opens centered detail modal (520px, #111117 bg, backdrop blur 12px, scale animation in/out, ESC/backdrop close, body scroll lock)
 - [ ] **HUI-04**: Header + stats bar + ambient glow — logo text, stats numbers (32px JetBrains Mono, emerald green), radial gradient glow (600px radius, 0.08 opacity) behind stats
 - [ ] **HUI-05**: Search + filter bar redesign — full-width ghost search bar (48px, rounded-xl), level/category dropdowns, online-only toggle
@@ -151,8 +151,8 @@ Deferred to future release. Tracked but not in current roadmap.
 | OC-03 | Phase 8 | Complete |
 | OC-04 | Phase 8 | Complete |
 
-| HUI-01 | Phase 9 | Pending |
-| HUI-02 | Phase 9 | Pending |
+| HUI-01 | Phase 9 | Complete |
+| HUI-02 | Phase 9 | Complete |
 | HUI-03 | Phase 9 | Pending |
 | HUI-04 | Phase 9 | Pending |
 | HUI-05 | Phase 9 | Pending |

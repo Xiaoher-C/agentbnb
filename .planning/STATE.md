@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v2.1
 milestone_name: Ship It
-status: ready_to_plan
-stopped_at: Roadmap created for v2.1 — Phase 9 ready to plan
-last_updated: "2026-03-16"
-last_activity: 2026-03-16 — v2.1 roadmap created (Phases 9-11, 15 requirements mapped)
+status: planning
+stopped_at: Completed 09-hub-ui-redesign plan 09-01-PLAN.md
+last_updated: "2026-03-15T18:43:45.480Z"
+last_activity: 2026-03-16 — v2.1 roadmap created
 progress:
-  total_phases: 3
-  completed_phases: 0
-  total_plans: 15
-  completed_plans: 0
+  total_phases: 16
+  completed_phases: 13
+  total_plans: 40
+  completed_plans: 37
   percent: 0
 ---
 
@@ -46,6 +46,7 @@ Progress: [░░░░░░░░░░] 0%
 | 9. Hub UI Redesign | 0/7 | Not started |
 | 10. ClaWHub Installable Skill | 0/5 | Not started |
 | 11. Repo Housekeeping | 0/3 | Not started |
+| Phase 09-hub-ui-redesign P01 | 6 | 2 tasks | 15 files |
 
 ## Accumulated Context
 
@@ -56,6 +57,9 @@ Progress: [░░░░░░░░░░] 0%
 - [v2.1 init]: Dark bg #08080C, accent emerald green #10B981, Inter + JetBrains Mono
 - [v2.1 init]: ClaWHub skill uses single activate() function — bootstrap.ts entry point
 - [v2.1 init]: SKILL.md must be agent-executable instructions, not human documentation
+- [Phase 09-hub-ui-redesign]: StatusColor type changed to 'accent'|'dim' to align with design token naming
+- [Phase 09-hub-ui-redesign]: CapabilityCard is compact-only with onClick prop; modal overlay wired in plan 09-02
+- [Phase 09-hub-ui-redesign]: Ghost chip pattern established: border-hub-border-hover bg-transparent rounded-full
 
 ### Pending Todos
 
@@ -67,8 +71,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-16
-Stopped at: Roadmap created — Phase 9 ready to plan
+Last session: 2026-03-15T18:43:45.477Z
+Stopped at: Completed 09-hub-ui-redesign plan 09-01-PLAN.md
 Resume file: None
 
 ---
