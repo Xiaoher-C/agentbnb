@@ -184,12 +184,12 @@ Plans:
   2. Running `agentbnb openclaw sync` reads the agent's SOUL.md and publishes a multi-skill Capability Card with skills[] derived from H2 sections — no manual card editing required
   3. `agentbnb openclaw status` shows whether the skill is installed, which tier is active, current balance, and idle rate per skill
   4. `agentbnb openclaw rules` emits the current HEARTBEAT.md autonomy rules block reflecting live tier and budget configuration
-**Plans**: TBD
+**Plans:** 3 plans
 
 Plans:
-- [ ] 08-01: src/openclaw/ — soul-sync.ts (parseSoulMd() → skills[]), heartbeat-writer.ts (rules block generator), skill.ts (lifecycle hooks)
-- [ ] 08-02: skills/agentbnb/ directory — SKILL.md, gateway.ts, auto-share.ts, auto-request.ts, credit-mgr.ts
-- [ ] 08-03: agentbnb openclaw [sync|status|rules] CLI commands + human verification
+- [ ] 08-01-PLAN.md — src/openclaw/ modules: soul-sync (parseSoulMdV2 + publishFromSoulV2), heartbeat-writer, skill lifecycle + status
+- [ ] 08-02-PLAN.md — skills/agentbnb/ installable package: SKILL.md manifest + 4 thin adapter files
+- [ ] 08-03-PLAN.md — agentbnb openclaw sync|status|rules CLI commands + human verification
 
 ---
 
@@ -212,4 +212,4 @@ Phases execute in numeric order: 4 → 5 → 6 → 7 → 8
 | 5. Autonomy Tiers + Credit Budgeting | v2.0 | 2/2 | Complete | 2026-03-15 |
 | 6. Idle Rate Monitoring + Auto-Share | v2.0 | 2/2 | Complete | 2026-03-15 |
 | 7. Auto-Request | v2.0 | 2/2 | Complete | 2026-03-15 |
-| 8. OpenClaw Deep Integration | v2.0 | 0/3 | Not started | - |
+| 8. OpenClaw Deep Integration | v2.0 | 0/3 | Planning complete | - |
