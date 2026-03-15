@@ -103,3 +103,10 @@ None — no external service configuration required.
 ---
 *Phase: 08-openclaw-deep-integration*
 *Completed: 2026-03-15*
+
+## Self-Check: PASSED
+
+- FOUND: .planning/phases/08-openclaw-deep-integration/08-03-SUMMARY.md
+- FOUND: commit 279d754 (feat(08-03): wire openclaw CLI subcommand group)
+- FOUND: src/cli/index.ts
+- FOUND: commit 38f0193 (docs(08-03): final metadata commit)

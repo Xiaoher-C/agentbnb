@@ -79,7 +79,7 @@ export function publishFromSoulV2(
   soulContent: string,
   owner: string,
 ): CapabilityCardV2 {
-  const { agentName, description, skills } = parseSoulMdV2(soulContent);
+  const { agentName, skills } = parseSoulMdV2(soulContent);
 
   if (skills.length === 0) {
     throw new AgentBnBError('SOUL.md has no H2 sections', 'VALIDATION_ERROR');
