@@ -136,17 +136,18 @@ Plans:
 **Goal**: Non-technical users can share agent capabilities via the Hub's authenticated owner features: dashboard monitoring, one-click sharing, and mobile-responsive status page.
 **Requirements**: [UX-01, UX-02, UX-03, UX-04, UX-05, UX-06, UX-07, UX-08, UX-09, UX-10, UX-11, UX-12, UX-13, UX-14]
 **Depends on:** Phase 2.3
-**Plans:** 3 plans
+**Plans:** 4 plans
 
 Plans:
-- [ ] 03-01-PLAN.md — Backend data layer: API key in config, request_log module, gateway logging
-- [ ] 03-02-PLAN.md — Auth-protected owner endpoints on registry server (GET /me, GET /requests, toggle, patch)
-- [ ] 03-03-PLAN.md — Hub frontend: auth, tab navigation, owner dashboard, share page, status monitoring
+- [ ] 03-01-PLAN.md — Backend data layer: API key in config, request_log module (with period filtering), gateway logging
+- [ ] 03-02-PLAN.md — Auth-protected owner endpoints (GET /me with balance, GET /requests with since, GET /draft, toggle, patch)
+- [ ] 03-03a-PLAN.md — Hub frontend hooks + auth components (useAuth, useRequests, useOwnerCards, AuthGate, LoginForm)
+- [ ] 03-03b-PLAN.md — Hub frontend pages + wiring (OwnerDashboard, SharePage with draft preview, RequestHistory, App.tsx tabs)
 
 - [ ] API key generation in `agentbnb init` and config storage
 - [ ] Request log table + gateway logging after settle/release
-- [ ] Auth-protected owner endpoints (GET /me, GET /requests, toggle-online, PATCH cards)
+- [ ] Auth-protected owner endpoints (GET /me with balance, GET /requests with period filtering, GET /draft, toggle-online, PATCH cards)
 - [ ] Hub tab navigation: Discover (existing) | Share | My Agent
-- [ ] Owner dashboard with published cards, request history, credit monitoring
-- [ ] One-click sharing page with local server detection
+- [ ] Owner dashboard with published cards, request history, credit monitoring, per-period counts
+- [ ] One-click sharing page with draft card preview from auto-detect
 - [ ] Mobile-responsive layout for all Hub pages
