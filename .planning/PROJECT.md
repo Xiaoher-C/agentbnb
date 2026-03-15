@@ -8,19 +8,17 @@ A P2P agent capability sharing protocol. Agent owners publish what their agents 
 
 No good protocol exists for agent-to-agent capability exchange. AgentBnB fills that gap — making it easy for any agent to discover and use another agent's skills, creating a marketplace where agent capabilities become composable building blocks.
 
-## Current Milestone: v2.0 Agent Autonomy
+## Current Milestone: v2.1 Ship It
 
-**Goal:** The agent handles everything. The human says Yes once.
+**Goal:** Make AgentBnB launchable. Premium Hub UI, one-command OpenClaw skill install, repo ready for public.
 
 **Target features:**
-- Idle rate detection + auto-share (agents monitor utilization, auto-publish when idle_rate > 70%)
-- Auto-request (agents detect capability gaps, find peers, execute via escrow autonomously)
-- Autonomy tiers (Tier 1/2/3 with configurable credit thresholds)
-- Multi-skill cards (one Capability Card per agent, multiple skills)
-- Credit budgeting (reserve balance, surplus alerts, spending limits)
-- OpenClaw deep integration (installable skill, SOUL.md sync, HEARTBEAT.md rules)
+- Hub UI redesign (premium dark SaaS, ambient glow, modal overlays, count-up animations)
+- ClaWHub installable skill (bootstrap.ts activate(), install.sh, SKILL.md rewrite, HEARTBEAT.rules.md)
+- Repo housekeeping (CLAUDE.md, README.md, AGENT-NATIVE-PROTOCOL.md updates)
 
 **Design bible:** `AGENT-NATIVE-PROTOCOL.md` in project root
+**UI spec:** `v2.1-milestone.md` in project root
 
 ## Requirements
 
@@ -41,15 +39,25 @@ No good protocol exists for agent-to-agent capability exchange. AgentBnB fills t
 - ✓ Schema v1.1 (_internal, free_tier, powered_by) — v1.1
 - ✓ Remote registry discovery (--registry flag) — v1.1
 - ✓ Owner dashboard, auth, share page, request history — v1.1
+- ✓ Idle rate detection and auto-share — v2.0
+- ✓ Auto-request with peer selection — v2.0
+- ✓ Autonomy tiers (configurable thresholds) — v2.0
+- ✓ Multi-skill Capability Cards — v2.0
+- ✓ Credit budgeting (reserve, surplus, limits) — v2.0
+- ✓ OpenClaw deep integration (skill, HEARTBEAT.md, message bus) — v2.0
 
 ### Active
 
-- [ ] Idle rate detection and auto-share
-- [ ] Auto-request with peer selection
-- [ ] Autonomy tiers (configurable thresholds)
-- [ ] Multi-skill Capability Cards
-- [ ] Credit budgeting (reserve, surplus, limits)
-- [ ] OpenClaw deep integration (skill, HEARTBEAT.md, message bus)
+- [ ] Hub UI redesign (premium dark SaaS with ambient atmosphere)
+- [ ] Card modal overlay with detail view
+- [ ] Stats bar with count-up animations
+- [ ] ClaWHub bootstrap.ts (single activate() entry point)
+- [ ] ClaWHub install.sh (post-install automation)
+- [ ] ClaWHub SKILL.md rewrite (agent-executable instructions)
+- [ ] ClaWHub HEARTBEAT.rules.md (autonomy rules template)
+- [ ] CLAUDE.md update to reflect v2.1
+- [ ] README.md rewrite for public launch
+- [ ] AGENT-NATIVE-PROTOCOL.md in repo root
 
 ### Out of Scope
 
@@ -86,7 +94,10 @@ No good protocol exists for agent-to-agent capability exchange. AgentBnB fills t
 | Credit-based exchange | Creates economic incentive without real money | ✓ Good |
 | EWA reputation (alpha=0.1) | Smooth outlier handling, bootstraps from first observation | ✓ Good |
 | Scoped Fastify plugins | Auth isolation without leaking to public routes | ✓ Good |
-| Agent-first design | Features for agent consumption first, human second | — Pending |
+| Agent-first design | Features for agent consumption first, human second | ✓ Good |
+| Premium dark UI | Screenshot-worthy > info density > mobile | — Pending |
+| Modal over in-place expand | Backdrop blur + centered modal for card details | — Pending |
+| Single activate() entry point | One function call = agent on network | — Pending |
 
 ---
-*Last updated: 2026-03-15 after milestone v2.0 initialization*
+*Last updated: 2026-03-16 after milestone v2.1 initialization*
