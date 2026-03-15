@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { CapabilityCardSchema } from './index.js';
+import { CapabilityCardSchema, SkillSchema, CapabilityCardV2Schema, AnyCardSchema } from './index.js';
 import { randomUUID } from 'crypto';
 
 describe('CapabilityCardSchema', () => {
@@ -241,5 +241,139 @@ describe('CapabilityCardSchema', () => {
         expect(result.data.powered_by).toHaveLength(3);
       }
     });
+  });
+});
+
+// -----------------------------------------------------------------------
+// New v2.0 schema tests (Task 1 — Plan 04-02)
+// -----------------------------------------------------------------------
+
+const validSkill = {
+  id: 'tts-elevenlabs',
+  name: 'ElevenLabs TTS',
+  description: 'Text-to-speech via ElevenLabs API',
+  level: 1 as const,
+  inputs: [{ name: 'text', type: 'text' as const, required: true }],
+  outputs: [{ name: 'audio', type: 'audio' as const, required: true }],
+  pricing: { credits_per_call: 5 },
+};
+
+const validV2Card = {
+  spec_version: '2.0' as const,
+  id: randomUUID(),
+  owner: 'chengwen@leyang',
+  agent_name: 'OpenClaw Audio Agent',
+  skills: [validSkill],
+  availability: { online: true },
+};
+
+describe('SkillSchema', () => {
+  it('Test 8: Skill.id is required and must be non-empty', () => {
+    const missingId = { ...validSkill, id: '' };
+    const result = SkillSchema.safeParse(missingId);
+    expect(result.success).toBe(false);
+  });
+
+  it('Test 9: Skill.pricing.credits_per_call is required', () => {
+    const missingPricing = { ...validSkill, pricing: {} };
+    const result = SkillSchema.safeParse(missingPricing);
+    expect(result.success).toBe(false);
+  });
+
+  it('validates a correct skill with all required fields', () => {
+    const result = SkillSchema.safeParse(validSkill);
+    expect(result.success).toBe(true);
+  });
+
+  it('accepts optional fields: category, availability, powered_by, metadata, _internal', () => {
+    const skill = {
+      ...validSkill,
+      category: 'tts',
+      availability: { online: true },
+      powered_by: [{ provider: 'ElevenLabs' }],
+      metadata: {
+        apis_used: ['elevenlabs'],
+        avg_latency_ms: 2000,
+        success_rate: 0.98,
+        tags: ['tts', 'audio'],
+        capacity: { calls_per_hour: 120 },
+      },
+      _internal: { api_key_ref: 'env:ELEVENLABS_KEY' },
+    };
+    const result = SkillSchema.safeParse(skill);
+    expect(result.success).toBe(true);
+  });
+});
+
+describe('CapabilityCardV2Schema', () => {
+  it('Test 1: A v2.0 card with one skill validates against CapabilityCardV2Schema', () => {
+    const result = CapabilityCardV2Schema.safeParse(validV2Card);
+    expect(result.success).toBe(true);
+  });
+
+  it('Test 2: A v2.0 card with three skills validates against CapabilityCardV2Schema', () => {
+    const card = {
+      ...validV2Card,
+      id: randomUUID(),
+      skills: [
+        validSkill,
+        { ...validSkill, id: 'tts-google', name: 'Google TTS', description: 'Google Cloud TTS' },
+        { ...validSkill, id: 'stt-whisper', name: 'Whisper STT', description: 'Speech to text' },
+      ],
+    };
+    const result = CapabilityCardV2Schema.safeParse(card);
+    expect(result.success).toBe(true);
+  });
+
+  it('Test 3: A v2.0 card with empty skills[] array fails validation (min 1)', () => {
+    const card = { ...validV2Card, id: randomUUID(), skills: [] };
+    const result = CapabilityCardV2Schema.safeParse(card);
+    expect(result.success).toBe(false);
+  });
+
+  it('Test 4: A v1.0 card still validates against CapabilityCardSchema (no regression)', () => {
+    const v1Card = {
+      id: randomUUID(),
+      owner: 'chengwen@leyang',
+      name: 'ElevenLabs TTS',
+      description: 'Text-to-speech via ElevenLabs API',
+      level: 1 as const,
+      inputs: [{ name: 'text', type: 'text' as const, required: true }],
+      outputs: [{ name: 'audio', type: 'audio' as const, required: true }],
+      pricing: { credits_per_call: 5 },
+      availability: { online: true },
+    };
+    const result = CapabilityCardSchema.safeParse(v1Card);
+    expect(result.success).toBe(true);
+  });
+});
+
+describe('AnyCardSchema', () => {
+  it('Test 5: AnyCardSchema accepts a v1.0 card (spec_version "1.0")', () => {
+    const v1Card = {
+      spec_version: '1.0' as const,
+      id: randomUUID(),
+      owner: 'chengwen@leyang',
+      name: 'ElevenLabs TTS',
+      description: 'Text-to-speech via ElevenLabs API',
+      level: 1 as const,
+      inputs: [{ name: 'text', type: 'text' as const, required: true }],
+      outputs: [{ name: 'audio', type: 'audio' as const, required: true }],
+      pricing: { credits_per_call: 5 },
+      availability: { online: true },
+    };
+    const result = AnyCardSchema.safeParse(v1Card);
+    expect(result.success).toBe(true);
+  });
+
+  it('Test 6: AnyCardSchema accepts a v2.0 card (spec_version "2.0")', () => {
+    const result = AnyCardSchema.safeParse({ ...validV2Card, id: randomUUID() });
+    expect(result.success).toBe(true);
+  });
+
+  it('Test 7: AnyCardSchema rejects a card with spec_version "3.0"', () => {
+    const card = { ...validV2Card, id: randomUUID(), spec_version: '3.0' };
+    const result = AnyCardSchema.safeParse(card);
+    expect(result.success).toBe(false);
   });
 });
