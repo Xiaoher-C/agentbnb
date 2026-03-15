@@ -153,7 +153,7 @@ Plans:
   3. Idle rate is computed from real `request_log` data using a sliding 60-minute window — not hardcoded or estimated
   4. The `capacity.calls_per_hour` field on each skill is owner-declared (default 60) and visible in the published card
   5. `agentbnb serve` starts the IdleMonitor background loop automatically; stopping the server stops the loop cleanly
-**Plans:** 2 plans
+**Plans:** 1/2 plans executed
 
 Plans:
 - [ ] 06-01-PLAN.md — Data layer helpers: getSkillRequestCount() sliding window query + updateSkillAvailability() + updateSkillIdleRate() with tests
@@ -210,6 +210,6 @@ Phases execute in numeric order: 4 → 5 → 6 → 7 → 8
 | 3. UX Layer | v1.1 | 4/4 | Complete | 2026-03-15 |
 | 4. Agent Runtime + Multi-Skill Foundation | v2.0 | 3/3 | Complete | 2026-03-15 |
 | 5. Autonomy Tiers + Credit Budgeting | v2.0 | 2/2 | Complete | 2026-03-15 |
-| 6. Idle Rate Monitoring + Auto-Share | v2.0 | 0/2 | Planning complete | - |
+| 6. Idle Rate Monitoring + Auto-Share | 1/2 | In Progress|  | - |
 | 7. Auto-Request | v2.0 | 0/2 | Not started | - |
 | 8. OpenClaw Deep Integration | v2.0 | 0/3 | Not started | - |
