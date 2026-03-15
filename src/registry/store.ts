@@ -160,6 +160,20 @@ export function openDatabase(path = ':memory:'): Database.Database {
       updated_at TEXT NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS pending_requests (
+      id TEXT PRIMARY KEY,
+      skill_query TEXT NOT NULL,
+      max_cost_credits REAL NOT NULL,
+      selected_peer TEXT,
+      selected_card_id TEXT,
+      selected_skill_id TEXT,
+      credits REAL NOT NULL,
+      status TEXT NOT NULL DEFAULT 'pending',
+      params TEXT,
+      created_at TEXT NOT NULL,
+      resolved_at TEXT
+    );
+
     CREATE VIRTUAL TABLE IF NOT EXISTS cards_fts USING fts5(
       id UNINDEXED,
       owner,

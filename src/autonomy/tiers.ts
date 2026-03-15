@@ -38,7 +38,8 @@ export type AutonomyEvent =
   | { type: 'auto_share_pending'; skill_id: string; tier_invoked: 3; idle_rate: number }
   | { type: 'auto_request'; card_id: string; skill_id: string; tier_invoked: 1; credits: number; peer: string }
   | { type: 'auto_request_notify'; card_id: string; skill_id: string; tier_invoked: 2; credits: number; peer: string }
-  | { type: 'auto_request_pending'; card_id: string; skill_id: string; tier_invoked: 3; credits: number; peer: string };
+  | { type: 'auto_request_pending'; card_id: string; skill_id: string; tier_invoked: 3; credits: number; peer: string }
+  | { type: 'auto_request_failed'; card_id: string; skill_id: string; tier_invoked: AutonomyTier; credits: number; peer: string; reason: string };
 
 // ---------------------------------------------------------------------------
 // Constants
