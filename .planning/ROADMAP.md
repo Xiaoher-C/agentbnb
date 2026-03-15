@@ -252,16 +252,13 @@ Plans:
   3. Stats numbers (agents, capabilities, credits) count up from 0 to their real values over 400ms in JetBrains Mono at 32px — visible on every page load
   4. The search bar, level/category dropdowns, online-only toggle, and pill-style tab switcher all render in the premium dark style with no legacy Tailwind defaults leaking through
   5. Cards show compact layout with 32px identicon, ghost category chips, level pill badge, and green online indicator — hovering any card lifts it 2px with border brightening
-**Plans**: TBD
+**Plans:** 4 plans
 
 Plans:
-- [ ] 09-01: Design system — CSS variables, font imports, base component tokens
-- [ ] 09-02: Card component redesign — compact layout, identicon, ghost chips, level pill, online glow
-- [ ] 09-03: Modal overlay — centered detail modal, backdrop blur, scale animation, ESC/backdrop close, scroll lock
-- [ ] 09-04: Header + stats bar + ambient glow — logo text, 32px JetBrains Mono stats, radial gradient glow
-- [ ] 09-05: Search + filter bar redesign — 48px ghost search, level/category dropdowns, online-only toggle
-- [ ] 09-06: Tabs pill-switcher — Discover/Share/My Agent pills, active fill rgba(255,255,255,0.08)
-- [ ] 09-07: Polish — count-up animation, card hover translateY(-2px), loading states, empty state
+- [ ] 09-01-PLAN.md — Design system (CSS vars, fonts, Tailwind config) + card component redesign (HUI-01, HUI-02)
+- [ ] 09-02-PLAN.md — Modal overlay with backdrop blur, scale animation, ESC/backdrop close, scroll lock (HUI-03)
+- [ ] 09-03-PLAN.md — Header + stats bar + ambient glow + search/filter bar + pill tab switcher (HUI-04, HUI-05, HUI-06)
+- [ ] 09-04-PLAN.md — Polish: count-up animation, empty/error state theming, visual audit + human verification (HUI-07)
 
 ### Phase 10: ClaWHub Installable Skill
 **Goal**: One command puts any OpenClaw agent on the AgentBnB network — activate() initializes the runtime, publishes the card, starts the gateway and IdleMonitor, and install.sh handles all setup automatically.
@@ -319,6 +316,6 @@ Phases execute in numeric order: 9 → 10 → 11
 | 6. Idle Rate Monitoring + Auto-Share | v2.0 | 2/2 | Complete | 2026-03-15 |
 | 7. Auto-Request | v2.0 | 2/2 | Complete | 2026-03-15 |
 | 8. OpenClaw Deep Integration | v2.0 | 3/3 | Complete | 2026-03-15 |
-| 9. Hub UI Redesign | v2.1 | 0/7 | Not started | - |
+| 9. Hub UI Redesign | v2.1 | 0/4 | Not started | - |
 | 10. ClaWHub Installable Skill | v2.1 | 0/5 | Not started | - |
 | 11. Repo Housekeeping | v2.1 | 0/3 | Not started | - |
