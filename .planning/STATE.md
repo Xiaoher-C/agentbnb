@@ -2,9 +2,9 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Upgrade
-current_plan: 03-03b complete — awaiting human-verify checkpoint (Task 2)
-status: in_progress
-last_updated: "2026-03-15T07:02:00.000Z"
+current_plan: 03-03b complete — Phase 3 UX Layer fully complete, human-verified
+status: complete
+last_updated: "2026-03-15T08:30:00.000Z"
 progress:
   total_phases: 8
   completed_phases: 8
@@ -23,16 +23,16 @@ See: .planning/PROJECT.md (updated 2026-03-13)
 
 ## Current Phase
 
-**Phase 3: UX Layer** — In progress. Plan 01 complete, Plan 02 next.
+**Phase 3: UX Layer** — Complete. All 4 plans done, human-verified.
 
-**Current Plan:** 03-03b — awaiting human-verify checkpoint
+**Current Plan:** 03-03b complete — Phase 3 fully done
 
-### Progress (Phase 3 — in progress)
+### Progress (Phase 3 — complete)
 
 - UX Data Foundation (Plan 01): complete — api_key in AgentBnBConfig, request_log SQLite table, insertRequestLog/getRequestLog with period filtering (24h/7d/30d), gateway logging at all 3 settlement points, 71 tests pass
 - Auth-Protected Owner Endpoints (Plan 02): complete — scoped Fastify plugin with Bearer token auth, GET /me (balance), GET /requests (since), GET /draft (auto-detect), POST toggle-online, PATCH /cards/:id, serve wired, 72 tests pass
 - Hub Auth Layer (Plan 03a): complete — useAuth (localStorage), useRequests (30s polling + since filter), useOwnerCards (balance from /me), LoginForm, AuthGate, 48 tests pass
-- Hub Dashboard SPA — Wiring and Pages (Plan 03b): Task 1 complete — RequestHistory table, OwnerDashboard (credit balance + low-credit badge + per-period counts), SharePage (/draft fetch + editable preview + Publish flow), App.tsx tab navigation, 64 hub tests pass. Awaiting human-verify checkpoint.
+- Hub Dashboard SPA — Wiring and Pages (Plan 03b): complete — RequestHistory table, OwnerDashboard (credit balance + low-credit badge + per-period counts), SharePage (/draft fetch + editable preview + Publish flow), App.tsx tab navigation, 64 hub tests pass. Human-verified: Discover/Share/My Agent tabs, API key auth, P2P escrow flow end-to-end.
 
 ### Progress (Phase 2.3 — complete)
 
@@ -186,6 +186,7 @@ See: .planning/PROJECT.md (updated 2026-03-13)
 | Phase 03-ux-layer P02 | 6min | 2 tasks | 4 files |
 | Phase 03-ux-layer P03a | 3min | 2 tasks | 10 files |
 | Phase 03-ux-layer P03b | 8min | 1 tasks | 9 files |
+| Phase 03-ux-layer P03b | 10min | 2 tasks | 9 files |
 
 ## Session Log
 
@@ -219,6 +220,7 @@ See: .planning/PROJECT.md (updated 2026-03-13)
 | 2026-03-15 | Completed 03-02-PLAN.md — 5 auth-protected owner endpoints, Bearer token auth, serve wired, 72 tests pass | Continue with Phase 3 Plan 03a (Hub Dashboard SPA) |
 | 2026-03-15 | Completed 03-03a-PLAN.md — useAuth, useRequests (since), useOwnerCards (balance), LoginForm, AuthGate, 48 tests pass | Continue with Phase 3 Plan 03b (Hub dashboard pages) |
 | 2026-03-15 | Checkpoint: 03-03b Task 1 complete, awaiting human-verify | Visit http://localhost:7701/hub/ and verify tab navigation, dashboard, share page, mobile layout |
+| 2026-03-15 | Completed 03-03b-PLAN.md — Phase 3 UX Layer complete, human-verified, 64 hub + 238 backend tests pass | Phase 3 done. Ready for Phase 4 or refinement. |
 
 ## Roadmap Evolution
 
@@ -227,4 +229,4 @@ See: .planning/PROJECT.md (updated 2026-03-13)
 - Phase 2.25 inserted before Phase 2.3: Schema v1.1 Upgrade — add powered_by, _internal, free_tier fields to CapabilityCardSchema. Additive optional fields, backward compatible. Must land before Remote Registry goes live.
 
 ---
-*Last updated: 2026-03-15 — Phase 2.3 Plan 02 complete. 8 cross-process integration tests, human-verified. All 20/20 plans complete.*
+*Last updated: 2026-03-15 — Phase 3 UX Layer complete. Hub dashboard pages human-verified. All 24/24 plans complete.*
