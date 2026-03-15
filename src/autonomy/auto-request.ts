@@ -152,7 +152,7 @@ export function scorePeers(candidates: Candidate[], selfOwner: string): ScoredPe
   // Combine dimensions multiplicatively
   const scored: ScoredPeer[] = eligible.map((c, i) => ({
     ...c,
-    rawScore: normSuccess[i] * normCost[i] * normIdle[i],
+    rawScore: (normSuccess[i] ?? 0) * (normCost[i] ?? 0) * (normIdle[i] ?? 0),
   }));
 
   // Sort descending by score
@@ -179,7 +179,6 @@ export class AutoRequestor {
   private readonly creditDb: Database.Database;
   private readonly autonomyConfig: AutonomyConfig;
   private readonly budgetManager: BudgetManager;
-  private readonly maxSearchResults: number;
 
   /**
    * Creates a new AutoRequestor.
@@ -192,7 +191,6 @@ export class AutoRequestor {
     this.creditDb = opts.creditDb;
     this.autonomyConfig = opts.autonomyConfig;
     this.budgetManager = opts.budgetManager;
-    this.maxSearchResults = opts.maxSearchResults ?? 10;
   }
 
   /**
@@ -249,7 +247,8 @@ export class AutoRequestor {
     }
 
     // Step 4: Pick top scorer and resolve peer gateway
-    const top = scored[0];
+    // scored.length > 0 is guaranteed by the guard above, but TypeScript doesn't know scored[0] is defined
+    const top: ScoredPeer = scored[0] as ScoredPeer;
     const peerConfig = findPeer(top.card.owner);
 
     if (!peerConfig) {

@@ -12,7 +12,8 @@ import { createInterface } from 'node:readline';
 import { loadConfig, saveConfig, getConfigDir } from './config.js';
 import { DEFAULT_AUTONOMY_CONFIG } from '../autonomy/tiers.js';
 import { IdleMonitor } from '../autonomy/idle-monitor.js';
-import { DEFAULT_BUDGET_CONFIG } from '../credit/budget.js';
+import { BudgetManager, DEFAULT_BUDGET_CONFIG } from '../credit/budget.js';
+import { AutoRequestor } from '../autonomy/auto-request.js';
 import { fetchRemoteCards, mergeResults } from './remote-registry.js';
 import type { TaggedCard } from './remote-registry.js';
 import { loadPeers, savePeer, removePeer, findPeer } from './peers.js';
@@ -445,15 +446,64 @@ program
 // ---------------------------------------------------------------------------
 
 program
-  .command('request <card-id>')
-  .description('Request a capability from another agent via the gateway')
+  .command('request [card-id]')
+  .description('Request a capability from another agent — direct (card-id) or auto (--query)')
   .option('--params <json>', 'Input parameters as JSON string', '{}')
   .option('--peer <name>', 'Peer name to send request to (resolves URL+token from peer registry)')
+  .option('--query <text>', 'Search query for capability gap (triggers auto-request flow)')
+  .option('--max-cost <credits>', 'Maximum credits to spend on auto-request (default: 50)')
   .option('--json', 'Output as JSON')
-  .action(async (cardId: string, opts: { params: string; peer?: string; json?: boolean }) => {
+  .action(async (cardId: string | undefined, opts: { params: string; peer?: string; query?: string; maxCost?: string; json?: boolean }) => {
     const config = loadConfig();
     if (!config) {
       console.error('Error: not initialized. Run `agentbnb init` first.');
+      process.exit(1);
+    }
+
+    // Auto-request flow: --query triggers AutoRequestor instead of direct request
+    if (opts.query) {
+      let queryParams: Record<string, unknown> | undefined;
+      if (opts.params && opts.params !== '{}') {
+        try {
+          queryParams = JSON.parse(opts.params) as Record<string, unknown>;
+        } catch {
+          console.error('Error: --params must be valid JSON.');
+          process.exit(1);
+        }
+      }
+
+      const registryDb = openDatabase(join(getConfigDir(), 'registry.db'));
+      const creditDb = openCreditDb(join(getConfigDir(), 'credits.db'));
+      registryDb.pragma('busy_timeout = 5000');
+      creditDb.pragma('busy_timeout = 5000');
+
+      try {
+        const budgetManager = new BudgetManager(creditDb, config.owner, config.budget ?? DEFAULT_BUDGET_CONFIG);
+        const requestor = new AutoRequestor({
+          owner: config.owner,
+          registryDb,
+          creditDb,
+          autonomyConfig: config.autonomy ?? DEFAULT_AUTONOMY_CONFIG,
+          budgetManager,
+        });
+
+        const result = await requestor.requestWithAutonomy({
+          query: opts.query,
+          maxCostCredits: Number(opts.maxCost ?? 50),
+          params: queryParams,
+        });
+
+        console.log(JSON.stringify(result, null, 2));
+      } finally {
+        registryDb.close();
+        creditDb.close();
+      }
+      return;
+    }
+
+    // Direct request flow: card-id is required
+    if (!cardId) {
+      console.error('Error: provide a <card-id> for direct request, or use --query for auto-request.');
       process.exit(1);
     }
 
