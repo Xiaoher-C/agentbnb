@@ -17,6 +17,6 @@
     "nyquist_validation": true,
     "auto_advance": false,
     "_auto_chain_active": false,
-    "research": true
+    "research": false
   }
 }
