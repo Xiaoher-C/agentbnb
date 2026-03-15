@@ -5,8 +5,13 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { existsSync } from 'node:fs';
 import type Database from 'better-sqlite3';
-import { getCard } from './store.js';
+import { getCard, updateCard } from './store.js';
 import { searchCards, filterCards } from './matcher.js';
+import { getRequestLog } from './request-log.js';
+import type { SincePeriod } from './request-log.js';
+import { getBalance } from '../credit/ledger.js';
+import { detectApiKeys, buildDraftCard, KNOWN_API_KEYS } from '../cli/onboarding.js';
+import { AgentBnBError } from '../types/index.js';
 import type { CapabilityCard } from '../types/index.js';
 
 /**
@@ -17,6 +22,12 @@ export interface RegistryServerOptions {
   registryDb: Database.Database;
   /** When true, disables Fastify request logging. Useful for tests. */
   silent?: boolean;
+  /** The owner identity for /me responses. Required to enable owner endpoints. */
+  ownerName?: string;
+  /** The API key for Bearer token auth on owner endpoints. Required to enable owner endpoints. */
+  ownerApiKey?: string;
+  /** Credit database for balance lookups in GET /me. */
+  creditDb?: Database.Database;
 }
 
 /**
@@ -59,8 +70,12 @@ export function createRegistryServer(opts: RegistryServerOptions): FastifyInstan
 
   const server = Fastify({ logger: !silent });
 
-  // Register CORS — allow all origins for public marketplace discovery
-  void server.register(cors, { origin: true });
+  // Register CORS — allow all origins for public marketplace discovery, including preflight
+  void server.register(cors, {
+    origin: true,
+    methods: ['GET', 'POST', 'PATCH', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+  });
 
   // Register static file serving for the hub SPA (optional — skipped if hub not built)
   // Resolve hub/dist/ relative to this file's compiled location in dist/registry/server.js
@@ -196,6 +211,120 @@ export function createRegistryServer(opts: RegistryServerOptions): FastifyInstan
 
     return reply.send(stripInternal(card));
   });
+
+  // Register owner routes as a scoped plugin (NOT fastify-plugin) so the auth hook
+  // only applies to these routes and does NOT affect public /cards and /health endpoints.
+  if (opts.ownerApiKey && opts.ownerName) {
+    const ownerApiKey = opts.ownerApiKey;
+    const ownerName = opts.ownerName;
+
+    void server.register(async (ownerRoutes) => {
+      /**
+       * Auth hook: validates Bearer token against ownerApiKey.
+       * Responds with 401 Unauthorized if missing or incorrect.
+       */
+      ownerRoutes.addHook('onRequest', async (request, reply) => {
+        const auth = request.headers.authorization;
+        const token = auth?.startsWith('Bearer ') ? auth.slice(7).trim() : null;
+        if (!token || token !== ownerApiKey) {
+          return reply.status(401).send({ error: 'Unauthorized' });
+        }
+      });
+
+      /**
+       * GET /me — Returns owner identity and current credit balance.
+       */
+      ownerRoutes.get('/me', async (_request, reply) => {
+        const balance = opts.creditDb
+          ? getBalance(opts.creditDb, ownerName)
+          : 0;
+        return reply.send({ owner: ownerName, balance });
+      });
+
+      /**
+       * GET /requests — Returns paginated request log entries.
+       *
+       * Query params:
+       *   limit  — Max entries (default 10, max 100)
+       *   since  — Time window: '24h', '7d', or '30d'
+       */
+      ownerRoutes.get('/requests', async (request, reply) => {
+        const query = request.query as Record<string, string | undefined>;
+        const rawLimit = query.limit !== undefined ? parseInt(query.limit, 10) : 10;
+        const limit = Math.min(isNaN(rawLimit) || rawLimit < 1 ? 10 : rawLimit, 100);
+        const sinceRaw = query.since;
+        const validSince: SincePeriod[] = ['24h', '7d', '30d'];
+        const since = sinceRaw && validSince.includes(sinceRaw as SincePeriod)
+          ? (sinceRaw as SincePeriod)
+          : undefined;
+        const items = getRequestLog(db, limit, since);
+        return reply.send({ items, limit });
+      });
+
+      /**
+       * GET /draft — Returns draft Capability Cards built from auto-detected API keys.
+       */
+      ownerRoutes.get('/draft', async (_request, reply) => {
+        const detectedKeys = detectApiKeys(KNOWN_API_KEYS);
+        const cards = detectedKeys
+          .map((key) => buildDraftCard(key, ownerName))
+          .filter((card): card is CapabilityCard => card !== null);
+        return reply.send({ cards });
+      });
+
+      /**
+       * POST /cards/:id/toggle-online — Toggles availability.online for an owned card.
+       *
+       * Returns 404 if card not found, 403 if card belongs to different owner.
+       */
+      ownerRoutes.post('/cards/:id/toggle-online', async (request, reply) => {
+        const { id } = request.params as { id: string };
+        const card = getCard(db, id);
+        if (!card) {
+          return reply.code(404).send({ error: 'Not found' });
+        }
+        try {
+          const newOnline = !card.availability.online;
+          updateCard(db, id, ownerName, {
+            availability: { ...card.availability, online: newOnline },
+          });
+          return reply.send({ ok: true, online: newOnline });
+        } catch (err) {
+          if (err instanceof AgentBnBError && err.code === 'FORBIDDEN') {
+            return reply.code(403).send({ error: 'Forbidden' });
+          }
+          throw err;
+        }
+      });
+
+      /**
+       * PATCH /cards/:id — Updates description and/or pricing for an owned card.
+       *
+       * Returns 403 if card belongs to different owner, 404 if not found.
+       */
+      ownerRoutes.patch('/cards/:id', async (request, reply) => {
+        const { id } = request.params as { id: string };
+        const body = request.body as Partial<Pick<CapabilityCard, 'description' | 'pricing'>>;
+        const updates: Partial<CapabilityCard> = {};
+        if (body.description !== undefined) updates.description = body.description;
+        if (body.pricing !== undefined) updates.pricing = body.pricing;
+        try {
+          updateCard(db, id, ownerName, updates);
+          return reply.send({ ok: true });
+        } catch (err) {
+          if (err instanceof AgentBnBError) {
+            if (err.code === 'FORBIDDEN') {
+              return reply.code(403).send({ error: 'Forbidden' });
+            }
+            if (err.code === 'NOT_FOUND') {
+              return reply.code(404).send({ error: 'Not found' });
+            }
+          }
+          throw err;
+        }
+      });
+    });
+  }
 
   return server;
 }

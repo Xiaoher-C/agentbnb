@@ -5,6 +5,13 @@ import { openCreditDb, bootstrapAgent } from '../credit/ledger.js';
 import type { CapabilityCard } from '../types/index.js';
 import type Database from 'better-sqlite3';
 
+// Module-level mock for onboarding — allows per-test reconfiguration via vi.mocked()
+vi.mock('../cli/onboarding.js', () => ({
+  detectApiKeys: vi.fn().mockReturnValue([]),
+  buildDraftCard: vi.fn().mockReturnValue(null),
+  KNOWN_API_KEYS: ['OPENAI_API_KEY', 'ANTHROPIC_API_KEY'],
+}));
+
 /** Creates a minimal valid CapabilityCard for testing. */
 function makeCard(overrides: Partial<CapabilityCard> = {}): CapabilityCard {
   return {
@@ -595,23 +602,21 @@ describe('createRegistryServer — owner endpoints', () => {
 
   // Test: GET /draft with valid key returns { cards: CapabilityCard[] } from auto-detected APIs
   it('GET /draft with valid key returns { cards } from auto-detected APIs', async () => {
-    vi.mock('../cli/onboarding.js', () => ({
-      detectApiKeys: vi.fn().mockReturnValue(['OPENAI_API_KEY']),
-      buildDraftCard: vi.fn().mockReturnValue({
-        spec_version: '1.0',
-        id: 'draft-id-1',
-        owner: OWNER,
-        name: 'OpenAI Text Generation',
-        description: 'Draft card',
-        level: 1,
-        inputs: [],
-        outputs: [],
-        pricing: { credits_per_call: 5 },
-        availability: { online: true },
-        metadata: {},
-      }),
-      KNOWN_API_KEYS: ['OPENAI_API_KEY'],
-    }));
+    const { detectApiKeys, buildDraftCard } = await import('../cli/onboarding.js');
+    vi.mocked(detectApiKeys).mockReturnValue(['OPENAI_API_KEY']);
+    vi.mocked(buildDraftCard).mockReturnValue({
+      spec_version: '1.0',
+      id: 'draft-id-1',
+      owner: OWNER,
+      name: 'OpenAI Text Generation',
+      description: 'Draft card',
+      level: 1,
+      inputs: [],
+      outputs: [],
+      pricing: { credits_per_call: 5 },
+      availability: { online: true },
+      metadata: {},
+    });
 
     const server = createRegistryServer({
       registryDb: db,
@@ -630,6 +635,7 @@ describe('createRegistryServer — owner endpoints', () => {
     expect(response.statusCode).toBe(200);
     const body = response.json() as { cards: unknown[] };
     expect(Array.isArray(body.cards)).toBe(true);
+    expect(body.cards).toHaveLength(1);
 
     await server.close();
     vi.restoreAllMocks();
@@ -637,11 +643,9 @@ describe('createRegistryServer — owner endpoints', () => {
 
   // Test: GET /draft returns { cards: [] } when no API keys detected
   it('GET /draft returns { cards: [] } when no API keys detected', async () => {
-    vi.mock('../cli/onboarding.js', () => ({
-      detectApiKeys: vi.fn().mockReturnValue([]),
-      buildDraftCard: vi.fn().mockReturnValue(null),
-      KNOWN_API_KEYS: [],
-    }));
+    const { detectApiKeys, buildDraftCard } = await import('../cli/onboarding.js');
+    vi.mocked(detectApiKeys).mockReturnValue([]);
+    vi.mocked(buildDraftCard).mockReturnValue(null);
 
     const server = createRegistryServer({
       registryDb: db,
