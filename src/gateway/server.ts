@@ -6,6 +6,7 @@ import { getBalance } from '../credit/ledger.js';
 import { holdEscrow, settleEscrow, releaseEscrow } from '../credit/escrow.js';
 import { insertRequestLog } from '../registry/request-log.js';
 import { AgentBnBError } from '../types/index.js';
+import type { CapabilityCardV2 } from '../types/index.js';
 
 /**
  * Options for creating a gateway server.
@@ -107,6 +108,7 @@ export function createGatewayServer(opts: GatewayOptions): FastifyInstance {
 
     const params = (body.params ?? {}) as Record<string, unknown>;
     const cardId = params.card_id as string | undefined;
+    const skillId = params.skill_id as string | undefined;
 
     if (!cardId) {
       return reply.send({
@@ -128,7 +130,38 @@ export function createGatewayServer(opts: GatewayOptions): FastifyInstance {
 
     // Requester identity comes from params (agents identify themselves)
     const requester = (params.requester as string | undefined) ?? 'unknown';
-    const creditsNeeded = card.pricing.credits_per_call;
+
+    // Resolve skill and pricing.
+    // If the stored card is v2.0 (has a skills[] array), look up the requested skill.
+    // Without skill_id, fall back to the first skill (v1.0 backward compat).
+    // v1.0 cards use card-level pricing directly.
+    let creditsNeeded: number;
+    let cardName: string;
+    let resolvedSkillId: string | undefined;
+
+    const rawCard = card as unknown as Record<string, unknown>;
+    if (Array.isArray(rawCard['skills'])) {
+      const v2card = card as unknown as CapabilityCardV2;
+      const skill = skillId
+        ? v2card.skills.find((s) => s.id === skillId)
+        : v2card.skills[0]; // fallback to first skill
+
+      if (!skill) {
+        return reply.send({
+          jsonrpc: '2.0',
+          id,
+          error: { code: -32602, message: `Skill not found: ${skillId}` },
+        });
+      }
+
+      creditsNeeded = skill.pricing.credits_per_call;
+      cardName = skill.name;
+      resolvedSkillId = skill.id;
+    } else {
+      // v1.0 card — use card-level pricing
+      creditsNeeded = card.pricing.credits_per_call;
+      cardName = card.name;
+    }
 
     // Check balance and hold escrow
     let escrowId: string;
@@ -160,7 +193,7 @@ export function createGatewayServer(opts: GatewayOptions): FastifyInstance {
       const response = await fetch(handlerUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ card_id: cardId, params }),
+        body: JSON.stringify({ card_id: cardId, skill_id: resolvedSkillId, params }),
         signal: controller.signal,
       });
 
@@ -174,7 +207,8 @@ export function createGatewayServer(opts: GatewayOptions): FastifyInstance {
           insertRequestLog(registryDb, {
             id: randomUUID(),
             card_id: cardId,
-            card_name: card.name,
+            card_name: cardName,
+            skill_id: resolvedSkillId,
             requester,
             status: 'failure',
             latency_ms: Date.now() - startMs,
@@ -197,11 +231,12 @@ export function createGatewayServer(opts: GatewayOptions): FastifyInstance {
         insertRequestLog(registryDb, {
           id: randomUUID(),
           card_id: cardId,
-          card_name: card.name,
+          card_name: cardName,
+          skill_id: resolvedSkillId,
           requester,
           status: 'success',
           latency_ms: Date.now() - startMs,
-          credits_charged: card.pricing.credits_per_call,
+          credits_charged: creditsNeeded,
           created_at: new Date().toISOString(),
         });
       } catch { /* silent no-op */ }
@@ -218,7 +253,8 @@ export function createGatewayServer(opts: GatewayOptions): FastifyInstance {
         insertRequestLog(registryDb, {
           id: randomUUID(),
           card_id: cardId,
-          card_name: card.name,
+          card_name: cardName,
+          skill_id: resolvedSkillId,
           requester,
           status: isTimeout ? 'timeout' : 'failure',
           latency_ms: Date.now() - startMs,

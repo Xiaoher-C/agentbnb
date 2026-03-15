@@ -7,13 +7,56 @@ import { openDatabase, insertCard, getCard } from '../registry/store.js';
 import { openCreditDb, bootstrapAgent } from '../credit/ledger.js';
 import { requestCapability } from './client.js';
 import { getRequestLog } from '../registry/request-log.js';
-import type { CapabilityCard } from '../types/index.js';
+import type { CapabilityCard, CapabilityCardV2 } from '../types/index.js';
 import type Database from 'better-sqlite3';
+
+// ─── Helper: insert a v2.0 card directly into the DB ─────────────────────────
+
+function insertCardV2(db: Database.Database, card: CapabilityCardV2): void {
+  const now = new Date().toISOString();
+  const stmt = db.prepare(
+    'INSERT INTO capability_cards (id, owner, data, created_at, updated_at) VALUES (?, ?, ?, ?, ?)'
+  );
+  stmt.run(card.id, card.owner, JSON.stringify(card), now, now);
+}
+
+/** Creates a two-skill v2.0 card for use in skill_id routing tests. */
+function makeV2Card(overrides: Partial<CapabilityCardV2> = {}): CapabilityCardV2 {
+  return {
+    spec_version: '2.0',
+    id: randomUUID(),
+    owner: 'provider-agent',
+    agent_name: 'Multi-Skill Agent',
+    skills: [
+      {
+        id: 'skill-tts',
+        name: 'Text to Speech',
+        description: 'Converts text to audio',
+        level: 1,
+        inputs: [{ name: 'text', type: 'text', required: true }],
+        outputs: [{ name: 'audio', type: 'audio', required: true }],
+        pricing: { credits_per_call: 5 },
+      },
+      {
+        id: 'skill-stt',
+        name: 'Speech to Text',
+        description: 'Converts audio to text',
+        level: 1,
+        inputs: [{ name: 'audio', type: 'audio', required: true }],
+        outputs: [{ name: 'text', type: 'text', required: true }],
+        pricing: { credits_per_call: 8 },
+      },
+    ],
+    availability: { online: true },
+    ...overrides,
+  };
+}
 
 // ─── Test helpers ────────────────────────────────────────────────────────────
 
 function makeCard(overrides: Partial<CapabilityCard> = {}): CapabilityCard {
   return {
+    spec_version: '1.0',
     id: randomUUID(),
     owner: 'provider-agent',
     name: 'Test Capability',
@@ -715,6 +758,208 @@ describe('Gateway Client', () => {
     } finally {
       await slowGateway.close();
       await slowHandler.close();
+    }
+  });
+});
+
+// ─── Skill ID Routing tests ───────────────────────────────────────────────────
+
+describe('Gateway skill_id routing', () => {
+  let registryDb: Database.Database;
+  let creditDb: Database.Database;
+  let gateway: FastifyInstance;
+  let mockHandler: { server: FastifyInstance; url: string };
+  let v2Card: CapabilityCardV2;
+  const validToken = 'skill-routing-test-token';
+
+  beforeEach(async () => {
+    registryDb = openDatabase(':memory:');
+    creditDb = openCreditDb(':memory:');
+
+    bootstrapAgent(creditDb, 'requester-agent', 1000);
+
+    v2Card = makeV2Card();
+    insertCardV2(registryDb, v2Card);
+
+    mockHandler = await createMockHandler({ output: 'skill executed' });
+
+    gateway = createGatewayServer({
+      registryDb,
+      creditDb,
+      tokens: [validToken],
+      handlerUrl: mockHandler.url,
+      timeoutMs: 5000,
+      silent: true,
+    });
+
+    await gateway.ready();
+  });
+
+  afterEach(async () => {
+    await gateway.close();
+    await mockHandler.server.close();
+    registryDb.close();
+    creditDb.close();
+  });
+
+  it('Test 1: POST /rpc with { card_id, skill_id } routes to handler and returns result', async () => {
+    const res = await gateway.inject({
+      method: 'POST',
+      url: '/rpc',
+      headers: { authorization: `Bearer ${validToken}` },
+      payload: {
+        jsonrpc: '2.0',
+        method: 'capability.execute',
+        params: {
+          card_id: v2Card.id,
+          skill_id: 'skill-tts',
+          requester: 'requester-agent',
+        },
+        id: 'skill-1',
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{ jsonrpc: string; result: unknown }>();
+    expect(body.jsonrpc).toBe('2.0');
+    expect(body.result).toBeDefined();
+  });
+
+  it('Test 2: POST /rpc without skill_id falls back to first skill for pricing', async () => {
+    // The first skill has credits_per_call = 5
+    const initialBalance = 1000;
+
+    await gateway.inject({
+      method: 'POST',
+      url: '/rpc',
+      headers: { authorization: `Bearer ${validToken}` },
+      payload: {
+        jsonrpc: '2.0',
+        method: 'capability.execute',
+        params: { card_id: v2Card.id, requester: 'requester-agent' },
+        id: 'skill-2',
+      },
+    });
+
+    const { getBalance } = await import('../credit/ledger.js');
+    const afterBalance = getBalance(creditDb, 'requester-agent');
+    // First skill pricing is 5 credits
+    expect(afterBalance).toBe(initialBalance - v2Card.skills[0].pricing.credits_per_call);
+  });
+
+  it('Test 3: POST /rpc with skill_id uses that skill\'s credits_per_call for escrow', async () => {
+    // skill-stt has credits_per_call = 8 (different from first skill = 5)
+    const { getBalance } = await import('../credit/ledger.js');
+    const initialBalance = getBalance(creditDb, 'requester-agent');
+
+    await gateway.inject({
+      method: 'POST',
+      url: '/rpc',
+      headers: { authorization: `Bearer ${validToken}` },
+      payload: {
+        jsonrpc: '2.0',
+        method: 'capability.execute',
+        params: {
+          card_id: v2Card.id,
+          skill_id: 'skill-stt',
+          requester: 'requester-agent',
+        },
+        id: 'skill-3',
+      },
+    });
+
+    const afterBalance = getBalance(creditDb, 'requester-agent');
+    const sttSkill = v2Card.skills.find((s) => s.id === 'skill-stt')!;
+    expect(afterBalance).toBe(initialBalance - sttSkill.pricing.credits_per_call);
+  });
+
+  it('Test 4: POST /rpc with invalid skill_id returns JSON-RPC error -32602', async () => {
+    const res = await gateway.inject({
+      method: 'POST',
+      url: '/rpc',
+      headers: { authorization: `Bearer ${validToken}` },
+      payload: {
+        jsonrpc: '2.0',
+        method: 'capability.execute',
+        params: {
+          card_id: v2Card.id,
+          skill_id: 'skill-nonexistent',
+          requester: 'requester-agent',
+        },
+        id: 'skill-4',
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{ error: { code: number; message: string } }>();
+    expect(body.error.code).toBe(-32602);
+    expect(body.error.message).toMatch(/skill not found/i);
+  });
+
+  it('Test 5: POST /rpc with skill_id logs skill_id in request_log entry', async () => {
+    await gateway.inject({
+      method: 'POST',
+      url: '/rpc',
+      headers: { authorization: `Bearer ${validToken}` },
+      payload: {
+        jsonrpc: '2.0',
+        method: 'capability.execute',
+        params: {
+          card_id: v2Card.id,
+          skill_id: 'skill-tts',
+          requester: 'requester-agent',
+        },
+        id: 'skill-5',
+      },
+    });
+
+    const log = getRequestLog(registryDb, 10);
+    expect(log).toHaveLength(1);
+    expect(log[0].skill_id).toBe('skill-tts');
+  });
+
+  it('Test 8: v1.0 backward compat — migrated card works without skill_id', async () => {
+    // Insert a v1.0 card — it will be migrated to v2.0 shape on openDatabase
+    // but inserted after the DB is open, so we need to use a fresh DB with v1.0 card
+    const freshRegistryDb = openDatabase(':memory:');
+    const v1Card = makeCard({ id: randomUUID(), pricing: { credits_per_call: 10 } });
+    insertCard(freshRegistryDb, v1Card);
+
+    bootstrapAgent(creditDb, 'v1-requester', 200);
+
+    const v1Gateway = createGatewayServer({
+      registryDb: freshRegistryDb,
+      creditDb,
+      tokens: [validToken],
+      handlerUrl: mockHandler.url,
+      timeoutMs: 5000,
+      silent: true,
+    });
+    await v1Gateway.ready();
+
+    try {
+      const res = await v1Gateway.inject({
+        method: 'POST',
+        url: '/rpc',
+        headers: { authorization: `Bearer ${validToken}` },
+        payload: {
+          jsonrpc: '2.0',
+          method: 'capability.execute',
+          // v1.0 style — no skill_id
+          params: { card_id: v1Card.id, requester: 'v1-requester' },
+          id: 'compat-1',
+        },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json<{ jsonrpc: string; result: unknown; error?: unknown }>();
+      expect(body.jsonrpc).toBe('2.0');
+      // Should succeed, not error
+      expect(body.result).toBeDefined();
+      expect(body.error).toBeUndefined();
+    } finally {
+      await v1Gateway.close();
+      freshRegistryDb.close();
     }
   });
 });
