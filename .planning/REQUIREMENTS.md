@@ -124,10 +124,10 @@ Deferred to future release. Tracked but not in current roadmap.
 | OC-04 | Phase 8 | Pending |
 
 **Coverage:**
-- v2.0 requirements: 23 total
-- Mapped to phases: 23
+- v2.0 requirements: 26 total (RUN×4, IDLE×5, TIER×4, BUD×3, REQ×6, OC×4)
+- Mapped to phases: 26
 - Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-03-15*
-*Last updated: 2026-03-15 after v2.0 milestone definition*
+*Last updated: 2026-03-15 — traceability confirmed, coverage corrected to 26 (was 23)*
