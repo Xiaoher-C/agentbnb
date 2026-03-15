@@ -1,281 +1,133 @@
-# AgentBnB Requirements
+# Requirements: AgentBnB
 
-## Phase 0: Dogfood Requirements
+**Defined:** 2026-03-15
+**Core Value:** Fill the market gap for agent-to-agent capability exchange — the agent handles everything, the human says Yes once.
 
-### R-001: Capability Card Schema
-**Status**: Complete (00-01)
-**Priority**: P0
+## v1.1 Requirements (Complete)
 
-The system must define a TypeScript schema for Capability Cards with:
-- Three levels: Atomic (L1), Pipeline (L2), Environment (L3)
-- Input/Output schema definitions (JSON Schema compatible)
-- Pricing model (credits per call, credits per minute)
-- Availability indicators (online/offline, schedule)
-- Metadata (APIs used, latency, success rate)
-- Validation via Zod
+All v1.1 requirements shipped and validated. See MILESTONES.md for details.
 
-**Acceptance Criteria**:
-- [x] Zod schema validates correct cards
-- [x] Zod schema rejects malformed cards
-- [x] All three levels can be represented
-- [x] Schema is exported as TypeScript types
+- [x] R-001 through R-006: Phase 0 Dogfood (schema, registry, CLI, gateway, credits, OpenClaw)
+- [x] R-007, R-008: Phase 1 CLI MVP (npm package, spec v1.0)
+- [x] R-013 through R-015: Phase 2 Cold Start (web registry, reputation, marketplace)
+- [x] ONB-01 through ONB-07: Phase 2.1 Smart Onboarding
+- [x] HUB-01 through HUB-05: Phase 2.2 Agent Hub
+- [x] SCH-02 through SCH-06: Phase 2.25 Schema v1.1
+- [x] RRD-01, RRD-02: Phase 2.3 Remote Registry
+- [x] UX-01 through UX-14: Phase 3 UX Layer
 
-### R-002: Local Registry
-**Status**: Complete (00-01)
-**Priority**: P0
+## v2.0 Requirements
 
-SQLite-backed storage for Capability Cards with:
-- CRUD operations on cards
-- Full-text search on name + description
-- Filter by level, availability, API used
-- Owner-based access control (only owner can update/delete)
+Requirements for the Agent Autonomy milestone. Each maps to roadmap phases.
 
-**Acceptance Criteria**:
-- [x] Can store and retrieve 100+ cards
-- [x] Search returns relevant results in <50ms
-- [x] Owner isolation enforced
+### Agent Runtime & Schema
 
-### R-003: CLI Interface
-**Status**: Complete (00-04)
-**Priority**: P0
+- [ ] **RUN-01**: AgentRuntime class owns all DB handles, background timers, and SIGTERM shutdown with orphaned escrow recovery
+- [ ] **RUN-02**: Multi-skill Capability Card schema v2.0 with `skills[]` array — one card per agent, multiple independently-priced skills
+- [ ] **RUN-03**: SQLite v1→v2 card migration preserving existing cards, with FTS5 trigger update to index nested skill names/descriptions
+- [ ] **RUN-04**: Gateway routing accepts `skill_id` for per-skill execution on multi-skill cards
 
-Commander-based CLI with subcommands:
-- `agentbnb init` — Initialize config in current directory
-- `agentbnb publish <card.json>` — Register a capability
-- `agentbnb discover [query]` — Search capabilities
-- `agentbnb request <card-id>` — Request a capability execution
-- `agentbnb status` — Show credit balance and active requests
-- `agentbnb serve` — Start the gateway server
+### Idle Detection & Auto-Share
 
-**Acceptance Criteria**:
-- [x] All commands have --help output
-- [x] JSON and table output formats
-- [x] Config stored in ~/.agentbnb/config.json
+- [ ] **IDLE-01**: Sliding window idle rate detection per skill — `idle_rate = 1 - (calls_in_60min / capacity_per_hour)`
+- [ ] **IDLE-02**: `capacity.calls_per_hour` field on skill schema, owner-declared with default 60
+- [ ] **IDLE-03**: Auto-share trigger flips `availability.online` when idle_rate crosses configurable threshold (default 70%)
+- [ ] **IDLE-04**: Per-skill idle rate stored in `_internal` (never transmitted), independently tracked per skill on multi-skill cards
+- [ ] **IDLE-05**: IdleMonitor runs as croner-scheduled background loop (60s interval) in AgentRuntime
 
-### R-004: Gateway Server
-**Status**: Complete (00-03)
-**Priority**: P0
+### Autonomy Tiers
 
-HTTP server (Fastify) that:
-- Listens for incoming capability requests
-- Validates request against published cards
-- Routes to local agent for execution
-- Returns results to requester
-- Tracks credit usage
+- [ ] **TIER-01**: Autonomy tier configuration stored in `~/.agentbnb/config.json` — Tier 1 (<10cr auto), Tier 2 (10-50cr notify-after), Tier 3 (>50cr ask-before)
+- [ ] **TIER-02**: Default tier is Tier 3 (most restrictive) — all autonomous actions blocked until owner explicitly configures tiers
+- [ ] **TIER-03**: `getAutonomyTier(creditAmount)` enforced before every autonomous action (auto-share, auto-request)
+- [ ] **TIER-04**: Tier 2 "notify after" writes audit event to request_log with `action_type` and `tier_invoked` fields
 
-**Acceptance Criteria**:
-- [x] Server starts on configurable port
-- [x] Health check endpoint
-- [x] Request/response logging
-- [x] Timeout handling (configurable per card)
+### Credit Budgeting
 
-### R-005: Credit Ledger
-**Status**: Complete (00-02)
-**Priority**: P1
+- [ ] **BUD-01**: Credit reserve enforcement — block auto-request when balance at or below reserve floor (default 20cr, configurable)
+- [ ] **BUD-02**: BudgetManager.canSpend() wraps every escrow hold from auto-request path — holdEscrow never called directly by auto-request
+- [ ] **BUD-03**: Reserve and tier thresholds configurable via `agentbnb config set reserve <N>` and `agentbnb config set tier1 <N>`
 
-SQLite-backed credit tracking:
-- Balance per agent owner
-- Transaction log (debit/credit with reason)
-- Escrow: hold credits when request starts
-- Settlement: release on success, refund on failure/timeout
-- Initial credit grant for new agents (bootstrap)
+### Auto-Request
 
-**Acceptance Criteria**:
-- [x] Double-entry bookkeeping (every debit has a credit)
-- [x] Escrow prevents overspending
-- [x] Transaction history queryable
+- [ ] **REQ-01**: Capability gap detection triggers auto-request flow via structured event when agent lacks required skill
+- [ ] **REQ-02**: Peer selection scores candidates by `success_rate * (1/credits_per_call) * idle_rate` with min-max normalization
+- [ ] **REQ-03**: Self-exclusion guard filters `candidate.owner !== self.owner` before ranking peers
+- [ ] **REQ-04**: Budget-gated escrow execution: BudgetManager.canSpend() → holdEscrow → JSON-RPC execute → settle/release
+- [ ] **REQ-05**: Tier 3 approval queue: `pending_requests` table + `GET /me/pending-requests` endpoint for owner approval
+- [ ] **REQ-06**: Auto-request failures written to request_log even when no escrow is initiated
 
-### R-006: OpenClaw Integration
-**Status**: Complete (00-05)
-**Priority**: P1
+### OpenClaw Integration
 
-OpenClaw skills that bridge AgentBnB:
-- Auto-generate Capability Card from agent's SOUL.md
-- Handle incoming requests as OpenClaw tasks
-- Report results back through gateway
+- [ ] **OC-01**: `skills/agentbnb/SKILL.md` installable package with gateway.ts, auto-share.ts, auto-request.ts, credit-mgr.ts
+- [ ] **OC-02**: HEARTBEAT.md rule injection — emit ready-to-paste autonomy rules block; auto-patch on `openclaw install agentbnb`
+- [ ] **OC-03**: SOUL.md v2 sync — extend `parseSoulMd()` to emit `skills[]` from H2 sections for multi-skill cards
+- [ ] **OC-04**: `agentbnb openclaw sync|status|rules` CLI commands for managing OpenClaw integration
 
-**Acceptance Criteria**:
-- [x] Skill installs in OpenClaw without errors
-- [x] Card auto-generation produces valid L1/L2 cards
-- [x] End-to-end: Agent A requests, Agent B executes, results return
+## v2.1 Requirements
 
-## Phase 1: CLI MVP Requirements
+Deferred to future release. Tracked but not in current roadmap.
 
-### R-007: npm Package Distribution
-**Status**: Complete (01-01)
-**Priority**: P0
+### Credit Optimization
 
-The package must be installable via npm/npx:
-- package.json configured with files, exports, bin, engines
-- Build pipeline produces distributable dist/ with shebang-correct CLI entry
-- `node dist/cli/index.js --version` prints correct version from package.json
-- `npx publint` passes with no errors
+- **BUD-04**: Credit surplus alert — notify owner when balance exceeds configured threshold (default 500cr)
+- **BUD-05**: Daily spending limit — cap total auto-request spend per 24h period
 
-**Acceptance Criteria**:
-- [x] package.json has files whitelist, exports map, prepublishOnly guard
-- [x] tsup build produces dist/cli/index.js with #!/usr/bin/env node shebang
-- [x] CLI version dynamically reads from package.json (no hardcoded string)
-- [x] publint reports "All good!"
+### Advanced Idle Detection
 
-### R-008: Capability Card Spec v1.0
-**Status**: Complete (01-01)
-**Priority**: P0
+- **IDLE-06**: Dynamic capacity learning — infer `capacity.calls_per_hour` from max observed throughput over 7-day window
 
-Freeze the Capability Card schema at version 1.0 with a spec_version field:
-- spec_version field locks schema to '1.0' (rejects future versions)
-- .default('1.0') ensures backward compatibility for legacy Phase 0 cards
-- Parsed cards always have spec_version '1.0' in output
+### Partial Pipeline Sharing
 
-**Acceptance Criteria**:
-- [x] Card with spec_version '1.0' validates successfully
-- [x] Card WITHOUT spec_version validates (default fills '1.0')
-- [x] Card with spec_version '2.0' is rejected
-- [x] Parsed output always includes spec_version '1.0'
-- [x] All Phase 0 tests continue to pass (zero regressions)
+- **PIPE-01**: Mark specific pipeline steps as shareable vs moat on Level 2 cards
 
-## Phase 2: Cold Start Requirements
+## Out of Scope
 
-### R-013: Web-Based Registry
-**Status**: Complete (02-02)
-**Priority**: P0
+| Feature | Reason |
+|---------|--------|
+| OpenClaw message bus transport | LOW confidence on API feasibility; needs dedicated research phase |
+| Dynamic pricing (auto-adjust) | Creates instability for requesting agents who budget in advance |
+| Multi-agent card ownership | Splits reputation accountability; owner isolation is correct model |
+| Real-time sub-second idle polling | Distorts the metric being measured; 60s refresh is sufficient |
+| Cross-agent credit transfers | Credits without backing exchange = gift economy, undermines share-to-earn |
+| Cloud relay for gateway | Introduces centralization; document ngrok/tunnel as user-managed option |
 
-Public HTTP REST API exposing the capability card registry for external discovery:
-- Separate Fastify server instance (not on the gateway)
-- CORS enabled for browser access
-- GET /health — server status
-- GET /cards — paginated list with filters and search
-- GET /cards/:id — single card by UUID
-- Read-only: no write endpoints
+## Traceability
 
-**Acceptance Criteria**:
-- [ ] GET /cards returns paginated response { total, limit, offset, items }
-- [ ] FTS5 search via ?q= parameter
-- [ ] Filters: level, online, tag, min_success_rate, max_latency_ms
-- [ ] Sort: success_rate (desc), latency (asc)
-- [ ] CORS headers present on all responses
-- [ ] Registry accessible at http://host:7701/cards via `agentbnb serve`
+| Requirement | Phase | Status |
+|-------------|-------|--------|
+| RUN-01 | Phase 4 | Pending |
+| RUN-02 | Phase 4 | Pending |
+| RUN-03 | Phase 4 | Pending |
+| RUN-04 | Phase 4 | Pending |
+| IDLE-01 | Phase 6 | Pending |
+| IDLE-02 | Phase 6 | Pending |
+| IDLE-03 | Phase 6 | Pending |
+| IDLE-04 | Phase 6 | Pending |
+| IDLE-05 | Phase 6 | Pending |
+| TIER-01 | Phase 5 | Pending |
+| TIER-02 | Phase 5 | Pending |
+| TIER-03 | Phase 5 | Pending |
+| TIER-04 | Phase 5 | Pending |
+| BUD-01 | Phase 5 | Pending |
+| BUD-02 | Phase 5 | Pending |
+| BUD-03 | Phase 5 | Pending |
+| REQ-01 | Phase 7 | Pending |
+| REQ-02 | Phase 7 | Pending |
+| REQ-03 | Phase 7 | Pending |
+| REQ-04 | Phase 7 | Pending |
+| REQ-05 | Phase 7 | Pending |
+| REQ-06 | Phase 7 | Pending |
+| OC-01 | Phase 8 | Pending |
+| OC-02 | Phase 8 | Pending |
+| OC-03 | Phase 8 | Pending |
+| OC-04 | Phase 8 | Pending |
 
-### R-014: Reputation System
-**Status**: Complete (02-01)
-**Priority**: P0
+**Coverage:**
+- v2.0 requirements: 23 total
+- Mapped to phases: 23
+- Unmapped: 0 ✓
 
-Per-card reputation tracking updated after each capability execution:
-- Exponentially weighted average (EWA) with alpha=0.1
-- success_rate: 0.0-1.0, updated on success (1) and failure (0)
-- avg_latency_ms: updated with observed execution latency
-- Gateway automatically records reputation after settle (success) and release (failure)
-- First execution bootstraps from undefined to concrete value
-
-**Acceptance Criteria**:
-- [ ] updateReputation() updates success_rate and avg_latency_ms using EWA
-- [ ] Gateway calls updateReputation() after every capability.execute
-- [ ] Reputation data persists in SQLite (survives restart)
-- [ ] Re-publishing a card preserves existing reputation data
-
-### R-015: Capability Card Marketplace
-**Status**: Complete (02-02)
-**Priority**: P1
-
-Browse and filter capabilities with reputation-aware sorting:
-- Pagination: limit (default 20, max 100) + offset
-- Tag filtering via metadata.tags
-- Reputation filtering (min_success_rate, max_latency_ms)
-- Sort by success_rate or latency
-- Unrated cards (undefined success_rate) sort after rated cards
-
-**Acceptance Criteria**:
-- [ ] Pagination returns correct slices with total count
-- [ ] Tag filter matches cards with specified tag
-- [ ] Reputation filters exclude cards below threshold
-- [ ] Sort by success_rate puts highest first, unrated last
-- [ ] Sort by latency puts fastest first, unrated last
-
-## Phase 2.25: Schema v1.1 Upgrade Requirements
-
-### SCH-02: _internal Field
-**Status**: Complete (02.25-01)
-**Priority**: P0
-
-Add `_internal: z.record(z.unknown()).optional()` to CapabilityCardSchema for private per-card metadata stored in SQLite but never transmitted.
-
-**Acceptance Criteria**:
-- [x] Cards with `_internal` field validate successfully
-- [x] Cards without `_internal` still validate (backward compat)
-- [x] `_internal` accepts arbitrary key-value data
-
-### SCH-03: free_tier in Pricing
-**Status**: Complete (02.25-01)
-**Priority**: P0
-
-Add `free_tier: z.number().nonnegative().optional()` to pricing object for monthly free request count.
-
-**Acceptance Criteria**:
-- [x] Cards with `free_tier` in pricing validate successfully
-- [x] Cards without `free_tier` still validate (backward compat)
-- [x] Negative `free_tier` values are rejected
-
-### SCH-04: Server Strips _internal
-**Status**: Complete (02.25-01)
-**Priority**: P0
-
-Registry server must strip `_internal` from all API responses.
-
-**Acceptance Criteria**:
-- [x] GET /cards response never contains `_internal` field
-- [x] GET /cards/:id response never contains `_internal` field
-
-### SCH-05: Hub Free-Tier Badge
-**Status**: Complete (02.25-01)
-**Priority**: P1
-
-Hub renders free-tier badge when `free_tier > 0`.
-
-**Acceptance Criteria**:
-- [x] Hub renders "N free/mo" badge when free_tier > 0
-- [x] Hub does not render badge when free_tier absent or 0
-
-### SCH-06: Schema v1.1 Tests
-**Status**: Complete (02.25-01)
-**Priority**: P0
-
-Tests covering all new fields and stripping behavior.
-
-**Acceptance Criteria**:
-- [x] Schema validation tests for _internal and free_tier
-- [x] Server stripping tests for both endpoints
-- [x] CLI discover strips _internal from output
-- [x] Hub badge rendering tests
-
-## Phase 2.3: Remote Registry Discovery Requirements
-
-### RRD-01: CLI Remote Registry Query
-**Status**: Pending (02.3)
-**Priority**: P0
-
-The `agentbnb discover` command must support querying a remote registry HTTP API:
-- `--registry <url>` option specifies the registry server URL (e.g., `http://host:7701`)
-- Fetches from `GET <url>/cards` with query/filter params forwarded
-- Supports same filters as local discover: q, level, online, tag
-- Results displayed in same table/JSON format as local discover
-- Graceful error handling for unreachable or invalid registry URLs
-
-**Acceptance Criteria**:
-- [ ] `agentbnb discover --registry http://host:7701` returns remote cards
-- [ ] Query param `--query` forwarded as `?q=` to remote API
-- [ ] Filter params (--level, --online, --tag) forwarded to remote API
-- [ ] `--json` output works with remote results
-- [ ] Timeout and connection errors produce actionable error messages
-
-### RRD-02: Remote Discovery Integration Test
-**Status**: Complete (02.3-02)
-**Priority**: P0
-
-End-to-end test proving cross-machine discovery works:
-- Start registry server, publish cards, discover via HTTP from CLI
-- Validates the full flow: init → publish → serve → discover (remote) → see results
-
-**Acceptance Criteria**:
-- [ ] Integration test starts registry server on random port
-- [ ] Test publishes card, then discovers it via `--registry http://localhost:<port>`
-- [ ] Test verifies discovered card matches published card
-- [ ] Test covers error case (unreachable registry)
+---
+*Requirements defined: 2026-03-15*
+*Last updated: 2026-03-15 after v2.0 milestone definition*
