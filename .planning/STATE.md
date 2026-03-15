@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Upgrade
-current_plan: Not started
-status: unknown
-last_updated: "2026-03-15T03:37:07.066Z"
+current_plan: 03-01 complete, 03-02 next
+status: in_progress
+last_updated: "2026-03-15T06:34:17.077Z"
 progress:
   total_phases: 8
   completed_phases: 7
-  total_plans: 20
-  completed_plans: 20
+  total_plans: 24
+  completed_plans: 21
 ---
 
 # AgentBnB — Project State
@@ -23,9 +23,13 @@ See: .planning/PROJECT.md (updated 2026-03-13)
 
 ## Current Phase
 
-**Phase 2.25: Schema v1.1 Upgrade** — Complete. 1 of 1 plans complete.
+**Phase 3: UX Layer** — In progress. Plan 01 complete, Plan 02 next.
 
-**Current Plan:** Not started
+**Current Plan:** 03-02 (API auth-protected endpoints)
+
+### Progress (Phase 3 — in progress)
+
+- UX Data Foundation (Plan 01): complete — api_key in AgentBnBConfig, request_log SQLite table, insertRequestLog/getRequestLog with period filtering (24h/7d/30d), gateway logging at all 3 settlement points, 71 tests pass
 
 ### Progress (Phase 2.3 — complete)
 
@@ -134,6 +138,11 @@ See: .planning/PROJECT.md (updated 2026-03-13)
 | 2026-03-14 | 02.3-02 | Spawn registry server as background subprocess for integration tests — vitest worker isolation blocks loopback access from execSync children to in-process sockets |
 | 2026-03-14 | 02.3-02 | Port-file polling pattern for server-ready signal — server writes ephemeral port to file once listening, test polls until file appears |
 | 2026-03-14 | 02.3-02 | Shell 2>&1 redirect for graceful-degradation test stderr capture — execSync on exit 0 discards stderr, redirect merges streams at shell level |
+| 2026-03-15 | 03-01 | api_key is optional in AgentBnBConfig — backward compatible with existing configs that lack the field |
+| 2026-03-15 | 03-01 | api_key preserved on re-init: load existing config first, only generate if not already present |
+| 2026-03-15 | 03-01 | insertRequestLog wrapped in try/catch at all 3 gateway settlement points — silent no-op, same pattern as updateReputation |
+| 2026-03-15 | 03-01 | SincePeriod cutoff: new Date(Date.now() - SINCE_MS[since]).toISOString() — ISO string comparison enables period filtering in SQLite |
+| 2026-03-15 | 03-01 | createRequestLogTable() called inside openDatabase() — request_log always exists when registry DB opens |
 
 ## Performance Metrics
 
@@ -160,6 +169,7 @@ See: .planning/PROJECT.md (updated 2026-03-13)
 | Phase 02.25-schema-v1-1-upgrade P01 | 7min | 2 tasks | 8 files |
 | Phase 02.3-remote-registry-discovery P01 | 15min | 2 tasks | 4 files |
 | Phase 02.3-remote-registry-discovery P02 | 8min | 2 tasks | 2 files |
+| Phase 03-ux-layer P01 | 6min | 2 tasks | 8 files |
 
 ## Session Log
 
@@ -189,6 +199,7 @@ See: .planning/PROJECT.md (updated 2026-03-13)
 | 2026-03-14 | Completed 02.3-01-PLAN.md — fetchRemoteCards, mergeResults, discover --registry/--tag, config set/get | Phase 2.3 Plan 01 complete |
 | 2026-03-14 | Checkpoint: 02.3-02 Task 1 complete, awaiting human-verify | Run `pnpm test:run`, `npx tsc --noEmit`, and optional CLI manual verification |
 | 2026-03-15 | Completed 02.3-02-PLAN.md — Phase 2.3 complete, human-verified, 35 CLI tests pass | Phase 3 (UX Layer) or `/gsd:verify-work` for further refinement |
+| 2026-03-15 | Completed 03-01-PLAN.md — api_key in config, request_log SQLite table + gateway logging, 71 tests pass | Continue with Phase 3 Plan 02 (API auth-protected endpoints) |
 
 ## Roadmap Evolution
 
