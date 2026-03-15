@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v2.1
 milestone_name: Ship It
 status: planning
-stopped_at: Completed 09-hub-ui-redesign plan 09-01-PLAN.md
-last_updated: "2026-03-15T18:43:45.480Z"
+stopped_at: Completed 09-hub-ui-redesign plan 09-02-PLAN.md
+last_updated: "2026-03-15T18:48:37.469Z"
 last_activity: 2026-03-16 — v2.1 roadmap created
 progress:
   total_phases: 16
   completed_phases: 13
   total_plans: 40
-  completed_plans: 37
+  completed_plans: 39
   percent: 0
 ---
 
@@ -47,6 +47,8 @@ Progress: [░░░░░░░░░░] 0%
 | 10. ClaWHub Installable Skill | 0/5 | Not started |
 | 11. Repo Housekeeping | 0/3 | Not started |
 | Phase 09-hub-ui-redesign P01 | 6 | 2 tasks | 15 files |
+| Phase 09-hub-ui-redesign P03 | 8 | 2 tasks | 3 files |
+| Phase 09-hub-ui-redesign P02 | 150s | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -60,6 +62,10 @@ Progress: [░░░░░░░░░░] 0%
 - [Phase 09-hub-ui-redesign]: StatusColor type changed to 'accent'|'dim' to align with design token naming
 - [Phase 09-hub-ui-redesign]: CapabilityCard is compact-only with onClick prop; modal overlay wired in plan 09-02
 - [Phase 09-hub-ui-redesign]: Ghost chip pattern established: border-hub-border-hover bg-transparent rounded-full
+- [Phase 09-hub-ui-redesign]: Ambient glow placed in StatsBar.tsx not App.tsx — component owns its own atmosphere
+- [Phase 09-hub-ui-redesign]: Tab switcher changed from underline to pill fill (bg-white/[0.08]) per CONTEXT.md spec
+- [Phase 09-hub-ui-redesign]: CardModal uses CSS transitions on isVisible state — simpler than keyframes, animate-out delays onClose by 150ms
+- [Phase 09-hub-ui-redesign]: backdrop-filter uses inline style with WebkitBackdropFilter for Safari compatibility
 
 ### Pending Todos
 
@@ -71,8 +77,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-15T18:43:45.477Z
-Stopped at: Completed 09-hub-ui-redesign plan 09-01-PLAN.md
+Last session: 2026-03-15T18:48:37.466Z
+Stopped at: Completed 09-hub-ui-redesign plan 09-02-PLAN.md
 Resume file: None
 
 ---
