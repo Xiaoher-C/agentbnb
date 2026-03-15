@@ -2,14 +2,16 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Agent Autonomy
-current_plan: Not started
-status: ready_to_plan
-last_updated: "2026-03-15"
+status: planning
+stopped_at: Completed 04-01-PLAN.md — AgentRuntime class with lifecycle management
+last_updated: "2026-03-15T10:37:12.263Z"
+last_activity: 2026-03-15 — v2.0 Agent Autonomy roadmap created (Phases 4-8)
 progress:
-  total_phases: 5
-  completed_phases: 0
-  total_plans: 12
-  completed_plans: 0
+  total_phases: 13
+  completed_phases: 8
+  total_plans: 27
+  completed_plans: 25
+  percent: 38
 ---
 
 # AgentBnB — Project State
@@ -44,6 +46,7 @@ Progress: [████████░░░░░░░░░░░░] 38% (v1
 | v1.1 (Phases 0-3) | 24/24 | - |
 
 *Updated after each plan completion*
+| Phase 04-agent-runtime-multi-skill-foundation P01 | 4 | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -57,6 +60,9 @@ Recent decisions affecting current work:
 - [v2.0 init]: croner ^10.0.1 + typed-emitter ^2.1.0 are the only new production dependencies
 - [v2.0 init]: SQLite WAL mode + busy_timeout activated at AgentRuntime startup
 - [v2.0 init]: Standalone process mode (AgentRuntime owns timers), not OpenClaw heartbeat-driven
+- [Phase 04-01]: AgentRuntime uses openDatabase/openCreditDb internally so schema migrations always run on DB open
+- [Phase 04-01]: busy_timeout=5000 added after openDatabase/openCreditDb calls (those functions don't set it)
+- [Phase 04-01]: shutdown() is idempotent via draining guard to handle double-SIGINT safely
 
 ### Pending Todos
 
@@ -70,8 +76,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-15
-Stopped at: Roadmap created for v2.0 Agent Autonomy milestone (Phases 4-8). Ready to plan Phase 4.
+Last session: 2026-03-15T10:37:12.261Z
+Stopped at: Completed 04-01-PLAN.md — AgentRuntime class with lifecycle management
 Resume file: None
 
 ---
