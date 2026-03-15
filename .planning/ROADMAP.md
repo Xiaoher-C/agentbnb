@@ -156,8 +156,8 @@ Plans:
 **Plans:** 2/2 plans complete
 
 Plans:
-- [ ] 06-01-PLAN.md — Data layer helpers: getSkillRequestCount() sliding window query + updateSkillAvailability() + updateSkillIdleRate() with tests
-- [ ] 06-02-PLAN.md — IdleMonitor class: croner polling, idle rate computation, tier-gated auto-share + CLI wiring + human verification
+- [x] 06-01-PLAN.md — Data layer helpers: getSkillRequestCount() sliding window query + updateSkillAvailability() + updateSkillIdleRate() with tests
+- [x] 06-02-PLAN.md — IdleMonitor class: croner polling, idle rate computation, tier-gated auto-share + CLI wiring + human verification
 
 ### Phase 7: Auto-Request
 **Goal**: Agents detect capability gaps and autonomously execute peer requests — finding the best peer, checking the budget, holding escrow, and running the capability — completing the earn/spend loop without human intervention.
@@ -169,11 +169,11 @@ Plans:
   3. The agent's own cards are never selected as auto-request peers — self-exclusion is enforced before scoring
   4. A Tier 3 pending request appears in `GET /me/pending-requests` and in the Hub owner dashboard awaiting approval before any escrow is touched
   5. Auto-request failures (peer not found, budget blocked, tier blocked) are written to `request_log` even when no escrow is initiated
-**Plans**: TBD
+**Plans:** 2 plans
 
 Plans:
-- [ ] 07-01: pending_requests table + GET /me/pending-requests endpoint + capability gap event type
-- [ ] 07-02: src/autonomy/auto-request.ts — AutoRequestor class, peer scoring, self-exclusion, budget-gated escrow + human verification
+- [ ] 07-01-PLAN.md — Tier 3 approval queue: pending_requests table, CRUD module, owner API endpoints, AutonomyEvent extension
+- [ ] 07-02-PLAN.md — AutoRequestor class: peer scoring, self-exclusion, budget-gated escrow, failure logging, CLI command + human verification
 
 ### Phase 8: OpenClaw Deep Integration
 **Goal**: AgentBnB installs as a first-class OpenClaw skill — one command wires up gateway, auto-share, auto-request, and credit management into any OpenClaw agent, with SOUL.md sync generating the multi-skill card and HEARTBEAT.md rules enforcing autonomy policy.
@@ -210,6 +210,6 @@ Phases execute in numeric order: 4 → 5 → 6 → 7 → 8
 | 3. UX Layer | v1.1 | 4/4 | Complete | 2026-03-15 |
 | 4. Agent Runtime + Multi-Skill Foundation | v2.0 | 3/3 | Complete | 2026-03-15 |
 | 5. Autonomy Tiers + Credit Budgeting | v2.0 | 2/2 | Complete | 2026-03-15 |
-| 6. Idle Rate Monitoring + Auto-Share | 2/2 | Complete   | 2026-03-15 | - |
-| 7. Auto-Request | v2.0 | 0/2 | Not started | - |
+| 6. Idle Rate Monitoring + Auto-Share | v2.0 | 2/2 | Complete | 2026-03-15 |
+| 7. Auto-Request | v2.0 | 0/2 | Planning | - |
 | 8. OpenClaw Deep Integration | v2.0 | 0/3 | Not started | - |
