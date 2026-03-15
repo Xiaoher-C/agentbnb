@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Upgrade
-current_plan: 03-03a next (Hub Dashboard SPA)
+current_plan: 03-03b next (Hub Dashboard SPA — wiring and pages)
 status: in_progress
-last_updated: "2026-03-15T06:43:54.104Z"
+last_updated: "2026-03-15T06:50:04.639Z"
 progress:
   total_phases: 8
   completed_phases: 7
   total_plans: 24
-  completed_plans: 22
+  completed_plans: 23
 ---
 
 # AgentBnB — Project State
@@ -31,6 +31,7 @@ See: .planning/PROJECT.md (updated 2026-03-13)
 
 - UX Data Foundation (Plan 01): complete — api_key in AgentBnBConfig, request_log SQLite table, insertRequestLog/getRequestLog with period filtering (24h/7d/30d), gateway logging at all 3 settlement points, 71 tests pass
 - Auth-Protected Owner Endpoints (Plan 02): complete — scoped Fastify plugin with Bearer token auth, GET /me (balance), GET /requests (since), GET /draft (auto-detect), POST toggle-online, PATCH /cards/:id, serve wired, 72 tests pass
+- Hub Auth Layer (Plan 03a): complete — useAuth (localStorage), useRequests (30s polling + since filter), useOwnerCards (balance from /me), LoginForm, AuthGate, 48 tests pass
 
 ### Progress (Phase 2.3 — complete)
 
@@ -147,6 +148,9 @@ See: .planning/PROJECT.md (updated 2026-03-13)
 | 2026-03-15 | 03-02 | Scoped Fastify plugin (NOT fastify-plugin) for owner routes — Fastify encapsulation ensures auth hook never leaks to public /cards and /health |
 | 2026-03-15 | 03-02 | vi.mock() at module-level + vi.mocked() per test — avoids conflicting factory mock calls for same module causing 500s in GET /draft tests |
 | 2026-03-15 | 03-02 | serve warns but continues when api_key missing — backward-compatible with pre-03-01 configs |
+| 2026-03-15 | 03-03a | vi.useFakeTimers() incompatible with waitFor in @testing-library/react — removed from hook tests to prevent 5s timeouts |
+| 2026-03-15 | 03-03a | useOwnerCards fetches /me then /cards sequentially; balance extracted as number (not null) from /me response |
+| 2026-03-15 | 03-03a | AuthGate checks !apiKey (falsy) to handle both null and undefined — consistent with optional prop typing |
 
 ## Performance Metrics
 
@@ -175,6 +179,7 @@ See: .planning/PROJECT.md (updated 2026-03-13)
 | Phase 02.3-remote-registry-discovery P02 | 8min | 2 tasks | 2 files |
 | Phase 03-ux-layer P01 | 6min | 2 tasks | 8 files |
 | Phase 03-ux-layer P02 | 6min | 2 tasks | 4 files |
+| Phase 03-ux-layer P03a | 3min | 2 tasks | 10 files |
 
 ## Session Log
 
@@ -206,6 +211,7 @@ See: .planning/PROJECT.md (updated 2026-03-13)
 | 2026-03-15 | Completed 02.3-02-PLAN.md — Phase 2.3 complete, human-verified, 35 CLI tests pass | Phase 3 (UX Layer) or `/gsd:verify-work` for further refinement |
 | 2026-03-15 | Completed 03-01-PLAN.md — api_key in config, request_log SQLite table + gateway logging, 71 tests pass | Continue with Phase 3 Plan 02 (API auth-protected endpoints) |
 | 2026-03-15 | Completed 03-02-PLAN.md — 5 auth-protected owner endpoints, Bearer token auth, serve wired, 72 tests pass | Continue with Phase 3 Plan 03a (Hub Dashboard SPA) |
+| 2026-03-15 | Completed 03-03a-PLAN.md — useAuth, useRequests (since), useOwnerCards (balance), LoginForm, AuthGate, 48 tests pass | Continue with Phase 3 Plan 03b (Hub dashboard pages) |
 
 ## Roadmap Evolution
 
