@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Upgrade
-current_plan: 03-01 complete, 03-02 next
+current_plan: 03-03a next (Hub Dashboard SPA)
 status: in_progress
-last_updated: "2026-03-15T06:34:17.077Z"
+last_updated: "2026-03-15T06:43:54.104Z"
 progress:
   total_phases: 8
   completed_phases: 7
   total_plans: 24
-  completed_plans: 21
+  completed_plans: 22
 ---
 
 # AgentBnB — Project State
@@ -25,11 +25,12 @@ See: .planning/PROJECT.md (updated 2026-03-13)
 
 **Phase 3: UX Layer** — In progress. Plan 01 complete, Plan 02 next.
 
-**Current Plan:** 03-02 (API auth-protected endpoints)
+**Current Plan:** 03-03a next (Hub Dashboard SPA — owner view)
 
 ### Progress (Phase 3 — in progress)
 
 - UX Data Foundation (Plan 01): complete — api_key in AgentBnBConfig, request_log SQLite table, insertRequestLog/getRequestLog with period filtering (24h/7d/30d), gateway logging at all 3 settlement points, 71 tests pass
+- Auth-Protected Owner Endpoints (Plan 02): complete — scoped Fastify plugin with Bearer token auth, GET /me (balance), GET /requests (since), GET /draft (auto-detect), POST toggle-online, PATCH /cards/:id, serve wired, 72 tests pass
 
 ### Progress (Phase 2.3 — complete)
 
@@ -143,6 +144,9 @@ See: .planning/PROJECT.md (updated 2026-03-13)
 | 2026-03-15 | 03-01 | insertRequestLog wrapped in try/catch at all 3 gateway settlement points — silent no-op, same pattern as updateReputation |
 | 2026-03-15 | 03-01 | SincePeriod cutoff: new Date(Date.now() - SINCE_MS[since]).toISOString() — ISO string comparison enables period filtering in SQLite |
 | 2026-03-15 | 03-01 | createRequestLogTable() called inside openDatabase() — request_log always exists when registry DB opens |
+| 2026-03-15 | 03-02 | Scoped Fastify plugin (NOT fastify-plugin) for owner routes — Fastify encapsulation ensures auth hook never leaks to public /cards and /health |
+| 2026-03-15 | 03-02 | vi.mock() at module-level + vi.mocked() per test — avoids conflicting factory mock calls for same module causing 500s in GET /draft tests |
+| 2026-03-15 | 03-02 | serve warns but continues when api_key missing — backward-compatible with pre-03-01 configs |
 
 ## Performance Metrics
 
@@ -170,6 +174,7 @@ See: .planning/PROJECT.md (updated 2026-03-13)
 | Phase 02.3-remote-registry-discovery P01 | 15min | 2 tasks | 4 files |
 | Phase 02.3-remote-registry-discovery P02 | 8min | 2 tasks | 2 files |
 | Phase 03-ux-layer P01 | 6min | 2 tasks | 8 files |
+| Phase 03-ux-layer P02 | 6min | 2 tasks | 4 files |
 
 ## Session Log
 
@@ -200,6 +205,7 @@ See: .planning/PROJECT.md (updated 2026-03-13)
 | 2026-03-14 | Checkpoint: 02.3-02 Task 1 complete, awaiting human-verify | Run `pnpm test:run`, `npx tsc --noEmit`, and optional CLI manual verification |
 | 2026-03-15 | Completed 02.3-02-PLAN.md — Phase 2.3 complete, human-verified, 35 CLI tests pass | Phase 3 (UX Layer) or `/gsd:verify-work` for further refinement |
 | 2026-03-15 | Completed 03-01-PLAN.md — api_key in config, request_log SQLite table + gateway logging, 71 tests pass | Continue with Phase 3 Plan 02 (API auth-protected endpoints) |
+| 2026-03-15 | Completed 03-02-PLAN.md — 5 auth-protected owner endpoints, Bearer token auth, serve wired, 72 tests pass | Continue with Phase 3 Plan 03a (Hub Dashboard SPA) |
 
 ## Roadmap Evolution
 
