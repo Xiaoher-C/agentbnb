@@ -60,8 +60,8 @@ Requirements for the Agent Autonomy milestone. Each maps to roadmap phases.
 ### OpenClaw Integration
 
 - [x] **OC-01**: `skills/agentbnb/SKILL.md` installable package with gateway.ts, auto-share.ts, auto-request.ts, credit-mgr.ts
-- [ ] **OC-02**: HEARTBEAT.md rule injection — emit ready-to-paste autonomy rules block; auto-patch on `openclaw install agentbnb`
-- [ ] **OC-03**: SOUL.md v2 sync — extend `parseSoulMd()` to emit `skills[]` from H2 sections for multi-skill cards
+- [x] **OC-02**: HEARTBEAT.md rule injection — emit ready-to-paste autonomy rules block; auto-patch on `openclaw install agentbnb`
+- [x] **OC-03**: SOUL.md v2 sync — extend `parseSoulMd()` to emit `skills[]` from H2 sections for multi-skill cards
 - [ ] **OC-04**: `agentbnb openclaw sync|status|rules` CLI commands for managing OpenClaw integration
 
 ## v2.1 Requirements
@@ -119,8 +119,8 @@ Deferred to future release. Tracked but not in current roadmap.
 | REQ-05 | Phase 7 | Complete |
 | REQ-06 | Phase 7 | Complete |
 | OC-01 | Phase 8 | Complete |
-| OC-02 | Phase 8 | Pending |
-| OC-03 | Phase 8 | Pending |
+| OC-02 | Phase 8 | Complete |
+| OC-03 | Phase 8 | Complete |
 | OC-04 | Phase 8 | Pending |
 
 **Coverage:**

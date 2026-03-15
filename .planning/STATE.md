@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Agent Autonomy
 status: planning
-stopped_at: Completed 08-02-PLAN.md — OpenClaw skill package (skills/agentbnb/) created with SKILL.md and four adapter files
-last_updated: "2026-03-15T15:46:41.030Z"
+stopped_at: Completed 08-01-PLAN.md — openclaw core modules, 29/29 tests passing
+last_updated: "2026-03-15T15:50:00.742Z"
 last_activity: 2026-03-15 — v2.0 Agent Autonomy roadmap created (Phases 4-8)
 progress:
   total_phases: 13
   completed_phases: 12
   total_plans: 36
-  completed_plans: 34
+  completed_plans: 35
   percent: 38
 ---
 
@@ -59,6 +59,7 @@ Progress: [████████░░░░░░░░░░░░] 38% (v1
 | Phase 07-auto-request P02 | 6 | 2 tasks | 3 files |
 | Phase 07-auto-request P02 | 6 | 3 tasks | 3 files |
 | Phase 08-openclaw-deep-integration P02 | 2 | 2 tasks | 5 files |
+| Phase 08-openclaw-deep-integration P01 | 261 | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -111,6 +112,8 @@ Recent decisions affecting current work:
 - [Phase 07-02]: Missing _internal.idle_rate defaults to 1.0 (maximally idle) — benefit of the doubt when no telemetry
 - [Phase 08-02]: skills/ directory is outside tsconfig src/ scope — intentional, documented in SKILL.md Installation Note with two resolution options
 - [Phase 08-02]: Skill adapter pattern: pure re-export wrappers in skills/ with no business logic, no timers, no DB writes
+- [Phase 08-01]: publishFromSoulV2 uses raw SQL INSERT/UPDATE (not insertCard) — insertCard validates v1.0 only; v2.0 cards bypass via direct SQL, consistent with Phase 06-02 updateSkillAvailability pattern
+- [Phase 08-01]: idle_rate defaults to null (not 0) when absent from skill._internal — null signals not-yet-computed vs 0 which would signal fully utilized
 
 ### Pending Todos
 
@@ -124,8 +127,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-15T15:46:41.027Z
-Stopped at: Completed 08-02-PLAN.md — OpenClaw skill package (skills/agentbnb/) created with SKILL.md and four adapter files
+Last session: 2026-03-15T15:50:00.740Z
+Stopped at: Completed 08-01-PLAN.md — openclaw core modules, 29/29 tests passing
 Resume file: None
 
 ---
