@@ -25,12 +25,12 @@ describe('getLevelBadge', () => {
 });
 
 describe('getStatusIndicator', () => {
-  it('true returns emerald (online)', () => {
-    expect(getStatusIndicator(true)).toBe('emerald');
+  it('true returns accent (online)', () => {
+    expect(getStatusIndicator(true)).toBe('accent');
   });
 
-  it('false returns rose (offline)', () => {
-    expect(getStatusIndicator(false)).toBe('rose');
+  it('false returns dim (offline)', () => {
+    expect(getStatusIndicator(false)).toBe('dim');
   });
 });
 

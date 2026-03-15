@@ -1,6 +1,7 @@
 /**
- * CapabilityCard — Main card component with expand-in-place behavior.
- * Compact view by default; expands on click to show full details.
+ * CapabilityCard — Compact card component for the Hub grid.
+ * Clicking a card triggers the modal overlay (handled by parent via onClick).
+ * No in-place expand behavior — modal comes in plan 02.
  */
 import Avatar from 'boring-avatars';
 import { inferCategories } from '../lib/categories.js';
@@ -12,49 +13,45 @@ import StatusDot from './StatusDot.js';
 
 interface CapabilityCardProps {
   card: HubCard;
-  expanded: boolean;
-  onToggle: () => void;
+  onClick: () => void;
 }
 
 /**
- * Renders a capability card with compact and expanded states.
+ * Renders a compact capability card with dark SaaS aesthetic.
+ * Layout: 32px identicon + title/owner/level row, ghost category chips, stats row.
+ * Hover: lifts 2px, border brightens, shadow deepens.
  *
  * @param card - The HubCard data to display
- * @param expanded - Whether the card is currently expanded
- * @param onToggle - Callback to toggle expanded state
+ * @param onClick - Callback invoked when the card is clicked (opens modal)
  */
-export default function CapabilityCard({ card, expanded, onToggle }: CapabilityCardProps) {
+export default function CapabilityCard({ card, onClick }: CapabilityCardProps) {
   const { categories, overflow } = inferCategories(card.metadata);
   const online = card.availability.online;
   const successRate = card.metadata?.success_rate;
-  const latency = card.metadata?.avg_latency_ms;
 
   return (
     <article
       role="article"
-      onClick={onToggle}
-      className={[
-        'bg-slate-800 rounded-xl border p-4 cursor-pointer transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_4px_12px_rgba(0,0,0,0.15)]',
-        expanded
-          ? 'border-indigo-500/50 shadow-lg shadow-indigo-500/10'
-          : 'border-slate-700 hover:border-indigo-500/50 hover:shadow-lg hover:shadow-indigo-500/5',
-      ].join(' ')}
+      onClick={onClick}
+      className="bg-hub-surface border border-hub-border rounded-card p-6 cursor-pointer transition-all duration-200 ease-[cubic-bezier(0.4,0,0.2,1)] hover:-translate-y-0.5 hover:border-hub-border-hover hover:shadow-[0_8px_32px_rgba(0,0,0,0.3)]"
     >
-      {/* Header row: identicon + name/owner */}
+      {/* Header row: 32px identicon + name/owner/level */}
       <div className="flex items-start gap-3">
-        <div className="flex-shrink-0">
+        <div className="flex-shrink-0 mt-0.5">
           <Avatar
-            size={40}
+            size={32}
             name={card.id}
             variant="beam"
           />
         </div>
         <div className="flex-1 min-w-0">
-          <p className="font-semibold text-slate-100 truncate">{card.name}</p>
-          <p className="text-sm text-slate-400">@{card.owner}</p>
-          <div className="mt-1">
+          <div className="flex items-center gap-2 flex-wrap">
+            <p className="text-[15px] font-semibold text-hub-text-primary truncate leading-tight">
+              {card.name}
+            </p>
             <LevelBadge level={card.level} />
           </div>
+          <p className="text-[13px] text-hub-text-tertiary mt-0.5">@{card.owner}</p>
         </div>
       </div>
 
@@ -66,98 +63,27 @@ export default function CapabilityCard({ card, expanded, onToggle }: CapabilityC
         {overflow > 0 && <CategoryChip category={categories[0]} overflowCount={overflow} />}
       </div>
 
-      {/* Powered by row */}
-      {card.powered_by && card.powered_by.length > 0 && (
-        <div className="mt-3 flex items-center gap-1 text-xs text-slate-500">
-          <span className="text-slate-600 mr-1">Powered by</span>
-          {card.powered_by.map((entry, i) => (
-            <span key={i} className="flex items-center">
-              {i > 0 && <span className="mx-1 text-slate-600">→</span>}
-              <span className="text-slate-300">
-                {entry.provider}
-                {entry.model && <span className="text-slate-500 ml-0.5">{entry.model}</span>}
-                {entry.tier && <span className="text-slate-500 ml-0.5">{entry.tier}</span>}
-              </span>
-            </span>
-          ))}
-        </div>
-      )}
-
       {/* Stats row */}
-      <div className="mt-3 flex items-center gap-3 text-xs text-slate-400">
+      <div className="mt-3 flex items-center gap-3 text-xs text-hub-text-secondary">
         <span className="flex items-center gap-1.5">
           <StatusDot online={online} />
           {online ? 'Online' : 'Offline'}
         </span>
         {successRate !== undefined && (
           <>
-            <span className="text-slate-600">·</span>
+            <span className="text-hub-text-tertiary">·</span>
             <span>{Math.round(successRate * 100)}% success</span>
           </>
         )}
-        <span className="text-slate-600">·</span>
-        <span className="text-indigo-400">{formatCredits(card.pricing)}</span>
+        <span className="text-hub-text-tertiary">·</span>
+        <span className="font-mono text-hub-accent">{formatCredits(card.pricing)}</span>
         {card.pricing.free_tier !== undefined && card.pricing.free_tier > 0 && (
           <>
-            <span className="text-slate-600">·</span>
-            <span className="text-emerald-400">{card.pricing.free_tier} free/mo</span>
+            <span className="text-hub-text-tertiary">·</span>
+            <span className="font-mono text-hub-accent">{card.pricing.free_tier} free/mo</span>
           </>
         )}
       </div>
-
-      {/* Expanded content */}
-      {expanded && (
-        <div className="mt-4 border-t border-slate-700 pt-4 space-y-3">
-          {/* Description */}
-          <p className="text-sm text-slate-300">{card.description}</p>
-
-          {/* I/O Schema */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1.5">
-                Inputs
-              </p>
-              <ul className="space-y-1">
-                {card.inputs.map((input) => (
-                  <li key={input.name} className="text-xs text-slate-300">
-                    <span className="text-slate-100 font-mono">{input.name}</span>
-                    <span className="text-slate-500 ml-1">:{input.type}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-            <div>
-              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1.5">
-                Outputs
-              </p>
-              <ul className="space-y-1">
-                {card.outputs.map((output) => (
-                  <li key={output.name} className="text-xs text-slate-300">
-                    <span className="text-slate-100 font-mono">{output.name}</span>
-                    <span className="text-slate-500 ml-1">:{output.type}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </div>
-
-          {/* Latency */}
-          <p className="text-xs text-slate-500">
-            {latency !== undefined ? `${latency}ms avg latency` : 'No latency data'}
-          </p>
-
-          {/* Request via CLI */}
-          <div
-            onClick={(e) => e.stopPropagation()}
-            className="mt-2"
-          >
-            <p className="text-xs text-slate-400 mb-1">Request via CLI:</p>
-            <pre className="px-3 py-2 bg-slate-900 rounded-lg text-indigo-400 text-xs font-mono">
-              agentbnb request {card.id}
-            </pre>
-          </div>
-        </div>
-      )}
     </article>
   );
 }

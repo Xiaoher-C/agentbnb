@@ -21,33 +21,33 @@ export function getLevelBadge(level: 1 | 2 | 3): LevelBadge {
     1: {
       level: 1,
       label: 'Atomic',
-      style: 'badge-dot text-xs px-2 py-0.5 rounded-full bg-slate-700 text-slate-300',
+      style: 'badge-dot text-[11px] px-2 py-0.5 rounded-full border border-hub-border-hover bg-transparent text-hub-text-secondary',
     },
     2: {
       level: 2,
       label: 'Pipeline',
-      style: 'badge-connected text-xs px-2 py-0.5 rounded-full bg-indigo-900 text-indigo-300',
+      style: 'badge-connected text-[11px] px-2 py-0.5 rounded-full border border-hub-border-hover bg-transparent text-hub-text-secondary',
     },
     3: {
       level: 3,
       label: 'Environment',
-      style: 'badge-block text-xs px-2 py-0.5 rounded bg-violet-900 text-violet-300',
+      style: 'badge-block text-[11px] px-2 py-0.5 rounded-full border border-hub-border-hover bg-transparent text-hub-text-secondary',
     },
   };
   return badges[level];
 }
 
 /**
- * Get the Tailwind color name for an online/offline status.
+ * Get the status color identifier for an online/offline status.
  *
  * Two-state only (online/offline). Three-state status (idle%) deferred
  * until the backend exposes idle metrics.
  *
  * @param online - Whether the agent is currently online
- * @returns 'emerald' for online, 'rose' for offline
+ * @returns 'accent' for online, 'dim' for offline
  */
 export function getStatusIndicator(online: boolean): StatusColor {
-  return online ? 'emerald' : 'rose';
+  return online ? 'accent' : 'dim';
 }
 
 /**

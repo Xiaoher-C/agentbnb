@@ -1,6 +1,7 @@
 /**
  * CapabilityCard component tests.
- * Covers compact view, expand-in-place behavior, and category overflow.
+ * Covers compact-only view and category overflow.
+ * Note: expanded/onToggle props removed — modal overlay added in plan 02.
  */
 import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
@@ -40,7 +41,7 @@ const cardWith6Categories: HubCard = {
 describe('CapabilityCard', () => {
   it('renders card name, owner, and status dot in compact view', () => {
     render(
-      <CapabilityCard card={baseCard} expanded={false} onToggle={() => {}} />,
+      <CapabilityCard card={baseCard} onClick={() => {}} />,
     );
     expect(screen.getByText('Text Summarizer')).toBeInTheDocument();
     expect(screen.getByText('@alice')).toBeInTheDocument();
@@ -48,29 +49,27 @@ describe('CapabilityCard', () => {
     expect(screen.getByLabelText('Online')).toBeInTheDocument();
   });
 
-  it('calls onToggle when the card is clicked', () => {
-    const onToggle = vi.fn();
+  it('calls onClick when the card is clicked', () => {
+    const onClick = vi.fn();
     render(
-      <CapabilityCard card={baseCard} expanded={false} onToggle={onToggle} />,
+      <CapabilityCard card={baseCard} onClick={onClick} />,
     );
     fireEvent.click(screen.getByRole('article'));
-    expect(onToggle).toHaveBeenCalledOnce();
+    expect(onClick).toHaveBeenCalledOnce();
   });
 
-  it('shows description and I/O schema section when expanded', () => {
+  it('does not render description or I/O schema (compact-only, no expand)', () => {
     render(
-      <CapabilityCard card={baseCard} expanded={true} onToggle={() => {}} />,
+      <CapabilityCard card={baseCard} onClick={() => {}} />,
     );
-    expect(
-      screen.getByText('Summarizes long documents using OpenAI GPT-4.'),
-    ).toBeInTheDocument();
-    expect(screen.getByText('Inputs')).toBeInTheDocument();
-    expect(screen.getByText('Outputs')).toBeInTheDocument();
+    expect(screen.queryByText('Summarizes long documents using OpenAI GPT-4.')).not.toBeInTheDocument();
+    expect(screen.queryByText('Inputs')).not.toBeInTheDocument();
+    expect(screen.queryByText('Outputs')).not.toBeInTheDocument();
   });
 
   it('shows "+2 more" overflow chip when card has 6 inferable categories', () => {
     render(
-      <CapabilityCard card={cardWith6Categories} expanded={false} onToggle={() => {}} />,
+      <CapabilityCard card={cardWith6Categories} onClick={() => {}} />,
     );
     expect(screen.getByText('+2 more')).toBeInTheDocument();
   });
@@ -81,7 +80,7 @@ describe('CapabilityCard', () => {
       pricing: { credits_per_call: 5, free_tier: 50 },
     };
     render(
-      <CapabilityCard card={cardWithFreeTier} expanded={false} onToggle={() => {}} />,
+      <CapabilityCard card={cardWithFreeTier} onClick={() => {}} />,
     );
     expect(screen.getByText('50 free/mo')).toBeInTheDocument();
   });
@@ -89,7 +88,7 @@ describe('CapabilityCard', () => {
   it('does not render free-tier badge when free_tier absent', () => {
     // baseCard has no free_tier field
     render(
-      <CapabilityCard card={baseCard} expanded={false} onToggle={() => {}} />,
+      <CapabilityCard card={baseCard} onClick={() => {}} />,
     );
     expect(screen.queryByText(/free\/mo/)).not.toBeInTheDocument();
   });

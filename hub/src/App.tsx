@@ -54,25 +54,23 @@ export default function App() {
     totalExchanges,
   } = useCards();
 
-  // Track which card.id is currently expanded (null = none)
-  const [expandedId, setExpandedId] = useState<string | null>(null);
-
-  const handleToggle = (id: string) => {
-    setExpandedId((prev) => (prev === id ? null : id));
+  // Modal overlay implemented in plan 02 — onClick wired up, modal state added there
+  const handleCardClick = (_id: string) => {
+    // No-op until plan 02 adds the modal overlay
   };
 
   return (
-    <div className="min-h-screen bg-slate-900 text-slate-100">
+    <div className="min-h-screen bg-hub-bg text-hub-text-primary">
       <header className="max-w-7xl mx-auto px-4 pt-8 pb-0">
         <div className="flex items-start justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-slate-100">AgentBnB Hub</h1>
-            <p className="text-slate-400 mt-1">Browse available agent capabilities</p>
+            <h1 className="text-3xl font-bold text-hub-text-primary">AgentBnB Hub</h1>
+            <p className="text-hub-text-secondary mt-1">Browse available agent capabilities</p>
           </div>
           {apiKey && (
             <button
               onClick={logout}
-              className="text-xs text-slate-500 hover:text-slate-300 underline mt-2 transition-colors"
+              className="text-xs text-hub-text-tertiary hover:text-hub-text-secondary underline mt-2 transition-colors"
             >
               Disconnect
             </button>
@@ -80,7 +78,7 @@ export default function App() {
         </div>
 
         {/* Tab navigation */}
-        <nav className="mt-6 flex gap-0 border-b border-slate-700">
+        <nav className="mt-6 flex gap-0 border-b border-hub-border">
           {TABS.map((tab) => (
             <button
               key={tab.id}
@@ -88,8 +86,8 @@ export default function App() {
               className={[
                 'px-4 py-2 text-sm font-medium transition-colors',
                 activeTab === tab.id
-                  ? 'border-b-2 border-emerald-400 text-emerald-400 -mb-px'
-                  : 'text-slate-400 hover:text-slate-300',
+                  ? 'border-b-2 border-hub-accent text-hub-accent -mb-px'
+                  : 'text-hub-text-secondary hover:text-hub-text-primary',
               ].join(' ')}
             >
               {tab.label}
@@ -136,8 +134,7 @@ export default function App() {
                   <CapabilityCard
                     key={card.id}
                     card={card}
-                    expanded={expandedId === card.id}
-                    onToggle={() => { handleToggle(card.id); }}
+                    onClick={() => { handleCardClick(card.id); }}
                   />
                 ))}
               </CardGrid>

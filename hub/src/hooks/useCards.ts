@@ -6,7 +6,7 @@
  */
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { inferCategories } from '../lib/categories.js';
-import type { CardsResponse, Category, HubCard } from '../types.js';
+import type { Category, HubCard } from '../types.js';
 
 const POLL_INTERVAL_MS = 30_000;
 

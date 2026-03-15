@@ -42,10 +42,10 @@ export interface LevelBadge {
 }
 
 /**
- * Two-state status: online (emerald) or offline (rose).
+ * Two-state status: online (accent green) or offline (dim).
  * Three-state status deferred until backend exposes idle metrics. MVP ships with online/offline.
  */
-export type StatusColor = 'emerald' | 'rose';
+export type StatusColor = 'accent' | 'dim';
 
 export interface CardsResponse {
   total: number;
