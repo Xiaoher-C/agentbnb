@@ -154,7 +154,7 @@ export function getRequestLog(
   }
 
   const stmt = db.prepare(`
-    SELECT id, card_id, card_name, requester, status, latency_ms, credits_charged, created_at, skill_id
+    SELECT id, card_id, card_name, requester, status, latency_ms, credits_charged, created_at, skill_id, action_type, tier_invoked
     FROM request_log
     ORDER BY created_at DESC
     LIMIT ?
