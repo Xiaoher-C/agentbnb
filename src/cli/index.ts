@@ -87,6 +87,10 @@ program
     const port = parseInt(opts.port, 10);
     const ip = opts.host ?? getLanIp();
 
+    // Load existing config to preserve api_key on re-init (don't overwrite)
+    const existingConfig = loadConfig();
+    const api_key = existingConfig?.api_key ?? randomBytes(32).toString('hex');
+
     const config = {
       owner,
       gateway_url: `http://${ip}:${port}`,
@@ -94,6 +98,7 @@ program
       db_path: dbPath,
       credit_db_path: creditDbPath,
       token,
+      api_key,
     };
 
     saveConfig(config);

@@ -24,6 +24,8 @@ export interface AgentBnBConfig {
   token: string;
   /** Optional default remote registry URL (e.g. http://host:7701). */
   registry?: string;
+  /** API key for authenticating Hub dashboard access. 64-char hex string generated on init. */
+  api_key?: string;
 }
 
 /**

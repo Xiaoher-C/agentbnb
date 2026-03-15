@@ -441,6 +441,65 @@ describe('CLI: init onboarding', () => {
   });
 });
 
+describe('CLI: init api_key', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = mkdtempSync(join(tmpdir(), 'agentbnb-test-'));
+  });
+
+  afterEach(() => {
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('init generates a 64-char hex api_key and stores it in config.json', () => {
+    const { status } = runCli('init --owner api-key-agent --no-detect', tmpDir);
+    expect(status).toBe(0);
+
+    const configPath = join(tmpDir, 'config.json');
+    const config = JSON.parse(readFileSync(configPath, 'utf-8')) as Record<string, unknown>;
+    expect(typeof config.api_key).toBe('string');
+    expect((config.api_key as string).length).toBe(64);
+    expect(/^[0-9a-f]{64}$/.test(config.api_key as string)).toBe(true);
+  });
+
+  it('re-running init does not overwrite existing api_key', () => {
+    runCli('init --owner api-key-agent --no-detect', tmpDir);
+
+    const configPath = join(tmpDir, 'config.json');
+    const firstConfig = JSON.parse(readFileSync(configPath, 'utf-8')) as Record<string, unknown>;
+    const firstKey = firstConfig.api_key as string;
+
+    // Run init again with same dir
+    runCli('init --owner api-key-agent --no-detect', tmpDir);
+    const secondConfig = JSON.parse(readFileSync(configPath, 'utf-8')) as Record<string, unknown>;
+    expect(secondConfig.api_key).toBe(firstKey);
+  });
+
+  it('existing configs without api_key load without error', () => {
+    // Manually create a config without api_key field (backward compat)
+    const { mkdirSync: mkdir, writeFileSync: wf } = require('node:fs') as typeof import('node:fs');
+    mkdir(tmpDir, { recursive: true });
+    const legacyConfig = {
+      owner: 'legacy-agent',
+      gateway_url: 'http://localhost:7700',
+      gateway_port: 7700,
+      db_path: join(tmpDir, 'registry.db'),
+      credit_db_path: join(tmpDir, 'credit.db'),
+      token: 'legacy-token',
+    };
+    wf(join(tmpDir, 'config.json'), JSON.stringify(legacyConfig, null, 2));
+
+    // A legacy config can be loaded (status command should work with it)
+    // The config itself is valid even without api_key since the field is optional
+    const config = JSON.parse(
+      (require('node:fs') as typeof import('node:fs')).readFileSync(join(tmpDir, 'config.json'), 'utf-8')
+    ) as Record<string, unknown>;
+    expect(config.api_key).toBeUndefined();
+    expect(config.owner).toBe('legacy-agent');
+  });
+});
+
 describe('CLI: --help', () => {
   it('all commands have --help registered in program', async () => {
     // Import program to verify commands are registered

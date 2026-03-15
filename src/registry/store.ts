@@ -1,6 +1,7 @@
 import Database from 'better-sqlite3';
 import { CapabilityCardSchema, AgentBnBError } from '../types/index.js';
 import type { CapabilityCard } from '../types/index.js';
+import { createRequestLogTable } from './request-log.js';
 
 export type { Database };
 
@@ -100,6 +101,9 @@ export function openDatabase(path = ':memory:'): Database.Database {
       );
     END;
   `);
+
+  // Create request_log table for tracking capability execution history
+  createRequestLogTable(db);
 
   return db;
 }
