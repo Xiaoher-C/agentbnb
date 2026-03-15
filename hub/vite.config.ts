@@ -12,6 +12,9 @@ export default defineConfig({
     proxy: {
       '/cards': 'http://localhost:7701',
       '/health': 'http://localhost:7701',
+      '/me': 'http://localhost:7701',
+      '/requests': 'http://localhost:7701',
+      '/draft': 'http://localhost:7701',
     },
   },
   test: {

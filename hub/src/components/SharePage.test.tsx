@@ -18,7 +18,10 @@ describe('SharePage', () => {
     render(<SharePage apiKey="test-key" />);
 
     await waitFor(() => {
-      expect(screen.getByText(/agentbnb serve/i)).toBeInTheDocument();
+      // The "Server Not Running" heading appears when unreachable
+      expect(screen.getByText(/Server Not Running/i)).toBeInTheDocument();
+      // The command block contains "agentbnb serve" text
+      expect(screen.getAllByText(/agentbnb serve/i).length).toBeGreaterThan(0);
     });
   });
 
@@ -88,10 +91,10 @@ describe('SharePage', () => {
     render(<SharePage apiKey="test-key" />);
 
     await waitFor(() => {
-      expect(screen.getByText(/Publish/i)).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /^Publish$/i })).toBeInTheDocument();
     });
 
-    await userEvent.click(screen.getByText(/Publish/i));
+    await userEvent.click(screen.getByRole('button', { name: /^Publish$/i }));
 
     await waitFor(() => {
       const publishCall = fetchMock.mock.calls.find((c) => {
