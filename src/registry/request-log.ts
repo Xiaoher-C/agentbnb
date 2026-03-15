@@ -20,6 +20,11 @@ export interface RequestLogEntry {
   credits_charged: number;
   /** ISO 8601 timestamp when this log entry was created. */
   created_at: string;
+  /**
+   * Identifier of the specific skill that was invoked on the card.
+   * Null for v1.0 cards (no skills[] array). Used by Phase 6 for per-skill idle rate tracking.
+   */
+  skill_id?: string | null;
 }
 
 /**
@@ -38,6 +43,7 @@ const SINCE_MS: Record<SincePeriod, number> = {
 /**
  * Creates the request_log table in the given database if it does not already exist.
  * Also creates an index on created_at DESC for efficient period-filtered queries.
+ * Adds skill_id column via ALTER TABLE if it does not already exist (idempotent).
  *
  * @param db - Open database instance.
  */
@@ -57,6 +63,15 @@ export function createRequestLogTable(db: Database.Database): void {
     CREATE INDEX IF NOT EXISTS request_log_created_at_idx
       ON request_log (created_at DESC);
   `);
+
+  // Add skill_id column if it does not already exist.
+  // ALTER TABLE ADD COLUMN is idempotent via try/catch — SQLite will throw if the
+  // column already exists, which we silently ignore.
+  try {
+    db.exec('ALTER TABLE request_log ADD COLUMN skill_id TEXT');
+  } catch {
+    // Column already exists — ignore
+  }
 }
 
 /**
@@ -67,8 +82,8 @@ export function createRequestLogTable(db: Database.Database): void {
  */
 export function insertRequestLog(db: Database.Database, entry: RequestLogEntry): void {
   const stmt = db.prepare(`
-    INSERT INTO request_log (id, card_id, card_name, requester, status, latency_ms, credits_charged, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO request_log (id, card_id, card_name, requester, status, latency_ms, credits_charged, created_at, skill_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
   stmt.run(
@@ -79,7 +94,8 @@ export function insertRequestLog(db: Database.Database, entry: RequestLogEntry):
     entry.status,
     entry.latency_ms,
     entry.credits_charged,
-    entry.created_at
+    entry.created_at,
+    entry.skill_id ?? null
   );
 }
 
@@ -101,7 +117,7 @@ export function getRequestLog(
   if (since !== undefined) {
     const cutoff = new Date(Date.now() - SINCE_MS[since]).toISOString();
     const stmt = db.prepare(`
-      SELECT id, card_id, card_name, requester, status, latency_ms, credits_charged, created_at
+      SELECT id, card_id, card_name, requester, status, latency_ms, credits_charged, created_at, skill_id
       FROM request_log
       WHERE created_at >= ?
       ORDER BY created_at DESC
@@ -111,7 +127,7 @@ export function getRequestLog(
   }
 
   const stmt = db.prepare(`
-    SELECT id, card_id, card_name, requester, status, latency_ms, credits_charged, created_at
+    SELECT id, card_id, card_name, requester, status, latency_ms, credits_charged, created_at, skill_id
     FROM request_log
     ORDER BY created_at DESC
     LIMIT ?

@@ -8,11 +8,13 @@ import {
   deleteCard,
   listCards,
   updateReputation,
+  runMigrations,
 } from './store.js';
 import { searchCards, filterCards } from './matcher.js';
 import { AgentBnBError } from '../types/index.js';
-import type { CapabilityCard } from '../types/index.js';
+import type { CapabilityCard, CapabilityCardV2 } from '../types/index.js';
 import type { Database } from 'better-sqlite3';
+import { insertRequestLog, getRequestLog, createRequestLogTable } from './request-log.js';
 
 function makeCard(overrides: Partial<CapabilityCard> = {}): CapabilityCard {
   return {
@@ -360,6 +362,271 @@ describe('Registry Store', () => {
       expect(updated?.metadata?.tags).toEqual(['tts', 'audio']);
       expect(updated?.metadata?.success_rate).toBeDefined();
       expect(updated?.metadata?.avg_latency_ms).toBeDefined();
+    });
+  });
+});
+
+// -----------------------------------------------------------------------
+// Task 2 — v1.0 to v2.0 migration tests (Plan 04-02)
+// -----------------------------------------------------------------------
+
+describe('v1-to-v2 migration', () => {
+  /**
+   * Builds a fresh in-memory database at PRAGMA user_version 0 with v1.0 triggers,
+   * inserts a v1.0 card directly into SQLite (bypassing insertCard validation),
+   * then returns the db. This simulates a pre-migration database state.
+   */
+  function makePreMigrationDb(cards: CapabilityCard[]): ReturnType<typeof openDatabase> {
+    // Open a new DB with initial schema (triggers set to v1.0 style)
+    const db = openDatabase(':memory:');
+
+    // Reset user_version to 0 to simulate pre-migration state
+    // Then insert v1.0 cards directly into the DB (no v2.0 validation)
+    // We need to bypass the migration that openDatabase() calls, so instead
+    // we build raw by inserting JSON directly
+    for (const card of cards) {
+      const now = new Date().toISOString();
+      db.prepare(
+        'INSERT INTO capability_cards (id, owner, data, created_at, updated_at) VALUES (?, ?, ?, ?, ?)'
+      ).run(card.id, card.owner, JSON.stringify({ ...card, spec_version: '1.0', created_at: now, updated_at: now }), now, now);
+    }
+
+    return db;
+  }
+
+  describe('Test 1+2+3: Migration converts v1.0 card to v2.0 with correct shape', () => {
+    it('migrated card has spec_version 2.0, agent_name = original name, skills[0].id = skill-{card.id}', () => {
+      const cardId = randomUUID();
+      const v1Card: CapabilityCard = {
+        id: cardId,
+        owner: 'test-owner',
+        name: 'ElevenLabs TTS',
+        description: 'Text-to-speech via ElevenLabs',
+        level: 1,
+        inputs: [{ name: 'text', type: 'text', required: true }],
+        outputs: [{ name: 'audio', type: 'audio', required: true }],
+        pricing: { credits_per_call: 5 },
+        availability: { online: true },
+        metadata: { apis_used: ['elevenlabs'], tags: ['tts'] },
+      };
+
+      const db = makePreMigrationDb([v1Card]);
+
+      // Reset user_version to force migration
+      db.pragma('user_version = 0');
+      runMigrations(db);
+
+      const row = db.prepare('SELECT data FROM capability_cards WHERE id = ?').get(cardId) as { data: string };
+      const migrated = JSON.parse(row.data) as CapabilityCardV2;
+
+      // Test 1: Correct v2.0 shape with skills[]
+      expect(migrated.spec_version).toBe('2.0');
+      expect(Array.isArray(migrated.skills)).toBe(true);
+      expect(migrated.skills.length).toBe(1);
+
+      // Test 2: agent_name and skill id
+      expect(migrated.agent_name).toBe('ElevenLabs TTS');
+      expect(migrated.skills[0]!.id).toBe(`skill-${cardId}`);
+
+      // Test 3: Preserves original fields
+      expect(migrated.skills[0]!.name).toBe('ElevenLabs TTS');
+      expect(migrated.skills[0]!.description).toBe('Text-to-speech via ElevenLabs');
+      expect(migrated.skills[0]!.level).toBe(1);
+      expect(migrated.skills[0]!.inputs).toEqual(v1Card.inputs);
+      expect(migrated.skills[0]!.outputs).toEqual(v1Card.outputs);
+      expect(migrated.skills[0]!.pricing).toEqual(v1Card.pricing);
+      expect(migrated.skills[0]!.metadata?.apis_used).toEqual(['elevenlabs']);
+      expect(migrated.skills[0]!.metadata?.tags).toEqual(['tts']);
+    });
+  });
+
+  describe('Test 4: PRAGMA user_version is 2 after migration', () => {
+    it('user_version is set to 2 after runMigrations()', () => {
+      const db = makePreMigrationDb([]);
+      db.pragma('user_version = 0');
+      runMigrations(db);
+
+      const version = (db.pragma('user_version') as Array<{ user_version: number }>)[0]?.user_version ?? 0;
+      expect(version).toBe(2);
+    });
+  });
+
+  describe('Test 5: Calling runMigrations() twice does NOT double-migrate (user_version guard)', () => {
+    it('running migration twice leaves only one skills[] per card', () => {
+      const cardId = randomUUID();
+      const v1Card: CapabilityCard = {
+        id: cardId,
+        owner: 'test-owner',
+        name: 'ElevenLabs TTS',
+        description: 'Text-to-speech via ElevenLabs',
+        level: 1,
+        inputs: [{ name: 'text', type: 'text', required: true }],
+        outputs: [{ name: 'audio', type: 'audio', required: true }],
+        pricing: { credits_per_call: 5 },
+        availability: { online: true },
+      };
+
+      const db = makePreMigrationDb([v1Card]);
+      db.pragma('user_version = 0');
+      runMigrations(db);
+      runMigrations(db); // Second call — should be a no-op
+
+      const row = db.prepare('SELECT data FROM capability_cards WHERE id = ?').get(cardId) as { data: string };
+      const migrated = JSON.parse(row.data) as CapabilityCardV2;
+
+      expect(migrated.spec_version).toBe('2.0');
+      expect(migrated.skills.length).toBe(1);
+      // Ensure no double-wrapping: skills[0] should NOT have a 'skills' property
+      expect((migrated.skills[0] as Record<string, unknown>)['skills']).toBeUndefined();
+    });
+  });
+
+  describe('Test 6+7: FTS5 search works after migration', () => {
+    it('FTS5 search for a skill name returns the correct card', () => {
+      const cardId = randomUUID();
+      const v1Card: CapabilityCard = {
+        id: cardId,
+        owner: 'test-owner',
+        name: 'VoiceSynth Pro',
+        description: 'Professional voice synthesis',
+        level: 1,
+        inputs: [{ name: 'text', type: 'text', required: true }],
+        outputs: [{ name: 'audio', type: 'audio', required: true }],
+        pricing: { credits_per_call: 10 },
+        availability: { online: true },
+      };
+
+      const db = makePreMigrationDb([v1Card]);
+      db.pragma('user_version = 0');
+      runMigrations(db);
+
+      const results = searchCards(db, 'VoiceSynth');
+      expect(results.length).toBeGreaterThanOrEqual(1);
+      const found = results.find((r) => r.id === cardId);
+      expect(found).toBeDefined();
+    });
+
+    it('FTS5 search for a skill description returns the correct card', () => {
+      const cardId = randomUUID();
+      const v1Card: CapabilityCard = {
+        id: cardId,
+        owner: 'test-owner',
+        name: 'My Capability',
+        description: 'UniqueXylosynthPhraseForTesting description',
+        level: 1,
+        inputs: [{ name: 'text', type: 'text', required: true }],
+        outputs: [{ name: 'audio', type: 'audio', required: true }],
+        pricing: { credits_per_call: 5 },
+        availability: { online: true },
+      };
+
+      const db = makePreMigrationDb([v1Card]);
+      db.pragma('user_version = 0');
+      runMigrations(db);
+
+      const results = searchCards(db, 'UniqueXylosynthPhraseForTesting');
+      expect(results.length).toBeGreaterThanOrEqual(1);
+      const found = results.find((r) => r.id === cardId);
+      expect(found).toBeDefined();
+    });
+  });
+
+  describe('Test 8: Inserting a NEW v2.0 card after migration is indexed by FTS5', () => {
+    it('new v2.0 card inserted after migration appears in FTS5 search', () => {
+      const db = makePreMigrationDb([]);
+      db.pragma('user_version = 0');
+      runMigrations(db);
+
+      // Insert a v2.0 card directly after migration
+      const cardId = randomUUID();
+      const now = new Date().toISOString();
+      const v2Card = {
+        spec_version: '2.0',
+        id: cardId,
+        owner: 'test-owner',
+        agent_name: 'New v2 Agent',
+        skills: [{
+          id: `skill-${cardId}`,
+          name: 'TranscriptionSkillUnique',
+          description: 'Transcribes audio to text with high accuracy',
+          level: 1,
+          inputs: [{ name: 'audio', type: 'audio', required: true }],
+          outputs: [{ name: 'text', type: 'text', required: true }],
+          pricing: { credits_per_call: 3 },
+        }],
+        availability: { online: true },
+        created_at: now,
+        updated_at: now,
+      };
+
+      db.prepare(
+        'INSERT INTO capability_cards (id, owner, data, created_at, updated_at) VALUES (?, ?, ?, ?, ?)'
+      ).run(cardId, 'test-owner', JSON.stringify(v2Card), now, now);
+
+      const results = searchCards(db, 'TranscriptionSkillUnique');
+      expect(results.length).toBeGreaterThanOrEqual(1);
+      const found = results.find((r) => r.id === cardId);
+      expect(found).toBeDefined();
+    });
+  });
+});
+
+// -----------------------------------------------------------------------
+// Task 2 — request_log skill_id column tests (Plan 04-02)
+// -----------------------------------------------------------------------
+
+describe('request_log skill_id', () => {
+  describe('Test 9: request_log table has skill_id column after migration', () => {
+    it('skill_id column exists in request_log table', () => {
+      const db = openDatabase(':memory:');
+      const info = db.prepare("PRAGMA table_info(request_log)").all() as Array<{ name: string }>;
+      const colNames = info.map((col) => col.name);
+      expect(colNames).toContain('skill_id');
+    });
+  });
+
+  describe('Test 10: insertRequestLog with skill_id succeeds', () => {
+    it('can insert a log entry with skill_id and retrieve it', () => {
+      const db = openDatabase(':memory:');
+      const entryId = randomUUID();
+      const cardId = randomUUID();
+
+      insertRequestLog(db, {
+        id: entryId,
+        card_id: cardId,
+        card_name: 'Test Card',
+        requester: 'test-agent',
+        status: 'success',
+        latency_ms: 150,
+        credits_charged: 5,
+        created_at: new Date().toISOString(),
+        skill_id: 'tts-elevenlabs',
+      });
+
+      const logs = getRequestLog(db, 10);
+      expect(logs).toHaveLength(1);
+      expect(logs[0]!.skill_id).toBe('tts-elevenlabs');
+    });
+
+    it('can insert a log entry without skill_id (backward compat)', () => {
+      const db = openDatabase(':memory:');
+      const entryId = randomUUID();
+
+      insertRequestLog(db, {
+        id: entryId,
+        card_id: randomUUID(),
+        card_name: 'Test Card',
+        requester: 'test-agent',
+        status: 'success',
+        latency_ms: 100,
+        credits_charged: 5,
+        created_at: new Date().toISOString(),
+      });
+
+      const logs = getRequestLog(db, 10);
+      expect(logs).toHaveLength(1);
+      // skill_id should be null or undefined when not provided
+      expect(logs[0]!.skill_id == null).toBe(true);
     });
   });
 });

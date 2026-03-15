@@ -1,13 +1,142 @@
 import Database from 'better-sqlite3';
 import { CapabilityCardSchema, AgentBnBError } from '../types/index.js';
-import type { CapabilityCard } from '../types/index.js';
+import type { CapabilityCard, CapabilityCardV2 } from '../types/index.js';
 import { createRequestLogTable } from './request-log.js';
 
 export type { Database };
 
 /**
+ * SQL for the v2.0 FTS5 triggers that aggregate over skills[] using json_each.
+ *
+ * The COALESCE fallback ensures backward compatibility: if $.skills is NULL
+ * (e.g. a v1.0 card inserted before migration), the trigger falls through to
+ * the flat $.name / $.description paths.
+ *
+ * NOTE: cards_fts uses content="" (contentless) so SQLite does NOT try to read
+ * columns from capability_cards during rebuild. All indexing is trigger-managed.
+ * The rowid join in matcher.ts still works because we set rowid explicitly.
+ */
+const V2_FTS_TRIGGERS = `
+  DROP TRIGGER IF EXISTS cards_ai;
+  DROP TRIGGER IF EXISTS cards_au;
+  DROP TRIGGER IF EXISTS cards_ad;
+
+  CREATE TRIGGER cards_ai AFTER INSERT ON capability_cards BEGIN
+    INSERT INTO cards_fts(rowid, id, owner, name, description, tags)
+    VALUES (
+      new.rowid,
+      new.id,
+      new.owner,
+      COALESCE(
+        (SELECT group_concat(json_extract(value, '$.name'), ' ')
+         FROM json_each(json_extract(new.data, '$.skills'))),
+        json_extract(new.data, '$.name'),
+        ''
+      ),
+      COALESCE(
+        (SELECT group_concat(json_extract(value, '$.description'), ' ')
+         FROM json_each(json_extract(new.data, '$.skills'))),
+        json_extract(new.data, '$.description'),
+        ''
+      ),
+      COALESCE(
+        (SELECT group_concat(json_extract(value, '$.metadata.tags'), ' ')
+         FROM json_each(json_extract(new.data, '$.skills'))),
+        (SELECT group_concat(value, ' ')
+         FROM json_each(json_extract(new.data, '$.metadata.tags'))),
+        ''
+      )
+    );
+  END;
+
+  CREATE TRIGGER cards_au AFTER UPDATE ON capability_cards BEGIN
+    INSERT INTO cards_fts(cards_fts, rowid, id, owner, name, description, tags)
+    VALUES (
+      'delete',
+      old.rowid,
+      old.id,
+      old.owner,
+      COALESCE(
+        (SELECT group_concat(json_extract(value, '$.name'), ' ')
+         FROM json_each(json_extract(old.data, '$.skills'))),
+        json_extract(old.data, '$.name'),
+        ''
+      ),
+      COALESCE(
+        (SELECT group_concat(json_extract(value, '$.description'), ' ')
+         FROM json_each(json_extract(old.data, '$.skills'))),
+        json_extract(old.data, '$.description'),
+        ''
+      ),
+      COALESCE(
+        (SELECT group_concat(json_extract(value, '$.metadata.tags'), ' ')
+         FROM json_each(json_extract(old.data, '$.skills'))),
+        (SELECT group_concat(value, ' ')
+         FROM json_each(json_extract(old.data, '$.metadata.tags'))),
+        ''
+      )
+    );
+    INSERT INTO cards_fts(rowid, id, owner, name, description, tags)
+    VALUES (
+      new.rowid,
+      new.id,
+      new.owner,
+      COALESCE(
+        (SELECT group_concat(json_extract(value, '$.name'), ' ')
+         FROM json_each(json_extract(new.data, '$.skills'))),
+        json_extract(new.data, '$.name'),
+        ''
+      ),
+      COALESCE(
+        (SELECT group_concat(json_extract(value, '$.description'), ' ')
+         FROM json_each(json_extract(new.data, '$.skills'))),
+        json_extract(new.data, '$.description'),
+        ''
+      ),
+      COALESCE(
+        (SELECT group_concat(json_extract(value, '$.metadata.tags'), ' ')
+         FROM json_each(json_extract(new.data, '$.skills'))),
+        (SELECT group_concat(value, ' ')
+         FROM json_each(json_extract(new.data, '$.metadata.tags'))),
+        ''
+      )
+    );
+  END;
+
+  CREATE TRIGGER cards_ad AFTER DELETE ON capability_cards BEGIN
+    INSERT INTO cards_fts(cards_fts, rowid, id, owner, name, description, tags)
+    VALUES (
+      'delete',
+      old.rowid,
+      old.id,
+      old.owner,
+      COALESCE(
+        (SELECT group_concat(json_extract(value, '$.name'), ' ')
+         FROM json_each(json_extract(old.data, '$.skills'))),
+        json_extract(old.data, '$.name'),
+        ''
+      ),
+      COALESCE(
+        (SELECT group_concat(json_extract(value, '$.description'), ' ')
+         FROM json_each(json_extract(old.data, '$.skills'))),
+        json_extract(old.data, '$.description'),
+        ''
+      ),
+      COALESCE(
+        (SELECT group_concat(json_extract(value, '$.metadata.tags'), ' ')
+         FROM json_each(json_extract(old.data, '$.skills'))),
+        (SELECT group_concat(value, ' ')
+         FROM json_each(json_extract(old.data, '$.metadata.tags'))),
+        ''
+      )
+    );
+  END;
+`;
+
+/**
  * Opens a SQLite database at the given path (or in-memory if ':memory:').
- * Applies WAL mode, enables foreign keys, and runs schema migrations.
+ * Applies WAL mode, enables foreign keys, creates base tables and FTS virtual table,
+ * calls createRequestLogTable, then runs schema migrations (which installs v2.0 triggers).
  *
  * @param path - File path or ':memory:' for in-memory. Defaults to ':memory:'.
  * @returns Opened Database instance.
@@ -18,7 +147,10 @@ export function openDatabase(path = ':memory:'): Database.Database {
   db.pragma('journal_mode = WAL');
   db.pragma('foreign_keys = ON');
 
-  // Run migrations
+  // Create base tables and FTS virtual table (no triggers — runMigrations installs them).
+  // cards_fts uses content="" (contentless FTS) so SQLite does not try to resolve FTS
+  // column names as physical columns in capability_cards during rebuild operations.
+  // All FTS rows are managed exclusively by triggers.
   db.exec(`
     CREATE TABLE IF NOT EXISTS capability_cards (
       id TEXT PRIMARY KEY,
@@ -34,78 +166,156 @@ export function openDatabase(path = ':memory:'): Database.Database {
       name,
       description,
       tags,
-      content=capability_cards,
-      content_rowid=rowid
+      content=""
     );
-
-    CREATE TRIGGER IF NOT EXISTS cards_ai AFTER INSERT ON capability_cards BEGIN
-      INSERT INTO cards_fts(rowid, id, owner, name, description, tags)
-      VALUES (
-        new.rowid,
-        new.id,
-        new.owner,
-        json_extract(new.data, '$.name'),
-        json_extract(new.data, '$.description'),
-        COALESCE(
-          (SELECT group_concat(value, ' ')
-           FROM json_each(json_extract(new.data, '$.metadata.tags'))),
-          ''
-        )
-      );
-    END;
-
-    CREATE TRIGGER IF NOT EXISTS cards_au AFTER UPDATE ON capability_cards BEGIN
-      INSERT INTO cards_fts(cards_fts, rowid, id, owner, name, description, tags)
-      VALUES (
-        'delete',
-        old.rowid,
-        old.id,
-        old.owner,
-        json_extract(old.data, '$.name'),
-        json_extract(old.data, '$.description'),
-        COALESCE(
-          (SELECT group_concat(value, ' ')
-           FROM json_each(json_extract(old.data, '$.metadata.tags'))),
-          ''
-        )
-      );
-      INSERT INTO cards_fts(rowid, id, owner, name, description, tags)
-      VALUES (
-        new.rowid,
-        new.id,
-        new.owner,
-        json_extract(new.data, '$.name'),
-        json_extract(new.data, '$.description'),
-        COALESCE(
-          (SELECT group_concat(value, ' ')
-           FROM json_each(json_extract(new.data, '$.metadata.tags'))),
-          ''
-        )
-      );
-    END;
-
-    CREATE TRIGGER IF NOT EXISTS cards_ad AFTER DELETE ON capability_cards BEGIN
-      INSERT INTO cards_fts(cards_fts, rowid, id, owner, name, description, tags)
-      VALUES (
-        'delete',
-        old.rowid,
-        old.id,
-        old.owner,
-        json_extract(old.data, '$.name'),
-        json_extract(old.data, '$.description'),
-        COALESCE(
-          (SELECT group_concat(value, ' ')
-           FROM json_each(json_extract(old.data, '$.metadata.tags'))),
-          ''
-        )
-      );
-    END;
   `);
 
-  // Create request_log table for tracking capability execution history
+  // Create request_log table (adds skill_id column idempotently)
   createRequestLogTable(db);
 
+  // Run schema migrations — installs v2.0 FTS triggers and migrates v1.0 cards
+  runMigrations(db);
+
   return db;
+}
+
+/**
+ * Runs all pending SQLite schema migrations.
+ *
+ * Currently applies one migration:
+ * - Version 0→2: Install v2.0 FTS5 triggers (json_each over skills[]).
+ *   If cards exist and are in v1.0 format, migrate them to v2.0 shape first.
+ *
+ * Uses PRAGMA user_version as a guard to ensure migrations run only once.
+ *
+ * @param db - Open database instance.
+ */
+export function runMigrations(db: Database.Database): void {
+  const version =
+    (db.pragma('user_version') as Array<{ user_version: number }>)[0]?.user_version ?? 0;
+
+  if (version < 2) {
+    migrateV1toV2(db);
+  }
+}
+
+/**
+ * Migration: v1.0 -> v2.0
+ *
+ * Runs inside a single db.transaction() to ensure atomicity:
+ * 1. Reads all v1.0 cards from capability_cards
+ * 2. Converts each to v2.0 shape (skills[] wrapping original fields)
+ * 3. Drops old v1.0 FTS triggers and installs v2.0 triggers (json_each over skills[])
+ * 4. Clears FTS index via 'delete-all' command then repopulates from migrated card data
+ * 5. Sets PRAGMA user_version = 2 to prevent re-running
+ *
+ * @param db - Open database instance.
+ */
+function migrateV1toV2(db: Database.Database): void {
+  const migrate = db.transaction(() => {
+    // 1. Read all existing cards
+    const rows = db.prepare('SELECT rowid, id, data FROM capability_cards').all() as Array<{
+      rowid: number;
+      id: string;
+      data: string;
+    }>;
+
+    // 2. Convert v1.0 cards to v2.0 shape
+    const now = new Date().toISOString();
+    for (const row of rows) {
+      const parsed = JSON.parse(row.data) as Record<string, unknown>;
+
+      // Skip cards that are already v2.0
+      if (parsed['spec_version'] === '2.0') continue;
+
+      const v1 = parsed as unknown as CapabilityCard;
+      const v2: CapabilityCardV2 = {
+        spec_version: '2.0',
+        id: v1.id,
+        owner: v1.owner,
+        agent_name: v1.name,
+        skills: [
+          {
+            id: `skill-${v1.id}`,
+            name: v1.name,
+            description: v1.description,
+            level: v1.level,
+            inputs: v1.inputs,
+            outputs: v1.outputs,
+            pricing: v1.pricing,
+            availability: { online: v1.availability.online },
+            powered_by: v1.powered_by,
+            metadata: v1.metadata,
+            _internal: v1._internal,
+          },
+        ],
+        availability: v1.availability,
+        created_at: v1.created_at,
+        updated_at: now,
+      };
+
+      db.prepare('UPDATE capability_cards SET data = ?, updated_at = ? WHERE id = ?').run(
+        JSON.stringify(v2),
+        now,
+        v2.id
+      );
+    }
+
+    // 3. Drop old triggers and install v2.0 FTS triggers
+    db.exec(V2_FTS_TRIGGERS);
+
+    // 4. Rebuild FTS index for contentless FTS5 table:
+    //    Use the FTS5 'delete-all' special command to clear all existing index entries,
+    //    then manually re-insert from the now-migrated card data.
+    //    NOTE: 'rebuild' is only valid for content= tables; 'delete-all' works on content="".
+    db.exec(`INSERT INTO cards_fts(cards_fts) VALUES('delete-all')`);
+
+    const allRows = db.prepare('SELECT rowid, id, owner, data FROM capability_cards').all() as Array<{
+      rowid: number;
+      id: string;
+      owner: string;
+      data: string;
+    }>;
+
+    const ftsInsert = db.prepare(
+      'INSERT INTO cards_fts(rowid, id, owner, name, description, tags) VALUES (?, ?, ?, ?, ?, ?)'
+    );
+
+    for (const row of allRows) {
+      const data = JSON.parse(row.data) as Record<string, unknown>;
+      const skills = (data['skills'] as Array<Record<string, unknown>> | undefined) ?? [];
+
+      let name: string;
+      let description: string;
+      let tags: string;
+
+      if (skills.length > 0) {
+        // v2.0 card — aggregate from skills[]
+        name = skills.map((s) => String(s['name'] ?? '')).join(' ');
+        description = skills.map((s) => String(s['description'] ?? '')).join(' ');
+        tags = skills
+          .flatMap((s) => {
+            const meta = s['metadata'] as Record<string, unknown> | undefined;
+            return (meta?.['tags'] as string[] | undefined) ?? [];
+          })
+          .join(' ');
+      } else {
+        // v1.0 card still in flat format (fallback)
+        name = String(data['name'] ?? '');
+        description = String(data['description'] ?? '');
+        const meta = data['metadata'] as Record<string, unknown> | undefined;
+        const rawTags = (meta?.['tags'] as string[] | undefined) ?? [];
+        tags = rawTags.join(' ');
+      }
+
+      ftsInsert.run(row.rowid, row.id, row.owner, name, description, tags);
+    }
+
+    // 5. Mark migration complete — MUST be last step inside the transaction
+    db.pragma('user_version = 2');
+  });
+
+  migrate();
 }
 
 /**
