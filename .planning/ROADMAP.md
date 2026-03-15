@@ -156,7 +156,7 @@ Plans:
 
 **Milestone Goal:** Make AgentBnB launchable. Premium Hub UI, one-command OpenClaw skill install, repo ready for public.
 
-- [ ] **Phase 9: Hub UI Redesign** - Premium dark SaaS Hub with ambient glow, modal card overlays, and count-up animations — screenshot-worthy
+- [x] **Phase 9: Hub UI Redesign** - Premium dark SaaS Hub with ambient glow, modal card overlays, and count-up animations — screenshot-worthy (completed 2026-03-15)
 - [ ] **Phase 10: ClaWHub Installable Skill** - One command puts any OpenClaw agent on the AgentBnB network via a single activate() entry point
 - [ ] **Phase 11: Repo Housekeeping** - Repo documentation reflects current reality and is ready for public launch
 
@@ -252,7 +252,7 @@ Plans:
   3. Stats numbers (agents, capabilities, credits) count up from 0 to their real values over 400ms in JetBrains Mono at 32px — visible on every page load
   4. The search bar, level/category dropdowns, online-only toggle, and pill-style tab switcher all render in the premium dark style with no legacy Tailwind defaults leaking through
   5. Cards show compact layout with 32px identicon, ghost category chips, level pill badge, and green online indicator — hovering any card lifts it 2px with border brightening
-**Plans:** 3/4 plans executed
+**Plans:** 4/4 plans complete
 
 Plans:
 - [ ] 09-01-PLAN.md — Design system (CSS vars, fonts, Tailwind config) + card component redesign (HUI-01, HUI-02)
@@ -316,6 +316,6 @@ Phases execute in numeric order: 9 → 10 → 11
 | 6. Idle Rate Monitoring + Auto-Share | v2.0 | 2/2 | Complete | 2026-03-15 |
 | 7. Auto-Request | v2.0 | 2/2 | Complete | 2026-03-15 |
 | 8. OpenClaw Deep Integration | v2.0 | 3/3 | Complete | 2026-03-15 |
-| 9. Hub UI Redesign | 3/4 | In Progress|  | - |
+| 9. Hub UI Redesign | 4/4 | Complete   | 2026-03-15 | - |
 | 10. ClaWHub Installable Skill | v2.1 | 0/5 | Not started | - |
 | 11. Repo Housekeeping | v2.1 | 0/3 | Not started | - |

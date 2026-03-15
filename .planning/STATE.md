@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v2.1
 milestone_name: Ship It
 status: planning
-stopped_at: Completed 09-hub-ui-redesign plan 09-02-PLAN.md
-last_updated: "2026-03-15T18:48:37.469Z"
+stopped_at: "Checkpoint: Task 2 human-verify for 09-04 (Hub complete, awaiting visual sign-off)"
+last_updated: "2026-03-15T18:53:05.854Z"
 last_activity: 2026-03-16 — v2.1 roadmap created
 progress:
   total_phases: 16
-  completed_phases: 13
+  completed_phases: 14
   total_plans: 40
-  completed_plans: 39
+  completed_plans: 40
   percent: 0
 ---
 
@@ -49,6 +49,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 09-hub-ui-redesign P01 | 6 | 2 tasks | 15 files |
 | Phase 09-hub-ui-redesign P03 | 8 | 2 tasks | 3 files |
 | Phase 09-hub-ui-redesign P02 | 150s | 2 tasks | 2 files |
+| Phase 09-hub-ui-redesign P04 | 8min | 1 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -66,6 +67,7 @@ Progress: [░░░░░░░░░░] 0%
 - [Phase 09-hub-ui-redesign]: Tab switcher changed from underline to pill fill (bg-white/[0.08]) per CONTEXT.md spec
 - [Phase 09-hub-ui-redesign]: CardModal uses CSS transitions on isVisible state — simpler than keyframes, animate-out delays onClose by 150ms
 - [Phase 09-hub-ui-redesign]: backdrop-filter uses inline style with WebkitBackdropFilter for Safari compatibility
+- [Phase 09-hub-ui-redesign]: useCountUp hook animates from 0 on every target change for alive feeling; grid overlay at 0.03 opacity included
 
 ### Pending Todos
 
@@ -77,8 +79,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-15T18:48:37.466Z
-Stopped at: Completed 09-hub-ui-redesign plan 09-02-PLAN.md
+Last session: 2026-03-15T18:53:05.851Z
+Stopped at: Checkpoint: Task 2 human-verify for 09-04 (Hub complete, awaiting visual sign-off)
 Resume file: None
 
 ---

@@ -76,7 +76,7 @@ Requirements for the Ship It milestone. Each maps to roadmap phases.
 - [x] **HUI-04**: Header + stats bar + ambient glow — logo text, stats numbers (32px JetBrains Mono, emerald green), radial gradient glow (600px radius, 0.08 opacity) behind stats
 - [x] **HUI-05**: Search + filter bar redesign — full-width ghost search bar (48px, rounded-xl), level/category dropdowns, online-only toggle
 - [x] **HUI-06**: Tabs pill-switcher — subtle pill-style tab switcher (Discover/Share/My Agent), active fill rgba(255,255,255,0.08), no underline
-- [ ] **HUI-07**: Polish — stats count-up animation (0→value over 400ms), card hover translateY(-2px) with border brighten, loading states, empty state
+- [x] **HUI-07**: Polish — stats count-up animation (0→value over 400ms), card hover translateY(-2px) with border brighten, loading states, empty state
 
 ### ClaWHub Installable Skill
 
@@ -157,7 +157,7 @@ Deferred to future release. Tracked but not in current roadmap.
 | HUI-04 | Phase 9 | Complete |
 | HUI-05 | Phase 9 | Complete |
 | HUI-06 | Phase 9 | Complete |
-| HUI-07 | Phase 9 | Pending |
+| HUI-07 | Phase 9 | Complete |
 | CLW-01 | Phase 10 | Pending |
 | CLW-02 | Phase 10 | Pending |
 | CLW-03 | Phase 10 | Pending |
