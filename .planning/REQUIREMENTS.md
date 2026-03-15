@@ -31,9 +31,9 @@ Requirements for the Agent Autonomy milestone. Each maps to roadmap phases.
 
 - [x] **IDLE-01**: Sliding window idle rate detection per skill — `idle_rate = 1 - (calls_in_60min / capacity_per_hour)`
 - [x] **IDLE-02**: `capacity.calls_per_hour` field on skill schema, owner-declared with default 60
-- [ ] **IDLE-03**: Auto-share trigger flips `availability.online` when idle_rate crosses configurable threshold (default 70%)
+- [x] **IDLE-03**: Auto-share trigger flips `availability.online` when idle_rate crosses configurable threshold (default 70%)
 - [x] **IDLE-04**: Per-skill idle rate stored in `_internal` (never transmitted), independently tracked per skill on multi-skill cards
-- [ ] **IDLE-05**: IdleMonitor runs as croner-scheduled background loop (60s interval) in AgentRuntime
+- [x] **IDLE-05**: IdleMonitor runs as croner-scheduled background loop (60s interval) in AgentRuntime
 
 ### Autonomy Tiers
 
@@ -102,9 +102,9 @@ Deferred to future release. Tracked but not in current roadmap.
 | RUN-04 | Phase 4 | Complete |
 | IDLE-01 | Phase 6 | Complete |
 | IDLE-02 | Phase 6 | Complete |
-| IDLE-03 | Phase 6 | Pending |
+| IDLE-03 | Phase 6 | Complete |
 | IDLE-04 | Phase 6 | Complete |
-| IDLE-05 | Phase 6 | Pending |
+| IDLE-05 | Phase 6 | Complete |
 | TIER-01 | Phase 5 | Complete |
 | TIER-02 | Phase 5 | Complete |
 | TIER-03 | Phase 5 | Complete |
