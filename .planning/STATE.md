@@ -1,232 +1,44 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.1
-milestone_name: Upgrade
+milestone: v2.0
+milestone_name: Agent Autonomy
 current_plan: Not started
-status: unknown
-last_updated: "2026-03-15T08:42:29.491Z"
+status: defining_requirements
+last_updated: "2026-03-15"
 progress:
-  total_phases: 8
-  completed_phases: 8
-  total_plans: 24
-  completed_plans: 24
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
 ---
 
 # AgentBnB — Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-03-13)
+See: .planning/PROJECT.md (updated 2026-03-15)
 
 **Core value:** Fill the market gap for agent-to-agent capability exchange
-**Current focus:** Phase 2.3 complete. All planned phases through 2.3 done. Ready for Phase 3 (UX Layer) or further refinement.
+**Current focus:** Defining requirements for v2.0 Agent Autonomy milestone
 
 ## Current Phase
 
-**Phase 3: UX Layer** — Complete. All 4 plans done, human-verified.
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-03-15 — Milestone v2.0 started
 
-**Current Plan:** Not started
+## Accumulated Context
 
-### Progress (Phase 3 — complete)
+### From v1.1
 
-- UX Data Foundation (Plan 01): complete — api_key in AgentBnBConfig, request_log SQLite table, insertRequestLog/getRequestLog with period filtering (24h/7d/30d), gateway logging at all 3 settlement points, 71 tests pass
-- Auth-Protected Owner Endpoints (Plan 02): complete — scoped Fastify plugin with Bearer token auth, GET /me (balance), GET /requests (since), GET /draft (auto-detect), POST toggle-online, PATCH /cards/:id, serve wired, 72 tests pass
-- Hub Auth Layer (Plan 03a): complete — useAuth (localStorage), useRequests (30s polling + since filter), useOwnerCards (balance from /me), LoginForm, AuthGate, 48 tests pass
-- Hub Dashboard SPA — Wiring and Pages (Plan 03b): complete — RequestHistory table, OwnerDashboard (credit balance + low-credit badge + per-period counts), SharePage (/draft fetch + editable preview + Publish flow), App.tsx tab navigation, 64 hub tests pass. Human-verified: Discover/Share/My Agent tabs, API key auth, P2P escrow flow end-to-end.
-
-### Progress (Phase 2.3 — complete)
-
-- Remote Registry Fetch + CLI Integration (Plan 01): complete — fetchRemoteCards(), mergeResults(), RegistryTimeoutError/ConnectionError/AuthError, discover --registry/--tag flags, config set/get, source tagging with [local]/[remote] column, 20 unit tests
-- Integration Tests (Plan 02): complete — 8 cross-process integration tests, background Fastify server fixture (test-registry-server.ts), port-file polling pattern, 35 total CLI tests pass. Human-verified.
-
-### Progress (Phase 2.25)
-
-- Schema v1.1 Upgrade (Plan 01): complete — _internal and free_tier fields added to CapabilityCardSchema, server/CLI stripping, Hub free-tier badge, 8 new tests
-
-### Progress (Phase 2.2)
-
-- Hub Scaffold + Category Utilities (Plan 01): complete — Vite+React+Tailwind scaffold in hub/, 15-category inference, level badges, status indicators, 21 tests
-- Hub UI Components + Data Layer (Plan 02): complete — 10 React components (StatusDot, LevelBadge, CategoryChip, SkeletonCard, EmptyState, ErrorState, StatsBar, SearchFilter, CapabilityCard, CardGrid), useCards hook with 30s polling, App.tsx full wiring, 25 tests
-
-### Progress (Phase 2.1)
-
-- Onboarding Detection + Card Generation (Plan 01): complete — TDD pure functions: detectApiKeys, isPortOpen, detectOpenPorts, buildDraftCard, 10 API templates, 21 tests, 157 total
-- CLI Integration (Plan 02): complete — --yes, --no-detect flags, non-TTY guard, interactive confirmation, 6 tests, 163 total
-
-### Progress (Phase 2 -- complete)
-
-- Reputation Foundation (Plan 01): complete — updateReputation() EWA algorithm in registry store, gateway instrumentation, 133 tests
-- Public Registry Server (Plan 02): complete — Fastify HTTP server with GET /health, GET /cards (FTS5 + 6 filters + sort + pagination + CORS), GET /cards/:id, 16 tests
-- CLI Registry Integration (Plan 03): complete — --registry-port flag, dual-server startup, graceful shutdown, R-013/R-014/R-015 formalized, 136 tests, human-verified
-
-### Progress (Phase 1 — complete)
-
-- npm Package Foundation (Plan 01): complete — schema v1.0, package.json for publish, tsup build pipeline, 99 tests
-- mDNS Discovery (Plan 02): complete — bonjour-service announce/browse/cleanup, 4 tests, loopback verified, 99 tests
-- Peer Management + mDNS CLI (Plan 03): complete — peers.json CRUD, connect/peers/request --peer/serve --announce/discover --local, 107 tests
-- Examples + README (Plan 04): complete — LAN IP detection, README 297 lines, two-agent demo scripts, human-verified
-
-### Phase 0 Progress (complete)
-
-- Foundation (Plan 00): complete — TypeScript types, schema validation, AgentBnBError
-- Registry (Plan 01): complete — SQLite registry, FTS5 search, owner isolation
-- Credit System (Plan 02): complete — ledger, escrow hold/settle/release, 18 tests
-- Gateway (Plan 03): complete — Fastify JSON-RPC gateway, auth, escrow flow, 15 tests
-- CLI (Plan 04): complete — Commander CLI with 6 commands wired to real implementations, 17 tests
-- OpenClaw Integration (Plan 05): complete — SOUL.md parser, request handler, 13 E2E tests, human-verified
-
-## Decisions Log
-
-| Date | Phase-Plan | Decision |
-|------|-----------|----------|
-| 2026-03-13 | 00-01 | FTS5 query words wrapped in double-quotes to prevent hyphen/operator interpretation |
-| 2026-03-13 | 00-01 | Store cards as JSON blob in data column — schemaless updates without migrations |
-| 2026-03-13 | 00-01 | filterCards separate from searchCards for browse-without-query use case |
-| 2026-03-13 | 00-02 | Idempotent bootstrap via INSERT OR IGNORE + result.changes check |
-| 2026-03-13 | 00-02 | ESCROW_ALREADY_SETTLED error covers both settled and released terminal states |
-| 2026-03-13 | 00-02 | INSERT OR IGNORE auto-creates recipient balance row in settleEscrow() |
-| 2026-03-13 | 00-02 | pnpm.onlyBuiltDependencies needed for better-sqlite3 native binding in pnpm 10 |
-| 2026-03-13 | 00-03 | Auth hook added to root Fastify instance (not plugin) — plugin scope encapsulation prevents hooks from applying to parent routes |
-| 2026-03-13 | 00-03 | Requester identity from params.requester (not from token) — token is auth, requester is credit identity |
-| 2026-03-13 | 00-03 | createGatewayServer() returns synchronously — Fastify queues plugin init; caller calls .ready() or .listen() |
-| 2026-03-13 | 00-04 | AGENTBNB_DIR env var for config dir override — test isolation without mocking fs |
-| 2026-03-13 | 00-04 | program.parseAsync instead of program.parse — required for top-level await async CLI actions |
-| 2026-03-13 | 00-04 | status command queries credit_escrow table directly for held escrows — no separate API needed |
-| 2026-03-13 | 00-05 | SOUL.md parser uses regex (no markdown library) — avoids new dependencies per plan spec |
-| 2026-03-13 | 00-05 | parseSoulMd defaults to level 2 Pipeline — per RESEARCH.md open question resolution |
-| 2026-03-13 | 00-05 | createRequestHandler returns raw handler result — gateway JSON-RPC layer wraps in { result }, no double-wrapping |
-| 2026-03-13 | 01-01 | tsup array config isolates shebang banner to CLI entry — universal banner causes double-shebang and SyntaxError |
-| 2026-03-13 | 01-01 | createRequire used for package.json version in ESM CLI — idiomatic pattern, resolveJsonModule already enabled |
-| 2026-03-13 | 01-01 | exports types condition placed first per publint requirement — conditions are order-sensitive for TypeScript resolution |
-| 2026-03-13 | 01-02 | Browse before announce in tests — browser must be listening before publication or initial query cycle misses the service |
-| 2026-03-13 | 01-02 | Module-level Bonjour singleton lazy-initialized to avoid multiple instances on the same multicast socket |
-| 2026-03-13 | 01-02 | IPv4 preference via addresses.filter(addr => !addr.includes(':')) — avoids link-local IPv6 noise |
-| 2026-03-13 | 01-03 | peers.json in getConfigDir() — consistent path, AGENTBNB_DIR test isolation works automatically |
-| 2026-03-13 | 01-03 | Case-insensitive peer name matching via toLowerCase() — prevents duplicates from case typos |
-| 2026-03-13 | 01-03 | discover --local overrides registry search — simpler UX, mDNS and registry serve different contexts |
-| 2026-03-13 | 01-03 | stopAnnouncement() before server.close() in gracefulShutdown — proper mDNS cleanup order |
-| 2026-03-14 | 01-04 | getLanIp() falls back to localhost if no non-internal IPv4 interface found |
-| 2026-03-14 | 01-04 | init --host flag allows manual IP override for edge cases (VPN, multiple interfaces) |
-| 2026-03-14 | 01-04 | demo.sh uses AGENTBNB_DIR isolation with trap/cleanup for temp dirs |
-| 2026-03-14 | 01-04 | README includes OpenSpec SDD section as process adoption, not runtime dependency |
-| 2026-03-14 | 02-01 | EWA alpha=0.1 gives 90% weight to history, smoothing single outlier results |
-| 2026-03-14 | 02-01 | Bootstrap uses observed value as prior — first execution sets concrete reputation rather than guessing |
-| 2026-03-14 | 02-01 | success_rate rounded to 3 decimal places; avg_latency_ms to integer — precision appropriate for display |
-| 2026-03-14 | 02-01 | Silent no-op for non-existent cardId in updateReputation() — gateway must not crash if card deleted mid-execution |
-| 2026-03-14 | 02-01 | startMs timer placed before fetch() to capture full round-trip latency in avg_latency_ms |
-| 2026-03-14 | 02-02 | origin: true in @fastify/cors allows all origins — public marketplace registry needs no restrictions |
-| 2026-03-14 | 02-02 | Limit capped at 100 server-side to prevent large payload abuse |
-| 2026-03-14 | 02-02 | Post-filter chaining for tag/success_rate/latency keeps SQL simple and preserves FTS5 BM25 ranking |
-| 2026-03-14 | 02-02 | Sort undefined values last: success_rate treats missing as -1, latency treats missing as Infinity |
-| 2026-03-14 | 02-03 | Registry server shares gateway's Database instance — single WAL writer, no lock contention |
-| 2026-03-14 | 02-03 | --registry-port 0 disables registry server entirely — clean opt-out for headless gateway use |
-| 2026-03-14 | 02-03 | Registry server closed before gateway in gracefulShutdown — read-only server stops first |
-| 2026-03-14 | 02.1-01 | Comment text avoids literal process.env[ pattern to pass source-level security test |
-| 2026-03-14 | 02.2-01 | vitest triple-slash reference needed in vite.config.ts for test block to type-check under tsc --noEmit |
-| 2026-03-14 | 02.2-01 | StatusColor is two-state only (emerald/rose); three-state deferred until backend exposes idle metrics |
-| 2026-03-14 | 02.2-01 | badge-dot/badge-connected/badge-block embedded in style strings so tests can match via regex |
-| 2026-03-14 | 02.2-02 | jsdom + @testing-library/react added for component tests; vitest environment switched from node to jsdom |
-| 2026-03-14 | 02.2-02 | Client-side category filter in useCards because /cards API has no category query param |
-| 2026-03-14 | 02.2-02 | LucideIcon type (not React.ComponentType) used for icon lookup Record to satisfy strict TS propTypes compatibility |
-| 2026-03-14 | 02.2-02 | availableCategories computed from allCards (pre-filter) so dropdown always reflects full registry contents |
-| 2026-03-15 | 02.25-01 | _internal stored in SQLite via schema but stripped at API boundary — enables private card metadata without schema migration complexity |
-| 2026-03-15 | 02.25-01 | free_tier: 0 is valid (disabled state), only negative values rejected — nonnegative() aligns with credits_per_call pattern |
-| 2026-03-15 | 02.25-01 | Hub badge guard uses !== undefined && > 0 — explicit undefined check needed because 0 is falsy but valid |
-| 2026-03-15 | 02.25-01 | CLI stripping applied before both --json and table output paths — single strip covers all output modes |
-| 2026-03-14 | 02.3-01 | vi.stubGlobal fetch for unit tests avoids new test dependencies |
-| 2026-03-14 | 02.3-01 | Explicit --registry failure exits 1; config.registry default failure degrades gracefully with local results |
-| 2026-03-14 | 02.3-01 | Source column only added to discover table when remote results present — local-only format unchanged to preserve existing tests |
-| 2026-03-14 | 02.3-01 | config set key validated against allowlist ['registry'] to prevent arbitrary key pollution |
-| 2026-03-14 | 02.3-01 | --tag applied client-side for local registry results (GET /cards has no tag query param) |
-| 2026-03-14 | 02.3-02 | Spawn registry server as background subprocess for integration tests — vitest worker isolation blocks loopback access from execSync children to in-process sockets |
-| 2026-03-14 | 02.3-02 | Port-file polling pattern for server-ready signal — server writes ephemeral port to file once listening, test polls until file appears |
-| 2026-03-14 | 02.3-02 | Shell 2>&1 redirect for graceful-degradation test stderr capture — execSync on exit 0 discards stderr, redirect merges streams at shell level |
-| 2026-03-15 | 03-01 | api_key is optional in AgentBnBConfig — backward compatible with existing configs that lack the field |
-| 2026-03-15 | 03-01 | api_key preserved on re-init: load existing config first, only generate if not already present |
-| 2026-03-15 | 03-01 | insertRequestLog wrapped in try/catch at all 3 gateway settlement points — silent no-op, same pattern as updateReputation |
-| 2026-03-15 | 03-01 | SincePeriod cutoff: new Date(Date.now() - SINCE_MS[since]).toISOString() — ISO string comparison enables period filtering in SQLite |
-| 2026-03-15 | 03-01 | createRequestLogTable() called inside openDatabase() — request_log always exists when registry DB opens |
-| 2026-03-15 | 03-02 | Scoped Fastify plugin (NOT fastify-plugin) for owner routes — Fastify encapsulation ensures auth hook never leaks to public /cards and /health |
-| 2026-03-15 | 03-02 | vi.mock() at module-level + vi.mocked() per test — avoids conflicting factory mock calls for same module causing 500s in GET /draft tests |
-| 2026-03-15 | 03-02 | serve warns but continues when api_key missing — backward-compatible with pre-03-01 configs |
-| 2026-03-15 | 03-03a | vi.useFakeTimers() incompatible with waitFor in @testing-library/react — removed from hook tests to prevent 5s timeouts |
-| 2026-03-15 | 03-03a | useOwnerCards fetches /me then /cards sequentially; balance extracted as number (not null) from /me response |
-| 2026-03-15 | 03-03a | AuthGate checks !apiKey (falsy) to handle both null and undefined — consistent with optional prop typing |
-| 2026-03-15 | 03-03b | Three separate useRequests calls (24h/7d/30d) in OwnerDashboard — simpler than adding multi-period variant to existing hook |
-| 2026-03-15 | 03-03b | AbortController + setTimeout(2000) for /health probe in SharePage — abort signal cancels hanging fetch, prevents state update on unmount |
-| 2026-03-15 | 03-03b | getAllByText / getByRole used in tests when same text appears in multiple DOM nodes (cards list + RequestHistory table) |
-| 2026-03-15 | 03-03b | @testing-library/user-event installed as devDependency — required for userEvent.click in SharePage and App tab tests |
-
-## Performance Metrics
-
-| Phase | Plan | Duration | Tasks | Files |
-|-------|------|----------|-------|-------|
-| 00-dogfood | 01 | 5min | 2 | 4 |
-| 00-dogfood | 02 | 4min | 2 | 7 |
-| 00-dogfood | 03 | 7min | 2 | 5 |
-| 00-dogfood | 04 | 15min | 2 | 5 |
-| 00-dogfood | 05 | 5min | 1 | 3 |
-| 01-cli-mvp | 01 | 8min | 2 | 5 |
-| 01-cli-mvp | 02 | 3min | 1 | 5 |
-| 01-cli-mvp | 03 | 3min | 2 | 4 |
-| 01-cli-mvp | 04 | 10min | 2 | 6 |
-| 02-cold-start | 01 | 8min | 2 | 4 |
-| 02-cold-start | 02 | 15min | 2 | 5 |
-| 02-cold-start | 03 | 5min | 3 | 3 |
-| 02.1-smart-onboarding | 01 | 2min | 1 | 2 |
-| 02.1-smart-onboarding | 02 | 3min | 1 | 2 |
-| 02.2-agent-hub | 01 | 12min | 2 | 14 |
-| Phase 02.2-agent-hub P01 | 12min | 2 tasks | 14 files |
-| 02.2-agent-hub | 02 | 18min | 3 | 16 |
-| Phase 02.2-agent-hub P02 | 18min | 3 tasks | 16 files |
-| Phase 02.25-schema-v1-1-upgrade P01 | 7min | 2 tasks | 8 files |
-| Phase 02.3-remote-registry-discovery P01 | 15min | 2 tasks | 4 files |
-| Phase 02.3-remote-registry-discovery P02 | 8min | 2 tasks | 2 files |
-| Phase 03-ux-layer P01 | 6min | 2 tasks | 8 files |
-| Phase 03-ux-layer P02 | 6min | 2 tasks | 4 files |
-| Phase 03-ux-layer P03a | 3min | 2 tasks | 10 files |
-| Phase 03-ux-layer P03b | 8min | 1 tasks | 9 files |
-| Phase 03-ux-layer P03b | 10min | 2 tasks | 9 files |
-
-## Session Log
-
-| Date | Stopped At | Resume With |
-|------|-----------|-------------|
-| 2026-03-13 | Project initialized | `/gsd:discuss-phase 0` or `/gsd:plan-phase 0` |
-| 2026-03-13 | Completed 00-01-PLAN.md | Continue with plan 02 |
-| 2026-03-13 | Completed 00-02-PLAN.md | Continue with plan 03 |
-| 2026-03-13 | Completed 00-03-PLAN.md | Continue with plan 04 |
-| 2026-03-13 | Completed 00-04-PLAN.md | Continue with plan 05 |
-| 2026-03-13 | Checkpoint: 00-05 Task 1 complete, awaiting human-verify | Run `pnpm test:run`, `pnpm typecheck`, and CLI manual verification |
-| 2026-03-13 | Phase 0 complete — human-verified | `/gsd:plan-phase 1` to start CLI MVP |
-| 2026-03-13 | Completed 01-01-PLAN.md | Continue with plan 01-02 |
-| 2026-03-13 | Completed 01-02-PLAN.md | Continue with plan 01-03 |
-| 2026-03-13 | Completed 01-03-PLAN.md | Continue with plan 01-04 |
-| 2026-03-14 | Checkpoint: 01-04 Tasks 1-2 complete, awaiting human-verify | Verify: pnpm test:run, pnpm build, node dist/cli/index.js --version, agentbnb init gateway uses LAN IP, README + demo scripts |
-| 2026-03-14 | Completed 01-04-PLAN.md — human-verified | Phase 1 CLI MVP complete. `/gsd:plan-phase 2` to continue |
-| 2026-03-14 | Completed 02-01-PLAN.md | Continue with plan 02-02 |
-| 2026-03-14 | Completed 02-02-PLAN.md | Continue with plan 02-03 |
-| 2026-03-14 | Phase 2 complete — human-verified | `/gsd:plan-phase 3` to start UX Layer |
-| 2026-03-14 | Completed 02.1-01-PLAN.md | Continue with plan 02.1-02 |
-| 2026-03-14 | Phase 2.1 complete — 10/10 verified, 163 tests | `/gsd:verify-work` or refinement tasks |
-| 2026-03-14 | Phase 2.2 context gathered | `/gsd:plan-phase 2.2` |
-| 2026-03-14 | Completed 02.2-01-PLAN.md | Continue with plan 02.2-02 |
-| 2026-03-14 | Completed 02.2-02-PLAN.md — Phase 2.2 complete | `/gsd:verify-work` or next phase |
-| 2026-03-15 | Completed 02.25-01-PLAN.md — _internal and free_tier schema fields, server/CLI stripping, Hub badge | Continue with Phase 2.3 (Remote Registry) |
-| 2026-03-14 | Completed 02.3-01-PLAN.md — fetchRemoteCards, mergeResults, discover --registry/--tag, config set/get | Phase 2.3 Plan 01 complete |
-| 2026-03-14 | Checkpoint: 02.3-02 Task 1 complete, awaiting human-verify | Run `pnpm test:run`, `npx tsc --noEmit`, and optional CLI manual verification |
-| 2026-03-15 | Completed 02.3-02-PLAN.md — Phase 2.3 complete, human-verified, 35 CLI tests pass | Phase 3 (UX Layer) or `/gsd:verify-work` for further refinement |
-| 2026-03-15 | Completed 03-01-PLAN.md — api_key in config, request_log SQLite table + gateway logging, 71 tests pass | Continue with Phase 3 Plan 02 (API auth-protected endpoints) |
-| 2026-03-15 | Completed 03-02-PLAN.md — 5 auth-protected owner endpoints, Bearer token auth, serve wired, 72 tests pass | Continue with Phase 3 Plan 03a (Hub Dashboard SPA) |
-| 2026-03-15 | Completed 03-03a-PLAN.md — useAuth, useRequests (since), useOwnerCards (balance), LoginForm, AuthGate, 48 tests pass | Continue with Phase 3 Plan 03b (Hub dashboard pages) |
-| 2026-03-15 | Checkpoint: 03-03b Task 1 complete, awaiting human-verify | Visit http://localhost:7701/hub/ and verify tab navigation, dashboard, share page, mobile layout |
-| 2026-03-15 | Completed 03-03b-PLAN.md — Phase 3 UX Layer complete, human-verified, 64 hub + 238 backend tests pass | Phase 3 done. Ready for Phase 4 or refinement. |
-
-## Roadmap Evolution
-
-- Phase 2.1 inserted after Phase 2: Smart onboarding — auto-detect API keys, generate draft Capability Cards, CLI ergonomics (URGENT). Directly enables Phase 2 cold start conversion. Phase 3 (UX Layer) deferred.
-- Phase 2.2 inserted after Phase 2.1: Agent Hub — public read-only capability browser at `/hub`. Cold-start accelerator for recruiting agent owners. React SPA embedded in Fastify, no new backend needed.
-- Phase 2.25 inserted before Phase 2.3: Schema v1.1 Upgrade — add powered_by, _internal, free_tier fields to CapabilityCardSchema. Additive optional fields, backward compatible. Must land before Remote Registry goes live.
+- 238+ tests passing across backend + hub
+- 24/24 plans complete across 8 phases
+- SQLite stores: registry (cards + FTS5), credit ledger, escrow, request_log, reputation
+- Gateway: Fastify JSON-RPC with auth hooks, reputation instrumentation, request logging
+- CLI: 6 commands (init, publish, discover, request, status, serve) + config set/get
+- Hub: React SPA with Discover/Share/My Agent tabs, auth, owner dashboard
+- Existing onboarding: detectApiKeys() scans 10 providers, buildDraftCard() generates cards
 
 ---
-*Last updated: 2026-03-15 — Phase 3 UX Layer complete. Hub dashboard pages human-verified. All 24/24 plans complete.*
+*Last updated: 2026-03-15 — Milestone v2.0 started*
