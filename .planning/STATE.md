@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Agent Autonomy
 status: planning
-stopped_at: Completed 08-01-PLAN.md — openclaw core modules, 29/29 tests passing
-last_updated: "2026-03-15T15:50:00.742Z"
+stopped_at: Completed 08-03-PLAN.md — openclaw CLI integration, Phase 8 + v2.0 milestone complete
+last_updated: "2026-03-15T16:00:22.148Z"
 last_activity: 2026-03-15 — v2.0 Agent Autonomy roadmap created (Phases 4-8)
 progress:
   total_phases: 13
-  completed_phases: 12
+  completed_phases: 13
   total_plans: 36
-  completed_plans: 35
+  completed_plans: 36
   percent: 38
 ---
 
@@ -60,6 +60,7 @@ Progress: [████████░░░░░░░░░░░░] 38% (v1
 | Phase 07-auto-request P02 | 6 | 3 tasks | 3 files |
 | Phase 08-openclaw-deep-integration P02 | 2 | 2 tasks | 5 files |
 | Phase 08-openclaw-deep-integration P01 | 261 | 2 tasks | 7 files |
+| Phase 08-openclaw-deep-integration P03 | 15 | 2 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -114,6 +115,9 @@ Recent decisions affecting current work:
 - [Phase 08-02]: Skill adapter pattern: pure re-export wrappers in skills/ with no business logic, no timers, no DB writes
 - [Phase 08-01]: publishFromSoulV2 uses raw SQL INSERT/UPDATE (not insertCard) — insertCard validates v1.0 only; v2.0 cards bypass via direct SQL, consistent with Phase 06-02 updateSkillAvailability pattern
 - [Phase 08-01]: idle_rate defaults to null (not 0) when absent from skill._internal — null signals not-yet-computed vs 0 which would signal fully utilized
+- [Phase 08-03]: openclaw CLI subcommands open read-only DB connections under WAL mode — safe alongside agentbnb serve per RESEARCH.md Pitfall 5
+- [Phase 08-03]: rules subcommand falls back to DEFAULT_AUTONOMY_CONFIG/DEFAULT_BUDGET_CONFIG when config fields undefined — tolerates minimal config
+- [Phase 08-03]: Human verification approved all 8 OpenClaw end-to-end integration steps — Phase 8 and v2.0 milestone complete
 
 ### Pending Todos
 
@@ -127,8 +131,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-15T15:50:00.740Z
-Stopped at: Completed 08-01-PLAN.md — openclaw core modules, 29/29 tests passing
+Last session: 2026-03-15T16:00:22.146Z
+Stopped at: Completed 08-03-PLAN.md — openclaw CLI integration, Phase 8 + v2.0 milestone complete
 Resume file: None
 
 ---
