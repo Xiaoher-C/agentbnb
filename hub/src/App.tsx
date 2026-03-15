@@ -2,12 +2,15 @@
  * AgentBnB Hub — Root App component.
  * Full hub page wiring all components and the data-fetching hook together.
  * Now includes tab navigation: Discover | Share | My Agent.
+ * Modal overlay (CardModal) wired in plan 02 — clicking a card opens a detail modal.
  */
 import { useState } from 'react';
 import { useCards } from './hooks/useCards.js';
 import { useAuth } from './hooks/useAuth.js';
+import type { HubCard } from './types.js';
 import CapabilityCard from './components/CapabilityCard.js';
 import CardGrid from './components/CardGrid.js';
+import CardModal from './components/CardModal.js';
 import EmptyState from './components/EmptyState.js';
 import ErrorState from './components/ErrorState.js';
 import SearchFilter from './components/SearchFilter.js';
@@ -29,9 +32,11 @@ const TABS: Array<{ id: ActiveTab; label: string }> = [
 
 /**
  * Hub page with tab navigation: Discover, Share, and My Agent.
+ * selectedCard state drives the detail modal overlay.
  */
 export default function App() {
   const [activeTab, setActiveTab] = useState<ActiveTab>('discover');
+  const [selectedCard, setSelectedCard] = useState<HubCard | null>(null);
 
   const { apiKey, login, logout } = useAuth();
 
@@ -54,40 +59,32 @@ export default function App() {
     totalExchanges,
   } = useCards();
 
-  // Modal overlay implemented in plan 02 — onClick wired up, modal state added there
-  const handleCardClick = (_id: string) => {
-    // No-op until plan 02 adds the modal overlay
-  };
-
   return (
     <div className="min-h-screen bg-hub-bg text-hub-text-primary">
       <header className="max-w-7xl mx-auto px-4 pt-8 pb-0">
         <div className="flex items-start justify-between">
-          <div>
-            <h1 className="text-3xl font-bold text-hub-text-primary">AgentBnB Hub</h1>
-            <p className="text-hub-text-secondary mt-1">Browse available agent capabilities</p>
-          </div>
+          <h1 className="text-2xl font-semibold text-hub-text-primary">AgentBnB</h1>
           {apiKey && (
             <button
               onClick={logout}
-              className="text-xs text-hub-text-tertiary hover:text-hub-text-secondary underline mt-2 transition-colors"
+              className="text-xs text-hub-text-tertiary hover:text-hub-text-secondary mt-1 transition-colors"
             >
               Disconnect
             </button>
           )}
         </div>
 
-        {/* Tab navigation */}
-        <nav className="mt-6 flex gap-0 border-b border-hub-border">
+        {/* Tab navigation — pill switcher */}
+        <nav className="mt-6 flex gap-1 bg-white/[0.04] rounded-lg p-1 w-fit">
           {TABS.map((tab) => (
             <button
               key={tab.id}
               onClick={() => { setActiveTab(tab.id); }}
               className={[
-                'px-4 py-2 text-sm font-medium transition-colors',
+                'px-4 py-1.5 rounded-md text-sm font-medium transition-colors',
                 activeTab === tab.id
-                  ? 'border-b-2 border-hub-accent text-hub-accent -mb-px'
-                  : 'text-hub-text-secondary hover:text-hub-text-primary',
+                  ? 'bg-white/[0.08] text-hub-text-primary'
+                  : 'bg-transparent text-hub-text-muted hover:text-hub-text-secondary',
               ].join(' ')}
             >
               {tab.label}
@@ -134,7 +131,7 @@ export default function App() {
                   <CapabilityCard
                     key={card.id}
                     card={card}
-                    onClick={() => { handleCardClick(card.id); }}
+                    onClick={() => { setSelectedCard(card); }}
                   />
                 ))}
               </CardGrid>
@@ -154,6 +151,9 @@ export default function App() {
           </AuthGate>
         )}
       </main>
+
+      {/* Modal overlay — renders above all content */}
+      <CardModal card={selectedCard} onClose={() => { setSelectedCard(null); }} />
     </div>
   );
 }
