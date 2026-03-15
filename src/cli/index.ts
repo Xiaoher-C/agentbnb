@@ -28,6 +28,12 @@ import { createGatewayServer } from '../gateway/server.js';
 import { createRegistryServer } from '../registry/server.js';
 import { announceGateway, discoverLocalAgents, stopAnnouncement } from '../discovery/mdns.js';
 import type { CapabilityCard } from '../types/index.js';
+import {
+  publishFromSoulV2,
+  generateHeartbeatSection,
+  injectHeartbeatSection,
+  getOpenClawStatus,
+} from '../openclaw/index.js';
 
 const require = createRequire(import.meta.url);
 const pkg = require('../../package.json') as { version: string };
@@ -909,6 +915,111 @@ configCmd
 
     const value = (config as unknown as Record<string, unknown>)[key];
     console.log(value !== undefined ? String(value) : '(not set)');
+  });
+
+// ---------------------------------------------------------------------------
+// openclaw
+// ---------------------------------------------------------------------------
+
+const openclaw = program.command('openclaw').description('OpenClaw integration commands');
+
+/**
+ * agentbnb openclaw sync
+ * Reads SOUL.md and publishes (or updates) a v2.0 multi-skill card.
+ */
+openclaw
+  .command('sync')
+  .description('Read SOUL.md and publish/update a v2.0 capability card')
+  .option('--soul-path <path>', 'Path to SOUL.md', './SOUL.md')
+  .action(async (opts: { soulPath: string }) => {
+    const config = loadConfig();
+    if (!config) {
+      console.error('Error: not initialized. Run `agentbnb init` first.');
+      process.exit(1);
+    }
+
+    let content: string;
+    try {
+      content = readFileSync(opts.soulPath, 'utf-8');
+    } catch {
+      console.error(`Error: cannot read SOUL.md at ${opts.soulPath}`);
+      process.exit(1);
+    }
+
+    const db = openDatabase(config.db_path);
+    try {
+      const card = publishFromSoulV2(db, content, config.owner);
+      console.log(`Published card ${card.id} with ${card.skills.length} skill(s)`);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`Error: ${msg}`);
+      process.exit(1);
+    } finally {
+      db.close();
+    }
+  });
+
+/**
+ * agentbnb openclaw status
+ * Shows install state, tier thresholds, balance, reserve, and per-skill idle rate.
+ */
+openclaw
+  .command('status')
+  .description('Show OpenClaw integration status, tier config, and skill idle rates')
+  .action(async () => {
+    const config = loadConfig();
+    if (!config) {
+      console.error('Error: not initialized. Run `agentbnb init` first.');
+      process.exit(1);
+    }
+
+    const db = openDatabase(config.db_path);
+    const creditDb = openCreditDb(config.credit_db_path);
+    try {
+      const status = getOpenClawStatus(config, db, creditDb);
+      console.log('AgentBnB OpenClaw Status');
+      console.log(`Owner: ${status.owner}`);
+      console.log(`Gateway: ${status.gateway_url}`);
+      console.log(`Tier 1 (auto): < ${status.tier.tier1_max_credits} credits`);
+      console.log(`Tier 2 (notify): ${status.tier.tier1_max_credits}-${status.tier.tier2_max_credits} credits`);
+      console.log(`Tier 3 (ask): > ${status.tier.tier2_max_credits} credits`);
+      console.log(`Balance: ${status.balance} credits`);
+      console.log(`Reserve: ${status.reserve} credits`);
+      console.log(`Skills: ${status.skills.length}`);
+      for (const skill of status.skills) {
+        console.log(`  - ${skill.id}: ${skill.name} (idle: ${skill.idle_rate ?? 'N/A'}, online: ${skill.online})`);
+      }
+    } finally {
+      db.close();
+      creditDb.close();
+    }
+  });
+
+/**
+ * agentbnb openclaw rules
+ * Prints or injects the HEARTBEAT.md autonomy rules block.
+ */
+openclaw
+  .command('rules')
+  .description('Print HEARTBEAT.md rules block (or inject into a file with --inject)')
+  .option('--inject <path>', 'Path to HEARTBEAT.md file to patch with rules block')
+  .action(async (opts: { inject?: string }) => {
+    const config = loadConfig();
+    if (!config) {
+      console.error('Error: not initialized. Run `agentbnb init` first.');
+      process.exit(1);
+    }
+
+    const autonomy = config.autonomy ?? DEFAULT_AUTONOMY_CONFIG;
+    const budget = config.budget ?? DEFAULT_BUDGET_CONFIG;
+    const section = generateHeartbeatSection(autonomy, budget);
+
+    if (opts.inject) {
+      injectHeartbeatSection(opts.inject, section);
+      console.log(`Injected AgentBnB rules into ${opts.inject}`);
+    } else {
+      console.log(section);
+    }
   });
 
 // ---------------------------------------------------------------------------
