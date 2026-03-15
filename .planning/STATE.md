@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Upgrade
-current_plan: 03-03b next (Hub Dashboard SPA — wiring and pages)
+current_plan: 03-03b complete — awaiting human-verify checkpoint (Task 2)
 status: in_progress
-last_updated: "2026-03-15T06:50:04.639Z"
+last_updated: "2026-03-15T07:02:00.000Z"
 progress:
   total_phases: 8
-  completed_phases: 7
+  completed_phases: 8
   total_plans: 24
-  completed_plans: 23
+  completed_plans: 24
 ---
 
 # AgentBnB — Project State
@@ -25,13 +25,14 @@ See: .planning/PROJECT.md (updated 2026-03-13)
 
 **Phase 3: UX Layer** — In progress. Plan 01 complete, Plan 02 next.
 
-**Current Plan:** 03-03a next (Hub Dashboard SPA — owner view)
+**Current Plan:** 03-03b — awaiting human-verify checkpoint
 
 ### Progress (Phase 3 — in progress)
 
 - UX Data Foundation (Plan 01): complete — api_key in AgentBnBConfig, request_log SQLite table, insertRequestLog/getRequestLog with period filtering (24h/7d/30d), gateway logging at all 3 settlement points, 71 tests pass
 - Auth-Protected Owner Endpoints (Plan 02): complete — scoped Fastify plugin with Bearer token auth, GET /me (balance), GET /requests (since), GET /draft (auto-detect), POST toggle-online, PATCH /cards/:id, serve wired, 72 tests pass
 - Hub Auth Layer (Plan 03a): complete — useAuth (localStorage), useRequests (30s polling + since filter), useOwnerCards (balance from /me), LoginForm, AuthGate, 48 tests pass
+- Hub Dashboard SPA — Wiring and Pages (Plan 03b): Task 1 complete — RequestHistory table, OwnerDashboard (credit balance + low-credit badge + per-period counts), SharePage (/draft fetch + editable preview + Publish flow), App.tsx tab navigation, 64 hub tests pass. Awaiting human-verify checkpoint.
 
 ### Progress (Phase 2.3 — complete)
 
@@ -151,6 +152,10 @@ See: .planning/PROJECT.md (updated 2026-03-13)
 | 2026-03-15 | 03-03a | vi.useFakeTimers() incompatible with waitFor in @testing-library/react — removed from hook tests to prevent 5s timeouts |
 | 2026-03-15 | 03-03a | useOwnerCards fetches /me then /cards sequentially; balance extracted as number (not null) from /me response |
 | 2026-03-15 | 03-03a | AuthGate checks !apiKey (falsy) to handle both null and undefined — consistent with optional prop typing |
+| 2026-03-15 | 03-03b | Three separate useRequests calls (24h/7d/30d) in OwnerDashboard — simpler than adding multi-period variant to existing hook |
+| 2026-03-15 | 03-03b | AbortController + setTimeout(2000) for /health probe in SharePage — abort signal cancels hanging fetch, prevents state update on unmount |
+| 2026-03-15 | 03-03b | getAllByText / getByRole used in tests when same text appears in multiple DOM nodes (cards list + RequestHistory table) |
+| 2026-03-15 | 03-03b | @testing-library/user-event installed as devDependency — required for userEvent.click in SharePage and App tab tests |
 
 ## Performance Metrics
 
@@ -180,6 +185,7 @@ See: .planning/PROJECT.md (updated 2026-03-13)
 | Phase 03-ux-layer P01 | 6min | 2 tasks | 8 files |
 | Phase 03-ux-layer P02 | 6min | 2 tasks | 4 files |
 | Phase 03-ux-layer P03a | 3min | 2 tasks | 10 files |
+| Phase 03-ux-layer P03b | 8min | 1 tasks | 9 files |
 
 ## Session Log
 
@@ -212,6 +218,7 @@ See: .planning/PROJECT.md (updated 2026-03-13)
 | 2026-03-15 | Completed 03-01-PLAN.md — api_key in config, request_log SQLite table + gateway logging, 71 tests pass | Continue with Phase 3 Plan 02 (API auth-protected endpoints) |
 | 2026-03-15 | Completed 03-02-PLAN.md — 5 auth-protected owner endpoints, Bearer token auth, serve wired, 72 tests pass | Continue with Phase 3 Plan 03a (Hub Dashboard SPA) |
 | 2026-03-15 | Completed 03-03a-PLAN.md — useAuth, useRequests (since), useOwnerCards (balance), LoginForm, AuthGate, 48 tests pass | Continue with Phase 3 Plan 03b (Hub dashboard pages) |
+| 2026-03-15 | Checkpoint: 03-03b Task 1 complete, awaiting human-verify | Visit http://localhost:7701/hub/ and verify tab navigation, dashboard, share page, mobile layout |
 
 ## Roadmap Evolution
 
