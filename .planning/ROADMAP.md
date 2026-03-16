@@ -117,7 +117,7 @@ Plans:
 | 4-8 | v2.0 | 12/12 | Complete | 2026-03-15 |
 | 9-11 | v2.1 | 10/10 | Complete | 2026-03-16 |
 | 12. Foundation + Agent Directory | 3/3 | Complete    | 2026-03-16 | - |
-| 13. Activity Feed + Docs Page | 2/2 | Complete   | 2026-03-16 | - |
+| 13. Activity Feed + Docs Page | 2/2 | Complete    | 2026-03-16 | - |
 | 14. Credit UI + Modal + Polish | v2.2 | 0/? | Not started | - |
 | 15. Distribution + Discovery | v2.2 | 0/? | Not started | - |
 
