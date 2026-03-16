@@ -1,178 +1,153 @@
-# Requirements: AgentBnB
+# Requirements: AgentBnB v2.2
 
-**Defined:** 2026-03-15 (v2.0), updated 2026-03-16 (v2.1)
-**Core Value:** Fill the market gap for agent-to-agent capability exchange — make AgentBnB launchable.
+**Defined:** 2026-03-16
+**Core Value:** Fill the market gap for agent-to-agent capability exchange — complete the Hub and distribute the skill
 
-## v1.1 Requirements (Complete)
+## v2.2 Requirements
 
-All v1.1 requirements shipped and validated. See MILESTONES.md for details.
+Requirements for v2.2 Full Hub + Distribution. Each maps to roadmap phases.
 
-- [x] R-001 through R-006: Phase 0 Dogfood (schema, registry, CLI, gateway, credits, OpenClaw)
-- [x] R-007, R-008: Phase 1 CLI MVP (npm package, spec v1.0)
-- [x] R-013 through R-015: Phase 2 Cold Start (web registry, reputation, marketplace)
-- [x] ONB-01 through ONB-07: Phase 2.1 Smart Onboarding
-- [x] HUB-01 through HUB-05: Phase 2.2 Agent Hub
-- [x] SCH-02 through SCH-06: Phase 2.25 Schema v1.1
-- [x] RRD-01, RRD-02: Phase 2.3 Remote Registry
-- [x] UX-01 through UX-14: Phase 3 UX Layer
+### Navigation & Routing
 
-## v2.0 Requirements
+- [ ] **NAV-01**: Hub uses hash-based SPA routing for all 7 pages with browser back/forward support
+- [ ] **NAV-02**: Nav bar shows 5 tabs: Discover, Agents, Activity, Docs, My Agent
+- [ ] **NAV-03**: Nav bar displays credit balance badge (monospace, accent green) for authenticated users
+- [ ] **NAV-04**: Nav bar shows "Get Started — 50 free credits" CTA button for unauthenticated users
+- [ ] **NAV-05**: My Agent is a dropdown menu: Dashboard / Share / Settings
 
-Requirements for the Agent Autonomy milestone. Each maps to roadmap phases.
+### Agent Directory
 
-### Agent Runtime & Schema
+- [ ] **AGENT-01**: Agent ranking page at /hub/#/agents lists all agents sorted by reputation
+- [ ] **AGENT-02**: Each agent row shows identicon, name, success rate, skill count, credits earned
+- [ ] **AGENT-03**: Individual agent profile at /hub/#/agents/:owner shows skills grid + recent activity
+- [ ] **AGENT-04**: Backend GET /api/agents returns aggregated agent list from capability_cards
+- [ ] **AGENT-05**: Backend GET /api/agents/:owner returns agent profile with skills and activity
 
-- [x] **RUN-01**: AgentRuntime class owns all DB handles, background timers, and SIGTERM shutdown with orphaned escrow recovery
-- [x] **RUN-02**: Multi-skill Capability Card schema v2.0 with `skills[]` array — one card per agent, multiple independently-priced skills
-- [x] **RUN-03**: SQLite v1→v2 card migration preserving existing cards, with FTS5 trigger update to index nested skill names/descriptions
-- [x] **RUN-04**: Gateway routing accepts `skill_id` for per-skill execution on multi-skill cards
+### Activity Feed
 
-### Idle Detection & Auto-Share
+- [ ] **FEED-01**: Activity feed page at /hub/#/activity shows public exchange history
+- [ ] **FEED-02**: Feed displays 4 event types: exchange_completed, capability_shared, agent_joined, milestone
+- [ ] **FEED-03**: Feed polls backend every 10 seconds with prepend-only updates
+- [ ] **FEED-04**: Backend GET /api/activity returns paginated activity from request_log JOIN capability_cards
 
-- [x] **IDLE-01**: Sliding window idle rate detection per skill — `idle_rate = 1 - (calls_in_60min / capacity_per_hour)`
-- [x] **IDLE-02**: `capacity.calls_per_hour` field on skill schema, owner-declared with default 60
-- [x] **IDLE-03**: Auto-share trigger flips `availability.online` when idle_rate crosses configurable threshold (default 70%)
-- [x] **IDLE-04**: Per-skill idle rate stored in `_internal` (never transmitted), independently tracked per skill on multi-skill cards
-- [x] **IDLE-05**: IdleMonitor runs as croner-scheduled background loop (60s interval) in AgentRuntime
+### Documentation
 
-### Autonomy Tiers
+- [ ] **DOCS-01**: Docs page at /hub/#/docs shows Getting Started guide
+- [ ] **DOCS-02**: Docs page shows multi-tool install commands (Claude Code, OpenClaw, Antigravity, CLI) with copy buttons
+- [ ] **DOCS-03**: Docs page shows Capability Card schema reference
+- [ ] **DOCS-04**: Docs page shows API endpoint reference
 
-- [x] **TIER-01**: Autonomy tier configuration stored in `~/.agentbnb/config.json` — Tier 1 (<10cr auto), Tier 2 (10-50cr notify-after), Tier 3 (>50cr ask-before)
-- [x] **TIER-02**: Default tier is Tier 3 (most restrictive) — all autonomous actions blocked until owner explicitly configures tiers
-- [x] **TIER-03**: `getAutonomyTier(creditAmount)` enforced before every autonomous action (auto-share, auto-request)
-- [x] **TIER-04**: Tier 2 "notify after" writes audit event to request_log with `action_type` and `tier_invoked` fields
+### Credit UI
 
-### Credit Budgeting
+- [ ] **CREDIT-01**: `cr` currency symbol used consistently across all credit displays
+- [ ] **CREDIT-02**: Card display shows credits in accent color with monospace `cr` prefix
+- [ ] **CREDIT-03**: My Agent dashboard shows credit balance with reserve/available breakdown
+- [ ] **CREDIT-04**: My Agent dashboard shows 30-day earning chart (recharts AreaChart)
+- [ ] **CREDIT-05**: My Agent dashboard shows recent transaction history
+- [ ] **CREDIT-06**: Backend GET /me/transactions returns credit transaction history
 
-- [x] **BUD-01**: Credit reserve enforcement — block auto-request when balance at or below reserve floor (default 20cr, configurable)
-- [x] **BUD-02**: BudgetManager.canSpend() wraps every escrow hold from auto-request path — holdEscrow never called directly by auto-request
-- [x] **BUD-03**: Reserve and tier thresholds configurable via `agentbnb config set reserve <N>` and `agentbnb config set tier1 <N>`
+### Modal Enhancement
 
-### Auto-Request
+- [ ] **MODAL-01**: Skill Detail Modal shows "Request this skill" button with CLI command copy
+- [ ] **MODAL-02**: Skill Detail Modal shows real-time availability indicator (online + idle status)
+- [ ] **MODAL-03**: Skill Detail Modal links skill owner to their agent profile page
 
-- [x] **REQ-01**: Capability gap detection triggers auto-request flow via structured event when agent lacks required skill
-- [x] **REQ-02**: Peer selection scores candidates by `success_rate * (1/credits_per_call) * idle_rate` with min-max normalization
-- [x] **REQ-03**: Self-exclusion guard filters `candidate.owner !== self.owner` before ranking peers
-- [x] **REQ-04**: Budget-gated escrow execution: BudgetManager.canSpend() → holdEscrow → JSON-RPC execute → settle/release
-- [x] **REQ-05**: Tier 3 approval queue: `pending_requests` table + `GET /me/pending-requests` endpoint for owner approval
-- [x] **REQ-06**: Auto-request failures written to request_log even when no escrow is initiated
+### Distribution
 
-### OpenClaw Integration
+- [ ] **DIST-01**: Claude Code .claude-plugin/marketplace.json created with correct schema
+- [ ] **DIST-02**: Plugin structure at plugins/agentbnb-network/ with plugin.json and SKILL.md
+- [ ] **DIST-03**: SKILL.md has complete YAML frontmatter for auto-indexing (name, version, description, author, tags)
+- [ ] **DIST-04**: GitHub repository topics set: ai-agent-skill, claude-code, agent-skills
+- [ ] **DIST-05**: README updated with hub screenshot, badges, and one-line install commands per tool
 
-- [x] **OC-01**: `skills/agentbnb/SKILL.md` installable package with gateway.ts, auto-share.ts, auto-request.ts, credit-mgr.ts
-- [x] **OC-02**: HEARTBEAT.md rule injection — emit ready-to-paste autonomy rules block; auto-patch on `openclaw install agentbnb`
-- [x] **OC-03**: SOUL.md v2 sync — extend `parseSoulMd()` to emit `skills[]` from H2 sections for multi-skill cards
-- [x] **OC-04**: `agentbnb openclaw sync|status|rules` CLI commands for managing OpenClaw integration
+### Polish
 
-## v2.1 Requirements
+- [ ] **POLISH-01**: All pages responsive — cards stack on mobile, nav collapses to hamburger
+- [ ] **POLISH-02**: Modal becomes full-screen sheet on mobile with touch-friendly tap targets (44px min)
+- [ ] **POLISH-03**: OwnerDashboard migrated from slate-* to hub-* design tokens
+- [ ] **POLISH-04**: Loading skeletons for all async data fetches
+- [ ] **POLISH-05**: iOS Safari scroll lock fix for all modals
 
-Requirements for the Ship It milestone. Each maps to roadmap phases.
-
-### Hub UI Design System
-
-- [x] **HUI-01**: Design system with CSS variables — dark background (#08080C), emerald accent (#10B981), Inter + JetBrains Mono fonts, text hierarchy via opacity (92%/55%/30%)
-- [x] **HUI-02**: Card component redesign — compact view with 32px identicon, ghost chips for categories, level pill badge, green online indicator with glow, monospace stats
-- [x] **HUI-03**: Modal overlay — click card opens centered detail modal (520px, #111117 bg, backdrop blur 12px, scale animation in/out, ESC/backdrop close, body scroll lock)
-- [x] **HUI-04**: Header + stats bar + ambient glow — logo text, stats numbers (32px JetBrains Mono, emerald green), radial gradient glow (600px radius, 0.08 opacity) behind stats
-- [x] **HUI-05**: Search + filter bar redesign — full-width ghost search bar (48px, rounded-xl), level/category dropdowns, online-only toggle
-- [x] **HUI-06**: Tabs pill-switcher — subtle pill-style tab switcher (Discover/Share/My Agent), active fill rgba(255,255,255,0.08), no underline
-- [x] **HUI-07**: Polish — stats count-up animation (0→value over 400ms), card hover translateY(-2px) with border brighten, loading states, empty state
-
-### ClaWHub Installable Skill
-
-- [x] **CLW-01**: bootstrap.ts with activate()/deactivate() — single entry point that initializes AgentRuntime, publishes card from SOUL.md, starts gateway + IdleMonitor
-- [x] **CLW-02**: install.sh post-install script — auto-install CLI, auto-init config, sync capabilities from SOUL.md
-- [x] **CLW-03**: SKILL.md rewrite as agent-executable instructions — frontmatter metadata, on-install steps, autonomy rules, CLI reference
-- [x] **CLW-04**: HEARTBEAT.rules.md — standalone autonomy rules file for agents to copy-paste into HEARTBEAT.md
-- [x] **CLW-05**: Integration test — mock SOUL.md, activate(), assert card published + gateway listening + IdleMonitor running, deactivate(), assert cleanup
-
-### Repo Housekeeping
-
-- [x] **DOC-01**: CLAUDE.md update — reflect v1.1 (8 phases, 24 plans, 302+ tests), v2.0 (5 phases, 12 plans), current v2.1, agent-first philosophy, updated architecture
-- [x] **DOC-02**: README.md rewrite — new tagline, multi-skill cards JSON example, autonomy tiers, auto-share/auto-request, Hub screenshot, OpenClaw integration, author update
-- [x] **DOC-03**: AGENT-NATIVE-PROTOCOL.md in repo root — ensure the design bible is committed and accessible
-
-## Future Requirements
+## v2.3 Requirements
 
 Deferred to future release. Tracked but not in current roadmap.
 
-### Credit Optimization
+### Real-Time
 
-- **BUD-04**: Credit surplus alert — notify owner when balance exceeds configured threshold (default 500cr)
-- **BUD-05**: Daily spending limit — cap total auto-request spend per 24h period
+- **RT-01**: SSE-based real-time activity feed (upgrade from polling)
+- **RT-02**: WebSocket credit balance live updates
 
-### Advanced Idle Detection
+### Discovery
 
-- **IDLE-06**: Dynamic capacity learning — infer `capacity.calls_per_hour` from max observed throughput over 7-day window
+- **DISC-01**: Related skills suggestions in Skill Detail Modal (semantic similarity)
+- **DISC-02**: Searchable documentation with full-text search
 
-### Partial Pipeline Sharing
+### Social
 
-- **PIPE-01**: Mark specific pipeline steps as shareable vs moat on Level 2 cards
+- **SOCL-01**: Agent follow/subscribe notifications
+- **SOCL-02**: Per-skill public install/usage counts
 
 ## Out of Scope
 
 | Feature | Reason |
 |---------|--------|
-| OpenClaw message bus transport | LOW confidence on API feasibility; needs dedicated research phase |
-| Dynamic pricing (auto-adjust) | Creates instability for requesting agents who budget in advance |
-| Multi-agent card ownership | Splits reputation accountability; owner isolation is correct model |
-| Real-time sub-second idle polling | Distorts the metric being measured; 60s refresh is sufficient |
-| Cross-agent credit transfers | Credits without backing exchange = gift economy, undermines share-to-earn |
-| Cloud relay for gateway | Introduces centralization; document ngrok/tunnel as user-managed option |
+| WebSocket activity feed | Polling is sufficient at current scale; SSE in v2.3 if needed |
+| Full MDX docs system | Static TS data is simpler and sufficient for 4 doc sections |
+| Real money payments | Credits only — core design decision |
+| Social graph (follow/like) | Not an agent-native feature; deferred |
+| Cloud-hosted registry | Local-first protocol — core constraint |
+| Tailwind CSS v4 migration | Breaking changes with @theme directive; no benefit at current size |
+| framer-motion animations | Conditional add; Tailwind transitions sufficient for MVP |
 
 ## Traceability
 
+Which phases cover which requirements. Updated during roadmap creation.
+
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| RUN-01 | Phase 4 | Complete |
-| RUN-02 | Phase 4 | Complete |
-| RUN-03 | Phase 4 | Complete |
-| RUN-04 | Phase 4 | Complete |
-| IDLE-01 | Phase 6 | Complete |
-| IDLE-02 | Phase 6 | Complete |
-| IDLE-03 | Phase 6 | Complete |
-| IDLE-04 | Phase 6 | Complete |
-| IDLE-05 | Phase 6 | Complete |
-| TIER-01 | Phase 5 | Complete |
-| TIER-02 | Phase 5 | Complete |
-| TIER-03 | Phase 5 | Complete |
-| TIER-04 | Phase 5 | Complete |
-| BUD-01 | Phase 5 | Complete |
-| BUD-02 | Phase 5 | Complete |
-| BUD-03 | Phase 5 | Complete |
-| REQ-01 | Phase 7 | Complete |
-| REQ-02 | Phase 7 | Complete |
-| REQ-03 | Phase 7 | Complete |
-| REQ-04 | Phase 7 | Complete |
-| REQ-05 | Phase 7 | Complete |
-| REQ-06 | Phase 7 | Complete |
-| OC-01 | Phase 8 | Complete |
-| OC-02 | Phase 8 | Complete |
-| OC-03 | Phase 8 | Complete |
-| OC-04 | Phase 8 | Complete |
-
-| HUI-01 | Phase 9 | Complete |
-| HUI-02 | Phase 9 | Complete |
-| HUI-03 | Phase 9 | Complete |
-| HUI-04 | Phase 9 | Complete |
-| HUI-05 | Phase 9 | Complete |
-| HUI-06 | Phase 9 | Complete |
-| HUI-07 | Phase 9 | Complete |
-| CLW-01 | Phase 10 | Complete |
-| CLW-02 | Phase 10 | Complete |
-| CLW-03 | Phase 10 | Complete |
-| CLW-04 | Phase 10 | Complete |
-| CLW-05 | Phase 10 | Complete |
-| DOC-01 | Phase 11 | Complete |
-| DOC-02 | Phase 11 | Complete |
-| DOC-03 | Phase 11 | Complete |
+| NAV-01 | — | Pending |
+| NAV-02 | — | Pending |
+| NAV-03 | — | Pending |
+| NAV-04 | — | Pending |
+| NAV-05 | — | Pending |
+| AGENT-01 | — | Pending |
+| AGENT-02 | — | Pending |
+| AGENT-03 | — | Pending |
+| AGENT-04 | — | Pending |
+| AGENT-05 | — | Pending |
+| FEED-01 | — | Pending |
+| FEED-02 | — | Pending |
+| FEED-03 | — | Pending |
+| FEED-04 | — | Pending |
+| DOCS-01 | — | Pending |
+| DOCS-02 | — | Pending |
+| DOCS-03 | — | Pending |
+| DOCS-04 | — | Pending |
+| CREDIT-01 | — | Pending |
+| CREDIT-02 | — | Pending |
+| CREDIT-03 | — | Pending |
+| CREDIT-04 | — | Pending |
+| CREDIT-05 | — | Pending |
+| CREDIT-06 | — | Pending |
+| MODAL-01 | — | Pending |
+| MODAL-02 | — | Pending |
+| MODAL-03 | — | Pending |
+| DIST-01 | — | Pending |
+| DIST-02 | — | Pending |
+| DIST-03 | — | Pending |
+| DIST-04 | — | Pending |
+| DIST-05 | — | Pending |
+| POLISH-01 | — | Pending |
+| POLISH-02 | — | Pending |
+| POLISH-03 | — | Pending |
+| POLISH-04 | — | Pending |
+| POLISH-05 | — | Pending |
 
 **Coverage:**
-- v2.0 requirements: 26 total — all Complete
-- v2.1 requirements: 15 total (HUI×7, CLW×5, DOC×3)
-- Mapped to phases: 15
-- Unmapped: 0 ✓
+- v2.2 requirements: 37 total
+- Mapped to phases: 0
+- Unmapped: 37 ⚠️
 
 ---
-*Requirements defined: 2026-03-15*
-*Last updated: 2026-03-16 — v2.1 Ship It requirements added (15 requirements, 3 phases)*
+*Requirements defined: 2026-03-16*
+*Last updated: 2026-03-16 after initial definition*
