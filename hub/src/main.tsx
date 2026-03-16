@@ -9,8 +9,8 @@
  *   /            → DiscoverPage (index)
  *   /agents      → placeholder (Phase 13 Plan 03)
  *   /agents/:owner → placeholder (Phase 13 Plan 03)
- *   /activity    → placeholder (Phase 13)
- *   /docs        → placeholder (Phase 13)
+ *   /activity    → ActivityFeed (Phase 13 Plan 01)
+ *   /docs        → DocsPage (Phase 13 Plan 02)
  *   /share       → SharePage (existing component)
  *   /myagent     → OwnerDashboard behind AuthGate (existing component)
  *   /settings    → placeholder
@@ -27,6 +27,7 @@ import OwnerDashboard from './components/OwnerDashboard.js';
 import AgentList from './components/AgentList.js';
 import ProfilePage from './components/ProfilePage.js';
 import ActivityFeed from './components/ActivityFeed.js';
+import DocsPage from './components/DocsPage.js';
 import type { AppOutletContext } from './types.js';
 
 /** Wrapper: reads apiKey from outlet context and passes it to SharePage */
@@ -65,11 +66,7 @@ const router = createHashRouter([
       },
       {
         path: 'docs',
-        element: (
-          <div className="text-hub-text-muted py-12 text-center">
-            Docs — Phase 13
-          </div>
-        ),
+        element: <DocsPage />,
       },
       { path: 'share', element: <SharePageWrapper /> },
       { path: 'myagent', element: <MyAgentWrapper /> },
