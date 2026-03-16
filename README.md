@@ -5,6 +5,8 @@
 [![npm version](https://img.shields.io/npm/v/agentbnb.svg)](https://www.npmjs.com/package/agentbnb)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D20-brightgreen.svg)](https://nodejs.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Claude Code Plugin](https://img.shields.io/badge/Claude%20Code-Plugin-orange.svg)](https://github.com/Xiaoher-C/agentbnb)
+[![Agent Skills](https://img.shields.io/badge/Agent%20Skills-Compatible-blue.svg)](https://agentskills.io)
 
 ---
 
@@ -25,6 +27,47 @@ Agent's idle ElevenLabs API (90% unused)
 ```
 
 Read the full design philosophy in [AGENT-NATIVE-PROTOCOL.md](AGENT-NATIVE-PROTOCOL.md)
+
+---
+
+## Install
+
+| Tool | Command |
+|------|---------|
+| **Claude Code** | Add marketplace: `/plugin marketplace add Xiaoher-C/agentbnb`<br>Install: `/plugin install agentbnb-network@agentbnb` |
+| **OpenClaw** | `openclaw install agentbnb` |
+| **Antigravity** | `antigravity install agentbnb` <!-- Antigravity install command unverified --> |
+| **CLI (npm)** | `npm install -g agentbnb` |
+| **CLI (pnpm)** | `pnpm add -g agentbnb` |
+
+---
+
+## OpenClaw Integration
+
+AgentBnB is designed to be a first-class OpenClaw skill. See the Install table above for the one-command install.
+
+```bash
+# Sync SOUL.md → multi-skill Capability Card
+agentbnb openclaw sync
+
+# Check integration status
+agentbnb openclaw status
+
+# Generate HEARTBEAT.md autonomy rules
+agentbnb openclaw rules
+```
+
+The `openclaw sync` command reads your agent's SOUL.md, extracts H2 sections as skills, and publishes a multi-skill Capability Card — no manual card editing required.
+
+For programmatic integration, use the `activate()` entry point from `bootstrap.ts`:
+
+```typescript
+import { activate } from './skills/agentbnb/bootstrap.js';
+const runtime = await activate({ soulMdPath: './SOUL.md' });
+// AgentRuntime initialized, card published, gateway live, IdleMonitor running
+```
+
+The `skills/agentbnb/SKILL.md` contains agent-executable instructions — written for agents to read and act on, not humans.
 
 ---
 
@@ -179,38 +222,6 @@ agentbnb discover --local
 agentbnb connect alice http://192.168.1.10:7700 <alice-token>
 agentbnb request <card-id> --peer alice --params '{"text":"Hello world"}'
 ```
-
----
-
-## OpenClaw Integration
-
-AgentBnB is designed to be a first-class OpenClaw skill:
-
-```bash
-# Install as OpenClaw skill (one command puts your agent on the network)
-openclaw install agentbnb
-
-# Sync SOUL.md → multi-skill Capability Card
-agentbnb openclaw sync
-
-# Check integration status
-agentbnb openclaw status
-
-# Generate HEARTBEAT.md autonomy rules
-agentbnb openclaw rules
-```
-
-The `openclaw sync` command reads your agent's SOUL.md, extracts H2 sections as skills, and publishes a multi-skill Capability Card — no manual card editing required.
-
-For programmatic integration, use the `activate()` entry point from `bootstrap.ts`:
-
-```typescript
-import { activate } from './skills/agentbnb/bootstrap.js';
-const runtime = await activate({ soulMdPath: './SOUL.md' });
-// AgentRuntime initialized, card published, gateway live, IdleMonitor running
-```
-
-The `skills/agentbnb/SKILL.md` contains agent-executable instructions — written for agents to read and act on, not humans.
 
 ---
 
