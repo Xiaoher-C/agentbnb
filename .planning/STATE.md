@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v2.2
 milestone_name: Full Hub + Distribution
 status: planning
-stopped_at: Completed 14-04-PLAN.md — NavBar hamburger menu, mobile drawer, iOS scroll lock
-last_updated: "2026-03-16T14:47:02.823Z"
+stopped_at: "Completed 14-03-PLAN.md — CardModal enhancements: iOS scroll lock, request button, availability, owner link, mobile sheet"
+last_updated: "2026-03-16T14:48:22.254Z"
 last_activity: 2026-03-16 — Roadmap created (4 phases, 37 requirements, 100% coverage)
 progress:
   total_phases: 4
   completed_phases: 2
   total_plans: 9
-  completed_plans: 7
+  completed_plans: 8
   percent: 0
 ---
 
@@ -54,6 +54,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 13-activity-feed-docs-page P02 | 3min | 2 tasks | 4 files |
 | Phase 14-credit-ui-modal-polish P01 | 7m | 2 tasks | 8 files |
 | Phase 14-credit-ui-modal-polish P04 | 2 | 1 tasks | 2 files |
+| Phase 14-credit-ui-modal-polish P03 | 4m | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -98,6 +99,9 @@ Progress: [░░░░░░░░░░] 0%
 - [Phase Phase 14-01]: useTransactions is a separate hook from useRequests — different endpoint, different data shape, same polling pattern
 - [Phase Phase 14]: Mobile drawer expands My Agent sub-items inline (no nested dropdown) — better mobile UX
 - [Phase Phase 14]: aria-label on nav elements (Desktop nav/Mobile nav) distinguishes sibling navs in testing-library queries
+- [Phase Phase 14-03]: iOS scroll lock uses position-fixed + saved scrollY in CardModal, not overflow:hidden — prevents Safari rubber-band bug
+- [Phase Phase 14-03]: Owner profile navigation uses setTimeout(160) after handleClose() to ensure 150ms close animation completes before route change
+- [Phase Phase 14-03]: CopyButton reused from Phase 13 in CardModal request section — DRY pattern, consistent copy UX
 
 ### Pending Todos
 
@@ -110,8 +114,8 @@ Progress: [░░░░░░░░░░] 0%
 
 ## Session Continuity
 
-Last session: 2026-03-16T14:47:02.822Z
-Stopped at: Completed 14-04-PLAN.md — NavBar hamburger menu, mobile drawer, iOS scroll lock
+Last session: 2026-03-16T14:48:22.252Z
+Stopped at: Completed 14-03-PLAN.md — CardModal enhancements: iOS scroll lock, request button, availability, owner link, mobile sheet
 Resume file: None
 
 ---

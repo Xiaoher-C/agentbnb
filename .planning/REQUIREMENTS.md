@@ -48,9 +48,9 @@ Requirements for v2.2 Full Hub + Distribution. Each maps to roadmap phases.
 
 ### Modal Enhancement
 
-- [ ] **MODAL-01**: Skill Detail Modal shows "Request this skill" button with CLI command copy
-- [ ] **MODAL-02**: Skill Detail Modal shows real-time availability indicator (online + idle status)
-- [ ] **MODAL-03**: Skill Detail Modal links skill owner to their agent profile page
+- [x] **MODAL-01**: Skill Detail Modal shows "Request this skill" button with CLI command copy
+- [x] **MODAL-02**: Skill Detail Modal shows real-time availability indicator (online + idle status)
+- [x] **MODAL-03**: Skill Detail Modal links skill owner to their agent profile page
 
 ### Distribution
 
@@ -63,10 +63,10 @@ Requirements for v2.2 Full Hub + Distribution. Each maps to roadmap phases.
 ### Polish
 
 - [x] **POLISH-01**: All pages responsive — cards stack on mobile, nav collapses to hamburger
-- [ ] **POLISH-02**: Modal becomes full-screen sheet on mobile with touch-friendly tap targets (44px min)
+- [x] **POLISH-02**: Modal becomes full-screen sheet on mobile with touch-friendly tap targets (44px min)
 - [ ] **POLISH-03**: OwnerDashboard migrated from slate-* to hub-* design tokens
 - [x] **POLISH-04**: Loading skeletons for all async data fetches
-- [ ] **POLISH-05**: iOS Safari scroll lock fix for all modals
+- [x] **POLISH-05**: iOS Safari scroll lock fix for all modals
 
 ## v2.3 Requirements
 
@@ -129,14 +129,14 @@ Which phases cover which requirements. Updated during roadmap creation.
 | CREDIT-04 | Phase 14 | Pending |
 | CREDIT-05 | Phase 14 | Pending |
 | CREDIT-06 | Phase 14 | Complete |
-| MODAL-01 | Phase 14 | Pending |
-| MODAL-02 | Phase 14 | Pending |
-| MODAL-03 | Phase 14 | Pending |
+| MODAL-01 | Phase 14 | Complete |
+| MODAL-02 | Phase 14 | Complete |
+| MODAL-03 | Phase 14 | Complete |
 | POLISH-01 | Phase 14 | Complete |
-| POLISH-02 | Phase 14 | Pending |
+| POLISH-02 | Phase 14 | Complete |
 | POLISH-03 | Phase 14 | Pending |
 | POLISH-04 | Phase 14 | Complete |
-| POLISH-05 | Phase 14 | Pending |
+| POLISH-05 | Phase 14 | Complete |
 | DIST-01 | Phase 15 | Pending |
 | DIST-02 | Phase 15 | Pending |
 | DIST-03 | Phase 15 | Pending |
