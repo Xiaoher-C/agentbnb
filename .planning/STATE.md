@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v2.1
 milestone_name: Ship It
 status: planning
-stopped_at: Completed 11-repo-housekeeping 11-02-PLAN.md
-last_updated: "2026-03-16T11:12:49.190Z"
+stopped_at: Completed 11-repo-housekeeping 11-03-PLAN.md
+last_updated: "2026-03-16T11:13:30.906Z"
 last_activity: 2026-03-16 — Phase 9 signed off, proceeding to Phase 10
 progress:
   total_phases: 16
-  completed_phases: 15
+  completed_phases: 16
   total_plans: 46
-  completed_plans: 45
+  completed_plans: 46
   percent: 0
 ---
 
@@ -55,6 +55,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 10-clawHub-installable-skill P03 | 3min | 2 tasks | 2 files |
 | Phase 11-repo-housekeeping P01 | 1min | 1 tasks | 1 files |
 | Phase 11-repo-housekeeping P02 | 2min | 1 tasks | 1 files |
+| Phase 11-repo-housekeeping P03 | 2min | 1 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -81,6 +82,7 @@ Progress: [░░░░░░░░░░] 0%
 - [Phase Phase 10-clawHub-installable-skill]: Gateway port 0 in tests for OS auto-assignment — eliminates port conflict failures in CI
 - [Phase 11-repo-housekeeping]: CLAUDE.md updated with all three milestones (v1.1, v2.0, v2.1) and shipped dates — accurate context for all future sessions
 - [Phase 11-repo-housekeeping]: README tagline changed to 'Your agent has idle APIs. It knows. It wants to trade them.' — agent-native, evocative framing
+- [Phase 11-repo-housekeeping]: AGENT-NATIVE-PROTOCOL.md is the authoritative design bible — 9 sections, self-contained prose, no implementation details, committed at repo root and linked from CLAUDE.md and README.md
 
 ### Pending Todos
 
@@ -92,8 +94,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-16T11:12:49.188Z
-Stopped at: Completed 11-repo-housekeeping 11-02-PLAN.md
+Last session: 2026-03-16T11:13:30.903Z
+Stopped at: Completed 11-repo-housekeeping 11-03-PLAN.md
 Resume file: None
 
 ---
