@@ -62,7 +62,7 @@ Requirements for v2.2 Full Hub + Distribution. Each maps to roadmap phases.
 
 ### Polish
 
-- [ ] **POLISH-01**: All pages responsive — cards stack on mobile, nav collapses to hamburger
+- [x] **POLISH-01**: All pages responsive — cards stack on mobile, nav collapses to hamburger
 - [ ] **POLISH-02**: Modal becomes full-screen sheet on mobile with touch-friendly tap targets (44px min)
 - [ ] **POLISH-03**: OwnerDashboard migrated from slate-* to hub-* design tokens
 - [x] **POLISH-04**: Loading skeletons for all async data fetches
@@ -132,7 +132,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | MODAL-01 | Phase 14 | Pending |
 | MODAL-02 | Phase 14 | Pending |
 | MODAL-03 | Phase 14 | Pending |
-| POLISH-01 | Phase 14 | Pending |
+| POLISH-01 | Phase 14 | Complete |
 | POLISH-02 | Phase 14 | Pending |
 | POLISH-03 | Phase 14 | Pending |
 | POLISH-04 | Phase 14 | Complete |
