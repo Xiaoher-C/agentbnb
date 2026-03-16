@@ -32,10 +32,10 @@ Requirements for v2.2 Full Hub + Distribution. Each maps to roadmap phases.
 
 ### Documentation
 
-- [ ] **DOCS-01**: Docs page at /hub/#/docs shows Getting Started guide
-- [ ] **DOCS-02**: Docs page shows multi-tool install commands (Claude Code, OpenClaw, Antigravity, CLI) with copy buttons
-- [ ] **DOCS-03**: Docs page shows Capability Card schema reference
-- [ ] **DOCS-04**: Docs page shows API endpoint reference
+- [x] **DOCS-01**: Docs page at /hub/#/docs shows Getting Started guide
+- [x] **DOCS-02**: Docs page shows multi-tool install commands (Claude Code, OpenClaw, Antigravity, CLI) with copy buttons
+- [x] **DOCS-03**: Docs page shows Capability Card schema reference
+- [x] **DOCS-04**: Docs page shows API endpoint reference
 
 ### Credit UI
 
@@ -119,10 +119,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | FEED-02 | Phase 13 | Complete |
 | FEED-03 | Phase 13 | Complete |
 | FEED-04 | Phase 13 | Complete |
-| DOCS-01 | Phase 13 | Pending |
-| DOCS-02 | Phase 13 | Pending |
-| DOCS-03 | Phase 13 | Pending |
-| DOCS-04 | Phase 13 | Pending |
+| DOCS-01 | Phase 13 | Complete |
+| DOCS-02 | Phase 13 | Complete |
+| DOCS-03 | Phase 13 | Complete |
+| DOCS-04 | Phase 13 | Complete |
 | CREDIT-01 | Phase 14 | Pending |
 | CREDIT-02 | Phase 14 | Pending |
 | CREDIT-03 | Phase 14 | Pending |

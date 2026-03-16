@@ -46,7 +46,7 @@
 ### v2.2 Full Hub + Distribution
 
 - [x] **Phase 12: Foundation + Agent Directory** - SPA routing, 5-tab nav, credit badge, CTA, agent ranking list and individual profile pages (completed 2026-03-16)
-- [ ] **Phase 13: Activity Feed + Docs Page** - Public exchange feed with 10s polling, 4-section embedded documentation
+- [x] **Phase 13: Activity Feed + Docs Page** - Public exchange feed with 10s polling, 4-section embedded documentation (completed 2026-03-16)
 - [ ] **Phase 14: Credit UI + Modal + Polish** - Credit dashboard with earning chart, modal enhancements, design token migration, mobile responsive
 - [ ] **Phase 15: Distribution + Discovery** - Claude Code plugin, cross-tool SKILL.md, GitHub topics, README visual overhaul
 
@@ -79,7 +79,7 @@ Plans:
   2. New activity events prepend to the top of the feed; the user does not lose their place when the feed refreshes
   3. The Docs page shows Getting Started, multi-tool install commands with copy buttons, Card Schema reference, and API endpoint reference — all without any network request
   4. Install commands on the Docs page are copyable and cover Claude Code, OpenClaw, Antigravity, and CLI
-**Plans:** 1/2 plans executed
+**Plans:** 2/2 plans complete
 Plans:
 - [ ] 13-01-PLAN.md — Activity feed backend endpoint + frontend hook and components with 10s polling
 - [ ] 13-02-PLAN.md — Docs page with static content, CopyButton, and sidebar navigation
@@ -117,7 +117,7 @@ Plans:
 | 4-8 | v2.0 | 12/12 | Complete | 2026-03-15 |
 | 9-11 | v2.1 | 10/10 | Complete | 2026-03-16 |
 | 12. Foundation + Agent Directory | 3/3 | Complete    | 2026-03-16 | - |
-| 13. Activity Feed + Docs Page | 1/2 | In Progress|  | - |
+| 13. Activity Feed + Docs Page | 2/2 | Complete   | 2026-03-16 | - |
 | 14. Credit UI + Modal + Polish | v2.2 | 0/? | Not started | - |
 | 15. Distribution + Discovery | v2.2 | 0/? | Not started | - |
 
