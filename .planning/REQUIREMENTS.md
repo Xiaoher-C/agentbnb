@@ -105,49 +105,49 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| NAV-01 | — | Pending |
-| NAV-02 | — | Pending |
-| NAV-03 | — | Pending |
-| NAV-04 | — | Pending |
-| NAV-05 | — | Pending |
-| AGENT-01 | — | Pending |
-| AGENT-02 | — | Pending |
-| AGENT-03 | — | Pending |
-| AGENT-04 | — | Pending |
-| AGENT-05 | — | Pending |
-| FEED-01 | — | Pending |
-| FEED-02 | — | Pending |
-| FEED-03 | — | Pending |
-| FEED-04 | — | Pending |
-| DOCS-01 | — | Pending |
-| DOCS-02 | — | Pending |
-| DOCS-03 | — | Pending |
-| DOCS-04 | — | Pending |
-| CREDIT-01 | — | Pending |
-| CREDIT-02 | — | Pending |
-| CREDIT-03 | — | Pending |
-| CREDIT-04 | — | Pending |
-| CREDIT-05 | — | Pending |
-| CREDIT-06 | — | Pending |
-| MODAL-01 | — | Pending |
-| MODAL-02 | — | Pending |
-| MODAL-03 | — | Pending |
-| DIST-01 | — | Pending |
-| DIST-02 | — | Pending |
-| DIST-03 | — | Pending |
-| DIST-04 | — | Pending |
-| DIST-05 | — | Pending |
-| POLISH-01 | — | Pending |
-| POLISH-02 | — | Pending |
-| POLISH-03 | — | Pending |
-| POLISH-04 | — | Pending |
-| POLISH-05 | — | Pending |
+| NAV-01 | Phase 12 | Pending |
+| NAV-02 | Phase 12 | Pending |
+| NAV-03 | Phase 12 | Pending |
+| NAV-04 | Phase 12 | Pending |
+| NAV-05 | Phase 12 | Pending |
+| AGENT-01 | Phase 12 | Pending |
+| AGENT-02 | Phase 12 | Pending |
+| AGENT-03 | Phase 12 | Pending |
+| AGENT-04 | Phase 12 | Pending |
+| AGENT-05 | Phase 12 | Pending |
+| FEED-01 | Phase 13 | Pending |
+| FEED-02 | Phase 13 | Pending |
+| FEED-03 | Phase 13 | Pending |
+| FEED-04 | Phase 13 | Pending |
+| DOCS-01 | Phase 13 | Pending |
+| DOCS-02 | Phase 13 | Pending |
+| DOCS-03 | Phase 13 | Pending |
+| DOCS-04 | Phase 13 | Pending |
+| CREDIT-01 | Phase 14 | Pending |
+| CREDIT-02 | Phase 14 | Pending |
+| CREDIT-03 | Phase 14 | Pending |
+| CREDIT-04 | Phase 14 | Pending |
+| CREDIT-05 | Phase 14 | Pending |
+| CREDIT-06 | Phase 14 | Pending |
+| MODAL-01 | Phase 14 | Pending |
+| MODAL-02 | Phase 14 | Pending |
+| MODAL-03 | Phase 14 | Pending |
+| POLISH-01 | Phase 14 | Pending |
+| POLISH-02 | Phase 14 | Pending |
+| POLISH-03 | Phase 14 | Pending |
+| POLISH-04 | Phase 14 | Pending |
+| POLISH-05 | Phase 14 | Pending |
+| DIST-01 | Phase 15 | Pending |
+| DIST-02 | Phase 15 | Pending |
+| DIST-03 | Phase 15 | Pending |
+| DIST-04 | Phase 15 | Pending |
+| DIST-05 | Phase 15 | Pending |
 
 **Coverage:**
 - v2.2 requirements: 37 total
-- Mapped to phases: 0
-- Unmapped: 37 ⚠️
+- Mapped to phases: 37
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-03-16*
-*Last updated: 2026-03-16 after initial definition*
+*Last updated: 2026-03-16 after roadmap creation — traceability complete*
