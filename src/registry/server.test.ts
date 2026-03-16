@@ -1346,3 +1346,365 @@ describe('createRegistryServer — GET /api/agents/:owner', () => {
     await server.close();
   });
 });
+
+describe('createRegistryServer — GET /api/activity', () => {
+  let db: Database.Database;
+
+  beforeEach(() => {
+    db = openDatabase(':memory:');
+  });
+
+  it('returns { items: [], total: 0, limit: 20 } when no log entries', async () => {
+    const server = createRegistryServer({ registryDb: db, silent: true });
+    await server.ready();
+
+    const response = await server.inject({ method: 'GET', url: '/api/activity' });
+    expect(response.statusCode).toBe(200);
+    const body = response.json() as { items: unknown[]; total: number; limit: number };
+    expect(body.items).toEqual([]);
+    expect(body.total).toBe(0);
+    expect(body.limit).toBe(20);
+
+    await server.close();
+  });
+
+  it('returns items with required fields including provider from JOIN', async () => {
+    const cardId = crypto.randomUUID();
+    insertCard(db, {
+      spec_version: '1.0',
+      id: cardId,
+      owner: 'provider-agent',
+      name: 'Text Synthesis',
+      description: 'Generates text',
+      level: 1,
+      inputs: [],
+      outputs: [],
+      pricing: { credits_per_call: 5 },
+      availability: { online: true },
+      metadata: {},
+    });
+    insertRequestLog(db, {
+      id: crypto.randomUUID(),
+      card_id: cardId,
+      card_name: 'Text Synthesis',
+      requester: 'requester-agent',
+      status: 'success',
+      latency_ms: 150,
+      credits_charged: 5,
+      created_at: new Date().toISOString(),
+      action_type: null,
+    });
+
+    const server = createRegistryServer({ registryDb: db, silent: true });
+    await server.ready();
+
+    const response = await server.inject({ method: 'GET', url: '/api/activity' });
+    expect(response.statusCode).toBe(200);
+    const body = response.json() as {
+      items: Array<{
+        id: string;
+        card_name: string;
+        requester: string;
+        provider: string | null;
+        status: string;
+        credits_charged: number;
+        latency_ms: number;
+        created_at: string;
+        action_type: string | null;
+      }>;
+      total: number;
+      limit: number;
+    };
+    expect(body.total).toBe(1);
+    expect(body.items).toHaveLength(1);
+    const item = body.items[0];
+    expect(item.card_name).toBe('Text Synthesis');
+    expect(item.requester).toBe('requester-agent');
+    expect(item.provider).toBe('provider-agent');
+    expect(item.status).toBe('success');
+    expect(item.credits_charged).toBe(5);
+    expect(item.latency_ms).toBe(150);
+    expect(typeof item.created_at).toBe('string');
+
+    await server.close();
+  });
+
+  it('excludes auto_request audit rows', async () => {
+    const cardId = crypto.randomUUID();
+    insertCard(db, {
+      spec_version: '1.0',
+      id: cardId,
+      owner: 'provider-agent',
+      name: 'Cap A',
+      description: 'Capability A',
+      level: 1,
+      inputs: [],
+      outputs: [],
+      pricing: { credits_per_call: 5 },
+      availability: { online: true },
+      metadata: {},
+    });
+
+    // Regular exchange — should be included
+    insertRequestLog(db, {
+      id: crypto.randomUUID(),
+      card_id: cardId,
+      card_name: 'Cap A',
+      requester: 'requester-agent',
+      status: 'success',
+      latency_ms: 100,
+      credits_charged: 5,
+      created_at: new Date().toISOString(),
+      action_type: null,
+    });
+
+    // auto_request audit row — should be excluded
+    insertRequestLog(db, {
+      id: crypto.randomUUID(),
+      card_id: cardId,
+      card_name: 'Cap A',
+      requester: 'auto-requestor',
+      status: 'success',
+      latency_ms: 50,
+      credits_charged: 0,
+      created_at: new Date().toISOString(),
+      action_type: 'auto_request',
+    });
+
+    const server = createRegistryServer({ registryDb: db, silent: true });
+    await server.ready();
+
+    const response = await server.inject({ method: 'GET', url: '/api/activity' });
+    expect(response.statusCode).toBe(200);
+    const body = response.json() as { items: Array<{ action_type: string | null }>; total: number };
+    expect(body.total).toBe(1);
+    expect(body.items).toHaveLength(1);
+    // The remaining item should not be auto_request
+    expect(body.items[0].action_type).not.toBe('auto_request');
+
+    await server.close();
+  });
+
+  it('includes auto_share rows (capability_shared events)', async () => {
+    const cardId = crypto.randomUUID();
+    insertCard(db, {
+      spec_version: '1.0',
+      id: cardId,
+      owner: 'provider-agent',
+      name: 'Shared Cap',
+      description: 'Shared capability',
+      level: 1,
+      inputs: [],
+      outputs: [],
+      pricing: { credits_per_call: 5 },
+      availability: { online: true },
+      metadata: {},
+    });
+
+    // auto_share event — should be included
+    insertRequestLog(db, {
+      id: crypto.randomUUID(),
+      card_id: cardId,
+      card_name: 'Shared Cap',
+      requester: 'auto-sharer',
+      status: 'success',
+      latency_ms: 30,
+      credits_charged: 0,
+      created_at: new Date().toISOString(),
+      action_type: 'auto_share',
+    });
+
+    const server = createRegistryServer({ registryDb: db, silent: true });
+    await server.ready();
+
+    const response = await server.inject({ method: 'GET', url: '/api/activity' });
+    expect(response.statusCode).toBe(200);
+    const body = response.json() as { items: Array<{ action_type: string | null }>; total: number };
+    expect(body.total).toBe(1);
+    expect(body.items[0].action_type).toBe('auto_share');
+
+    await server.close();
+  });
+
+  it('?since=ISO returns only entries newer than that timestamp', async () => {
+    const cardId = crypto.randomUUID();
+    insertCard(db, {
+      spec_version: '1.0',
+      id: cardId,
+      owner: 'provider-agent',
+      name: 'Timely Cap',
+      description: 'Time-based capability',
+      level: 1,
+      inputs: [],
+      outputs: [],
+      pricing: { credits_per_call: 5 },
+      availability: { online: true },
+      metadata: {},
+    });
+
+    const oldTime = new Date(Date.now() - 5000).toISOString();
+    const sinceTime = new Date(Date.now() - 2000).toISOString();
+    const newTime = new Date().toISOString();
+
+    // Old entry — should be excluded
+    insertRequestLog(db, {
+      id: crypto.randomUUID(),
+      card_id: cardId,
+      card_name: 'Timely Cap',
+      requester: 'old-requester',
+      status: 'success',
+      latency_ms: 100,
+      credits_charged: 5,
+      created_at: oldTime,
+      action_type: null,
+    });
+
+    // New entry — should be included
+    insertRequestLog(db, {
+      id: crypto.randomUUID(),
+      card_id: cardId,
+      card_name: 'Timely Cap',
+      requester: 'new-requester',
+      status: 'success',
+      latency_ms: 80,
+      credits_charged: 5,
+      created_at: newTime,
+      action_type: null,
+    });
+
+    const server = createRegistryServer({ registryDb: db, silent: true });
+    await server.ready();
+
+    const response = await server.inject({
+      method: 'GET',
+      url: `/api/activity?since=${encodeURIComponent(sinceTime)}`,
+    });
+    expect(response.statusCode).toBe(200);
+    const body = response.json() as { items: Array<{ requester: string }>; total: number };
+    expect(body.total).toBe(1);
+    expect(body.items[0].requester).toBe('new-requester');
+
+    await server.close();
+  });
+
+  it('?limit=2 caps results at 2 items', async () => {
+    const cardId = crypto.randomUUID();
+    insertCard(db, {
+      spec_version: '1.0',
+      id: cardId,
+      owner: 'provider-agent',
+      name: 'Limit Cap',
+      description: 'Limit test',
+      level: 1,
+      inputs: [],
+      outputs: [],
+      pricing: { credits_per_call: 5 },
+      availability: { online: true },
+      metadata: {},
+    });
+
+    // Insert 5 entries
+    for (let i = 0; i < 5; i++) {
+      insertRequestLog(db, {
+        id: crypto.randomUUID(),
+        card_id: cardId,
+        card_name: 'Limit Cap',
+        requester: `requester-${i}`,
+        status: 'success',
+        latency_ms: 100,
+        credits_charged: 5,
+        created_at: new Date(Date.now() + i * 1000).toISOString(),
+        action_type: null,
+      });
+    }
+
+    const server = createRegistryServer({ registryDb: db, silent: true });
+    await server.ready();
+
+    const response = await server.inject({ method: 'GET', url: '/api/activity?limit=2' });
+    expect(response.statusCode).toBe(200);
+    const body = response.json() as { items: unknown[]; limit: number };
+    expect(body.items).toHaveLength(2);
+    expect(body.limit).toBe(2);
+
+    await server.close();
+  });
+
+  it('results are ordered by created_at DESC (newest first)', async () => {
+    const cardId = crypto.randomUUID();
+    insertCard(db, {
+      spec_version: '1.0',
+      id: cardId,
+      owner: 'provider-agent',
+      name: 'Order Cap',
+      description: 'Order test',
+      level: 1,
+      inputs: [],
+      outputs: [],
+      pricing: { credits_per_call: 5 },
+      availability: { online: true },
+      metadata: {},
+    });
+
+    const earlier = new Date(Date.now() - 2000).toISOString();
+    const later = new Date().toISOString();
+
+    insertRequestLog(db, {
+      id: crypto.randomUUID(),
+      card_id: cardId,
+      card_name: 'Order Cap',
+      requester: 'earlier-requester',
+      status: 'success',
+      latency_ms: 100,
+      credits_charged: 5,
+      created_at: earlier,
+      action_type: null,
+    });
+    insertRequestLog(db, {
+      id: crypto.randomUUID(),
+      card_id: cardId,
+      card_name: 'Order Cap',
+      requester: 'later-requester',
+      status: 'success',
+      latency_ms: 80,
+      credits_charged: 5,
+      created_at: later,
+      action_type: null,
+    });
+
+    const server = createRegistryServer({ registryDb: db, silent: true });
+    await server.ready();
+
+    const response = await server.inject({ method: 'GET', url: '/api/activity' });
+    const body = response.json() as { items: Array<{ requester: string }> };
+    expect(body.items[0].requester).toBe('later-requester');
+    expect(body.items[1].requester).toBe('earlier-requester');
+
+    await server.close();
+  });
+
+  it('provider is null when capability_card has been deleted', async () => {
+    const cardId = crypto.randomUUID();
+    // Insert log entry with non-existent card (simulates deleted card)
+    insertRequestLog(db, {
+      id: crypto.randomUUID(),
+      card_id: cardId,
+      card_name: 'Deleted Cap',
+      requester: 'some-requester',
+      status: 'success',
+      latency_ms: 100,
+      credits_charged: 5,
+      created_at: new Date().toISOString(),
+      action_type: null,
+    });
+
+    const server = createRegistryServer({ registryDb: db, silent: true });
+    await server.ready();
+
+    const response = await server.inject({ method: 'GET', url: '/api/activity' });
+    const body = response.json() as { items: Array<{ provider: string | null }> };
+    expect(body.items[0].provider).toBeNull();
+
+    await server.close();
+  });
+});
