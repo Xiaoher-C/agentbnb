@@ -5,7 +5,8 @@
 - ✅ **v1.1 Upgrade** - Phases 0-3 (shipped 2026-03-15)
 - ✅ **v2.0 Agent Autonomy** - Phases 4-8 (shipped 2026-03-15)
 - ✅ **v2.1 Ship It** - Phases 9-11 (shipped 2026-03-16)
-- 🚧 **v2.2 Full Hub + Distribution** - Phases 12-15 (in progress)
+- ✅ **v2.2 Full Hub + Distribution** - Phases 12-15 (shipped 2026-03-16)
+- 🚧 **v2.3 Launch Ready** - Phases 16-19 (in progress)
 
 ## Phases
 
@@ -43,77 +44,70 @@
 
 </details>
 
-### v2.2 Full Hub + Distribution
+<details>
+<summary>✅ v2.2 Full Hub + Distribution (Phases 12-15) - SHIPPED 2026-03-16</summary>
 
-- [x] **Phase 12: Foundation + Agent Directory** - SPA routing, 5-tab nav, credit badge, CTA, agent ranking list and individual profile pages (completed 2026-03-16)
-- [x] **Phase 13: Activity Feed + Docs Page** - Public exchange feed with 10s polling, 4-section embedded documentation (completed 2026-03-16)
-- [x] **Phase 14: Credit UI + Modal + Polish** - Credit dashboard with earning chart, modal enhancements, design token migration, mobile responsive (completed 2026-03-16)
-- [x] **Phase 15: Distribution + Discovery** - Claude Code plugin, cross-tool SKILL.md, GitHub topics, README visual overhaul (completed 2026-03-16)
+- [x] Phase 12: Foundation + Agent Directory (3/3 plans) — SPA routing, 5-tab nav, credit badge, CTA, agent ranking list and individual profile pages
+- [x] Phase 13: Activity Feed + Docs Page (2/2 plans) — Public exchange feed with 10s polling, 4-section embedded documentation
+- [x] Phase 14: Credit UI + Modal + Polish (4/4 plans) — Credit dashboard with earning chart, modal enhancements, design token migration, mobile responsive
+- [x] Phase 15: Distribution + Discovery (2/2 plans) — Claude Code plugin, cross-tool SKILL.md, GitHub topics, README visual overhaul
+
+</details>
+
+### v2.3 Launch Ready
+
+- [ ] **Phase 16: SPA Routing Fix + Hub Enhancement** — Fix reply.sendFile 500 error, extract Magic UI components into Hub, add doodle creature mascot
+- [ ] **Phase 17: Below-Fold Sections** — Compatible With marquee, FAQ accordion, brief description below Discover card grid
+- [ ] **Phase 18: README Visual Overhaul** — Badges, hero image, structured layout, real hub screenshot
+- [ ] **Phase 19: Deployment + Go Public** — Fly.io registry, DNS config, Cloudflare Tunnel, GitHub public pre-flight
 
 ---
 
 ## Phase Details
 
-### Phase 12: Foundation + Agent Directory
-**Goal**: Users can navigate all 7 Hub pages via URL and discover ranked agents with individual profiles
-**Depends on**: Phase 11 (v2.1 Hub baseline)
-**Requirements**: NAV-01, NAV-02, NAV-03, NAV-04, NAV-05, AGENT-01, AGENT-02, AGENT-03, AGENT-04, AGENT-05
+### Phase 16: SPA Routing Fix + Hub Enhancement
+**Goal**: Fix the /hub/* sub-route 500 error and extract useful Magic UI components into the Hub's component library
+**Depends on**: Phase 15 (v2.2 complete)
+**Requirements**: SPA-01, SPA-02, MAGICUI-01, MAGICUI-02, MAGICUI-03, MAGICUI-04, MAGICUI-05, MAGICUI-06, MASCOT-01
 **Success Criteria** (what must be TRUE):
-  1. Clicking any nav tab changes the URL hash and renders a distinct page without a full reload; browser back/forward buttons work
-  2. The nav bar shows 5 tabs (Discover, Agents, Activity, Docs, My Agent) and a "My Agent" dropdown with Dashboard/Share/Settings
-  3. An authenticated user sees their credit balance as an accent-green monospace badge in the nav bar; an unauthenticated visitor sees a "Get Started — 50 free credits" CTA button
-  4. The Agents page lists all agents sorted by reputation, each row showing identicon, name, success rate, skill count, and credits earned
-  5. Clicking an agent row navigates to their profile URL (/hub/#/agents/:owner) showing their skills grid and recent activity
-**Plans:** 3/3 plans complete
-Plans:
-- [x] 12-01-PLAN.md — SPA routing foundation + NavBar with 5 tabs, credit badge, CTA, My Agent dropdown
-- [x] 12-02-PLAN.md — Backend agent API endpoints + SPA catch-all + Vite proxy
-- [x] 12-03-PLAN.md — Frontend agent directory (AgentList + ProfilePage + useAgents hook)
+  1. Direct URL access to /hub/#/agents, /hub/#/activity, /hub/#/docs all return 200 (not 500)
+  2. Six Magic UI components (NumberFlow, Marquee, FlickeringGrid, Accordion, LineChart, OrbitingCircles) exist in hub/src/components/ui/ and render without errors
+  3. Doodle creature mascot (56px SVG) visible in NavBar next to "AgentBnB" title
+  4. All existing tests pass after changes
+**Plans:** 0/? plans — not yet planned
 
-### Phase 13: Activity Feed + Docs Page
-**Goal**: Visitors can see real exchange activity happening on the network and read embedded documentation without leaving the Hub
-**Depends on**: Phase 12
-**Requirements**: FEED-01, FEED-02, FEED-03, FEED-04, DOCS-01, DOCS-02, DOCS-03, DOCS-04
+### Phase 17: Below-Fold Sections
+**Goal**: Add supporting content sections below the Discover card grid while maintaining minimalist aesthetic
+**Depends on**: Phase 16 (Magic UI components available)
+**Requirements**: FOLD-01, FOLD-02, FOLD-03, FOLD-04
 **Success Criteria** (what must be TRUE):
-  1. The Activity page shows a chronological list of public exchange events (exchange_completed, capability_shared, agent_joined, milestone) updated every 10 seconds without resetting the scroll position
-  2. New activity events prepend to the top of the feed; the user does not lose their place when the feed refreshes
-  3. The Docs page shows Getting Started, multi-tool install commands with copy buttons, Card Schema reference, and API endpoint reference — all without any network request
-  4. Install commands on the Docs page are copyable and cover Claude Code, OpenClaw, Antigravity, and CLI
-**Plans:** 2/2 plans complete
-Plans:
-- [ ] 13-01-PLAN.md — Activity feed backend endpoint + frontend hook and components with 10s polling
-- [ ] 13-02-PLAN.md — Docs page with static content, CopyButton, and sidebar navigation
+  1. A "Compatible With" section with scrolling marquee of tool/framework logos appears below the Discover card grid
+  2. A FAQ accordion section with common AgentBnB questions is visible below Compatible With
+  3. A brief value proposition section explains the protocol
+  4. All below-fold sections use the existing dark theme (#08080C bg, emerald accent) and feel native to the current Hub aesthetic
+**Plans:** 0/? plans — not yet planned
 
-### Phase 14: Credit UI + Modal + Polish
-**Goal**: Users can see credit balances, earnings history, and transaction details everywhere in the Hub; all pages work on mobile
-**Depends on**: Phase 12
-**Requirements**: CREDIT-01, CREDIT-02, CREDIT-03, CREDIT-04, CREDIT-05, CREDIT-06, MODAL-01, MODAL-02, MODAL-03, POLISH-01, POLISH-02, POLISH-03, POLISH-04, POLISH-05
+### Phase 18: README Visual Overhaul
+**Goal**: Make the GitHub README visually compelling and informative for first-time visitors
+**Depends on**: Phase 16 (Hub working for screenshot)
+**Requirements**: README-01, README-02, README-03, README-04
 **Success Criteria** (what must be TRUE):
-  1. Every credit amount in the Hub displays a `cr` prefix in accent green monospace; no raw numbers appear without the currency symbol
-  2. The My Agent dashboard shows credit balance with reserve/available breakdown, a 30-day earning AreaChart, and a transaction history list
-  3. The Skill Detail Modal shows a "Request this skill" button with a copyable CLI command, a real-time availability indicator, and a link to the skill owner's agent profile
-  4. On a mobile viewport (< 768px), the nav collapses to a hamburger menu, card grids stack to single column, and the Skill Detail Modal becomes a full-screen bottom sheet with 44px tap targets
-  5. All async data fetches show loading skeletons while data is pending; the OwnerDashboard uses hub-* design tokens with no slate-* token leakage
-**Plans:** 4/4 plans complete
-Plans:
-- [ ] 14-01-PLAN.md — formatCredits cr prefix, backend /me/transactions, useTransactions hook, Skeleton component
-- [ ] 14-02-PLAN.md — OwnerDashboard credit dashboard with EarningsChart, TransactionHistory, and slate-to-hub token migration
-- [ ] 14-03-PLAN.md — CardModal enhancements: request button, availability, profile link, mobile sheet, iOS scroll lock
-- [ ] 14-04-PLAN.md — NavBar hamburger menu for mobile responsive navigation
+  1. README has OpenClaw-style badges (npm version, tests, license) at the top
+  2. A hero image or banner is prominently displayed
+  3. README has clear structured sections: What, Install, Quick Start, Architecture, Contributing
+  4. docs/hub-screenshot.png is a real screenshot (not 0-byte placeholder)
+**Plans:** 0/? plans — not yet planned
 
-### Phase 15: Distribution + Discovery
-**Goal**: AgentBnB can be installed from the Claude Code plugin marketplace and is discoverable via GitHub and cross-tool package indexes
-**Depends on**: Phase 14
-**Requirements**: DIST-01, DIST-02, DIST-03, DIST-04, DIST-05
+### Phase 19: Deployment + Go Public
+**Goal**: AgentBnB registry is accessible at agentbnb.dev and the GitHub repository is public
+**Depends on**: Phase 17, Phase 18 (Hub polished, README ready)
+**Requirements**: DEPLOY-01, DEPLOY-02, DEPLOY-03, DEPLOY-04
 **Success Criteria** (what must be TRUE):
-  1. The Claude Code plugin marketplace file exists at .claude-plugin/marketplace.json with correct schema and a versioned plugin entry pointing to the plugins/agentbnb-network/ directory
-  2. SKILL.md has complete YAML frontmatter including name, version, description, author, and compatible-tools tags for cross-tool auto-indexing
-  3. The GitHub repository has the topics ai-agent-skill, claude-code, and agent-skills set
-  4. The README shows a hub screenshot, per-tool install badges, and one-line install commands for Claude Code, OpenClaw, Antigravity, and CLI
-**Plans:** 2/2 plans complete
-Plans:
-- [ ] 15-01-PLAN.md — Claude Code plugin package (marketplace.json, plugin.json, plugin SKILL.md) + AgentSkills SKILL.md update + version bump
-- [ ] 15-02-PLAN.md — GitHub topics + README overhaul with badges, install commands, and hub screenshot
+  1. Registry server runs on Fly.io and responds to API requests
+  2. agentbnb.dev DNS resolves to the deployed services
+  3. Cloudflare Tunnel connects Mac Mini gateway to the public internet
+  4. GitHub repository is public with no leaked secrets, correct license, and clean .gitignore
+**Plans:** 0/? plans — not yet planned
 
 ---
 
@@ -124,12 +118,13 @@ Plans:
 | 0-3 | v1.1 | 24/24 | Complete | 2026-03-15 |
 | 4-8 | v2.0 | 12/12 | Complete | 2026-03-15 |
 | 9-11 | v2.1 | 10/10 | Complete | 2026-03-16 |
-| 12. Foundation + Agent Directory | 3/3 | Complete    | 2026-03-16 | - |
-| 13. Activity Feed + Docs Page | 2/2 | Complete    | 2026-03-16 | - |
-| 14. Credit UI + Modal + Polish | 4/4 | Complete    | 2026-03-16 | - |
-| 15. Distribution + Discovery | 2/2 | Complete    | 2026-03-16 | - |
+| 12-15 | v2.2 | 11/11 | Complete | 2026-03-16 |
+| 16. SPA Fix + Hub Enhancement | v2.3 | 0/? | Not started | — |
+| 17. Below-Fold Sections | v2.3 | 0/? | Not started | — |
+| 18. README Visual Overhaul | v2.3 | 0/? | Not started | — |
+| 19. Deployment + Go Public | v2.3 | 0/? | Not started | — |
 
-**Total:** 20 phases, 57+ plans, 3 milestones shipped, 1 in progress.
+**Total:** 20+ phases, 57+ plans, 4 milestones shipped, 1 in progress.
 
 ---
 *Full milestone details archived in .planning/milestones/*

@@ -1,11 +1,12 @@
-# Requirements: AgentBnB v2.2
+# Requirements: AgentBnB v2.3
 
-**Defined:** 2026-03-16
-**Core Value:** Fill the market gap for agent-to-agent capability exchange — complete the Hub and distribute the skill
+**Defined:** 2026-03-17
+**Core Value:** Launch AgentBnB publicly — fix SPA routing, enhance Hub with extracted Magic UI components, overhaul README, deploy and go public.
 
-## v2.2 Requirements
+## v2.2 Requirements (COMPLETED)
 
-Requirements for v2.2 Full Hub + Distribution. Each maps to roadmap phases.
+<details>
+<summary>All 37 v2.2 requirements — shipped 2026-03-16</summary>
 
 ### Navigation & Routing
 
@@ -68,36 +69,68 @@ Requirements for v2.2 Full Hub + Distribution. Each maps to roadmap phases.
 - [x] **POLISH-04**: Loading skeletons for all async data fetches
 - [x] **POLISH-05**: iOS Safari scroll lock fix for all modals
 
+</details>
+
 ## v2.3 Requirements
 
-Deferred to future release. Tracked but not in current roadmap.
+Requirements for v2.3 Launch Ready. Each maps to roadmap phases 16-19.
 
-### Real-Time
+### SPA Routing Fix
 
-- **RT-01**: SSE-based real-time activity feed (upgrade from polling)
-- **RT-02**: WebSocket credit balance live updates
+- [ ] **SPA-01**: Remove `decorateReply: false` from @fastify/static registration so `reply.sendFile()` works on /hub/* sub-routes
+- [ ] **SPA-02**: Direct URL access to any /hub/* sub-route (e.g., /hub/#/agents) returns 200, not 500
 
-### Discovery
+### Hub Enhancement — Magic UI Components
 
-- **DISC-01**: Related skills suggestions in Skill Detail Modal (semantic similarity)
-- **DISC-02**: Searchable documentation with full-text search
+- [ ] **MAGICUI-01**: Extract and integrate NumberFlow component into hub/src/components/ui/ for animated number transitions
+- [ ] **MAGICUI-02**: Extract and integrate Marquee component for "Compatible With" scrolling logo strip
+- [ ] **MAGICUI-03**: Extract and integrate FlickeringGrid component as subtle background texture
+- [ ] **MAGICUI-04**: Extract and integrate Accordion component for FAQ section
+- [ ] **MAGICUI-05**: Extract and integrate LineChart (SVG-based) component for lightweight chart alternative
+- [ ] **MAGICUI-06**: Extract and integrate Orbiting Circles component for visual decoration
 
-### Social
+### Hub Below-Fold Sections
 
-- **SOCL-01**: Agent follow/subscribe notifications
-- **SOCL-02**: Per-skill public install/usage counts
+- [ ] **FOLD-01**: "Compatible With" section below the Discover card grid using Marquee component — shows tool/framework logos
+- [ ] **FOLD-02**: FAQ accordion section with common questions about AgentBnB
+- [ ] **FOLD-03**: Brief description / value proposition section explaining the protocol
+- [ ] **FOLD-04**: Below-fold sections maintain the existing minimalist dark aesthetic
+
+### Mascot
+
+- [x] **MASCOT-01**: Doodle creature SVG (56px) displayed inline in NavBar next to "AgentBnB" title (DONE — committed with v2.3 planning)
+
+### README Visual Overhaul
+
+- [ ] **README-01**: OpenClaw-style badges at top of README (npm version, tests passing, license)
+- [ ] **README-02**: Hero image or banner at top of README
+- [ ] **README-03**: Structured layout with clear sections (What, Install, Quick Start, Architecture, Contributing)
+- [ ] **README-04**: Real hub screenshot replaces the 0-byte placeholder at docs/hub-screenshot.png
+
+### Deployment
+
+- [ ] **DEPLOY-01**: Fly.io deployment configuration for remote registry server
+- [ ] **DEPLOY-02**: DNS configuration for agentbnb.dev domain
+- [ ] **DEPLOY-03**: Cloudflare Tunnel setup for Mac Mini gateway
+- [ ] **DEPLOY-04**: GitHub repo set to public with pre-flight checklist (no secrets, license, .gitignore)
+
+### Human-Action Items (tracked, not GSD-executed)
+
+- [ ] **HUMAN-01**: Show HN post (Tuesday/Wednesday Pacific AM)
+- [ ] **HUMAN-02**: Reddit + X series posts
+- [ ] **HUMAN-03**: Taiwan TIPO trademark registration
 
 ## Out of Scope
 
 | Feature | Reason |
 |---------|--------|
-| WebSocket activity feed | Polling is sufficient at current scale; SSE in v2.3 if needed |
-| Full MDX docs system | Static TS data is simpler and sufficient for 4 doc sections |
-| Real money payments | Credits only — core design decision |
-| Social graph (follow/like) | Not an agent-native feature; deferred |
-| Cloud-hosted registry | Local-first protocol — core constraint |
-| Tailwind CSS v4 migration | Breaking changes with @theme directive; no benefit at current size |
-| framer-motion animations | Conditional add; Tailwind transitions sufficient for MVP |
+| Separate landing page app (landing/ directory) | Hub IS the landing page — Discover page is homepage |
+| Replacing Hub with Magic UI template | Extract components only, don't pour content into template |
+| Heavy Magic UI components (Particles, AnimatedBeam, InteractiveHoverButton, AnimatedList) | GPU-heavy or framer-motion dependent — too heavy for minimalist aesthetic |
+| Real money / payment integration | Credits only — core design decision |
+| Multi-language SDKs | TypeScript only for v2.3 |
+| Mobile native app | Web Hub is sufficient |
+| WebSocket activity feed | Polling is sufficient at current scale |
 
 ## Traceability
 
@@ -105,49 +138,36 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| NAV-01 | Phase 12 | Complete |
-| NAV-02 | Phase 12 | Complete |
-| NAV-03 | Phase 12 | Complete |
-| NAV-04 | Phase 12 | Complete |
-| NAV-05 | Phase 12 | Complete |
-| AGENT-01 | Phase 12 | Complete |
-| AGENT-02 | Phase 12 | Complete |
-| AGENT-03 | Phase 12 | Complete |
-| AGENT-04 | Phase 12 | Complete |
-| AGENT-05 | Phase 12 | Complete |
-| FEED-01 | Phase 13 | Complete |
-| FEED-02 | Phase 13 | Complete |
-| FEED-03 | Phase 13 | Complete |
-| FEED-04 | Phase 13 | Complete |
-| DOCS-01 | Phase 13 | Complete |
-| DOCS-02 | Phase 13 | Complete |
-| DOCS-03 | Phase 13 | Complete |
-| DOCS-04 | Phase 13 | Complete |
-| CREDIT-01 | Phase 14 | Complete |
-| CREDIT-02 | Phase 14 | Complete |
-| CREDIT-03 | Phase 14 | Complete |
-| CREDIT-04 | Phase 14 | Complete |
-| CREDIT-05 | Phase 14 | Complete |
-| CREDIT-06 | Phase 14 | Complete |
-| MODAL-01 | Phase 14 | Complete |
-| MODAL-02 | Phase 14 | Complete |
-| MODAL-03 | Phase 14 | Complete |
-| POLISH-01 | Phase 14 | Complete |
-| POLISH-02 | Phase 14 | Complete |
-| POLISH-03 | Phase 14 | Complete |
-| POLISH-04 | Phase 14 | Complete |
-| POLISH-05 | Phase 14 | Complete |
-| DIST-01 | Phase 15 | Complete |
-| DIST-02 | Phase 15 | Complete |
-| DIST-03 | Phase 15 | Complete |
-| DIST-04 | Phase 15 | Complete |
-| DIST-05 | Phase 15 | Complete |
+| SPA-01 | Phase 16 | Planned |
+| SPA-02 | Phase 16 | Planned |
+| MAGICUI-01 | Phase 16 | Planned |
+| MAGICUI-02 | Phase 16 | Planned |
+| MAGICUI-03 | Phase 16 | Planned |
+| MAGICUI-04 | Phase 16 | Planned |
+| MAGICUI-05 | Phase 16 | Planned |
+| MAGICUI-06 | Phase 16 | Planned |
+| FOLD-01 | Phase 17 | Planned |
+| FOLD-02 | Phase 17 | Planned |
+| FOLD-03 | Phase 17 | Planned |
+| FOLD-04 | Phase 17 | Planned |
+| MASCOT-01 | Phase 16 | Complete |
+| README-01 | Phase 18 | Planned |
+| README-02 | Phase 18 | Planned |
+| README-03 | Phase 18 | Planned |
+| README-04 | Phase 18 | Planned |
+| DEPLOY-01 | Phase 19 | Planned |
+| DEPLOY-02 | Phase 19 | Planned |
+| DEPLOY-03 | Phase 19 | Planned |
+| DEPLOY-04 | Phase 19 | Planned |
+| HUMAN-01 | — | Human action |
+| HUMAN-02 | — | Human action |
+| HUMAN-03 | — | Human action |
 
 **Coverage:**
-- v2.2 requirements: 37 total
-- Mapped to phases: 37
-- Unmapped: 0 ✓
+- v2.3 requirements: 24 total (21 GSD-executable + 3 human-action)
+- Mapped to phases: 21
+- Unmapped: 0 (3 human-action items tracked separately) ✓
 
 ---
-*Requirements defined: 2026-03-16*
-*Last updated: 2026-03-16 after roadmap creation — traceability complete*
+*Requirements defined: 2026-03-17*
+*Last updated: 2026-03-17 — v2.3 Launch Ready milestone*

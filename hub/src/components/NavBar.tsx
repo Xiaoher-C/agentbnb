@@ -136,7 +136,36 @@ export default function NavBar({ apiKey, balance, onLogout }: NavBarProps): JSX.
     <header className="max-w-7xl mx-auto px-4 pt-8 pb-0">
       {/* Title row */}
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold text-hub-text-primary">AgentBnB</h1>
+        <h1 className="text-2xl font-semibold text-hub-text-primary flex items-center gap-2">
+          <svg width="56" height="56" viewBox="60 30 290 290" xmlns="http://www.w3.org/2000/svg" className="shrink-0 -my-2">
+            {/* Doodle creature body */}
+            <path d="M198,80 Q140,83 120,120 Q102,160 108,210 Q115,258 140,285 Q165,308 195,315 Q225,320 255,300 Q282,278 290,240 Q298,200 292,160 Q285,118 260,95 Q235,78 198,80Z" fill="currentColor" opacity="0.06" />
+            <path d="M198,80 Q140,83 120,120 Q102,160 108,210 Q115,258 140,285 Q165,308 195,315 Q225,320 255,300 Q282,278 290,240 Q298,200 292,160 Q285,118 260,95 Q235,78 198,80Z" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+            {/* Left eye */}
+            <path d="M155,155 Q155,135 172,135 Q189,135 189,155 Q189,175 172,175 Q155,175 155,155Z" fill="none" stroke="currentColor" strokeWidth="2.5" />
+            <circle cx="172" cy="156" r="7" fill="currentColor" />
+            <circle cx="176" cy="152" r="2.2" fill="#08080C" />
+            {/* Right eye */}
+            <path d="M210,148 Q210,126 230,126 Q250,126 250,148 Q250,170 230,170 Q210,170 210,148Z" fill="none" stroke="currentColor" strokeWidth="2.5" />
+            <circle cx="230" cy="150" r="8" fill="currentColor" />
+            <circle cx="235" cy="145" r="2.2" fill="#08080C" />
+            {/* Smile */}
+            <path d="M168,200 Q180,220 195,212 Q210,220 222,200" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+            {/* Left arm waving */}
+            <line x1="120" y1="180" x2="72" y2="135" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+            <line x1="72" y1="135" x2="60" y2="112" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+            <line x1="72" y1="135" x2="78" y2="108" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+            {/* Right arm holding star */}
+            <line x1="282" y1="180" x2="320" y2="138" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+            <path d="M320,128 L323,112 L330,122 L342,118 L334,128 L346,136 L332,136 L328,148 L322,138 L310,142 L318,132Z" fill="#EF9F27" stroke="#EF9F27" strokeWidth="0.8" />
+            {/* Antennae */}
+            <line x1="185" y1="80" x2="170" y2="42" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+            <circle cx="170" cy="36" r="6" fill="#7F77DD" />
+            <line x1="205" y1="78" x2="222" y2="38" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+            <circle cx="222" cy="32" r="6" fill="#10B981" />
+          </svg>
+          AgentBnB
+        </h1>
         <div className="flex items-center gap-3">
           {/* Hamburger button — visible on mobile only */}
           <button
