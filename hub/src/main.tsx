@@ -24,6 +24,8 @@ import DiscoverPage from './pages/DiscoverPage.js';
 import SharePage from './components/SharePage.js';
 import AuthGate from './components/AuthGate.js';
 import OwnerDashboard from './components/OwnerDashboard.js';
+import AgentList from './components/AgentList.js';
+import ProfilePage from './components/ProfilePage.js';
 import type { AppOutletContext } from './types.js';
 
 /** Wrapper: reads apiKey from outlet context and passes it to SharePage */
@@ -50,19 +52,11 @@ const router = createHashRouter([
       { index: true, element: <DiscoverPage /> },
       {
         path: 'agents',
-        element: (
-          <div className="text-hub-text-muted py-12 text-center">
-            Agents — coming in Plan 03
-          </div>
-        ),
+        element: <AgentList />,
       },
       {
         path: 'agents/:owner',
-        element: (
-          <div className="text-hub-text-muted py-12 text-center">
-            Agent profile — coming in Plan 03
-          </div>
-        ),
+        element: <ProfilePage />,
       },
       {
         path: 'activity',
