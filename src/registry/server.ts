@@ -99,6 +99,12 @@ export function createRegistryServer(opts: RegistryServerOptions): FastifyInstan
     server.get('/hub', async (_request, reply) => {
       return reply.redirect('/hub/');
     });
+
+    // SPA catch-all: serve index.html for all /hub/* sub-paths (deep links, direct URL access)
+    // Must be AFTER fastifyStatic registration so real assets take priority
+    server.get('/hub/*', async (_request, reply) => {
+      return reply.sendFile('index.html');
+    });
   }
 
   /**
