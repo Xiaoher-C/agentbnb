@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v2.2
 milestone_name: Full Hub + Distribution
 status: planning
-stopped_at: Completed 12-02-PLAN.md — agent directory backend routes
-last_updated: "2026-03-16T13:07:53.000Z"
+stopped_at: Completed 12-03-PLAN.md — frontend agent directory
+last_updated: "2026-03-16T13:13:33.638Z"
 last_activity: 2026-03-16 — Roadmap created (4 phases, 37 requirements, 100% coverage)
 progress:
   total_phases: 4
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 3
-  completed_plans: 2
+  completed_plans: 3
   percent: 0
 ---
 
@@ -49,6 +49,7 @@ Progress: [░░░░░░░░░░] 0%
 | 15. Distribution + Discovery | 0/? | Not started |
 | Phase 12-foundation-agent-directory P01 | 4m | 2 tasks | 7 files |
 | Phase 12-foundation-agent-directory P02 | 5 | 2 tasks | 3 files |
+| Phase 12-foundation-agent-directory P03 | 3min | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -80,6 +81,8 @@ Progress: [░░░░░░░░░░] 0%
 - [Phase 12-02]: SPA catch-all uses setNotFoundHandler not server.get('/hub/*') — @fastify/static registers HEAD+GET wildcard, competing GET causes Fastify 5 to throw immediately
 - [Phase 12-02]: credits_earned computed via GROUP BY aggregate SQL on request_log, never stored as a column
 - [Phase 12-02]: listCards() CapabilityCard[] typed but stores v2 cards at runtime — cast via (card as unknown as CapabilityCardV2) for skills?.length access
+- [Phase Phase 12-03]: ProfilePage uses useOutletContext setSelectedCard to open CardModal — consistent with DiscoverPage pattern
+- [Phase Phase 12-03]: timeAgo() kept inline in ProfilePage — single-use, plan specified inline implementation
 
 ### Pending Todos
 
@@ -92,8 +95,8 @@ Progress: [░░░░░░░░░░] 0%
 
 ## Session Continuity
 
-Last session: 2026-03-16T13:07:52.998Z
-Stopped at: Completed 12-02-PLAN.md — agent directory backend routes
+Last session: 2026-03-16T13:13:33.636Z
+Stopped at: Completed 12-03-PLAN.md — frontend agent directory
 Resume file: None
 
 ---
