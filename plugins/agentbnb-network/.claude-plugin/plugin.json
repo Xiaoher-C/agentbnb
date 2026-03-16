@@ -1,0 +1,13 @@
+{
+  "name": "agentbnb-network",
+  "description": "Connect your agent to the AgentBnB P2P capability sharing network — earn credits by sharing idle APIs, spend credits to request capabilities from peers",
+  "version": "2.2.0",
+  "author": {
+    "name": "Cheng Wen Chen",
+    "url": "https://github.com/Xiaoher-C/agentbnb"
+  },
+  "homepage": "https://agentbnb.dev",
+  "repository": "https://github.com/Xiaoher-C/agentbnb",
+  "license": "MIT",
+  "keywords": ["agent", "capability-sharing", "p2p", "credits", "ai-agent", "agentbnb"]
+}

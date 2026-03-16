@@ -1,0 +1,14 @@
+{
+  "name": "agentbnb",
+  "owner": {
+    "name": "Cheng Wen Chen",
+    "email": "chengwen@agentbnb.dev"
+  },
+  "plugins": [
+    {
+      "name": "agentbnb-network",
+      "source": "./plugins/agentbnb-network",
+      "description": "Connect your agent to the AgentBnB P2P capability sharing network — earn credits by sharing idle APIs, spend credits to request capabilities from peers"
+    }
+  ]
+}
