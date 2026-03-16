@@ -94,7 +94,12 @@ Plans:
   3. The Skill Detail Modal shows a "Request this skill" button with a copyable CLI command, a real-time availability indicator, and a link to the skill owner's agent profile
   4. On a mobile viewport (< 768px), the nav collapses to a hamburger menu, card grids stack to single column, and the Skill Detail Modal becomes a full-screen bottom sheet with 44px tap targets
   5. All async data fetches show loading skeletons while data is pending; the OwnerDashboard uses hub-* design tokens with no slate-* token leakage
-**Plans**: TBD
+**Plans:** 4 plans
+Plans:
+- [ ] 14-01-PLAN.md — formatCredits cr prefix, backend /me/transactions, useTransactions hook, Skeleton component
+- [ ] 14-02-PLAN.md — OwnerDashboard credit dashboard with EarningsChart, TransactionHistory, and slate-to-hub token migration
+- [ ] 14-03-PLAN.md — CardModal enhancements: request button, availability, profile link, mobile sheet, iOS scroll lock
+- [ ] 14-04-PLAN.md — NavBar hamburger menu for mobile responsive navigation
 
 ### Phase 15: Distribution + Discovery
 **Goal**: AgentBnB can be installed from the Claude Code plugin marketplace and is discoverable via GitHub and cross-tool package indexes
@@ -118,10 +123,10 @@ Plans:
 | 9-11 | v2.1 | 10/10 | Complete | 2026-03-16 |
 | 12. Foundation + Agent Directory | 3/3 | Complete    | 2026-03-16 | - |
 | 13. Activity Feed + Docs Page | 2/2 | Complete    | 2026-03-16 | - |
-| 14. Credit UI + Modal + Polish | v2.2 | 0/? | Not started | - |
+| 14. Credit UI + Modal + Polish | v2.2 | 0/4 | Planning complete | - |
 | 15. Distribution + Discovery | v2.2 | 0/? | Not started | - |
 
-**Total:** 20 phases, 51+ plans, 3 milestones shipped, 1 in progress.
+**Total:** 20 phases, 55+ plans, 3 milestones shipped, 1 in progress.
 
 ---
 *Full milestone details archived in .planning/milestones/*
