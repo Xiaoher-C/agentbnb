@@ -66,9 +66,9 @@
   5. Clicking an agent row navigates to their profile URL (/hub/#/agents/:owner) showing their skills grid and recent activity
 **Plans:** 3/3 plans complete
 Plans:
-- [ ] 12-01-PLAN.md — SPA routing foundation + NavBar with 5 tabs, credit badge, CTA, My Agent dropdown
-- [ ] 12-02-PLAN.md — Backend agent API endpoints + SPA catch-all + Vite proxy
-- [ ] 12-03-PLAN.md — Frontend agent directory (AgentList + ProfilePage + useAgents hook)
+- [x] 12-01-PLAN.md — SPA routing foundation + NavBar with 5 tabs, credit badge, CTA, My Agent dropdown
+- [x] 12-02-PLAN.md — Backend agent API endpoints + SPA catch-all + Vite proxy
+- [x] 12-03-PLAN.md — Frontend agent directory (AgentList + ProfilePage + useAgents hook)
 
 ### Phase 13: Activity Feed + Docs Page
 **Goal**: Visitors can see real exchange activity happening on the network and read embedded documentation without leaving the Hub
@@ -79,7 +79,10 @@ Plans:
   2. New activity events prepend to the top of the feed; the user does not lose their place when the feed refreshes
   3. The Docs page shows Getting Started, multi-tool install commands with copy buttons, Card Schema reference, and API endpoint reference — all without any network request
   4. Install commands on the Docs page are copyable and cover Claude Code, OpenClaw, Antigravity, and CLI
-**Plans**: TBD
+**Plans:** 2 plans
+Plans:
+- [ ] 13-01-PLAN.md — Activity feed backend endpoint + frontend hook and components with 10s polling
+- [ ] 13-02-PLAN.md — Docs page with static content, CopyButton, and sidebar navigation
 
 ### Phase 14: Credit UI + Modal + Polish
 **Goal**: Users can see credit balances, earnings history, and transaction details everywhere in the Hub; all pages work on mobile
@@ -114,11 +117,11 @@ Plans:
 | 4-8 | v2.0 | 12/12 | Complete | 2026-03-15 |
 | 9-11 | v2.1 | 10/10 | Complete | 2026-03-16 |
 | 12. Foundation + Agent Directory | 3/3 | Complete    | 2026-03-16 | - |
-| 13. Activity Feed + Docs Page | v2.2 | 0/? | Not started | - |
+| 13. Activity Feed + Docs Page | v2.2 | 0/2 | Planning | - |
 | 14. Credit UI + Modal + Polish | v2.2 | 0/? | Not started | - |
 | 15. Distribution + Discovery | v2.2 | 0/? | Not started | - |
 
-**Total:** 20 phases, 49+ plans, 3 milestones shipped, 1 in progress.
+**Total:** 20 phases, 51+ plans, 3 milestones shipped, 1 in progress.
 
 ---
 *Full milestone details archived in .planning/milestones/*
