@@ -10,7 +10,7 @@ import { listPendingRequests, resolvePendingRequest } from '../autonomy/pending-
 import { searchCards, filterCards } from './matcher.js';
 import { getRequestLog, getActivityFeed } from './request-log.js';
 import type { SincePeriod } from './request-log.js';
-import { getBalance } from '../credit/ledger.js';
+import { getBalance, getTransactions } from '../credit/ledger.js';
 import { detectApiKeys, buildDraftCard, KNOWN_API_KEYS } from '../cli/onboarding.js';
 import { AgentBnBError } from '../types/index.js';
 import type { CapabilityCard, CapabilityCardV2 } from '../types/index.js';
@@ -536,6 +536,26 @@ export function createRegistryServer(opts: RegistryServerOptions): FastifyInstan
           if (err instanceof AgentBnBError) return reply.status(404).send({ error: err.message });
           throw err;
         }
+      });
+
+      /**
+       * GET /me/transactions — Returns paginated credit transaction history.
+       *
+       * Query params:
+       *   limit — Max entries (default 20, max 100)
+       *
+       * Returns { items: CreditTransaction[], limit: number }
+       * Returns { items: [], limit: 20 } when no creditDb is configured.
+       */
+      ownerRoutes.get('/me/transactions', async (request, reply) => {
+        const query = request.query as Record<string, string | undefined>;
+        const rawLimit = query.limit !== undefined ? parseInt(query.limit, 10) : 20;
+        const limit = Math.min(isNaN(rawLimit) || rawLimit < 1 ? 20 : rawLimit, 100);
+        if (!opts.creditDb) {
+          return reply.send({ items: [], limit });
+        }
+        const items = getTransactions(opts.creditDb, ownerName, limit);
+        return reply.send({ items, limit });
       });
     });
   }

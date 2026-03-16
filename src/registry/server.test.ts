@@ -1708,3 +1708,139 @@ describe('createRegistryServer — GET /api/activity', () => {
     await server.close();
   });
 });
+
+describe('createRegistryServer — GET /me/transactions', () => {
+  let db: Database.Database;
+  let creditDb: Database.Database;
+  const OWNER = 'test-owner';
+  const API_KEY = 'test-api-key';
+
+  beforeEach(() => {
+    db = openDatabase(':memory:');
+    creditDb = openCreditDb(':memory:');
+    bootstrapAgent(creditDb, OWNER, 100);
+  });
+
+  function makeServer(withCreditDb = true) {
+    return createRegistryServer({
+      registryDb: db,
+      silent: true,
+      ownerApiKey: API_KEY,
+      ownerName: OWNER,
+      creditDb: withCreditDb ? creditDb : undefined,
+    });
+  }
+
+  it('GET /me/transactions returns 200 with { items, limit } structure', async () => {
+    const server = makeServer();
+    await server.ready();
+
+    const response = await server.inject({
+      method: 'GET',
+      url: '/me/transactions',
+      headers: { authorization: `Bearer ${API_KEY}` },
+    });
+    expect(response.statusCode).toBe(200);
+    const body = response.json() as { items: unknown[]; limit: number };
+    expect(Array.isArray(body.items)).toBe(true);
+    expect(typeof body.limit).toBe('number');
+
+    await server.close();
+  });
+
+  it('GET /me/transactions returns bootstrap transaction for newly bootstrapped owner', async () => {
+    const server = makeServer();
+    await server.ready();
+
+    const response = await server.inject({
+      method: 'GET',
+      url: '/me/transactions',
+      headers: { authorization: `Bearer ${API_KEY}` },
+    });
+    expect(response.statusCode).toBe(200);
+    const body = response.json() as { items: Array<{ reason: string; amount: number }> };
+    expect(body.items).toHaveLength(1);
+    expect(body.items[0].reason).toBe('bootstrap');
+    expect(body.items[0].amount).toBe(100);
+
+    await server.close();
+  });
+
+  it('GET /me/transactions uses default limit of 20', async () => {
+    const server = makeServer();
+    await server.ready();
+
+    const response = await server.inject({
+      method: 'GET',
+      url: '/me/transactions',
+      headers: { authorization: `Bearer ${API_KEY}` },
+    });
+    expect(response.statusCode).toBe(200);
+    const body = response.json() as { limit: number };
+    expect(body.limit).toBe(20);
+
+    await server.close();
+  });
+
+  it('GET /me/transactions?limit=5 returns limit 5', async () => {
+    const server = makeServer();
+    await server.ready();
+
+    const response = await server.inject({
+      method: 'GET',
+      url: '/me/transactions?limit=5',
+      headers: { authorization: `Bearer ${API_KEY}` },
+    });
+    expect(response.statusCode).toBe(200);
+    const body = response.json() as { limit: number };
+    expect(body.limit).toBe(5);
+
+    await server.close();
+  });
+
+  it('GET /me/transactions?limit=200 is capped at 100', async () => {
+    const server = makeServer();
+    await server.ready();
+
+    const response = await server.inject({
+      method: 'GET',
+      url: '/me/transactions?limit=200',
+      headers: { authorization: `Bearer ${API_KEY}` },
+    });
+    expect(response.statusCode).toBe(200);
+    const body = response.json() as { limit: number };
+    expect(body.limit).toBe(100);
+
+    await server.close();
+  });
+
+  it('GET /me/transactions without auth returns 401', async () => {
+    const server = makeServer();
+    await server.ready();
+
+    const response = await server.inject({
+      method: 'GET',
+      url: '/me/transactions',
+    });
+    expect(response.statusCode).toBe(401);
+
+    await server.close();
+  });
+
+  it('GET /me/transactions with no creditDb returns { items: [], limit: 20 }', async () => {
+    const server = makeServer(false);
+    await server.ready();
+
+    const response = await server.inject({
+      method: 'GET',
+      url: '/me/transactions',
+      headers: { authorization: `Bearer ${API_KEY}` },
+    });
+    expect(response.statusCode).toBe(200);
+    const body = response.json() as { items: unknown[]; limit: number };
+    expect(body.items).toEqual([]);
+    expect(body.limit).toBe(20);
+
+    await server.close();
+  });
+});
