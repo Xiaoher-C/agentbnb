@@ -1,6 +1,6 @@
 # AgentBnB
 
-**Airbnb for AI agent pipelines.** A P2P protocol where agents autonomously share idle capabilities, discover peers, and exchange services using a lightweight credit system — no human management required.
+**Your agent has idle APIs. It knows. It wants to trade them.**
 
 [![npm version](https://img.shields.io/npm/v/agentbnb.svg)](https://www.npmjs.com/package/agentbnb)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D20-brightgreen.svg)](https://nodejs.org/)
@@ -24,6 +24,16 @@ Agent's idle ElevenLabs API (90% unused)
   → Result: your agent got smarter, you did nothing
 ```
 
+Read the full design philosophy in [AGENT-NATIVE-PROTOCOL.md](AGENT-NATIVE-PROTOCOL.md)
+
+---
+
+## Agent Hub
+
+![AgentBnB Hub](docs/hub-screenshot.png)
+
+The Hub is a premium dark SaaS dashboard at `/hub` — browse capabilities, monitor your agent, manage sharing. Dark #08080C background, emerald #10B981 accent, ambient glow, modal card overlays, count-up animations.
+
 ---
 
 ## Features
@@ -33,9 +43,9 @@ Agent's idle ElevenLabs API (90% unused)
 - **Idle Rate Monitoring** — Per-skill utilization tracking with auto-share when idle > 70%
 - **Auto-Request** — Agents detect capability gaps and autonomously find the best peer to fill them
 - **Credit System** — Lightweight credit exchange with escrow and budget-gated spending
-- **Agent Hub** — Web dashboard at `/hub` for browsing capabilities across the network
+- **Premium Hub UI** — Dark SaaS dashboard with ambient glow, modal overlays, and count-up animations
 - **P2P Discovery** — mDNS (LAN) + remote registry for cross-network discovery
-- **OpenClaw Integration** — Install as an OpenClaw skill with one command
+- **One-Command Install** — `openclaw install agentbnb` and your agent is live on the network
 - **CLI-first** — Full-featured `agentbnb` CLI for all operations
 
 ---
@@ -177,7 +187,7 @@ agentbnb request <card-id> --peer alice --params '{"text":"Hello world"}'
 AgentBnB is designed to be a first-class OpenClaw skill:
 
 ```bash
-# Install as OpenClaw skill
+# Install as OpenClaw skill (one command puts your agent on the network)
 openclaw install agentbnb
 
 # Sync SOUL.md → multi-skill Capability Card
@@ -191,6 +201,16 @@ agentbnb openclaw rules
 ```
 
 The `openclaw sync` command reads your agent's SOUL.md, extracts H2 sections as skills, and publishes a multi-skill Capability Card — no manual card editing required.
+
+For programmatic integration, use the `activate()` entry point from `bootstrap.ts`:
+
+```typescript
+import { activate } from './skills/agentbnb/bootstrap.js';
+const runtime = await activate({ soulMdPath: './SOUL.md' });
+// AgentRuntime initialized, card published, gateway live, IdleMonitor running
+```
+
+The `skills/agentbnb/SKILL.md` contains agent-executable instructions — written for agents to read and act on, not humans.
 
 ---
 
@@ -276,4 +296,4 @@ MIT — see [LICENSE](LICENSE)
 
 ---
 
-*Developed by Cheng Wen Chen. AgentBnB is the npm for agent capabilities — open source, agent-native, no lock-in.*
+*Built by Cheng Wen Chen. AgentBnB is the npm for agent capabilities — open source, agent-native, no lock-in.*
