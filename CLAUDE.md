@@ -15,8 +15,9 @@ AgentBnB is a P2P agent capability sharing protocol. Agent owners publish what t
 ## Current State
 
 - **v1.1 Milestone**: 8/8 phases complete, 24 plans, 302+ tests — shipped 2026-03-15
-- **v2.0 Milestone**: 5/5 phases complete (Phase 4-8), 12 plans — shipped 2026-03-15
-- **Current phase**: Pre-launch preparation (deployment, docs, UI polish)
+- **v2.0 Milestone**: 5/5 phases complete (Phases 4-8), 12 plans — shipped 2026-03-15
+- **v2.1 Milestone**: 3/3 phases complete (Phases 9-11), ~10 plans — shipped 2026-03-16
+- **Current phase**: v2.1 complete. Repo ready for public launch.
 
 ## Tech Stack
 
@@ -26,7 +27,7 @@ AgentBnB is a P2P agent capability sharing protocol. Agent owners publish what t
 - Protocol: JSON-RPC over HTTP for agent-to-agent communication
 - Testing: Vitest
 - Linting: ESLint + Prettier
-- Hub: React 18 + Vite + Tailwind CSS (served at `/hub`)
+- Hub: React 18 + Vite + Tailwind CSS (premium dark SaaS theme, served at `/hub`)
 - Background Jobs: croner (cron scheduling)
 - Events: typed-emitter
 
@@ -74,12 +75,16 @@ src/
 
 hub/                 # React SPA served at /hub
 ├── src/
-│   ├── components/  # CapabilityCard, CardGrid, OwnerDashboard, SharePage, etc.
+│   ├── components/  # CapabilityCard, CardGrid, CardModal, StatsBar, SearchFilter, etc.
 │   ├── hooks/       # useCards, useAuth, useOwnerCards, useRequests
 │   └── lib/         # categories, utils
 
 skills/agentbnb/     # OpenClaw installable skill package
-├── SKILL.md         # Skill manifest
+├── SKILL.md         # Skill manifest (agent-executable instructions)
+├── bootstrap.ts     # activate()/deactivate() entry point
+├── install.sh       # Post-install automation
+├── HEARTBEAT.rules.md # Autonomy rules template
+├── bootstrap.test.ts # Integration tests for full lifecycle
 ├── gateway.ts       # Gateway adapter
 ├── auto-share.ts    # Auto-share adapter
 ├── auto-request.ts  # Auto-request adapter
@@ -167,7 +172,8 @@ This project uses GSD for spec-driven development:
 
 ## Important Context
 
-- v1.1 + v2.0 complete. Currently in pre-launch preparation.
+- v1.1 + v2.0 + v2.1 complete. Project is launch-ready.
+- v2.1 added: premium Hub UI (dark theme, modal overlays, count-up animations), ClaWHub installable skill (single activate() entry point), repo documentation updates.
 - Founder (Cheng Wen Chen) is the primary developer using vibe coding with Claude Code + GSD.
 - Agent-first philosophy: every feature must pass "Does this require human intervention? If yes, redesign."
 - Hub at `/hub` is the recruiting tool — must be visually polished.
