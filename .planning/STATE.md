@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v2.2
 milestone_name: Full Hub + Distribution
 status: planning
-stopped_at: Completed 14-02-PLAN.md — EarningsChart, TransactionHistory, hub-* migration
-last_updated: "2026-03-16T15:04:14.552Z"
+stopped_at: Completed 15-01-PLAN.md — Claude Code plugin package and SKILL.md AgentSkills standard
+last_updated: "2026-03-16T15:49:23.931Z"
 last_activity: 2026-03-16 — Roadmap created (4 phases, 37 requirements, 100% coverage)
 progress:
   total_phases: 4
   completed_phases: 3
-  total_plans: 9
-  completed_plans: 9
+  total_plans: 11
+  completed_plans: 10
   percent: 0
 ---
 
@@ -56,6 +56,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 14-credit-ui-modal-polish P04 | 2 | 1 tasks | 2 files |
 | Phase 14-credit-ui-modal-polish P03 | 4m | 2 tasks | 3 files |
 | Phase 14-credit-ui-modal-polish P02 | 5m | 2 tasks | 10 files |
+| Phase 15-distribution-discovery P01 | 2m | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -106,6 +107,9 @@ Progress: [░░░░░░░░░░] 0%
 - [Phase Phase 14-02]: recharts mocked as passthrough divs in jsdom tests — vi.mock('recharts') with data-testid on containers
 - [Phase Phase 14-02]: RESERVE_FLOOR hardcoded as 20 in OwnerDashboard — BudgetManager is server-side only, frontend shows static reserve floor
 - [Phase Phase 14-02]: React.memo on EarningsChart — prevents unnecessary re-renders from parent polling cycle (3 useRequests hooks every 30s)
+- [Phase Phase 15]: plugin.json version discipline: version in plugin.json only, not duplicated in marketplace.json
+- [Phase Phase 15]: AgentSkills frontmatter: metadata map holds author/version/tags; compatibility replaces requires field
+- [Phase Phase 15]: Plugin SKILL.md uses disable-model-invocation:true — manual task skill for human developers
 
 ### Pending Todos
 
@@ -118,8 +122,8 @@ Progress: [░░░░░░░░░░] 0%
 
 ## Session Continuity
 
-Last session: 2026-03-16T14:50:12.174Z
-Stopped at: Completed 14-02-PLAN.md — EarningsChart, TransactionHistory, hub-* migration
+Last session: 2026-03-16T15:49:23.929Z
+Stopped at: Completed 15-01-PLAN.md — Claude Code plugin package and SKILL.md AgentSkills standard
 Resume file: None
 
 ---

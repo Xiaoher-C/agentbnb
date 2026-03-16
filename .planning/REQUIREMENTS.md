@@ -54,9 +54,9 @@ Requirements for v2.2 Full Hub + Distribution. Each maps to roadmap phases.
 
 ### Distribution
 
-- [ ] **DIST-01**: Claude Code .claude-plugin/marketplace.json created with correct schema
-- [ ] **DIST-02**: Plugin structure at plugins/agentbnb-network/ with plugin.json and SKILL.md
-- [ ] **DIST-03**: SKILL.md has complete YAML frontmatter for auto-indexing (name, version, description, author, tags)
+- [x] **DIST-01**: Claude Code .claude-plugin/marketplace.json created with correct schema
+- [x] **DIST-02**: Plugin structure at plugins/agentbnb-network/ with plugin.json and SKILL.md
+- [x] **DIST-03**: SKILL.md has complete YAML frontmatter for auto-indexing (name, version, description, author, tags)
 - [ ] **DIST-04**: GitHub repository topics set: ai-agent-skill, claude-code, agent-skills
 - [ ] **DIST-05**: README updated with hub screenshot, badges, and one-line install commands per tool
 
@@ -137,9 +137,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | POLISH-03 | Phase 14 | Complete |
 | POLISH-04 | Phase 14 | Complete |
 | POLISH-05 | Phase 14 | Complete |
-| DIST-01 | Phase 15 | Pending |
-| DIST-02 | Phase 15 | Pending |
-| DIST-03 | Phase 15 | Pending |
+| DIST-01 | Phase 15 | Complete |
+| DIST-02 | Phase 15 | Complete |
+| DIST-03 | Phase 15 | Complete |
 | DIST-04 | Phase 15 | Pending |
 | DIST-05 | Phase 15 | Pending |
 

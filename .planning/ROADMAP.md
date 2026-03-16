@@ -110,7 +110,7 @@ Plans:
   2. SKILL.md has complete YAML frontmatter including name, version, description, author, and compatible-tools tags for cross-tool auto-indexing
   3. The GitHub repository has the topics ai-agent-skill, claude-code, and agent-skills set
   4. The README shows a hub screenshot, per-tool install badges, and one-line install commands for Claude Code, OpenClaw, Antigravity, and CLI
-**Plans:** 2 plans
+**Plans:** 1/2 plans executed
 Plans:
 - [ ] 15-01-PLAN.md — Claude Code plugin package (marketplace.json, plugin.json, plugin SKILL.md) + AgentSkills SKILL.md update + version bump
 - [ ] 15-02-PLAN.md — GitHub topics + README overhaul with badges, install commands, and hub screenshot
@@ -127,7 +127,7 @@ Plans:
 | 12. Foundation + Agent Directory | 3/3 | Complete    | 2026-03-16 | - |
 | 13. Activity Feed + Docs Page | 2/2 | Complete    | 2026-03-16 | - |
 | 14. Credit UI + Modal + Polish | 4/4 | Complete    | 2026-03-16 | - |
-| 15. Distribution + Discovery | v2.2 | 0/2 | Not started | - |
+| 15. Distribution + Discovery | 1/2 | In Progress|  | - |
 
 **Total:** 20 phases, 57+ plans, 3 milestones shipped, 1 in progress.
 
