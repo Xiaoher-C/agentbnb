@@ -151,6 +151,80 @@ export function getSkillRequestCount(
 }
 
 /**
+ * A public activity feed entry, joining request_log with capability_cards
+ * to include the provider (card owner) field.
+ */
+export interface ActivityFeedEntry {
+  /** UUID for this log entry. */
+  id: string;
+  /** Human-readable name of the capability card at time of request. */
+  card_name: string;
+  /** Owner identifier of the requesting agent. */
+  requester: string;
+  /** Owner of the capability card (from LEFT JOIN), null if card was deleted. */
+  provider: string | null;
+  /** Outcome of the capability execution. */
+  status: 'success' | 'failure' | 'timeout';
+  /** Credits charged for this request. */
+  credits_charged: number;
+  /** End-to-end latency in milliseconds. */
+  latency_ms: number;
+  /** ISO 8601 timestamp when this log entry was created. */
+  created_at: string;
+  /**
+   * Type of autonomous action, if applicable.
+   * Only 'auto_share' rows appear in the public feed (auto_request rows are excluded).
+   */
+  action_type: string | null;
+}
+
+/**
+ * Returns public activity feed entries from request_log JOIN capability_cards.
+ *
+ * Autonomy audit rows with action_type = 'auto_request' are excluded.
+ * Auto-share events (action_type = 'auto_share') and regular exchanges
+ * (action_type IS NULL) are included.
+ *
+ * @param db - Open database instance.
+ * @param limit - Maximum number of entries to return. Defaults to 20, capped at 100.
+ * @param since - Optional ISO 8601 timestamp string. When provided, only entries
+ *   with created_at > since are returned (for polling-based prepend pattern).
+ * @returns Array of ActivityFeedEntry objects, newest first.
+ */
+export function getActivityFeed(
+  db: Database.Database,
+  limit = 20,
+  since?: string
+): ActivityFeedEntry[] {
+  const effectiveLimit = Math.min(limit, 100);
+
+  if (since !== undefined) {
+    const stmt = db.prepare(`
+      SELECT r.id, r.card_name, r.requester, c.owner AS provider,
+             r.status, r.credits_charged, r.latency_ms, r.created_at, r.action_type
+      FROM request_log r
+      LEFT JOIN capability_cards c ON r.card_id = c.id
+      WHERE (r.action_type IS NULL OR r.action_type = 'auto_share')
+        AND r.created_at > ?
+      ORDER BY r.created_at DESC
+      LIMIT ?
+    `);
+    return stmt.all(since, effectiveLimit) as ActivityFeedEntry[];
+  }
+
+  const stmt = db.prepare(`
+    SELECT r.id, r.card_name, r.requester, c.owner AS provider,
+           r.status, r.credits_charged, r.latency_ms, r.created_at, r.action_type
+    FROM request_log r
+    LEFT JOIN capability_cards c ON r.card_id = c.id
+    WHERE (r.action_type IS NULL OR r.action_type = 'auto_share')
+    ORDER BY r.created_at DESC
+    LIMIT ?
+  `);
+  return stmt.all(effectiveLimit) as ActivityFeedEntry[];
+}
+
+/**
  * Retrieves request log entries from the database, newest first.
  *
  * @param db - Open database instance.

@@ -8,7 +8,7 @@ import type Database from 'better-sqlite3';
 import { getCard, updateCard, listCards } from './store.js';
 import { listPendingRequests, resolvePendingRequest } from '../autonomy/pending-requests.js';
 import { searchCards, filterCards } from './matcher.js';
-import { getRequestLog } from './request-log.js';
+import { getRequestLog, getActivityFeed } from './request-log.js';
 import type { SincePeriod } from './request-log.js';
 import { getBalance } from '../credit/ledger.js';
 import { detectApiKeys, buildDraftCard, KNOWN_API_KEYS } from '../cli/onboarding.js';
@@ -360,6 +360,26 @@ export function createRegistryServer(opts: RegistryServerOptions): FastifyInstan
       skills: ownerCards,
       recent_activity: recentActivity,
     });
+  });
+
+  /**
+   * GET /api/activity — Returns a paginated public activity feed of exchange events.
+   *
+   * Joins request_log with capability_cards to include the provider (card owner) field.
+   * Autonomy audit rows (action_type = 'auto_request') are excluded.
+   * Auto-share events (action_type = 'auto_share') and regular exchanges are included.
+   *
+   * Query parameters:
+   *   limit  — Max items to return (default 20, max 100)
+   *   since  — ISO 8601 timestamp; only entries newer than this are returned (for polling)
+   */
+  server.get('/api/activity', async (request, reply) => {
+    const query = request.query as Record<string, string | undefined>;
+    const rawLimit = query.limit !== undefined ? parseInt(query.limit, 10) : 20;
+    const limit = Math.min(isNaN(rawLimit) || rawLimit < 1 ? 20 : rawLimit, 100);
+    const since = query.since?.trim() || undefined;
+    const items = getActivityFeed(db, limit, since);
+    return reply.send({ items, total: items.length, limit });
   });
 
   // Register owner routes as a scoped plugin (NOT fastify-plugin) so the auth hook
