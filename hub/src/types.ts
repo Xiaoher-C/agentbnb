@@ -26,6 +26,7 @@ export interface HubCard {
     avg_latency_ms?: number;
     success_rate?: number;
     tags?: string[];
+    idle_rate?: number;
   };
 }
 
