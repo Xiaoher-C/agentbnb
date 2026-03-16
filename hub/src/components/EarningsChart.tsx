@@ -16,7 +16,6 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
-  type TooltipProps,
 } from 'recharts';
 import type { RequestLogEntry } from '../hooks/useRequests.js';
 
@@ -57,7 +56,7 @@ export function aggregateByDay(requests: RequestLogEntry[]): DayBucket[] {
 }
 
 /** Custom dark-themed tooltip for recharts. */
-function CreditsTooltip({ active, payload, label }: TooltipProps<number, string>): JSX.Element | null {
+function CreditsTooltip({ active, payload, label }: { active?: boolean; payload?: Array<{ value?: number }>; label?: string }): JSX.Element | null {
   if (!active || !payload?.length) return null;
 
   const credits = payload[0]?.value ?? 0;

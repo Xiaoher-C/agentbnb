@@ -7,7 +7,7 @@ import { describe, it, expect } from 'vitest';
 import { MemoryRouter } from 'react-router';
 import NavBar from './NavBar.js';
 
-const defaultProps = {
+const defaultProps: { apiKey: string | null; balance: number | null; onLogout: () => void } = {
   apiKey: null,
   balance: null,
   onLogout: () => {},

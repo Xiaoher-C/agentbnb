@@ -3,7 +3,7 @@
  * Covers all 5 requirements: MODAL-01 (request button), MODAL-02 (availability),
  * MODAL-03 (owner profile link), POLISH-02 (44px tap targets), POLISH-05 (iOS scroll lock).
  */
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { MemoryRouter } from 'react-router';
 import CardModal from './CardModal.js';
