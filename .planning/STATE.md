@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v2.2
 milestone_name: Full Hub + Distribution
 status: planning
-stopped_at: Completed 15-01-PLAN.md — Claude Code plugin package and SKILL.md AgentSkills standard
-last_updated: "2026-03-16T15:49:23.931Z"
+stopped_at: Completed 15-02-PLAN.md — GitHub topics, README overhaul, hub screenshot placeholder
+last_updated: "2026-03-16T16:41:16.205Z"
 last_activity: 2026-03-16 — Roadmap created (4 phases, 37 requirements, 100% coverage)
 progress:
   total_phases: 4
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 11
-  completed_plans: 10
+  completed_plans: 11
   percent: 0
 ---
 
@@ -57,6 +57,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 14-credit-ui-modal-polish P03 | 4m | 2 tasks | 3 files |
 | Phase 14-credit-ui-modal-polish P02 | 5m | 2 tasks | 10 files |
 | Phase 15-distribution-discovery P01 | 2m | 2 tasks | 5 files |
+| Phase 15-distribution-discovery P02 | 10min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -110,6 +111,8 @@ Progress: [░░░░░░░░░░] 0%
 - [Phase Phase 15]: plugin.json version discipline: version in plugin.json only, not duplicated in marketplace.json
 - [Phase Phase 15]: AgentSkills frontmatter: metadata map holds author/version/tags; compatibility replaces requires field
 - [Phase Phase 15]: Plugin SKILL.md uses disable-model-invocation:true — manual task skill for human developers
+- [Phase Phase 15]: docs/hub-screenshot.png committed as 0-byte placeholder — will be replaced with real screenshot before public launch
+- [Phase Phase 15]: Antigravity install command marked as unverified via HTML comment in README
 
 ### Pending Todos
 
@@ -122,8 +125,8 @@ Progress: [░░░░░░░░░░] 0%
 
 ## Session Continuity
 
-Last session: 2026-03-16T15:49:23.929Z
-Stopped at: Completed 15-01-PLAN.md — Claude Code plugin package and SKILL.md AgentSkills standard
+Last session: 2026-03-16T16:41:16.203Z
+Stopped at: Completed 15-02-PLAN.md — GitHub topics, README overhaul, hub screenshot placeholder
 Resume file: None
 
 ---

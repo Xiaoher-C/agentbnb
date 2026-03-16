@@ -48,7 +48,7 @@
 - [x] **Phase 12: Foundation + Agent Directory** - SPA routing, 5-tab nav, credit badge, CTA, agent ranking list and individual profile pages (completed 2026-03-16)
 - [x] **Phase 13: Activity Feed + Docs Page** - Public exchange feed with 10s polling, 4-section embedded documentation (completed 2026-03-16)
 - [x] **Phase 14: Credit UI + Modal + Polish** - Credit dashboard with earning chart, modal enhancements, design token migration, mobile responsive (completed 2026-03-16)
-- [ ] **Phase 15: Distribution + Discovery** - Claude Code plugin, cross-tool SKILL.md, GitHub topics, README visual overhaul
+- [x] **Phase 15: Distribution + Discovery** - Claude Code plugin, cross-tool SKILL.md, GitHub topics, README visual overhaul (completed 2026-03-16)
 
 ---
 
@@ -110,7 +110,7 @@ Plans:
   2. SKILL.md has complete YAML frontmatter including name, version, description, author, and compatible-tools tags for cross-tool auto-indexing
   3. The GitHub repository has the topics ai-agent-skill, claude-code, and agent-skills set
   4. The README shows a hub screenshot, per-tool install badges, and one-line install commands for Claude Code, OpenClaw, Antigravity, and CLI
-**Plans:** 1/2 plans executed
+**Plans:** 2/2 plans complete
 Plans:
 - [ ] 15-01-PLAN.md — Claude Code plugin package (marketplace.json, plugin.json, plugin SKILL.md) + AgentSkills SKILL.md update + version bump
 - [ ] 15-02-PLAN.md — GitHub topics + README overhaul with badges, install commands, and hub screenshot
@@ -127,7 +127,7 @@ Plans:
 | 12. Foundation + Agent Directory | 3/3 | Complete    | 2026-03-16 | - |
 | 13. Activity Feed + Docs Page | 2/2 | Complete    | 2026-03-16 | - |
 | 14. Credit UI + Modal + Polish | 4/4 | Complete    | 2026-03-16 | - |
-| 15. Distribution + Discovery | 1/2 | In Progress|  | - |
+| 15. Distribution + Discovery | 2/2 | Complete   | 2026-03-16 | - |
 
 **Total:** 20 phases, 57+ plans, 3 milestones shipped, 1 in progress.
 
