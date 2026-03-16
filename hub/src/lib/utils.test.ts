@@ -35,15 +35,15 @@ describe('getStatusIndicator', () => {
 });
 
 describe('formatCredits', () => {
-  it('credits_per_call only returns "5 credits"', () => {
-    expect(formatCredits({ credits_per_call: 5 })).toBe('5 credits');
+  it('credits_per_call only returns "cr 5"', () => {
+    expect(formatCredits({ credits_per_call: 5 })).toBe('cr 5');
   });
 
-  it('both fields returns range "5-120 credits"', () => {
-    expect(formatCredits({ credits_per_call: 5, credits_per_minute: 120 })).toBe('5-120 credits');
+  it('both fields returns range "cr 5-120/min"', () => {
+    expect(formatCredits({ credits_per_call: 5, credits_per_minute: 120 })).toBe('cr 5-120/min');
   });
 
-  it('zero credits per call returns "0 credits"', () => {
-    expect(formatCredits({ credits_per_call: 0 })).toBe('0 credits');
+  it('zero credits per call returns "cr 0"', () => {
+    expect(formatCredits({ credits_per_call: 0 })).toBe('cr 0');
   });
 });

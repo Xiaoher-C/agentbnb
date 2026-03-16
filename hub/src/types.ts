@@ -87,6 +87,20 @@ export interface AgentProfileResponse {
   recent_activity: ActivityEntry[];
 }
 
+/**
+ * A single credit transaction record, as returned by GET /me/transactions.
+ * Mirrors the CreditTransaction type from src/credit/ledger.ts.
+ */
+export interface CreditTransaction {
+  id: string;
+  owner: string;
+  /** Positive = credit, negative = debit */
+  amount: number;
+  reason: 'bootstrap' | 'escrow_hold' | 'escrow_release' | 'settlement' | 'refund';
+  reference_id: string | null;
+  created_at: string;
+}
+
 /** Activity event for the public feed (GET /api/activity) */
 export interface ActivityEvent {
   id: string;

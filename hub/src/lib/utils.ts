@@ -53,15 +53,17 @@ export function getStatusIndicator(online: boolean): StatusColor {
 /**
  * Format a pricing object into a human-readable credit string.
  *
+ * Uses the `cr` symbol prefix: "cr X" for single-rate, "cr X-Y/min" for per-minute pricing.
+ *
  * @param pricing - The card's pricing object
- * @returns e.g. "5 credits" or "5-120 credits"
+ * @returns e.g. "cr 5" or "cr 5-120/min"
  */
 export function formatCredits(pricing: {
   credits_per_call: number;
   credits_per_minute?: number;
 }): string {
   if (pricing.credits_per_minute !== undefined) {
-    return `${pricing.credits_per_call}-${pricing.credits_per_minute} credits`;
+    return `cr ${pricing.credits_per_call}-${pricing.credits_per_minute}/min`;
   }
-  return `${pricing.credits_per_call} credits`;
+  return `cr ${pricing.credits_per_call}`;
 }
