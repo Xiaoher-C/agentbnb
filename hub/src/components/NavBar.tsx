@@ -4,14 +4,16 @@
  * Left: "AgentBnB" title
  * Right: if authenticated — credit balance badge + Disconnect button
  *        if not authenticated — GetStartedCTA button
- * Tabs: Discover | Agents | Activity | Docs | My Agent (dropdown)
+ * Desktop tabs: Discover | Agents | Activity | Docs | My Agent (dropdown)
+ * Mobile: Hamburger button opens a vertical drawer with all nav items flat
  *
  * Uses react-router NavLink for active-state styling on all link tabs.
- * My Agent is a custom dropdown (Dashboard / Share / Settings).
+ * My Agent is a custom dropdown on desktop (Dashboard / Share / Settings),
+ * expanded inline in the mobile drawer for better UX.
  */
 import { useState, useRef, useEffect } from 'react';
 import { NavLink } from 'react-router';
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown, Menu, X } from 'lucide-react';
 import GetStartedCTA from './GetStartedCTA.js';
 
 export interface NavBarProps {
@@ -37,7 +39,7 @@ function navTabClass(isActive: boolean): string {
   return `${base} ${isActive ? active : inactive}`;
 }
 
-/** My Agent dropdown — shows Dashboard, Share, Settings sub-items. */
+/** My Agent dropdown — shows Dashboard, Share, Settings sub-items (desktop only). */
 function MyAgentDropdown(): JSX.Element {
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -99,14 +101,38 @@ function MyAgentDropdown(): JSX.Element {
 
 /**
  * Top navigation bar with title, 5 tabs, credit badge or CTA, and My Agent dropdown.
+ * Collapses to hamburger menu on mobile (< 768px / md breakpoint).
  */
 export default function NavBar({ apiKey, balance, onLogout }: NavBarProps): JSX.Element {
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  // iOS-safe scroll lock when mobile drawer is open
+  useEffect(() => {
+    if (menuOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [menuOpen]);
+
   return (
     <header className="max-w-7xl mx-auto px-4 pt-8 pb-0">
       {/* Title row */}
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold text-hub-text-primary">AgentBnB</h1>
         <div className="flex items-center gap-3">
+          {/* Hamburger button — visible on mobile only */}
+          <button
+            className="md:hidden min-h-[44px] min-w-[44px] flex items-center justify-center text-hub-text-secondary hover:text-hub-text-primary transition-colors"
+            onClick={() => setMenuOpen((prev) => !prev)}
+            aria-label="Toggle menu"
+          >
+            {menuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+          </button>
+
           {apiKey ? (
             <>
               <NavCreditBadge balance={balance} />
@@ -123,8 +149,11 @@ export default function NavBar({ apiKey, balance, onLogout }: NavBarProps): JSX.
         </div>
       </div>
 
-      {/* Tab navigation — pill switcher */}
-      <nav className="mt-6 flex gap-1 bg-white/[0.04] rounded-lg p-1 w-fit">
+      {/* Desktop tab navigation — pill switcher, hidden on mobile */}
+      <nav
+        aria-label="Desktop nav"
+        className="mt-6 hidden md:flex gap-1 bg-white/[0.04] rounded-lg p-1 w-fit"
+      >
         <NavLink
           to="/"
           end
@@ -152,6 +181,65 @@ export default function NavBar({ apiKey, balance, onLogout }: NavBarProps): JSX.
         </NavLink>
         <MyAgentDropdown />
       </nav>
+
+      {/* Mobile drawer — full-width vertical nav, shown only when menuOpen */}
+      {menuOpen && (
+        <nav
+          aria-label="Mobile nav"
+          className="md:hidden mt-2 border-t border-hub-border pt-2 pb-1 flex flex-col gap-1"
+        >
+          <NavLink
+            to="/"
+            end
+            onClick={() => setMenuOpen(false)}
+            className={({ isActive }) => `${navTabClass(isActive)} block`}
+          >
+            Discover
+          </NavLink>
+          <NavLink
+            to="/agents"
+            onClick={() => setMenuOpen(false)}
+            className={({ isActive }) => `${navTabClass(isActive)} block`}
+          >
+            Agents
+          </NavLink>
+          <NavLink
+            to="/activity"
+            onClick={() => setMenuOpen(false)}
+            className={({ isActive }) => `${navTabClass(isActive)} block`}
+          >
+            Activity
+          </NavLink>
+          <NavLink
+            to="/docs"
+            onClick={() => setMenuOpen(false)}
+            className={({ isActive }) => `${navTabClass(isActive)} block`}
+          >
+            Docs
+          </NavLink>
+          <NavLink
+            to="/myagent"
+            onClick={() => setMenuOpen(false)}
+            className={({ isActive }) => `${navTabClass(isActive)} block`}
+          >
+            Dashboard
+          </NavLink>
+          <NavLink
+            to="/share"
+            onClick={() => setMenuOpen(false)}
+            className={({ isActive }) => `${navTabClass(isActive)} block`}
+          >
+            Share
+          </NavLink>
+          <NavLink
+            to="/settings"
+            onClick={() => setMenuOpen(false)}
+            className={({ isActive }) => `${navTabClass(isActive)} block`}
+          >
+            Settings
+          </NavLink>
+        </nav>
+      )}
     </header>
   );
 }
