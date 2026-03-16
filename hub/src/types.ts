@@ -60,3 +60,29 @@ export interface AppOutletContext {
   login: (key: string) => void;
   setSelectedCard: (card: HubCard | null) => void;
 }
+
+/** Agent profile as returned by GET /api/agents */
+export interface AgentProfile {
+  owner: string;
+  skill_count: number;
+  success_rate: number | null;
+  total_earned: number;
+  member_since: string;
+}
+
+/** Activity entry as returned by GET /api/agents/:owner recent_activity */
+export interface ActivityEntry {
+  id: string;
+  card_name: string;
+  requester: string;
+  status: 'success' | 'failure' | 'timeout';
+  credits_charged: number;
+  created_at: string;
+}
+
+/** Full agent profile response from GET /api/agents/:owner */
+export interface AgentProfileResponse {
+  profile: AgentProfile;
+  skills: HubCard[];
+  recent_activity: ActivityEntry[];
+}
