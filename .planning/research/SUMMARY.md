@@ -1,183 +1,216 @@
 # Project Research Summary
 
-**Project:** AgentBnB v2.0 — Agent Autonomy Milestone
-**Domain:** P2P agent capability sharing — autonomous sense/decide/act loop
-**Researched:** 2026-03-15
+**Project:** AgentBnB v2.2 — Full Hub Feature Expansion + Multi-Platform Distribution
+**Domain:** P2P agent capability marketplace Hub expansion + Claude Code plugin distribution
+**Researched:** 2026-03-16
 **Confidence:** HIGH
 
 ## Executive Summary
 
-AgentBnB v2.0 is a fundamental execution model shift, not a feature addition. The v1.1 system is a clean synchronous request-response server: it receives capability requests, executes them, and returns results. v2.0 requires the same process to simultaneously run background timers (idle monitoring, budget checks), initiate outbound requests autonomously (auto-request), and make economic decisions constrained by owner-configured tiers — all while continuing to serve inbound requests. Experts building autonomous agent systems address this by establishing a centralized runtime scaffold first, before any autonomous feature code is written. This is the single most important architectural decision for v2.0: the `AgentRuntime` class that owns all database handles, background loops, and shutdown coordination.
+AgentBnB v2.2 is a UI-heavy milestone that expands a proven backend (v1.1 + v2.0, fully shipped) into a visually polished, publicly distributable product. The hub must grow from 3 tabs to 5, add an agent directory, activity feed, documentation page, and credit dashboard — all built on top of an existing React 18 + Vite + Tailwind stack that already has the necessary backend data in place. The key insight from research is that almost every new frontend feature is presentation-only: the data, hooks, and Fastify endpoints are already built or trivially extendable. The primary engineering work is UI composition and polish, not new system design.
 
-The recommended approach is a 5-phase build order derived from hard feature dependencies: (1) schema foundation — multi-skill CapabilityCard v2.0 with data migration; (2) autonomy core — tiers logic and credit budgeting modules; (3) idle monitoring and auto-share behavior; (4) auto-request with peer selection; (5) OpenClaw deep integration. The stack additions are minimal: `croner` for background scheduling and `typed-emitter` for type-safe event routing. Everything else is already in the existing stack. Resist any impulse to add job queue libraries, logging libraries, or ML scoring — the existing SQLite + Fastify + TypeScript stack handles all new requirements.
+The recommended approach is strictly additive: extend `App.tsx` tab routing to 5 views, add 4 lightweight Fastify routes, add 3 new React hooks following the established 30-second polling pattern, and build 9 new components following existing design token conventions. The only new npm dependencies with material weight are `react-router` (hash mode, no server config change), `recharts` (credit chart), `react-markdown` + `remark-gfm` + `rehype-highlight` (docs page), and optionally `framer-motion` (animations). The Claude Code plugin marketplace is purely static file work — no code.
 
-The key risks fall into three categories. First, data safety: the multi-skill card schema is a breaking change to the SQLite JSON blob format; every FTS5 trigger must be updated in the same migration as the schema change, or search silently returns nothing. Second, economic safety: auto-request without reserve enforcement creates a scenario where the agent drains its credits below a usable floor, isolating it from the network; the `BudgetManager` must wrap every escrow call, never allowing direct `holdEscrow` from auto-request code. Third, agency safety: the default autonomy tier must be Tier 3 (ask-before), not Tier 1; OWASP's 2026 Least-Agency principle is explicit that defaults must be maximally restrictive, with the owner expanding autonomy only through explicit configuration.
+The top risk is architectural: building new nested views (agent profile detail, docs sections) without URL routing creates dead ends that require expensive retrofitting. The routing decision must come first, before any page component is written. Secondary risks are visual correctness traps: Recharts tooltip white-on-dark breaking the dark theme, `react-markdown` rendering unstyled elements, and iOS Safari scroll lock failures on modals. All three have well-documented fixes — the risk is skipping them, not solving them.
+
+---
 
 ## Key Findings
 
 ### Recommended Stack
 
-The existing stack (TypeScript strict, Node.js 20+, better-sqlite3, Fastify, Zod, Vitest, bonjour-service) covers all v2.0 requirements. Only two production dependencies are added: `croner ^10.0.1` for background task scheduling (ESM-native, TypeScript-first, supports pause/resume — needed for fine-grained polling intervals and graceful shutdown) and `typed-emitter ^2.1.0` for a type-safe event bus (zero runtime bytes — pure types layered over Node.js EventEmitter, needed because the autonomy system has 6+ event types where raw string-keyed emitters become error-prone). SQLite WAL mode (`db.pragma('journal_mode = WAL')`) must be activated at startup to prevent `SQLITE_BUSY` errors when background timers write concurrently with the gateway serving reads.
+The existing stack (React 18.3.1, Vite 6.0.7, TypeScript 5.7.3, Tailwind CSS 3.4.17) is locked and requires no changes. Four targeted additions are recommended. `react-router ^7.13.1` using `createHashRouter` provides SPA routing with zero Fastify config changes — hash URLs (`/hub/#/agents`) are served correctly by the existing static file mount. `recharts ^3.8.0` provides the credit earning chart with CSS variable theming support (`stroke="var(--color-accent)"`). `react-markdown ^10.1.0` with `remark-gfm ^4.0.1` and `rehype-highlight ^7.0.0` provides the docs page at roughly 200KB less bundle weight than `react-syntax-highlighter`. `framer-motion ^12.36.0` is conditional — add only if route transitions or staggered Activity Feed animations prove necessary.
 
 **Core technologies:**
-- `croner ^10.0.1`: background scheduling — ESM-native, pause/resume for graceful shutdown, zero dependencies
-- `typed-emitter ^2.1.0`: event bus types — zero runtime, strict typing for autonomy/credit event payloads
-- `process.cpuUsage()` (built-in): idle signal supplementation — no external metrics library justified
-- `better-sqlite3` WAL mode: concurrent read/write — call once at startup, required for background timers
-- `db.pragma('busy_timeout = 5000')`: prevents `SQLITE_BUSY` under concurrent background writes
+- `react-router ^7.13.1` with `createHashRouter`: client-side routing for 7-page Hub — hash mode avoids all Fastify fallback configuration; import only from `react-router` (not `react-router-dom` — merged in v7)
+- `recharts ^3.8.0`: credit history AreaChart — declarative SVG, CSS variable theming, 64M+ monthly downloads
+- `react-markdown ^10.1.0` + `remark-gfm ^4.0.1` + `rehype-highlight ^7.0.0`: docs page rendering — unified pipeline, GFM tables, dark-theme code highlighting
+- `framer-motion ^12.36.0` (conditional): AnimatePresence route transitions + staggered feed animations
+- Native `setInterval`: activity feed polling — no library needed, 10-second polling is functionally equivalent to WebSocket for this use case
+- Tailwind CSS breakpoints (`md:`, `lg:`): all mobile responsive work — no additional library
+- Tailwind CSS v3 (stay): do not migrate to v4 this milestone; breaking `@theme` directive changes create migration risk with no material benefit at this codebase size
 
-Do not add: BullMQ/Agenda/bee-queue (requires Redis — violates local-first constraint), winston/pino (Fastify's built-in logger is sufficient), rxjs (over-engineered for 6 event types), any LLM SDK (AgentBnB is a protocol, not an agent — intelligence is OpenClaw's job).
+**What not to use:** `react-syntax-highlighter` (700KB bundle for what `rehype-highlight` does lighter), `react-query` / TanStack Query (existing hook pattern is sufficient), `axios` (native fetch already in use), `react-router-dom` as a separate package (merged into `react-router` in v7), Tailwind CSS v4 (migration risk mid-milestone).
 
 ### Expected Features
 
-The v2.0 milestone delivers the core promise: "the agent monitors itself, shares when idle, requests when stuck, and never violates the owner's configured limits." All 8 table-stakes features are required for this promise to hold; removing any one breaks the economic model.
+The v2.1 baseline already ships card grid, owner dashboard, auth, share page, CLI, credits, and OpenClaw integration. v2.2 adds the public-facing layer that makes the network visible and distributable.
 
-**Must have (v2.0 table stakes):**
-- Idle rate detection — sliding window counter per skill; without this, auto-share defaults to always-share, breaking the economic model
-- Auto-share trigger — flip `availability.online` based on idle_rate vs threshold; the sharing half of the earn/spend loop
-- Autonomy tier configuration — Tier 1/2/3 credit thresholds stored in config; enforced before every autonomous action
-- Credit reserve enforcement — block auto-request when balance at or below reserve floor; prevents network isolation
-- Auto-request — capability gap detection, peer selection, escrow-gated execution; the spending half of the earn/spend loop
-- Multi-skill Capability Card — schema v2.0 with `skills[]` array; one card = one agent identity (not one card per skill)
-- OpenClaw SKILL.md installable package — `skills/agentbnb/` directory with SKILL.md, gateway.ts, auto-share.ts, auto-request.ts, credit-mgr.ts
-- HEARTBEAT.md rule injection — emit ready-to-paste autonomy rules; auto-patch on `openclaw install agentbnb`
+**Must have (table stakes):**
+- Agent Profiles page (list + individual) — every marketplace has a participant directory; makes the network tangible
+- Activity Feed — live proof the exchange economy is real; social proof for developer onboarding
+- In-hub Documentation page — removes evaluation barrier; developers cannot adopt without Getting Started + API Reference
+- Credit system UI (nav balance badge, 30-day earning chart, sign-up CTA) — credit economy is invisible without visualization
+- Mobile responsive layout — hub is a recruiting tool; must work on all devices for demos and sharing
+- Skill Detail Modal enhancement (request button, availability section) — closes the discovery-to-action gap
+- Claude Code plugin marketplace (`.claude-plugin/marketplace.json`) — primary inbound distribution channel; lowest effort, highest reach
 
-**Should have (v2.1 differentiators):**
-- Credit surplus alert — notify owner when balance exceeds configured threshold; signals the earn-spend loop is profitable
-- Per-skill idle rate — independent idle tracking per skill on a multi-skill card; enables fine-grained sharing decisions
-- SOUL.md v2 sync — extend `parseSoulMd()` to emit `skills[]` from H2 sections; closes the agent identity loop
-- Reputation-weighted peer selection — refine auto-request with scored ranking: `success_rate * (1/credits_per_call) * idle_rate`
-- Autonomy audit log — extend `request_log` with `action_type` and `tier_invoked`; required for Tier 2 "notify after"
+**Should have (differentiators):**
+- Design system polish pass — `OwnerDashboard` uses `slate-*` tokens inconsistent with `hub-*` tokens; must be corrected for brand coherence and screenshot quality
+- Cross-tool SKILL.md compatibility frontmatter — passive discovery via SkillsMP (351k+ skills indexed), Skills.sh (8M+ installs)
+- Auto-index preparation (GitHub topics) — zero-code passive distribution channel
 
-**Defer (v2.2+):**
-- Partial pipeline sharing — complex schema extension; needs real use case evidence
-- OpenClaw message bus transport — LOW confidence on feasibility; needs dedicated research phase before committing
-- Dynamic pricing signals — useful only after network has enough agents to produce real demand signals
+**Defer to v2.3+:**
+- SSE-based real-time activity feed — upgrade from polling only if latency becomes user-visible
+- Searchable documentation — add only if docs exceed 6 pages or search demand emerges
+- Related skills suggestions in Skill Detail Modal — requires semantic similarity; defer until network has sufficient data
 
-**Anti-features to avoid building:**
-- Real-time sub-second idle rate polling (distorts the metric being measured; 60s refresh is correct)
-- Unlimited auto-request without tier enforcement (recursive loops produce unbounded credit spend — the $47K API bill failure mode)
-- Multi-agent card ownership (splits reputation accountability; owner isolation is the correct model)
-- Automatic dynamic pricing (creates instability for requesting agents who budget in advance)
+**Anti-features (do not build):**
+- WebSocket activity feed, full MDX docs system, real money payments, social graph (follow/like/comment), per-skill public install counts, cloud-hosted central registry
 
 ### Architecture Approach
 
-The v2.0 architecture adds a new `src/autonomy/` module directory containing three new modules (`tiers.ts`, `idle-monitor.ts`, `auto-request.ts`), a new `src/credit/budget.ts` module, and a new `src/openclaw/` directory. All existing modules are modified, not replaced: `src/types/index.ts` gains the multi-skill schema, `src/registry/store.ts` gains per-skill idle rate and shareable flag functions, FTS5 triggers are updated to index nested `skills[]` content, and `src/cli/index.ts` starts the `IdleMonitor` and `BudgetManager` on `agentbnb serve`. The gateway routing changes from `{ card_id }` to `{ card_id, skill_id }` to support per-skill execution. The `AgentRuntime` (the centralized process model) is the architectural prerequisite for all other new modules.
+The architecture is an additive overlay on a proven base. The Fastify registry server gains 4 new routes (`/api/agents`, `/api/agents/:owner`, `/api/activity`, `/me/transactions`) — all implemented using existing store and ledger functions already written. The Hub gains 5 tabs (up from 3), 9 new components, 3 new hooks, and 1 new Vite proxy entry (`/api`). No database schema changes. No new tables — agent profiles aggregate from `capability_cards` GROUP BY owner with a JOIN to `request_log`; the activity feed reads directly from `request_log JOIN capability_cards`. `useCredit` is called once in `App.tsx` and props passed down to prevent double-polling. The Claude Code plugin is pure file additions at `.claude-plugin/marketplace.json` and `plugins/agentbnb-network/`.
 
 **Major components:**
-1. `AgentRuntime` (new) — owns all DB handles, starts/stops all background loops, handles SIGTERM gracefully
-2. `src/autonomy/tiers.ts` (new) — single `getAutonomyTier()` function + `AutonomyEvent` types; all autonomy decisions route through here
-3. `src/autonomy/idle-monitor.ts` (new) — croner-scheduled polling; reads `request_log`, computes idle_rate, triggers auto-share via tiers
-4. `src/autonomy/auto-request.ts` (new) — FTS peer search, scoring (reputation × 1/latency × 1/cost), budget-gated escrow + execute
-5. `src/credit/budget.ts` (new) — `BudgetManager` with reserve floor, daily spend limit, surplus alerting with cooldown
-6. `src/openclaw/` (new) — SOUL.md sync, HEARTBEAT.md writer, skill lifecycle adapter
+1. `NavBar` + `NavCreditBadge` — top nav, 5-tab routing, authenticated credit display (single `useCredit` call in App.tsx, props passed down)
+2. `AgentList` + `ProfilePage` — agent directory with ranking (`success_rate × online_status`), boring-avatars identicons, skill grid detail view via `selectedAgentOwner` state
+3. `ActivityFeed` + `ActivityEvent` — 30-second polling of `/api/activity`, prepend-only updates with `since` timestamp to preserve scroll position
+4. `DocsPage` — static TypeScript data in `lib/docs-content.ts`; no dynamic fetching; copy buttons reuse existing `navigator.clipboard` pattern
+5. `CreditDashboard` — recharts AreaChart with custom dark-theme tooltip, 30-day earning aggregation from `useRequests` data
+6. Modified `CardModal` — request button + availability display
+7. Modified `OwnerDashboard` — migrated from `slate-*` to `hub-*` design tokens + credit section
+8. 4 new Fastify routes in `src/registry/server.ts` — aggregate queries using existing `listCards()` and `getTransactions()` functions, no new tables
+9. `.claude-plugin/marketplace.json` + `plugins/agentbnb-network/` — Claude Code distribution files
+
+**Build order:** types + vite proxy first → backend endpoints → new hooks → new page components (parallel) → App.tsx navigation wiring → component modifications → plugin files.
 
 ### Critical Pitfalls
 
-1. **No `AgentRuntime` scaffold** — Background timers started ad hoc (outside a centralized runtime) cannot be cleanly shut down, produce `SQLITE_BUSY` errors when each module opens its own DB connection, and leave orphaned escrows on crash. Prevention: build `AgentRuntime` as the first deliverable of Phase 1, before any autonomous feature code.
+1. **Building pages without URL routing** — Tab-state navigation (`useState<ActiveTab>`) cannot support nested views with back-button history. Add `react-router` with `createHashRouter` before writing any new page component. Retrofitting routing after pages are built costs 1-2 days. Prevention: routing is the first task in Phase 12.
 
-2. **Multi-skill schema migration without FTS trigger update** — The SQLite FTS5 trigger uses `json_extract(new.data, '$.name')`. When skills move into a `skills[]` array, this path returns `NULL` and search silently returns nothing. Prevention: update all three FTS5 triggers (`cards_ai`, `cards_au`, `cards_ad`) in the same migration as the schema change; test by searching for a skill name nested in the array.
+2. **SPA deep routes returning 404 on direct access** — `@fastify/static` returns 404 for `/hub/agents/owner-name` because no file exists at that path. Fix: add `server.get('/hub/*', () => reply.sendFile('index.html'))` catch-all route after static plugin registration. Must be verified with a direct-access integration test before any page is marked complete.
 
-3. **Autonomy tier defaults to Tier 1** — If `~/.agentbnb/config.json` is missing and the default is Tier 1 (full autonomy), the agent immediately shares capabilities and spends credits without any owner awareness. Prevention: default is Tier 3; `agentbnb init --yes` must NOT skip tier selection; all autonomous operations are disabled until explicit tier is configured.
+3. **Recharts tooltip white-on-dark theme** — Recharts `<Tooltip>` renders with inline `backgroundColor: '#fff'` that overrides all Tailwind class-based styling. The only fix is a custom `content` component: `<Tooltip content={<CreditsTooltip />} />`. Use CSS variables (`var(--color-accent)`) for all chart colors, not hardcoded hex.
 
-4. **Auto-request without reserve enforcement** — `holdEscrow` deducts from balance atomically, but has no concept of a reserve floor. Auto-request calling `holdEscrow` directly can drain the agent below 20 credits (the reserve), making subsequent auto-requests impossible and isolating the agent from the network. Prevention: `AutoRequestor` always calls `BudgetManager.canSpend()` before `holdEscrow`; never bypass BudgetManager.
+4. **Activity feed N+1 SQLite queries** — Fetching 20 log entries then calling `getCard(db, id)` per entry is 21 queries per request. Write a single `SELECT r.*, c.owner AS provider FROM request_log r LEFT JOIN capability_cards c ON r.card_id = c.id ORDER BY r.created_at DESC LIMIT ?` from the start. Also: filter `WHERE action_type IS NULL` to exclude autonomy audit rows from the public feed.
 
-5. **Auto-request self-selection deadlock** — The peer-scoring algorithm ranks by reputation × idle_rate / cost. The local agent's own card will score well for its own skills. If selected, the agent initiates an escrow hold against itself and sends an HTTP request to its own gateway — producing a SQLite deadlock or double-charge. Prevention: peer-selection always filters `candidate.owner !== self.owner` before ranking; local skills execute without escrow.
+5. **Agent profiles credits-earned query** — `credits_earned` does not exist as a stored field; it must be computed via `GROUP BY owner` with `SUM(CASE WHEN status='success' THEN credits_charged ELSE 0 END)`. Loop-based per-owner queries fail immediately with > 10 agents. Write the aggregate SQL query upfront; never add a `credits_earned` column to the schema.
 
-6. **OpenClaw heartbeat + Node.js timer conflict** — Running both AgentBnB's `setInterval` and OpenClaw's heartbeat scheduler to trigger auto-share produces duplicate card publishes and conflicting `availability.online` states. Prevention: choose one authoritative scheduler (standalone process with own timers OR OpenClaw skill with heartbeat-driven triggers), never both.
+6. **iOS Safari modal scroll lock** — `document.body.style.overflow = 'hidden'` is ignored on iOS Safari; the body continues scrolling behind modals. Replace with position-fixed + saved scroll position technique in `CardModal.tsx` before building the hamburger menu, to avoid fixing the same bug twice.
+
+7. **`react-markdown` rendering unstyled** — `<ReactMarkdown>` without a `components` prop produces bare, Tailwind-reset HTML. Always provide a full component map for `h1`-`h6`, `p`, `code`, `pre`, `a`. Do not use `@tailwindcss/typography` `prose` class — it assumes a light background.
+
+8. **`plugin.json` version discipline** — Claude Code silently skips updates when `plugin.json` version has not changed. Version must be in `plugin.json` only, not duplicated in `marketplace.json`. Bump on every SKILL.md content change.
+
+---
 
 ## Implications for Roadmap
 
-Based on research, the dependency graph dictates a 5-phase structure. Multi-skill cards must come first because the new schema is what every other module builds on. Autonomy tiers and budget modules come second because they are pure logic with no downstream dependencies — fast to build and test. Idle monitoring comes third because it is the first active behavior and validates the tiers + budget integration. Auto-request comes fourth as the second active behavior, completing the earn/spend loop. OpenClaw integration comes last because it requires a stable schema and stable autonomy behaviors to generate meaningful output.
+Research points to a 4-phase structure that front-loads the architectural decision (routing), builds the data layer before presentation, sequences UI pages by dependency order, and ships distribution last (no code dependencies).
 
-### Phase 1: Agent Runtime + Multi-Skill Card Foundation
-**Rationale:** Everything depends on this. The `AgentRuntime` scaffold must exist before any background loop is written (Pitfall 1). The multi-skill card schema must be finalized before the registry, matcher, gateway routing, or Hub rendering changes are safe to build (Architecture research: "Build FIRST. Everything else depends on the new schema shape.").
-**Delivers:** `AgentRuntime` class with SIGTERM handling + orphaned escrow recovery; `CapabilityCard` v2.0 schema with `skills[]`; SQLite migration for v1.x cards; FTS5 trigger update to index nested skill names/descriptions; `spec_version: '2.0'` gateway routing for `skill_id`
-**Addresses:** Multi-skill Capability Card (table stakes)
-**Avoids:** Pitfall 1 (no runtime scaffold), Pitfall 3 (schema migration without FTS update), Pitfall 7 (orphaned escrows at shutdown)
+### Phase 12: Foundation + Agent Directory
 
-### Phase 2: Autonomy Tiers + Credit Budgeting
-**Rationale:** These are pure logic modules with no UI and no background behavior. They can be built and tested in isolation before any active autonomous behavior is wired up. Autonomy tiers must exist before idle monitoring (which calls `getAutonomyTier` before acting). Budget must exist before auto-request (which must call `canSpend` before every escrow). The safe-default requirement (Tier 3 default) must be enforced here before any autonomous code touches it.
-**Delivers:** `src/autonomy/tiers.ts` with `getAutonomyTier()`, `AutonomyEvent` types, Tier 3 as default; `src/credit/budget.ts` with `BudgetManager` (reserve floor, daily spend limit, surplus alert with cooldown); `AgentBnBConfig` extended with `autonomy: AutonomyConfig` and `budget: BudgetConfig`
-**Addresses:** Autonomy tier configuration (table stakes), Credit reserve enforcement (table stakes)
-**Avoids:** Pitfall 5 (Tier 1 default), Pitfall 6 (reserve not enforced), Pitfall 10 (surplus alert spam without cooldown)
+**Rationale:** Routing must be established before any nested-view page can be built correctly. Agent Profiles is the most complex new feature (backend aggregate query + new components) and is the dependency for Activity Feed's "click agent to view profile" interaction. Ship the foundation and the hardest new feature first.
 
-### Phase 3: Idle Rate Monitoring + Auto-Share
-**Rationale:** First active autonomous behavior. Depends on Phase 1 (skill schema needed to query per-skill request counts) and Phase 2 (tiers needed to decide what to do when idle_rate crosses threshold). This phase validates the full idle → share decision loop before adding the more complex auto-request flow. The idle metric must be grounded in real `request_log` data — hardcoding idle_rate is explicitly an unacceptable shortcut.
-**Delivers:** `src/autonomy/idle-monitor.ts` with croner-based polling; `getSkillRequestCount()` added to `src/registry/request-log.ts`; `capacity.calls_per_hour` added to skill schema; `updateSkillIdleRate()` and `setSkillShareable()` in `src/registry/store.ts`; `agentbnb serve` starts IdleMonitor via AgentRuntime
-**Addresses:** Idle rate detection (table stakes), Auto-share trigger (table stakes)
-**Avoids:** Pitfall 2 (idle_rate computed from no real data), Pitfall 4 (auto-share without metric activates immediately on start)
+**Delivers:** URL-based SPA routing (hash mode), `NavBar` with 5 tabs + credit badge, `GetStartedCTA` for unauthenticated visitors, `AgentList` ranked directory, `ProfilePage` detail view, 2 new Fastify routes (`/api/agents`, `/api/agents/:owner`), `useAgents` hook, updated `hub/src/types.ts`, updated `vite.config.ts` proxy.
 
-### Phase 4: Auto-Request
-**Rationale:** The spending half of the earn/spend loop. Depends on Phase 1 (skill-level FTS search), Phase 2 (tiers gate every spend decision, budget wraps every escrow hold), and Phase 3 (idle_rate is part of the peer scoring formula). This is the most complex phase — peer selection, gap detection, self-exclusion, and Tier 3 approval queue all introduce new failure modes that must be built in carefully.
-**Delivers:** `src/autonomy/auto-request.ts` with `AutoRequestor` class; peer scoring (`success_rate * (1/credits_per_call) * idle_rate`); self-exclusion (`candidate.owner !== self.owner`); `getPeerGatewayUrl()` in `src/cli/peers.ts`; `GET /me/pending-requests` endpoint for Tier 3 approval queue; auto-request failure events written to `request_log` even when no escrow is initiated
-**Addresses:** Auto-request (table stakes)
-**Avoids:** Pitfall 4 (auto-request self-selection deadlock), Pitfall 6 (reserve floor enforcement via BudgetManager)
+**Addresses (from FEATURES.md):** Agent Profiles page (list + individual) — P1 table stakes.
 
-### Phase 5: OpenClaw Deep Integration
-**Rationale:** Depends on all prior phases. SOUL.md sync emits `skills[]` (requires Phase 1 schema). HEARTBEAT.md rules reference autonomy tier thresholds (requires Phase 2 config). The skill lifecycle hooks call `IdleMonitor.start()` and `AutoRequestor` (requires Phases 3 and 4). This is also where the authoritative scheduler decision (standalone vs skill) must be locked in to avoid the heartbeat/timer conflict.
-**Delivers:** `src/openclaw/soul-sync.ts`, `src/openclaw/heartbeat-writer.ts`, `src/openclaw/skill.ts`; `SKILL.md` + skill directory for `openclaw install agentbnb`; `agentbnb openclaw [sync|status|rules]` CLI commands; decision: standalone process mode (AgentRuntime owns timers) with OpenClaw webhook notification
-**Addresses:** OpenClaw SKILL.md installable package (table stakes), HEARTBEAT.md rule injection (table stakes)
-**Avoids:** Pitfall 8 (timer/heartbeat conflict — standalone mode chosen, no competing schedulers)
+**Avoids (from PITFALLS.md):** Pitfall 1 (tab navigation dead ends), Pitfall 2 (SPA 404 on direct access), Pitfall 5 (credits_earned aggregate query), Pitfall 3 (API route namespace consistency).
+
+**Research flag:** Standard React Router + Fastify patterns — well-documented, skip deeper research.
+
+### Phase 13: Activity Feed + Docs Page
+
+**Rationale:** Activity Feed has no new backend dependencies beyond a JOIN query on `request_log` — the data is ready. Docs page is static content. Both can be built in parallel once Phase 12's routing foundation is in place. Together they complete the "public" section of the hub that makes the protocol legible to new visitors.
+
+**Delivers:** `ActivityFeed` + `ActivityEvent` components with prepend-only poll updates, `GET /api/activity` Fastify route with JOIN query, `useActivity` hook with `since` timestamp polling, `DocsPage` with static TypeScript content data in `lib/docs-content.ts`, 4 static doc sections (Getting Started, Multi-Tool Install, Card Schema v2.0, API Reference).
+
+**Addresses (from FEATURES.md):** Activity Feed (P1 differentiator), In-Hub Documentation page (P1 table stakes).
+
+**Avoids (from PITFALLS.md):** Pitfall 4 (activity feed N+1 queries), Pitfall 10 (scroll position reset on poll), Pitfall 7 (`react-markdown` unstyled — mitigated by using static TypeScript data instead of react-markdown for the docs page).
+
+**Research flag:** Standard patterns — skip deeper research. If `react-markdown` is chosen over static TS data for docs, the component map pattern is well-documented in PITFALLS.md Pitfall 7.
+
+### Phase 14: Credit UI + Modal + Polish
+
+**Rationale:** Credit dashboard depends on `recharts` and the `useCredit` hook which depends on `/me/transactions` — backend must be stable before UI is built. Modal enhancement and design system polish are correctness fixes that must be done before screenshots are taken for the README. Mobile responsive layout is a horizontal concern best addressed after all new components exist.
+
+**Delivers:** `CreditDashboard` with recharts AreaChart (custom dark tooltip), `NavCreditBadge`, credit earning aggregation from `useRequests` 30d data, `GET /me/transactions` Fastify route, `useCredit` hook, `CardModal` enhancement (request button + availability), `OwnerDashboard` migration from `slate-*` to `hub-*` tokens, mobile responsive layout (hamburger nav, stacked card grid, iOS-safe scroll lock), sign-up CTA for unauthenticated users.
+
+**Addresses (from FEATURES.md):** Credit system UI (P1), Skill Detail Modal enhancement (P1), Mobile responsive layout (P1), Design system polish (P2).
+
+**Avoids (from PITFALLS.md):** Pitfall 6 (Recharts tooltip white-on-dark), Pitfall 9 (iOS Safari scroll lock), Pitfall 3 (Vite proxy for new `/me/transactions` route).
+
+**Research flag:** Recharts custom tooltip is well-documented but a known gotcha — re-read PITFALLS.md Pitfall 6 before implementing. iOS scroll lock fix is a 30-minute implementation with a verified pattern in PITFALLS.md Pitfall 9.
+
+### Phase 15: Distribution + Discovery
+
+**Rationale:** Plugin files have zero code dependencies and can ship any time. They are last because: (1) SKILL.md must reflect the final v2.2 state, (2) README screenshots must show the completed hub design, (3) GitHub topics can be set at any time. This phase has the lowest complexity and the highest distribution leverage.
+
+**Delivers:** `.claude-plugin/marketplace.json`, `plugins/agentbnb-network/.claude-plugin/plugin.json`, `plugins/agentbnb-network/skills/agentbnb/SKILL.md` (copy of existing), SKILL.md frontmatter augmentation (`compatible-tools`, `tags`), GitHub repository topics, README visual overhaul with final hub screenshots and badges.
+
+**Addresses (from FEATURES.md):** Claude Code plugin marketplace (P1 highest-reach/lowest-cost), Cross-tool SKILL.md compatibility (P2), Auto-index preparation (P2), README visual overhaul (P3).
+
+**Avoids (from PITFALLS.md):** Pitfall 8 (plugin.json version discipline — establishes versioning convention from initial setup, version in `plugin.json` only, not `marketplace.json`).
+
+**Research flag:** Claude Code plugin schema verified against official docs at HIGH confidence. Use exact schema from ARCHITECTURE.md. No deeper research needed.
 
 ### Phase Ordering Rationale
 
-- Schema first because it propagates to all modules (registry, matcher, gateway routing, Hub rendering) — changing it after other modules are built creates rework cascades
-- Pure logic modules (tiers, budget) before active behaviors (idle monitor, auto-request) because they can be fully tested in isolation before any timer fires
-- Idle monitoring before auto-request because auto-request's peer scoring depends on `idle_rate` being a real metric from Phase 3
-- OpenClaw integration last because it requires all prior phases to be stable to generate correct SOUL.md mappings and HEARTBEAT.md rules
-- This order also allows human-review checkpoints between phases: schema is reviewable before any behavior runs; tiers/budget are reviewable before autonomous actions start; idle monitoring validates the economic loop before the riskier auto-request phase begins
+- Routing before pages because tab-state navigation creates permanent architectural debt for any nested view (PITFALLS Pitfall 1).
+- Agent directory before activity feed because agent profile links are referenced in activity feed events (FEATURES dependency map).
+- Backend endpoints before hooks before components (ARCHITECTURE build order recommendation).
+- Credit UI and polish after core pages because `recharts` and `useCredit` add no value until the basic page structure exists; design polish requires stable components to audit.
+- Distribution last because SKILL.md content and README screenshots must reflect the completed product.
 
 ### Research Flags
 
 Phases likely needing deeper research during planning:
-- **Phase 1 (Schema migration):** The v1.x → v2.0 card migration must handle real SQLite rows in the wild; need to verify exact FTS5 trigger syntax for `json_each` aggregation over `skills[]` arrays before implementation
-- **Phase 4 (Peer scoring calibration):** The `reputation × (1/latency) × (1/cost)` formula uses three variables that need normalization; weights are currently arbitrary and need tuning with real OpenClaw agent data
-- **Phase 5 (OpenClaw message bus transport):** LOW confidence on feasibility from FEATURES.md research; the message bus API details need verification before committing; flag this sub-feature for a dedicated research phase if pursued
+- None identified. All four phases operate on well-documented patterns with verified library versions and existing codebase structure.
 
 Phases with standard patterns (skip research-phase):
-- **Phase 2 (Autonomy tiers + budget):** Pure TypeScript logic with well-defined interfaces; the tier thresholds, event types, and BudgetManager interface are fully specified in the architecture research
-- **Phase 3 (Idle monitoring):** Sliding window rate calculation is a well-documented pattern; the implementation path is unambiguous (croner poll → `request_log` query → compare vs capacity config)
+- **Phase 12 (Foundation + Agent Directory):** React Router hash mode, Fastify static + catch-all, GROUP BY aggregate SQL — all well-documented.
+- **Phase 13 (Activity Feed + Docs):** `setInterval` polling with prepend pattern, static TypeScript content — established patterns.
+- **Phase 14 (Credit UI + Polish):** Recharts AreaChart with custom tooltip — well-documented, pitfall-mapped. iOS scroll lock — 30-minute fix with verified code pattern.
+- **Phase 15 (Distribution):** Claude Code plugin schema verified against official docs — use exact schema from ARCHITECTURE.md.
+
+---
 
 ## Confidence Assessment
 
 | Area | Confidence | Notes |
 |------|------------|-------|
-| Stack | HIGH | npm registry versions verified; OpenClaw skill format verified via official docs; WAL mode confirmed via better-sqlite3 performance docs |
-| Features | MEDIUM-HIGH | Table-stakes features derived from AGENT-NATIVE-PROTOCOL.md (HIGH confidence design doc); OpenClaw ecosystem claims MEDIUM (community data) |
-| Architecture | HIGH | Derived from actual source code analysis of all 11 existing modules; no speculation — integration points verified against real implementations |
-| Pitfalls | HIGH | Grounded in codebase analysis + OWASP 2026 agentic security framework + SQLite concurrency docs; 10 pitfalls with specific code-level prevention strategies |
+| Stack | HIGH | Versions confirmed via npm search + official docs. react-router 7.13.1, recharts 3.8.0, react-markdown 10.1.0 all verified. Version compatibility cross-checked. |
+| Features | HIGH | Claude Code plugin schema verified against official Anthropic docs. Cross-tool SKILL.md patterns verified via multiple live repositories. Prioritization grounded in existing v2.1 baseline. |
+| Architecture | HIGH | Based on direct codebase inspection of all relevant files (App.tsx, server.ts, store.ts, request-log.ts, ledger.ts, vite.config.ts). No speculation — all existing function signatures verified. |
+| Pitfalls | HIGH | Grounded in codebase analysis + official docs + documented library issues (Recharts tooltip GitHub issues, iOS Safari scroll bug). Recovery strategies verified. |
 
 **Overall confidence:** HIGH
 
 ### Gaps to Address
 
-- **`capacity.calls_per_hour` schema field:** Idle rate formula requires `1 - (observed/capacity)` but `capacity` is not yet defined in the card schema. Must decide: owner-declared fixed value, or dynamically inferred from max observed throughput? Recommend owner-declared with a sensible default (60 calls/hour) — validate this default with OpenClaw agent owners during Phase 3.
-- **Tier 3 "ask before" UX mechanism:** How does the agent surface a pending approval to the human owner? Options are: CLI prompt (blocks the process), Hub dashboard notification (requires Hub to be open), HEARTBEAT.md check on next OpenClaw cycle (30-minute delay). FEATURES.md rates this MEDIUM confidence. Recommend: write to a `pending_requests` table + `GET /me/pending-requests` endpoint (Phase 4) + Hub notification panel; decide on CLI prompt vs Hub at Phase 4 implementation.
-- **OpenClaw message bus API:** FEATURES.md explicitly flags this as LOW confidence. Do not commit to Phase 5 implementation of message bus transport without a dedicated research phase. The standalone HTTP gateway is the safe fallback.
-- **Peer scoring normalization:** The formula `success_rate * (1/credits_per_call) * idle_rate` has unbounded range for `1/credits_per_call` when cost approaches zero (free-tier cards). Min-max normalization per search result set is needed. Address this during Phase 4 implementation.
+- **Recharts AreaChart data aggregation:** `useRequests(apiKey, '30d')` returns raw request entries. The client-side aggregation by date (summing `credits_charged` per day) needs verification that the request log timestamps are in a consistent format for `Date.toLocaleDateString()` grouping. Verify during Phase 14 implementation.
+
+- **`/api/agents` performance at > 100 agents:** The TypeScript aggregation approach (`listCards(db)` + JS groupBy) is correct at dogfood scale. ARCHITECTURE.md notes that > 1K agents needs a materialized `agent_stats` table. If launch traffic exceeds 100 agents quickly, the aggregate SQL query approach from PITFALLS.md Pitfall 5 should be used instead. Not a blocker — flag for re-evaluation post-launch.
+
+- **Claude Code plugin repository path:** ARCHITECTURE.md uses `Xiaoher-C/agentbnb`; FEATURES.md uses `chengwenchen/agentbnb`. The exact GitHub repository path must be confirmed before pushing the plugin files in Phase 15. This affects the user-facing install command.
+
+- **`action_type` filter for activity feed:** PITFALLS.md identifies that `action_type IS NOT NULL` rows are autonomy audit events that should be excluded from the public feed. Verify against actual `request_log` table data to confirm which `action_type` values exist and which should be filtered.
+
+---
 
 ## Sources
 
 ### Primary (HIGH confidence)
-- `src/types/index.ts`, `src/registry/store.ts`, `src/gateway/server.ts`, `src/credit/escrow.ts` — current architecture baseline (direct code analysis)
-- `AGENT-NATIVE-PROTOCOL.md` (project root) — autonomy tier design, idle rate protocol, OpenClaw integration intent
-- OpenClaw Skills Documentation (https://docs.openclaw.ai/tools/skills) — SKILL.md format, ClawHub distribution, heartbeat spec
-- croner GitHub (https://github.com/Hexagon/croner) — ESM-native, pause/resume, zero dependencies
-- better-sqlite3 WAL docs — concurrent read/write behavior
-- OWASP Top 10 for Agentic Applications 2026 (https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/) — Least-Agency principle, default autonomy tier guidance
+- [Claude Code Plugin Marketplace official docs](https://code.claude.com/docs/en/plugin-marketplaces) — marketplace.json schema, plugin.json placement, install commands, reserved names
+- Direct codebase inspection: `hub/src/App.tsx`, `hub/src/hooks/useCards.ts`, `hub/src/hooks/useRequests.ts`, `hub/src/hooks/useAuth.ts` — tab routing pattern, hook structure
+- Direct codebase inspection: `src/registry/server.ts`, `src/registry/store.ts`, `src/registry/request-log.ts`, `src/credit/ledger.ts`, `hub/vite.config.ts`, `hub/src/types.ts`
+- [react-router official docs — SPA and hash router modes](https://reactrouter.com/start/modes)
+- `v2.2-milestone.md` — feature requirements, priority order
 
 ### Secondary (MEDIUM confidence)
-- Microsoft Agent Framework docs — 1:N agent-to-skills architecture pattern, progressive disclosure
-- Sliding Window Rate Limiting (API7.ai) — idle rate computation algorithm
-- Agent Contracts: Resource-Bounded AI Systems (Arxiv 2601.08815) — credit/budget management, stop conditions
-- AwesomeOpenClawSkills Registry — ClawHub skill count, community structure
-- OpenClaw npm release notes — current version 2026.3.2
+- react-router npm (version 7.13.1), recharts npm (version 3.8.0), react-markdown npm (version 10.1.0), framer-motion npm (version 12.36.0) — via npm search
+- Recharts tooltip backgroundColor known issues: recharts/recharts#1402, recharts/recharts#663
+- iOS Safari scroll lock decade-long bug analysis
+- Vite SPA 404 on refresh — root cause and fix
+- [VoltAgent/awesome-agent-skills](https://github.com/VoltAgent/awesome-agent-skills) — cross-tool SKILL.md compatibility patterns
+- [Agent Skills Are the New npm — 2026](https://www.buildmvpfast.com/blog/agent-skills-npm-ai-package-manager-2026) — SkillsMP/Skills.sh distribution ecosystem
 
 ### Tertiary (LOW confidence)
-- OpenClaw message bus API details — not fully documented; needs validation before Phase 5 message bus transport feature
-- Peer scoring weight calibration — formula is theoretically sound but weights need empirical tuning with real agent data
+- [8 Top React Chart Libraries 2026](https://querio.ai/articles/top-react-chart-libraries-data-visualization) — recharts ranking confirmation (secondary validation only; primary confidence from npm downloads)
 
 ---
-*Research completed: 2026-03-15*
+*Research completed: 2026-03-16*
 *Ready for roadmap: yes*

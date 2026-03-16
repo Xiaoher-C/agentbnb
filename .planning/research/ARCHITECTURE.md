@@ -1,623 +1,614 @@
 # Architecture Research
 
-**Domain:** P2P agent capability sharing — v2.0 Agent Autonomy milestone
-**Researched:** 2026-03-15
-**Confidence:** HIGH (analysis of actual source code, not speculation)
+**Domain:** Hub feature expansion + multi-platform distribution for P2P agent capability sharing
+**Researched:** 2026-03-16
+**Confidence:** HIGH — based on direct codebase inspection and official Claude Code docs (code.claude.com)
 
 ---
 
-## Current Architecture (v1.1 Baseline)
+## Standard Architecture
 
 ### System Overview
 
 ```
-┌─────────────────────────────────────────────────────────────────────┐
-│                        Hub (React SPA)                              │
-│  CardGrid  OwnerDashboard  SharePage  RequestHistory  AuthGate      │
-│                        Vite + Tailwind                               │
-└────────────────────────┬────────────────────────────────────────────┘
-                         │ HTTP REST
-┌────────────────────────▼────────────────────────────────────────────┐
-│                    Registry Server (Fastify)                         │
-│   GET /cards  GET /cards/:id  GET /me  PATCH /me/cards  GET /me/log │
-│            src/registry/server.ts  + owner-routes.ts                │
-└───────┬──────────────────────┬──────────────────────────────────────┘
-        │                      │
-        │ SQLite               │ module calls
-┌───────▼──────────┐  ┌────────▼────────────────────────────────────┐
-│  registry DB     │  │            Core Modules                      │
-│  capability_     │  │  src/registry/store.ts   (CRUD + FTS5)       │
-│  cards + FTS5    │  │  src/registry/matcher.ts  (search/filter)     │
-│  request_log     │  │  src/credit/ledger.ts     (balances + txns)   │
-└──────────────────┘  │  src/credit/escrow.ts     (hold/settle/refund)│
-                      │  src/discovery/mdns.ts    (mDNS announce)      │
-┌──────────────────┐  │  src/gateway/server.ts   (JSON-RPC inbound)   │
-│  credit DB       │  │  src/gateway/client.ts   (outbound requests)  │
-│  credit_         │  │  src/gateway/auth.ts      (token auth)         │
-│  balances +      │  │  src/skills/handle-request.ts (HandlerMap)    │
-│  transactions +  │  │  src/skills/publish-capability.ts             │
-│  escrow          │  │  src/cli/onboarding.ts   (detectApiKeys)       │
-└──────────────────┘  │  src/cli/config.ts        (AgentBnBConfig)     │
-                      │  src/cli/peers.ts         (peer management)     │
-                      └─────────────────────────────────────────────────┘
+┌───────────────────────────────────────────────────────────────────────┐
+│                        React Hub SPA (hub/src/)                        │
+│                         base: /hub/, Vite + Tailwind                   │
+├──────────────────────────────────────────────────────────────────────┤
+│  App.tsx (tab router — currently 3 tabs, extending to 5)               │
+│  ┌───────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌────────────┐ │
+│  │ Discover  │ │ Agents   │ │ Activity │ │  Docs    │ │  My Agent  │ │
+│  │ (exists)  │ │  (NEW)   │ │  (NEW)   │ │  (NEW)   │ │  (modify)  │ │
+│  └───────────┘ └──────────┘ └──────────┘ └──────────┘ └────────────┘ │
+│                                                                        │
+│  hooks/                components/              lib/                   │
+│  useCards (exists)     CapabilityCard (exists)  categories.ts (exists) │
+│  useRequests (exists)  CardModal (modify)       utils.ts (exists)     │
+│  useAuth (exists)      OwnerDashboard (modify)  docs-content.ts (NEW) │
+│  useOwnerCards (exists)NavBar (NEW)                                    │
+│  useAgents (NEW)       NavCreditBadge (NEW)                           │
+│  useActivity (NEW)     GetStartedCTA (NEW)                            │
+│  useCredit (NEW)       AgentList (NEW)                                │
+│                        ProfilePage (NEW)                               │
+│                        ActivityFeed (NEW)                              │
+│                        ActivityEvent (NEW)                             │
+│                        DocsPage (NEW)                                  │
+│                        CreditDashboard (NEW)                           │
+├──────────────────────────────────────────────────────────────────────┤
+│                                                                        │
+│  Vite dev proxy → localhost:7777                                       │
+│  /cards, /health, /me, /requests, /draft (existing)                   │
+│  /api (NEW — covers /api/agents, /api/activity)                       │
+│                                                                        │
+├──────────────────────────────────────────────────────────────────────┤
+│                        Fastify Server                                  │
+│                   src/registry/server.ts (modify)                     │
+│                                                                        │
+│  Public routes (no auth):          Owner routes (Bearer auth):        │
+│  GET /health (exists)              GET /me (exists)                   │
+│  GET /cards (exists)               GET /requests (exists)             │
+│  GET /cards/:id (exists)           GET /draft (exists)                │
+│  GET /api/agents (NEW)             GET /me/pending-requests (exists)  │
+│  GET /api/agents/:owner (NEW)      POST /cards/:id/toggle-online      │
+│  GET /api/activity (NEW)           PATCH /cards/:id (exists)          │
+│                                    POST /me/pending-requests/:id/     │
+│                                      approve|reject (exists)          │
+│                                    GET /me/transactions (NEW)         │
+│                                                                        │
+├──────────────────────────────────────────────────────────────────────┤
+│                       SQLite Databases (unchanged tables)              │
+│  registryDb (registry.db)          creditDb (credit.db)               │
+│  ┌─────────────────────────┐       ┌──────────────────────────────┐  │
+│  │ capability_cards        │       │ credit_balances              │  │
+│  │ cards_fts (FTS5)        │       │ credit_transactions          │  │
+│  │ request_log             │       │ credit_escrow                │  │
+│  │ pending_requests        │       └──────────────────────────────┘  │
+│  └─────────────────────────┘                                         │
+└───────────────────────────────────────────────────────────────────────┘
+
+┌───────────────────────────────────────────────────────────────────────┐
+│               Claude Code Plugin Distribution (NEW)                    │
+│                                                                        │
+│  .claude-plugin/marketplace.json  (marketplace catalog)               │
+│  plugins/agentbnb-network/        (plugin package)                    │
+│    .claude-plugin/plugin.json     (plugin manifest)                   │
+│    skills/agentbnb/SKILL.md       (copy or symlink)                   │
+│                                                                        │
+│  Install: /plugin marketplace add Xiaoher-C/agentbnb                  │
+│           /plugin install agentbnb-network@agentbnb                   │
+└───────────────────────────────────────────────────────────────────────┘
 ```
 
-### What Exists and What Each Module Does
+### Component Responsibilities
 
-| Module | File | Responsibility | Used By |
-|--------|------|----------------|---------|
-| CapabilityCard schema | `src/types/index.ts` | Zod validation, type exports | Everything |
-| Registry store | `src/registry/store.ts` | SQLite CRUD + FTS5 search + EWA reputation | Gateway, registry-server, CLI |
-| Matcher | `src/registry/matcher.ts` | Full-text search + filter by level/online/apis_used | Registry server, CLI |
-| Gateway server | `src/gateway/server.ts` | Fastify JSON-RPC inbound: auth, escrow, execute, settle | `agentbnb serve` |
-| Gateway client | `src/gateway/client.ts` | Outbound `capability.execute` JSON-RPC calls | CLI `request`, auto-request |
-| Escrow | `src/credit/escrow.ts` | holdEscrow / settleEscrow / releaseEscrow (atomic SQLite tx) | Gateway server |
-| Ledger | `src/credit/ledger.ts` | getBalance, getTransactions, bootstrapAgent | Gateway, registry server |
-| mDNS | `src/discovery/mdns.ts` | announceGateway / discoverLocalAgents (bonjour-service) | CLI `serve`, peers |
-| Config | `src/cli/config.ts` | Read/write `~/.agentbnb/config.json` (AgentBnBConfig) | CLI, serve startup |
-| Onboarding | `src/cli/onboarding.ts` | detectApiKeys + buildDraftCard | CLI `init` |
-| Peers | `src/cli/peers.ts` | Peer registry (in-memory + SQLite) | CLI `peers` |
-| Handler map | `src/skills/handle-request.ts` | Dispatches card_id to local handler function | `agentbnb serve` |
-| Registry server | `src/registry/server.ts` | Public HTTP API + Hub static serving + owner routes | `agentbnb serve` |
+| Component | Responsibility | Location | Status |
+|-----------|---------------|----------|--------|
+| App.tsx | Tab routing, modal state, auth state wiring | hub/src/App.tsx | MODIFY |
+| NavBar | Top nav with 5 tabs + credit badge + Get Started CTA | hub/src/components/ | NEW |
+| NavCreditBadge | "cr 100" accent display, click for credit dropdown | hub/src/components/ | NEW |
+| GetStartedCTA | Unauthenticated banner: install command + 50 free credits | hub/src/components/ | NEW |
+| AgentList | Ranked agent table with identicons + reputation stats | hub/src/components/ | NEW |
+| ProfilePage | Single agent: identicon, all skills grid, recent activity | hub/src/components/ | NEW |
+| ActivityFeed | Paginated public network event feed | hub/src/components/ | NEW |
+| ActivityEvent | Single event row with type-specific formatting | hub/src/components/ | NEW |
+| DocsPage | Multi-section doc viewer, static TS data, copy buttons | hub/src/components/ | NEW |
+| CreditDashboard | Balance, reserve, earning history, transaction list | hub/src/components/ | NEW |
+| CardModal | Enhanced: request button, owner profile link, related skills | hub/src/components/CardModal.tsx | MODIFY |
+| OwnerDashboard | Add CreditDashboard section, share functionality absorbed | hub/src/components/OwnerDashboard.tsx | MODIFY |
+| useAgents | Fetch + 30s poll /api/agents | hub/src/hooks/ | NEW |
+| useActivity | Fetch + 30s poll /api/activity with offset pagination | hub/src/hooks/ | NEW |
+| useCredit | Fetch /me + /me/transactions, 30s poll | hub/src/hooks/ | NEW |
+| GET /api/agents | List all agents ranked by reputation | src/registry/server.ts | NEW route |
+| GET /api/agents/:owner | Single agent profile + skills + recent activity | src/registry/server.ts | NEW route |
+| GET /api/activity | Public paginated feed from request_log JOIN capability_cards | src/registry/server.ts | NEW route |
+| GET /me/transactions | Auth: credit transaction history from creditDb | src/registry/server.ts | NEW route |
+| marketplace.json | Claude Code marketplace catalog listing the plugin | .claude-plugin/marketplace.json | NEW file |
+| plugin.json | Plugin manifest for agentbnb-network plugin | plugins/agentbnb-network/.claude-plugin/ | NEW file |
 
 ---
 
-## v2.0 Feature Integration Analysis
+## Recommended Project Structure
 
-### Feature 1: Multi-Skill Cards
+New files and directories to add (existing structure is not moved or renamed):
 
-**What it is:** One CapabilityCard per agent with a `skills[]` array instead of one card = one skill. Each skill has its own `idle_rate`, `shareable` flag, `inputs`, `outputs`, `pricing`.
+```
+agentbnb/
+├── .claude-plugin/
+│   └── marketplace.json              # NEW: Claude Code marketplace catalog
+│
+├── plugins/
+│   └── agentbnb-network/             # NEW: Claude Code plugin package
+│       ├── .claude-plugin/
+│       │   └── plugin.json           # NEW: plugin manifest
+│       └── skills/
+│           └── agentbnb/
+│               └── SKILL.md          # NEW: copy of skills/agentbnb/SKILL.md
+│
+├── hub/src/
+│   ├── components/
+│   │   ├── NavBar.tsx                # NEW: top nav with tabs + credit badge
+│   │   ├── NavCreditBadge.tsx        # NEW: "cr 100" display + dropdown
+│   │   ├── GetStartedCTA.tsx         # NEW: unauthenticated install CTA
+│   │   ├── AgentList.tsx             # NEW: ranked agent table
+│   │   ├── ProfilePage.tsx           # NEW: single-agent profile view
+│   │   ├── ActivityFeed.tsx          # NEW: paginated network event feed
+│   │   ├── ActivityEvent.tsx         # NEW: single event row
+│   │   ├── DocsPage.tsx              # NEW: multi-section docs viewer
+│   │   ├── CreditDashboard.tsx       # NEW: earning history + transactions
+│   │   ├── CardModal.tsx             # MODIFY: request button, owner link
+│   │   └── OwnerDashboard.tsx        # MODIFY: add CreditDashboard section
+│   │
+│   ├── hooks/
+│   │   ├── useAgents.ts              # NEW: fetches /api/agents
+│   │   ├── useActivity.ts            # NEW: fetches /api/activity
+│   │   └── useCredit.ts              # NEW: fetches /me + /me/transactions
+│   │
+│   ├── lib/
+│   │   └── docs-content.ts           # NEW: static docs content as TS data
+│   │
+│   ├── types.ts                      # MODIFY: add AgentProfile, ActivityEvent
+│   └── App.tsx                       # MODIFY: 5-tab nav, credit in header
+│
+└── src/registry/server.ts            # MODIFY: add 4 new routes
+```
 
-**Current state:** `CapabilityCard` in `src/types/index.ts` is a flat single-skill model. The schema must be extended.
+### Structure Rationale
 
-**New schema shape:**
+- **All new API routes go into src/registry/server.ts:** The existing server already owns all Hub-serving REST routes and the static SPA serving. Adding routes to a separate file would require registering a new Fastify plugin with its own lifecycle — unnecessary complexity for 4 new endpoints. The established pattern is one file, one server.
+- **hub/src/components/ stays flat (no feature subfolders):** The existing directory is flat. All 11 existing components live at the same level. Maintain consistency — new components follow the same convention.
+- **plugins/ at repo root:** Claude Code's `git-subdir` source type and relative path source both work when the marketplace is added via GitHub. The `plugins/agentbnb-network/` path lets marketplace.json use `"./plugins/agentbnb-network"` as the source, and the rest of the repo stays untouched.
+- **lib/docs-content.ts as TypeScript data:** DocsPage is explicitly static per the milestone spec ("no backend needed"). TS data objects are type-safe, support ReactNode content, and avoid adding a Markdown processing dependency. Copy buttons use the existing `navigator.clipboard` pattern from CardModal.
+
+---
+
+## Architectural Patterns
+
+### Pattern 1: Tab-Based Page Switching (extend existing)
+
+**What:** App.tsx owns `activeTab` state and conditionally renders page components. Currently `'discover' | 'share' | 'myagent'`. Extending to `'discover' | 'agents' | 'activity' | 'docs' | 'myagent'`. The `'share'` tab merges into My Agent (it is an owner action, not a browse action).
+
+**When to use:** The existing pattern works for the Hub use case. No routing library (react-router) is installed or needed. Tab state is local to App.tsx and trivial to extend.
+
+**Trade-offs:** No deep-linkable URLs per tab. Acceptable — the Hub is a local tool, not a public website that external users link into.
+
+**Integration point:** The Agents tab needs a profile sub-page. Use `selectedAgentOwner: string | null` state in App.tsx, same as `selectedCard: HubCard | null` drives the CardModal. Clicking an agent row sets `selectedAgentOwner`; ProfilePage renders in-place; back button sets it to null.
+
+### Pattern 2: 30-Second Polling Hook (established pattern)
+
+**What:** Every async data domain has a hook that fetches on mount, re-fetches on filter param change via useCallback deps, and polls via setInterval every 30s. useCards and useRequests both implement this pattern. New hooks (useAgents, useActivity, useCredit) follow it exactly.
+
+**When to use:** Every new server-fetched data source in the Hub. Do not deviate.
+
+**Example (useAgents):**
 ```typescript
-// Replaces flat CapabilityCard — skill becomes the unit inside the card
-interface Skill {
-  id: string;                       // e.g. "tts-elevenlabs"
-  name: string;
-  description: string;
-  level: 1 | 2 | 3;
-  category: string;                 // "tts" | "video_gen" | "code_review" etc.
-  inputs: IOSchema[];
-  outputs: IOSchema[];
-  pricing: { credits_per_call: number; credits_per_minute?: number; free_tier?: number; };
-  idle_rate: number;                // 0.0 – 1.0, detected by idle-monitor
-  shareable: boolean;               // agent-controlled based on idle_rate threshold
-  shareable_steps?: string[];       // for Level 2: which pipeline steps are shareable
-  powered_by?: PoweredBy[];
-  metadata?: { apis_used?: string[]; avg_latency_ms?: number; success_rate?: number; tags?: string[]; };
-}
+export function useAgents(): UseAgentsResult {
+  const [agents, setAgents] = useState<AgentProfile[]>([]);
+  const [loading, setLoading] = useState(true);
+  const isFirstFetch = useRef(true);
 
-// Extended CapabilityCard becomes agent identity
-interface CapabilityCard {
-  spec_version: '2.0';
-  id: string;                       // agent UUID, stable
+  const fetchAgents = useCallback(async () => {
+    const res = await fetch('/api/agents');
+    const data = await res.json() as { items: AgentProfile[] };
+    setAgents(data.items);
+    setError(null);
+    if (isFirstFetch.current) { isFirstFetch.current = false; setLoading(false); }
+  }, []);
+
+  useEffect(() => { isFirstFetch.current = true; setLoading(true); void fetchAgents(); }, [fetchAgents]);
+  useEffect(() => {
+    const id = setInterval(() => void fetchAgents(), 30_000);
+    return () => clearInterval(id);
+  }, [fetchAgents]);
+
+  return { agents, loading };
+}
+```
+
+### Pattern 3: Scoped Fastify Plugin for Auth Routes (existing pattern)
+
+**What:** Owner routes are registered inside `server.register(async (ownerRoutes) => { ... })` in server.ts. The `addHook('onRequest')` Bearer check is scoped to that plugin only — it does NOT affect public routes like `/cards` or the new `/api/agents`.
+
+**When to use:** Any new authenticated endpoint (e.g. `GET /me/transactions`) must be added inside the existing `ownerRoutes` scope block. Public endpoints (`/api/agents`, `/api/activity`) go at top-level server scope.
+
+**Trade-offs:** The existing scoped plugin has no path prefix — all auth routes live at root path level. This is the established pattern; new routes maintain it.
+
+### Pattern 4: Derive Activity Feed from request_log (no new table)
+
+**What:** The `request_log` table already captures every capability exchange with `card_name`, `requester`, `status`, `latency_ms`, `credits_charged`, `created_at`, `action_type`. The `GET /api/activity` endpoint queries it directly with a JOIN to `capability_cards` to get the card owner as `provider`.
+
+**When to use:** Always preferred over creating a separate `activity_events` table. A second table would require a write-path insertion on every exchange and could drift from the source of truth.
+
+**Required query:**
+```sql
+SELECT
+  r.id,
+  r.card_name,
+  r.requester,
+  r.status,
+  r.latency_ms,
+  r.credits_charged,
+  r.created_at,
+  r.action_type,
+  c.owner AS provider
+FROM request_log r
+LEFT JOIN capability_cards c ON r.card_id = c.id
+ORDER BY r.created_at DESC
+LIMIT ? OFFSET ?
+```
+
+**Trade-offs:** Adds one LEFT JOIN per query. At dogfood scale (< 1K requests) this is negligible. SQLite JOIN on integer rowid is fast.
+
+### Pattern 5: Derive Agent Profiles from Aggregated Queries (no new table)
+
+**What:** `GET /api/agents` aggregates `capability_cards` GROUP BY owner plus a LEFT JOIN to `request_log` for total credits earned. No `agents` table needed.
+
+**Data derivation:**
+- `owner` — from `capability_cards.owner`
+- `skill_count` — count of skills[] items via JSON aggregation or post-processing
+- `success_rate` — pulled from `json_extract(data, '$.metadata.success_rate')` or skill-level aggregation
+- `total_earned` — `SUM(credits_charged)` from `request_log WHERE status='success'`
+- `member_since` — `MIN(created_at)` from `capability_cards`
+
+**Simpler approach:** Call `listCards(db)` (existing function in store.ts), then aggregate in TypeScript rather than complex SQL. Given the small cardinality (tens of agents), TypeScript aggregation is cleaner and easier to test.
+
+---
+
+## Data Flow
+
+### New: Agent List Flow
+
+```
+User clicks "Agents" tab
+    |
+App.tsx renders <AgentList />
+    |
+useAgents() hook → fetch GET /api/agents
+    |
+Fastify handler → listCards(db) (existing) → aggregate by owner in TS
+    |
+Returns: [{ owner, skill_count, success_rate, total_earned, member_since }]
+    |
+<AgentList> renders ranked rows with boring-avatars identicons + stats
+
+User clicks agent row → selectedAgentOwner set in App.tsx
+    |
+App.tsx renders <ProfilePage owner={selectedAgentOwner} />
+    |
+useAgents(owner) → fetch GET /api/agents/:owner
+    |
+Returns: { profile, skills: HubCard[], recent_activity: ActivityEvent[] }
+    |
+<ProfilePage> renders identicon + skill cards grid + recent activity list
+```
+
+### New: Activity Feed Flow
+
+```
+User clicks "Activity" tab
+    |
+App.tsx renders <ActivityFeed />
+    |
+useActivity() → fetch GET /api/activity?limit=20&offset=0
+    |
+Fastify handler → SQL: SELECT request_log JOIN capability_cards
+    |
+Returns: { items: ActivityEvent[], total, limit, offset }
+    |
+<ActivityFeed> renders event rows
+    |
+User clicks "Load more" → offset += 20 → fetch next page
+    (offset state inside ActivityFeed or useActivity hook)
+```
+
+### New: Credit Display + Dashboard Flow
+
+```
+App.tsx owns: const { balance, transactions } = useCredit(apiKey)
+    |
+useCredit → fetch /me (existing, returns balance)
+           → fetch /me/transactions (NEW, returns CreditTransaction[])
+    |
+<NavCreditBadge balance={balance} /> → renders "cr 247" in header
+User clicks badge → shows <CreditDashboard transactions={transactions} />
+    |
+CreditDashboard shows: balance, reserve floor, earned/spent this week
+    (computed from transactions.filter by reason + created_at)
+    + list of recent transactions
+    |
+OwnerDashboard also receives balance + transactions as props
+(avoids double-fetching — single useCredit call in App.tsx)
+```
+
+### Vite Dev Proxy — What Changes
+
+Current `hub/vite.config.ts` proxy entries:
+```
+'/cards', '/health', '/me', '/requests', '/draft' → http://localhost:7777
+```
+
+The `/me` prefix already covers `/me/transactions` (Vite proxy uses prefix matching).
+
+Add only:
+```
+'/api' → 'http://localhost:7777'   // covers /api/agents and /api/activity
+```
+
+---
+
+## New API Endpoints — Complete Specification
+
+### GET /api/agents
+- Auth: none (public)
+- Query params: none initially; `?sort=reputation|earned` optional
+- Response: `{ items: AgentProfile[], total: number }`
+- Implementation: `listCards(db)` → TS aggregation + request_log sum
+- New code: one Fastify route handler in server.ts, one SQL query
+
+### GET /api/agents/:owner
+- Auth: none (public)
+- Response: `{ profile: AgentProfile, skills: HubCard[], recent_activity: ActivityEvent[] }`
+- Implementation: `listCards(db, owner)` + `getRequestLog(db, 10)` filtered by owner's cards
+- New code: one Fastify route handler
+
+### GET /api/activity
+- Auth: none (public)
+- Query params: `limit` (default 20, max 100), `offset` (default 0)
+- Response: `{ items: ActivityEvent[], total: number, limit: number, offset: number }`
+- Implementation: SQL with JOIN (see Pattern 4 above)
+- New code: one Fastify route handler + one new SQL query function in request-log.ts
+
+### GET /me/transactions
+- Auth: Bearer token (inside ownerRoutes scope)
+- Query params: `limit` (default 20, max 100)
+- Response: `{ items: CreditTransaction[], limit: number }`
+- Implementation: `getTransactions(db, ownerName, limit)` — this function already exists in `src/credit/ledger.ts`
+- New code: one Fastify route handler (the underlying function is already written)
+
+---
+
+## New Frontend Types
+
+Add to `hub/src/types.ts`:
+
+```typescript
+export interface AgentProfile {
   owner: string;
-  agent_name: string;
-  skills: Skill[];                  // multi-skill array
-  environment?: {                   // Level 3 info
-    runtime: string;
-    region?: string;
-  };
-  availability: { online: boolean; schedule?: string; };
-  _internal?: Record<string, unknown>;
-  created_at?: string;
-  updated_at?: string;
+  skill_count: number;
+  success_rate: number | null;   // null if no requests yet
+  total_earned: number;          // credits earned from sharing
+  member_since: string;          // ISO timestamp of first card
+  // Only present in /api/agents/:owner response:
+  skills?: HubCard[];
+  recent_activity?: ActivityEvent[];
 }
-```
 
-**Modules modified:**
-- `src/types/index.ts` — Extend `CapabilityCardSchema` with `skills[]`, add `SkillSchema`
-- `src/registry/store.ts` — FTS5 triggers must index skill names/descriptions within the skills array (JSON path changes)
-- `src/registry/matcher.ts` — `searchCards` + `filterCards` must traverse `skills[]` for level/api filters
-- `src/registry/server.ts` — `/cards` response shape changes; skill-level endpoints may be needed
-- Hub components — `CapabilityCard.tsx`, `CardGrid.tsx` must render multi-skill layout
+export interface ActivityEvent {
+  id: string;
+  type: 'exchange_completed' | 'capability_shared' | 'agent_joined';
+  requester: string;
+  provider: string;
+  card_name: string;
+  credits: number;
+  latency_ms: number | null;
+  action_type: string | null;    // 'auto_share' | 'auto_request' | null
+  created_at: string;
+}
 
-**New module needed:** None for schema only; schema change ripples through all existing modules.
-
-**Build order position:** Build FIRST. Everything else depends on the new schema shape.
-
----
-
-### Feature 2: Idle Rate Monitoring + Auto-Share
-
-**What it is:** Background process per skill that measures actual API/resource utilization. When `idle_rate` exceeds the configured threshold (default 70%), skill `shareable` is flipped to `true` and the card is (re)published.
-
-**Current state:** Nothing. No polling, no metrics, no auto-publish logic.
-
-**New module needed:** `src/autonomy/idle-monitor.ts`
-
-```typescript
-// src/autonomy/idle-monitor.ts
-export interface IdleMonitorOptions {
+// CreditTransaction already exported from src/credit/ledger.ts
+// Re-export here so hub components don't cross module boundaries:
+export interface CreditTransaction {
+  id: string;
   owner: string;
-  db: Database.Database;
-  creditDb: Database.Database;
-  pollIntervalMs: number;           // default: 60_000 (1 min)
-  idleThreshold: number;            // default: 0.70
-  autonomyTier: AutonomyTier;       // controls notification behavior
-  onShareableChange?: (skillId: string, shareable: boolean) => void;
-}
-
-export class IdleMonitor {
-  start(): void                     // begin polling loop (setInterval)
-  stop(): void                      // clear interval
-  getIdleRate(skillId: string): number   // current computed idle_rate
-  forceCheck(): Promise<void>       // manual trigger
+  amount: number;                // positive = credit, negative = debit
+  reason: 'bootstrap' | 'escrow_hold' | 'escrow_release' | 'settlement' | 'refund';
+  reference_id: string | null;
+  created_at: string;
 }
 ```
 
-**Idle rate computation:** No external metrics daemon exists. The monitor reads `request_log` to count actual executions per skill in a rolling window and computes idle_rate as `1 - (requests_in_window / capacity_in_window)`. The `request_log` table already exists in `src/registry/request-log.ts`.
-
-**Auto-publish path:**
-```
-IdleMonitor polls (every N seconds)
-  → reads request_log for each skill in the last window
-  → computes idle_rate per skill
-  → if idle_rate > threshold AND skill.shareable === false:
-      → update skill.shareable = true in DB
-      → if Tier 1: auto-update card, no notification
-      → if Tier 2: update card + emit notification event
-      → if Tier 3: emit "pending_approval" event, wait for human confirm
-  → write new idle_rate into skill metadata in DB
-```
-
-**Modules modified:**
-- `src/registry/store.ts` — New function `updateSkillIdleRate(db, cardId, skillId, idleRate)` + `setSkillShareable(db, cardId, skillId, shareable)`
-- `src/registry/request-log.ts` — New function `getSkillRequestCount(db, skillId, sinceMs): number` for idle computation
-- `src/cli/config.ts` — `AgentBnBConfig` needs `idle_threshold`, `poll_interval_ms` fields
-- `src/cli/index.ts` — `agentbnb serve` must start IdleMonitor
-
-**New modules needed:**
-- `src/autonomy/idle-monitor.ts` — Core polling logic
-
-**Build order position:** Depends on Multi-Skill Cards schema (Feature 1). Build SECOND.
-
 ---
 
-### Feature 3: Autonomy Tiers
+## Claude Code Plugin Structure
 
-**What it is:** Owner-configurable thresholds that determine whether the agent acts silently (Tier 1), notifies after acting (Tier 2), or asks before acting (Tier 3). Tiers apply to both sharing decisions and spend decisions.
+**Confidence: HIGH** — verified against official Claude Code docs at code.claude.com/docs/en/plugin-marketplaces.
 
-```
-Tier 1 — Full autonomy: transaction < T1_limit AND known peers
-Tier 2 — Notify after: T1_limit ≤ transaction < T2_limit OR new peer
-Tier 3 — Ask before: transaction ≥ T2_limit OR unverified peer (reputation < threshold)
-```
+The marketplace catalog and plugin manifest are separate files at different directory levels:
 
-**Current state:** Nothing. No tier concept exists.
-
-**New module needed:** `src/autonomy/tiers.ts`
-
-```typescript
-// src/autonomy/tiers.ts
-export interface AutonomyConfig {
-  tier1_max_credits: number;        // default: 10  — silent auto-execute
-  tier2_max_credits: number;        // default: 50  — execute + notify after
-  // anything above tier2_max = Tier 3: must ask
-  min_peer_reputation: number;      // default: 0.5 — below this = Tier 3 always
-  notify_fn?: (event: AutonomyEvent) => Promise<void>;  // e.g. write to HEARTBEAT log
-}
-
-export type AutonomyTier = 1 | 2 | 3;
-
-export type AutonomyEvent =
-  | { type: 'share_auto'; skillId: string; idleRate: number }
-  | { type: 'share_notify'; skillId: string; idleRate: number }
-  | { type: 'share_pending'; skillId: string; idleRate: number }
-  | { type: 'request_auto'; cardId: string; credits: number; peer: string }
-  | { type: 'request_notify'; cardId: string; credits: number; peer: string }
-  | { type: 'request_pending'; cardId: string; credits: number; peer: string };
-
-export function getAutonomyTier(
-  credits: number,
-  peer: { reputation: number; isNew: boolean },
-  config: AutonomyConfig,
-): AutonomyTier
-```
-
-**Modules modified:**
-- `src/cli/config.ts` — `AgentBnBConfig` needs `autonomy: AutonomyConfig` field
-- `src/autonomy/idle-monitor.ts` — Calls `getAutonomyTier` before acting on idle_rate
-- `src/autonomy/auto-request.ts` (new, Feature 4) — Calls `getAutonomyTier` before spending
-- Hub `OwnerDashboard.tsx` — UI to view/change tier thresholds
-
-**New modules needed:**
-- `src/autonomy/tiers.ts` — Tier classification logic + event types
-
-**Build order position:** Depends on nothing new; can be built alongside Multi-Skill Cards. Build SECOND (parallel with idle monitor).
-
----
-
-### Feature 4: Auto-Request
-
-**What it is:** When the agent detects a task it cannot complete with local skills, it automatically queries the network for matching capabilities, selects the best peer by scoring (reputation × inverse_latency × cost_efficiency), and executes via the existing escrow flow.
-
-**Current state:** `requestCapability()` in `src/gateway/client.ts` does outbound requests but requires explicit cardId. No capability gap detection, no peer selection scoring, no autonomous trigger.
-
-**New module needed:** `src/autonomy/auto-request.ts`
-
-```typescript
-// src/autonomy/auto-request.ts
-export interface AutoRequestOptions {
-  owner: string;
-  registryDb: Database.Database;
-  creditDb: Database.Database;
-  autonomyConfig: AutonomyConfig;
-  peerStore: PeerStore;             // from src/cli/peers.ts
-  maxSearchResults?: number;        // default: 10
-}
-
-export class AutoRequestor {
-  /** Find best peer card for a capability need (FTS query on skill descriptions). */
-  async findBestPeer(query: string, maxCost: number): Promise<ScoredCard | null>
-
-  /** Execute capability with full autonomy tier gate. */
-  async requestWithAutonomy(
-    need: CapabilityNeed,
-    context: AgentContext,
-  ): Promise<AutoRequestResult>
-}
-
-// Peer scoring: reputation * (1 / normalized_latency) * (1 / normalized_cost)
-function scorePeer(card: CapabilityCard, skill: Skill): number
-```
-
-**Peer selection scoring uses existing reputation data** (`metadata.success_rate`, `metadata.avg_latency_ms`) stored on cards by `updateReputation()` in `src/registry/store.ts`.
-
-**Modules modified:**
-- `src/gateway/client.ts` — `requestCapability` already handles the mechanics; `AutoRequestor` wraps it
-- `src/cli/peers.ts` — Needs `getPeerGatewayUrl(owner): string | null` for resolving peer endpoints
-- `src/registry/server.ts` — Potential new endpoint `GET /me/pending-requests` for Tier 3 human approval queue
-- Hub `OwnerDashboard.tsx` — Pending approval queue display
-
-**New modules needed:**
-- `src/autonomy/auto-request.ts` — Peer search, scoring, autonomy-gated execution
-
-**Build order position:** Depends on Tiers (Feature 3). Build THIRD.
-
----
-
-### Feature 5: Credit Budgeting
-
-**What it is:** Reserve balance (minimum credit floor), spending limits per period, surplus alerts, and budget allocation across skill categories.
-
-**Current state:** `getBalance()` + `holdEscrow()` exist but there is no minimum reserve enforcement, no spending caps, no surplus detection.
-
-**New module needed:** `src/credit/budget.ts`
-
-```typescript
-// src/credit/budget.ts
-export interface BudgetConfig {
-  reserve_credits: number;          // default: 20 — floor, never spend below this
-  daily_spend_limit?: number;       // optional cap on outbound spend per 24h
-  surplus_alert_threshold?: number; // default: 500 — notify owner above this
-  notify_fn?: (event: BudgetEvent) => Promise<void>;
-}
-
-export type BudgetEvent =
-  | { type: 'surplus_alert'; balance: number; threshold: number }
-  | { type: 'low_balance'; balance: number; reserve: number }
-  | { type: 'spend_limit_hit'; daily_spent: number; limit: number };
-
-export class BudgetManager {
-  /** Returns true if spending `amount` credits is allowed by budget rules. */
-  canSpend(amount: number): boolean
-
-  /** Records a spend event for daily limit tracking. */
-  recordSpend(amount: number, reason: string): void
-
-  /** Checks surplus and emits alert if above threshold. */
-  checkSurplus(): void
-
-  /** Returns available spending power (balance - reserve). */
-  availableCredits(): number
+### .claude-plugin/marketplace.json (repo root level)
+```json
+{
+  "name": "agentbnb",
+  "owner": {
+    "name": "Cheng Wen Chen",
+    "email": "chengwen@agentbnb.dev"
+  },
+  "metadata": {
+    "description": "P2P capability sharing for AI agents"
+  },
+  "plugins": [
+    {
+      "name": "agentbnb-network",
+      "source": "./plugins/agentbnb-network",
+      "description": "Join the AgentBnB P2P capability sharing network",
+      "version": "2.0.0",
+      "category": "productivity",
+      "tags": ["agents", "p2p", "capabilities", "credits", "ai-agent-skill"]
+    }
+  ]
 }
 ```
 
-**Where budget is enforced:** The auto-request flow (Feature 4) calls `budgetManager.canSpend()` before calling `holdEscrow()`. The gateway server's existing `getBalance` check also needs the reserve offset.
-
-**Modules modified:**
-- `src/credit/ledger.ts` — New function `getDailySpend(db, owner, since): number`
-- `src/credit/escrow.ts` — `holdEscrow` needs optional `reserveFloor` parameter or caller pre-checks
-- `src/cli/config.ts` — `AgentBnBConfig` needs `budget: BudgetConfig`
-- `src/gateway/server.ts` — Inbound requests: check that accepting the request won't violate any budget (minor, the server is the provider side — mainly auto-request side)
-- Hub `OwnerDashboard.tsx` — Budget settings panel, balance with reserve visualization
-
-**New modules needed:**
-- `src/credit/budget.ts` — Budget enforcement + alerting
-
-**Build order position:** Depends on Tiers (Feature 3) for notification events. Build alongside Auto-Request (Feature 4).
-
----
-
-### Feature 6: OpenClaw Deep Integration
-
-**What it is:** AgentBnB as an installable OpenClaw skill. Includes: SOUL.md → auto-generate CapabilityCard, HEARTBEAT.md → inject autonomy rules, Message Bus as alternative Gateway transport, skill lifecycle hooks (start/stop/health).
-
-**Current state:** `src/skills/` exists but contains `handle-request.ts` (HandlerMap dispatcher) and `publish-capability.ts`. No OpenClaw-specific integration layer.
-
-**New modules needed:**
-
-```
-src/openclaw/
-├── skill.ts              # OpenClaw SKILL.md protocol adapter
-├── soul-sync.ts          # Parse SOUL.md → CapabilityCard draft
-├── heartbeat-writer.ts   # Write AgentBnB rules to HEARTBEAT.md
-└── message-bus.ts        # Optional: message-bus transport for gateway
-```
-
-```typescript
-// src/openclaw/soul-sync.ts
-export function parseSoulMd(soulMdContent: string): Partial<CapabilityCard>
-export function generateSoulMdSection(card: CapabilityCard): string
-
-// src/openclaw/heartbeat-writer.ts
-export function generateHeartbeatSection(autonomyConfig: AutonomyConfig): string
-export function injectHeartbeatSection(heartbeatPath: string, section: string): void
-
-// src/openclaw/skill.ts
-export interface OpenClawSkillLifecycle {
-  onStart(agentContext: OpenClawAgentContext): Promise<void>
-  onStop(): Promise<void>
-  onHeartbeat(): Promise<{ status: 'ok'; credits: number; sharing: number }>
+### plugins/agentbnb-network/.claude-plugin/plugin.json
+```json
+{
+  "name": "agentbnb-network",
+  "description": "P2P capability sharing — earn credits by sharing idle APIs",
+  "version": "2.0.0"
 }
 ```
 
-**SOUL.md sync flow:**
+### Directory Layout
 ```
-agentbnb openclaw sync
-  → reads SOUL.md from OpenClaw agent directory
-  → parseSoulMd() extracts: agent_name, skills list, tool declarations
-  → buildDraftCard() (existing in src/cli/onboarding.ts) merges with detected APIs
-  → writes/updates card in local registry
-  → writes AgentBnB section to HEARTBEAT.md
+plugins/agentbnb-network/
+├── .claude-plugin/
+│   └── plugin.json
+└── skills/
+    └── agentbnb/
+        └── SKILL.md         # copy of skills/agentbnb/SKILL.md content
 ```
 
-**Modules modified:**
-- `src/cli/onboarding.ts` — `buildDraftCard` extended to accept parsed SOUL.md data
-- `src/cli/index.ts` — New command group `agentbnb openclaw [sync|status|rules]`
-- `src/skills/publish-capability.ts` — Used by SOUL.md sync after card generation
+**Install path for users:**
+```
+/plugin marketplace add Xiaoher-C/agentbnb
+/plugin install agentbnb-network@agentbnb
+```
 
-**Build order position:** Depends on Multi-Skill Cards (Feature 1) since SOUL.md maps to the multi-skill schema. Build LAST.
+**Why relative path source works:** When users add via `/plugin marketplace add Xiaoher-C/agentbnb` (GitHub), Claude Code clones the entire repo. Relative path `"./plugins/agentbnb-network"` resolves correctly within the cloned repo. This is the recommended approach per official docs.
+
+**SKILL.md handling:** Copy (not symlink) the SKILL.md content into `plugins/agentbnb-network/skills/agentbnb/SKILL.md`. Symlinks are supported by Claude Code plugin copy, but copying avoids any platform-specific symlink issues and keeps the plugin self-contained.
 
 ---
 
-## New Module Map
+## Scaling Considerations
 
-```
-src/
-├── autonomy/                       NEW
-│   ├── idle-monitor.ts             Polling idle_rate per skill, triggers auto-share
-│   ├── auto-request.ts             Peer search, scoring, autonomy-gated execution
-│   └── tiers.ts                    Tier classification logic + AutonomyEvent types
-├── credit/
-│   ├── ledger.ts                   MODIFY: add getDailySpend()
-│   ├── escrow.ts                   MODIFY: reserve-aware spend check
-│   └── budget.ts                   NEW: BudgetManager, BudgetConfig, surplus alerts
-├── openclaw/                       NEW
-│   ├── skill.ts                    OpenClaw SKILL.md protocol adapter
-│   ├── soul-sync.ts                SOUL.md → CapabilityCard parser
-│   ├── heartbeat-writer.ts         HEARTBEAT.md rule injector
-│   └── message-bus.ts              Message bus transport (optional)
-├── registry/
-│   ├── store.ts                    MODIFY: updateSkillIdleRate, setSkillShareable
-│   ├── matcher.ts                  MODIFY: traverse skills[] for search/filter
-│   ├── request-log.ts              MODIFY: getSkillRequestCount()
-│   └── server.ts                   MODIFY: pending-requests endpoint, skill-level routes
-├── gateway/
-│   ├── server.ts                   MODIFY: skill_id routing (not just card_id)
-│   └── client.ts                   UNCHANGED (AutoRequestor wraps it)
-├── types/
-│   └── index.ts                    MODIFY: Skill type, multi-skill CapabilityCard schema
-└── cli/
-    ├── config.ts                   MODIFY: add autonomy, budget, idle fields
-    └── index.ts                    MODIFY: start IdleMonitor + BudgetManager on serve
-```
+| Scale | Architecture Adjustments |
+|-------|--------------------------|
+| 0-100 agents | Current SQLite + TS aggregation for /api/agents is fine. All queries < 5ms. |
+| 100-1K agents | Add index on `request_log(card_id, status)` for credits_earned JOIN. Already has `created_at DESC` index. |
+| 1K+ agents | Materialize agent stats into an `agent_stats` table updated by the existing insert trigger pattern. /api/agents GROUP BY across a large request_log becomes slow without it. Not needed at v2.2 scope. |
+
+### Scaling Priorities
+
+1. **First bottleneck:** `/api/agents` TS aggregation across all cards. Fix: add `agent_stats` table, updated by trigger on request_log insert. Not needed until > 1K requests.
+2. **Second bottleneck:** 30s polling from multiple browser tabs open simultaneously. Fix: replace polling with SSE stream on `/api/activity/stream`. Not needed at dogfood scale.
 
 ---
 
-## Recommended Build Order
+## Anti-Patterns
 
-The 6 features have hard dependencies. Build order must respect them:
+### Anti-Pattern 1: Installing react-router for Agent Profile URLs
 
-```
-Phase A (Foundation — blocks everything else):
-  [1] Multi-Skill Cards (src/types, src/registry/store, src/registry/matcher)
-      → Schema change propagates to all modules
-      → Must be done first; everything else uses new schema
+**What people do:** Add react-router-dom to make `/hub/agents/chengwen` a bookmarkable URL.
 
-Phase B (Autonomy Core — parallel, both depend on Phase A):
-  [2a] Autonomy Tiers (src/autonomy/tiers.ts)
-       → No dependencies on 2b, 3, 4
-       → Defines AutonomyConfig + event types used by everything else
-  [2b] Credit Budgeting (src/credit/budget.ts + modify ledger/escrow)
-       → Depends on Phase A (multi-skill card identifies which skill is spending)
-       → Independent of 2a internally, but shares AutonomyEvent notification pattern
+**Why it's wrong:** The Hub is a local tool. No external user links to agent profiles. react-router requires changes to vite.config.ts (history fallback), Fastify (SPA fallback route), App.tsx restructuring, and adds 50KB bundle weight. Zero user benefit.
 
-Phase C (Active Behaviors — sequential within phase):
-  [3] Idle Rate Monitor (src/autonomy/idle-monitor.ts)
-      → Depends on Phase A (skill schema), 2a (tiers), 2b (budget)
-      → First active autonomy behavior
-  [4] Auto-Request (src/autonomy/auto-request.ts)
-      → Depends on Phase A (skill search), 2a (tiers), 2b (budget), 3 (monitor)
-      → Uses existing gateway/client.ts + credit/escrow.ts
+**Do this instead:** `selectedAgentOwner: string | null` state in App.tsx. Same pattern as `selectedCard` for the CardModal. Back = set to null. Already the established pattern.
 
-Phase D (Integration Layer — depends on all prior):
-  [5] OpenClaw Deep Integration (src/openclaw/)
-      → Depends on Phase A (multi-skill schema), Phase C (autonomy behaviors)
-      → SOUL.md sync, HEARTBEAT.md rules, skill lifecycle
-```
+### Anti-Pattern 2: Creating a Separate activity_events Table
 
-**Dependency graph:**
+**What people do:** Create an `activity_events` table and INSERT on every exchange, auto-share, and agent join.
 
-```
-Multi-Skill Cards (1)
-    ├──► Autonomy Tiers (2a) ──────────────────────────────┐
-    ├──► Credit Budgeting (2b) ────────────────────────────┤
-    └──► Idle Monitor (3) ◄── (2a) + (2b) ───────────────►│
-              └──► Auto-Request (4) ◄── (2a) + (2b) ──────►│
-                        └──► OpenClaw Integration (5) ◄────┘
-```
+**Why it's wrong:** `request_log` already captures every exchange with `action_type` distinguishing autonomous events. A second table means two-write paths, potential sync drift, and duplicate data. The "agent_joined" event type can be derived from MIN(created_at) per owner on capability_cards.
 
----
+**Do this instead:** JOIN `request_log` with `capability_cards` at query time. The query is simple and data is always consistent.
 
-## Data Flow Changes
+### Anti-Pattern 3: Calling useCredit in Both NavCreditBadge and CreditDashboard
 
-### Auto-Share Flow (new)
+**What people do:** Both components independently call `useCredit(apiKey)` for their own data.
 
-```
-IdleMonitor (setInterval every 60s)
-  → reads request_log WHERE skill_id = X AND created_at > (now - window)
-  → computes idle_rate = 1 - (actual_requests / capacity)
-  → writes idle_rate to skills[X].metadata.idle_rate in DB
-  → if idle_rate > threshold:
-      → getAutonomyTier(0, peer={}, config) → Tier 1/2/3
-      → Tier 1: setSkillShareable(db, cardId, skillId, true) immediately
-      → Tier 2: setSkillShareable + emit AutonomyEvent (log to HEARTBEAT)
-      → Tier 3: emit "pending_approval", wait for CLI/Hub confirm
-```
+**Why it's wrong:** Doubles API calls to `/me` and `/me/transactions`. Creates two independent 30s polling intervals. Can show stale/different data between the nav badge and the dashboard.
 
-### Auto-Request Flow (new)
+**Do this instead:** Call `useCredit(apiKey)` once in App.tsx (alongside `useAuth`). Pass `balance` and `transactions` as props to both NavCreditBadge and CreditDashboard. Single source of truth, single polling interval.
 
-```
-External trigger: OpenClaw agent encounters task gap
-  → calls AutoRequestor.requestWithAutonomy({ query: "need TTS", maxCost: 15 })
-  → FTS search on skills[] across known peers
-  → score results: reputation × (1/latency) × (1/cost)
-  → pick top scorer
-  → getAutonomyTier(cost, peerReputation, config) → tier
-  → BudgetManager.canSpend(cost) → bool (reserve check + daily limit)
-  → Tier 1: holdEscrow → requestCapability → settleEscrow (silent)
-  → Tier 2: same flow + emit AutonomyEvent (notify after)
-  → Tier 3: emit "pending_approval" → human approves via CLI/Hub → execute
-```
+### Anti-Pattern 4: Building DocsPage with Dynamic Markdown Fetching
 
-### Credit Budget Flow (new)
+**What people do:** Store docs as `.md` files in `hub/public/docs/`, fetch at runtime, use remark or react-markdown to render.
 
-```
-Auto-Request or manual request:
-  → BudgetManager.canSpend(amount):
-      → getBalance(db, owner) - reserve_credits >= amount
-      → getDailySpend(db, owner, 24h) + amount <= daily_spend_limit
-  → If blocked: return error with reason
-  → If allowed: proceed to holdEscrow
-  → After settlement: BudgetManager.recordSpend(amount)
-  → Periodic (or on-settle): checkSurplus() → if balance > surplus_threshold → emit alert
-```
+**Why it's wrong:** Adds a Markdown processing dependency (remark is 150KB+ of plugins). Content flashes on load. Code blocks with copy buttons require extra configuration. No type safety.
 
-### Gateway Routing Change (multi-skill)
+**Do this instead:** Static TypeScript data object in `lib/docs-content.ts`. Each section is `{ id: string, title: string, content: ReactNode }`. Content is JSX with inline copy buttons using the same `navigator.clipboard` pattern from CardModal. Zero new dependencies.
 
-```
-Current:  POST /rpc { card_id, params }  →  single card handler
-New:      POST /rpc { card_id, skill_id, params }
-            → look up card.skills.find(s => s.id === skill_id)
-            → hold escrow for skill.pricing.credits_per_call
-            → route to skill-specific handler (HandlerMap key = skill_id)
-            → settle/release
-```
+### Anti-Pattern 5: Placing marketplace.json at the Wrong Level
+
+**What people do:** Create `marketplace.json` at the repo root (not inside `.claude-plugin/`).
+
+**Why it's wrong:** Claude Code requires the marketplace catalog at `.claude-plugin/marketplace.json` specifically. The `.claude-plugin/` directory is the convention for all Claude Code metadata files. A file at the repo root is invisible to Claude Code's marketplace discovery.
+
+**Do this instead:** `.claude-plugin/marketplace.json` is the marketplace catalog. `plugins/agentbnb-network/.claude-plugin/plugin.json` is the individual plugin manifest. These are two separate files at two separate directory levels — do not conflate them.
+
+### Anti-Pattern 6: Storing Docs as a Single Monolithic Component
+
+**What people do:** Write all documentation directly in DocsPage.tsx as one 500-line JSX component.
+
+**Why it's wrong:** Hard to update doc content without touching JSX. The content and the rendering are tangled.
+
+**Do this instead:** `lib/docs-content.ts` exports `DOCS_SECTIONS: DocSection[]`. DocsPage.tsx imports this data and renders it. Content updates require only editing the data file. The component itself is a simple mapper over the sections array.
 
 ---
 
-## Component Boundary Changes
+## Integration Points
 
-### Existing Module Modifications — Summary
+### New vs Existing — Complete Map
 
-| Module | Change Type | What Changes |
-|--------|-------------|--------------|
-| `src/types/index.ts` | Schema extension | Add `Skill` type, extend `CapabilityCard` with `skills[]` |
-| `src/registry/store.ts` | New functions | `updateSkillIdleRate`, `setSkillShareable`; FTS triggers index skills array |
-| `src/registry/matcher.ts` | Logic change | `searchCards` / `filterCards` traverse `skills[]` not flat fields |
-| `src/registry/request-log.ts` | New function | `getSkillRequestCount(db, skillId, sinceMs)` for idle computation |
-| `src/registry/server.ts` | New endpoint | `GET /me/pending-requests` for Tier 3 approval queue |
-| `src/gateway/server.ts` | Routing change | Accept `skill_id` param, route to skill handler, use skill pricing |
-| `src/credit/ledger.ts` | New function | `getDailySpend(db, owner, sinceMs)` for budget enforcement |
-| `src/credit/escrow.ts` | Minor change | `holdEscrow` callers now pre-check via BudgetManager |
-| `src/cli/config.ts` | Type extension | Add `autonomy: AutonomyConfig`, `budget: BudgetConfig`, `idle_threshold` |
-| `src/cli/index.ts` | New behaviors | Start IdleMonitor + BudgetManager on `serve`; add `openclaw` commands |
-| `src/cli/onboarding.ts` | Extension | `buildDraftCard` accepts SOUL.md parsed data |
-| Hub `OwnerDashboard.tsx` | New panels | Autonomy tier config, budget config, pending approvals |
+| What Changes | Type | Touches |
+|-------------|------|---------|
+| hub/src/App.tsx | MODIFY | Add 2 new tabs, credit badge, selectedAgentOwner state |
+| hub/src/types.ts | MODIFY | Add AgentProfile, ActivityEvent, CreditTransaction interfaces |
+| hub/vite.config.ts | MODIFY | Add '/api' proxy entry |
+| hub/src/components/CardModal.tsx | MODIFY | Add request button, owner profile link |
+| hub/src/components/OwnerDashboard.tsx | MODIFY | Add CreditDashboard section, absorb Share functionality |
+| src/registry/server.ts | MODIFY | Add 4 new routes (/api/agents, /api/agents/:owner, /api/activity, /me/transactions) |
+| src/registry/request-log.ts | MODIFY | Add getActivityFeed() function with the JOIN query |
+| hub/src/components/NavBar.tsx | NEW | — |
+| hub/src/components/NavCreditBadge.tsx | NEW | — |
+| hub/src/components/GetStartedCTA.tsx | NEW | — |
+| hub/src/components/AgentList.tsx | NEW | — |
+| hub/src/components/ProfilePage.tsx | NEW | — |
+| hub/src/components/ActivityFeed.tsx | NEW | — |
+| hub/src/components/ActivityEvent.tsx | NEW | — |
+| hub/src/components/DocsPage.tsx | NEW | — |
+| hub/src/components/CreditDashboard.tsx | NEW | — |
+| hub/src/hooks/useAgents.ts | NEW | — |
+| hub/src/hooks/useActivity.ts | NEW | — |
+| hub/src/hooks/useCredit.ts | NEW | — |
+| hub/src/lib/docs-content.ts | NEW | — |
+| .claude-plugin/marketplace.json | NEW | — |
+| plugins/agentbnb-network/.claude-plugin/plugin.json | NEW | — |
+| plugins/agentbnb-network/skills/agentbnb/SKILL.md | NEW | — |
 
-### New Module Interfaces
+### Existing Functions Already Available (no new code in these files)
 
-| Module | Consumes | Exposes |
-|--------|----------|---------|
-| `src/autonomy/tiers.ts` | `AutonomyConfig` from config | `getAutonomyTier()`, `AutonomyEvent` type |
-| `src/autonomy/idle-monitor.ts` | registry DB, request-log, tiers | `IdleMonitor` class with start/stop/getIdleRate |
-| `src/autonomy/auto-request.ts` | gateway/client, matcher, tiers, budget, peers | `AutoRequestor` class |
-| `src/credit/budget.ts` | credit/ledger, AutonomyEvent | `BudgetManager` class, `BudgetConfig` |
-| `src/openclaw/soul-sync.ts` | onboarding.buildDraftCard | `parseSoulMd()`, `generateSoulMdSection()` |
-| `src/openclaw/heartbeat-writer.ts` | tiers.AutonomyConfig | `generateHeartbeatSection()`, `injectHeartbeatSection()` |
-| `src/openclaw/skill.ts` | All autonomy modules | `OpenClawSkillLifecycle` (start/stop/heartbeat) |
+| New Feature | Existing Function | Already In |
+|-------------|------------------|-----------|
+| /api/agents list | `listCards(db)` | src/registry/store.ts |
+| /api/agents/:owner skills | `listCards(db, owner)` | src/registry/store.ts |
+| /api/activity base data | `getRequestLog(db, limit, since)` | src/registry/request-log.ts |
+| /me/transactions | `getTransactions(db, owner, limit)` | src/credit/ledger.ts |
+| Agent identicons | `boring-avatars` (already installed) | hub/src/components/CardModal.tsx |
 
----
+### Build Order Recommendations
 
-## Anti-Patterns to Avoid
+Based on dependency analysis:
 
-### Anti-Pattern 1: Polling Without the Existing Request Log
+1. **New types + vite.config proxy** — Zero risk, unblocks all other work. `hub/src/types.ts` and `hub/vite.config.ts` changes first.
 
-**What people do:** Build a separate metrics system (Prometheus, custom counters) to measure idle_rate.
-**Why it's wrong:** `request_log` already exists in `src/registry/request-log.ts` with `created_at` timestamps per skill execution. A rolling window query over this table is sufficient and requires zero new infrastructure.
-**Do this instead:** `getSkillRequestCount(db, skillId, sinceMs)` reading from `request_log`. Define capacity as max observed throughput in the window.
+2. **Backend endpoints** — `src/registry/server.ts` new routes + `src/registry/request-log.ts` activity query function. No frontend dependency.
 
-### Anti-Pattern 2: Autonomy Logic Scattered Across Modules
+3. **New hooks** — useAgents, useActivity, useCredit. Depend on backend endpoints being live (or mockable in tests).
 
-**What people do:** Add tier checks inline in gateway/server.ts, cli/index.ts, auto-request.ts separately.
-**Why it's wrong:** Inconsistent tier behavior, impossible to test, impossible to adjust thresholds globally.
-**Do this instead:** All autonomy decisions route through `getAutonomyTier()` in `src/autonomy/tiers.ts`. Single policy, tested in isolation.
+4. **New pages (parallel)** — AgentList + ProfilePage, ActivityFeed, DocsPage, CreditDashboard can all be built in parallel once hooks exist.
 
-### Anti-Pattern 3: Multi-Skill as Multiple Separate Cards
+5. **App.tsx navigation wiring** — Extend tab system, add NavBar, wire credit state. Integrates all new pages.
 
-**What people do:** Publish one card per skill to stay backward compatible with existing flat schema.
-**Why it's wrong:** Violates AGENT-NATIVE-PROTOCOL.md design intent; breaks agent identity model (agent = one card); makes idle_rate correlation across skills impossible; creates peer selection complexity (which card to use for an agent?).
-**Do this instead:** Extend the schema with `skills[]` and version the spec (`spec_version: '2.0'`). Write a migration for v1.x cards.
+6. **Modifications to existing components** — CardModal enhancements, OwnerDashboard credit section. Can be done any time after types are updated.
 
-### Anti-Pattern 4: Blocking the `agentbnb serve` Process on Autonomy
-
-**What people do:** Autonomy behaviors (idle monitoring, auto-request) run synchronously in the serve loop.
-**Why it's wrong:** A slow FTS search or hanging peer request blocks all inbound capability serving.
-**Do this instead:** IdleMonitor and AutoRequestor run via `setInterval` on the Node.js event loop — they are non-blocking by design. Escrow/request calls are `async`; never `await` them inline in the serve startup path.
-
-### Anti-Pattern 5: Embedding Budget in Escrow Logic
-
-**What people do:** Add reserve check directly inside `holdEscrow()` in `escrow.ts`.
-**Why it's wrong:** `holdEscrow` is a low-level atomic operation used by both inbound serving (where budget doesn't apply — you want to accept payment) and outbound requesting (where budget applies). Mixing them breaks the inbound path.
-**Do this instead:** `BudgetManager.canSpend()` is called only by `AutoRequestor` (outbound) before calling `holdEscrow`. Inbound gateway server does not call BudgetManager.
-
----
-
-## Architecture Implications for Roadmap
-
-### Suggested Phase Structure
-
-Based on the dependency graph:
-
-1. **Schema Foundation** — Multi-skill CapabilityCard, spec_version 2.0, migration for v1.x cards. Until this is done nothing else builds on solid ground.
-2. **Autonomy Core** — Tiers module + Budget module. These are pure logic with no UI, fast to build and test in isolation.
-3. **Idle Monitor + Auto-Share** — First active behavior. Tests the tiers + budget integration end-to-end.
-4. **Auto-Request** — Second active behavior. Validates the full autonomous loop (earn via idle-share, spend via auto-request).
-5. **OpenClaw Integration** — The SOUL.md sync and HEARTBEAT.md writer. Requires stable schema and stable autonomy behaviors to generate meaningful output.
-
-### Phases That Will Need Deeper Research
-
-| Phase | Risk Area | Reason |
-|-------|-----------|--------|
-| Schema migration (Phase 1) | Data compatibility | Existing cards in SQLite use flat schema; v1→v2 migration path needs care |
-| Idle rate computation (Phase 3) | Accuracy | "Capacity" is undefined — needs a concrete definition (max observed, or fixed config?) |
-| Peer scoring function (Phase 4) | Calibration | Reputation × latency × cost weights are arbitrary; need tuning with real OpenClaw data |
-| OpenClaw skill protocol (Phase 5) | External interface | OpenClaw SKILL.md format is community-defined; verify current spec before implementing |
+7. **Claude Code plugin files** — marketplace.json + plugin.json + SKILL.md copy. Zero code dependency, can be done any time.
 
 ---
 
 ## Sources
 
-- Analyzed source: `src/types/index.ts`, `src/registry/store.ts`, `src/registry/matcher.ts`, `src/gateway/server.ts`, `src/gateway/client.ts`, `src/credit/ledger.ts`, `src/credit/escrow.ts`, `src/discovery/mdns.ts`, `src/cli/config.ts`, `src/skills/handle-request.ts`, `src/registry/request-log.ts`
-- Design intent: `AGENT-NATIVE-PROTOCOL.md` (project root)
-- Project context: `.planning/PROJECT.md`
-- Confidence: HIGH — all integration points derived from actual source code, not assumptions
+- Direct inspection: `hub/src/App.tsx`, `hub/src/hooks/useCards.ts`, `hub/src/hooks/useRequests.ts`, `hub/src/hooks/useAuth.ts` — confirmed tab routing pattern and hook structure — HIGH confidence
+- Direct inspection: `src/registry/server.ts` — confirmed all existing routes, auth pattern, scoped plugin scope — HIGH confidence
+- Direct inspection: `src/registry/store.ts` — confirmed `listCards()`, `getCard()` signatures — HIGH confidence
+- Direct inspection: `src/registry/request-log.ts` — confirmed table schema, `getRequestLog()` function — HIGH confidence
+- Direct inspection: `src/credit/ledger.ts` — confirmed `getTransactions()` already exists, confirmed credit table schema — HIGH confidence
+- Direct inspection: `hub/vite.config.ts` — confirmed proxy config and existing entries — HIGH confidence
+- Direct inspection: `hub/src/types.ts` — confirmed HubCard type and existing interfaces — HIGH confidence
+- Official Claude Code docs: https://code.claude.com/docs/en/plugin-marketplaces — `.claude-plugin/marketplace.json` schema, `plugin.json` placement, relative path source mechanics, install commands — HIGH confidence
+- `v2.2-milestone.md` — confirmed feature requirements, UI wireframes, and implementation priority order — HIGH confidence
 
 ---
 
-*Architecture research for: AgentBnB v2.0 Agent Autonomy milestone*
-*Researched: 2026-03-15*
+*Architecture research for: AgentBnB v2.2 Hub Feature Expansion + Multi-Platform Distribution*
+*Researched: 2026-03-16*

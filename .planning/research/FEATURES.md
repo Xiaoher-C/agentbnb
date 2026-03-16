@@ -1,255 +1,304 @@
 # Feature Research
 
-**Domain:** Agent autonomy — P2P capability sharing protocol (AgentBnB v2.0)
-**Researched:** 2026-03-15
-**Confidence:** MEDIUM-HIGH (architecture well-established from AGENT-NATIVE-PROTOCOL.md; ecosystem patterns verified via WebSearch + Microsoft Agent Framework docs; OpenClaw-specific internals from official docs)
+**Domain:** Agent capability marketplace Hub expansion + multi-platform skill distribution (AgentBnB v2.2)
+**Researched:** 2026-03-16
+**Confidence:** HIGH (Claude Code plugin docs verified via official source; cross-tool SKILL.md patterns verified via multiple live repositories; React charting patterns verified via current documentation; activity feed patterns verified via multiple 2025-2026 sources)
 
 ---
 
-## Context: What Already Exists (v1.1)
+## Existing Baseline (Already Shipped — Do Not Rebuild)
 
-Do not rebuild. These are v1.1 features the v2.0 milestone depends on:
+Before mapping new features, document what v2.1 already provides to avoid scope confusion:
 
-- Capability Card schema (Zod, 3 levels) with `_internal`, `free_tier`, `powered_by`, `metadata.success_rate`, `metadata.avg_latency_ms`
-- SQLite registry with FTS5 search, owner isolation
-- Credit ledger: double-entry bookkeeping, escrow hold/settle/release
-- Fastify JSON-RPC gateway with auth, per-request reputation instrumentation (EWA)
-- CLI: init, publish, discover, request, status, serve
-- Smart onboarding: auto-detect 10 API providers, draft card generation, `--yes` flag
-- Public registry server with marketplace API
-- mDNS peer discovery + peer management
-- Agent Hub: React SPA with card grid, search/filter, owner dashboard, request history
-- SOUL.md parser: `parseSoulMd()` + `publishFromSoul()`
-- OpenClaw skill scaffolding: `src/skills/publish-capability.ts`, `src/skills/handle-request.ts`
+- Capability Card grid with search/filter (FTS5), modal overlay details with CLI copy button
+- Owner dashboard: published cards list, per-period request counts (24h/7d/30d), credit balance with low-credit badge, request history table
+- Auth (API key gate), Share page, tab navigation (Discover / Share / My Agent)
+- StatsBar with count-up animations (agents online, capabilities, exchanges)
+- Premium dark SaaS theme (#08080C + #10B981 emerald), ambient radial glow, skeleton loading, backdrop-blur modals
+- CLI: init, publish, discover, request, serve, config, openclaw commands
+- Credit ledger with escrow, autonomy tiers, idle monitoring, auto-share, auto-request
+- OpenClaw SKILL.md, install.sh, bootstrap.ts activate()/deactivate()
+- `boring-avatars` installed for identicons
 
 ---
 
 ## Feature Landscape
 
-### Table Stakes (Agents and Owners Expect These)
+### Table Stakes (Users Expect These)
 
-Features that v2.0 is meaningless without. Missing any = the "agent handles everything" promise is broken.
+Features missing from a product of this type that make it feel incomplete. These must ship.
 
-| Feature | Why Expected | Complexity | Depends On (v1.1) | Notes |
-|---------|--------------|------------|-------------------|-------|
-| **Idle rate detection** — per-card utilization tracking (calls/time window vs capacity) | The agent cannot decide what to share without knowing what is idle. Without this, "auto-share" is just always-share, which breaks the economic model. | MEDIUM | `metadata.avg_latency_ms`, `_internal` field for per-card private state | Use sliding window counter (last 60 min). `idle_rate = 1 - (actual_calls / capacity_limit)`. Store in `_internal` so it never leaks to the network. |
-| **Auto-share trigger** — when idle_rate > threshold, auto-publish card as online; when below threshold, take offline | Core to the agent-native loop. Agents share idle capacity, not everything all the time. | LOW | `availability.online` toggle, PATCH card endpoint (v1.1 UX layer), idle rate detection | Threshold configurable per-agent (default 70%). Runs in background during `agentbnb serve`. |
-| **Autonomy tier configuration** — owner sets Tier 1/2/3 credit thresholds once, agent respects them forever | Without configurable tiers, every autonomous action requires human approval, defeating the purpose. | LOW | Credit ledger (v1.1), config storage (`agentbnb.config.json`) | Tier 1: auto-execute < 10cr. Tier 2: execute + notify-after, 10-50cr. Tier 3: ask-before > 50cr. Stored in local config. |
-| **Auto-request** — agent detects capability gap, queries network, selects best peer, executes via escrow | This is the "spending" half of the economic loop. Without it, credits earned from sharing cannot be used. | HIGH | Escrow (v1.1), peer discovery (v1.1), discover CLI (v1.1), autonomy tiers | Peer selection algorithm: reputation x price efficiency x idle_rate. Cap at autonomy tier limit before executing. |
-| **Credit reserve enforcement** — agent refuses to spend below configured reserve balance | Agents with 0 credits become isolated (cannot request). Reserve prevents this. | LOW | Credit ledger, balance query (v1.1) | Default reserve = 20cr. Configurable. When balance <= reserve, auto-request is blocked, sharing priority increases. |
-| **Multi-skill Capability Card** — one card per agent with an array of `skills[]`, each skill independently shareable | Current schema has one card = one capability. An agent with TTS + video gen + code review needs ONE identity on the network, not three cards. | MEDIUM | `CapabilityCardSchema` (needs `skills[]` field), registry store, FTS5 search index | Schema v2.0 breaking change. The agent's card IS its identity. Skills are independently priced, individually togglable. |
-| **OpenClaw SKILL.md installable package** — `openclaw install agentbnb` or copy `skills/agentbnb/` to workspace | Target users are OpenClaw agents. If AgentBnB is not installable as a skill, adoption path is manual and broken. | MEDIUM | `src/skills/` existing scaffolding, gateway.ts, auto-share.ts, auto-request.ts | Follows OpenClaw skill spec: directory + `SKILL.md` with YAML frontmatter + instructions. Name: `agentbnb`. |
-| **HEARTBEAT.md rule injection** — AgentBnB autonomy rules are insertable into any OpenClaw agent's HEARTBEAT.md | HEARTBEAT.md is where OpenClaw agents get their behavioral rules. Without this, the agent won't know to share/request autonomously during its 30-min heartbeat cycles. | LOW | SOUL.md parser (v1.1) | Emit a ready-to-paste HEARTBEAT.md block. Ideally auto-patch on `openclaw install agentbnb`. Rules: share when idle_rate > 70%, request when gap detected and credits sufficient, maintain reserve. |
+| Feature | Why Expected | Complexity | Dependencies on Existing |
+|---------|--------------|------------|--------------------------|
+| Agent Profiles page (list view with ranking) | Every marketplace has a participant directory. Without it, discovery is card-only, not agent-centric. npm has user profile pages, Hugging Face has model cards — agents need the same. Ranking signals quality at a glance. | MEDIUM | Reads from existing `GET /cards` endpoint; ranking derives from `success_rate`, `avg_latency_ms`, `availability.online` already in schema; `boring-avatars` already installed for identicons |
+| Individual agent profile view | Clicking an agent from the profiles list must go somewhere — a view showing that agent's published skills, aggregate stats, and a request CTA. All marketplaces support drill-down. | MEDIUM | Reuses `CapabilityCard`, `LevelBadge`, `CategoryChip` components; modal overlay pattern (consistent with `CardModal`) avoids React Router dependency |
+| Credit balance visible in nav | Users of credit-based systems always want their balance at a glance — Stripe balance widget, OpenAI credit display. Currently balance is only in the My Agent tab behind auth. | LOW | `useOwnerCards` hook already fetches `balance`; nav-level display needs `cr` symbol and emerald color; extract pattern from `OwnerDashboard.tsx` |
+| Credit earning chart (30-day sparkline) | Any dashboard with earnings shows a trend line. The current owner dashboard shows counts but no visualization. Users expect to see growth over time. | MEDIUM | `useRequests(apiKey, '30d')` hook already provides the data; recharts `AreaChart` + `ResponsiveContainer` is the verified standard pattern for low-density React dashboards |
+| Mobile responsive layout | The hub is a recruiting tool shown to developer agents and humans on any device. Missing hamburger nav / stacked cards breaks presentation on phones and during demos. | MEDIUM | Tailwind `md:` breakpoints; existing card grid already uses `grid-cols-1 md:grid-cols-2 lg:grid-cols-3` but nav and header are not responsive; hamburger state needs `useState` |
+| In-hub documentation page | Developers evaluating an open-source protocol need Getting Started, API Reference, and multi-tool install instructions without leaving the hub. npm renders README inline; documentation must be similarly accessible. | MEDIUM | Static content; `react-markdown` (lightweight, zero bundler config) is sufficient; no backend changes; new `Docs` tab in App.tsx TABS array |
+| Skill Detail Modal enhancement (request button + availability) | When a user opens a card modal, the natural next action is "request this". Currently the modal only shows a CLI command to copy. The primary CTA must be a button, not a code block. | LOW | `CardModal.tsx` already has CLI code block; enhancement = add `Request` button that executes or copies enriched CLI call; availability schedule is already in schema but not displayed |
 
 ### Differentiators (Competitive Advantage)
 
-Features that make AgentBnB meaningfully different from Google A2A and enterprise agent marketplaces. Not required for launch, but valuable for positioning.
+Features unique to AgentBnB's agent-native philosophy and distribution strategy.
 
-| Feature | Value Proposition | Complexity | Depends On | Notes |
-|---------|-------------------|------------|------------|-------|
-| **Credit surplus alert** — notify owner when balance exceeds configured surplus threshold | Agents earning too many credits means they are over-sharing. Notify lets owners adjust pricing upward or reduce sharing. Also demonstrates the economic model is working. | LOW | Credit ledger, notification channel (CLI/webhook) | Default surplus = 500cr. MEDIUM confidence: the exact threshold and notification delivery method need design (webhook vs CLI output vs HEARTBEAT.md check). |
-| **Per-skill idle rate** — each skill on a multi-skill card has its own idle rate, shareable flag auto-set independently | One agent's TTS might be 95% idle while its video gen is 60% utilized. Sharing both at the same rate wastes neither capacity nor competitive advantage. | MEDIUM | Multi-skill cards (v2.0), sliding window counter per skill | Requires multi-skill cards first. Each skill gets its own `_internal.idle_rate` and `_internal.last_window_calls`. |
-| **Partial pipeline sharing** — on Level 2 cards, mark specific pipeline steps as shareable and others as moat | Agents can share sub-steps without revealing their competitive advantage step (e.g., share TTS + script but not the composite editor). Enables fine-grained capability packaging. | HIGH | Multi-skill cards, pipeline step schema (needs design) | Explicitly modeled in AGENT-NATIVE-PROTOCOL.md: `shareable_steps: [script, video-gen, tts]`. Complex schema extension. Defer to v2.1 unless core use case demands it. |
-| **Reputation-weighted peer selection** — auto-request picks best peer using `reputation x price_efficiency x idle_rate` score | Deterministic peer selection creates predictable outcomes. Reputation (EWA success_rate) already tracked in v1.1. Combining it with price and availability creates smarter routing. | MEDIUM | Reputation system (v1.1), idle rate (v2.0), discover endpoint (v1.1) | Score = `success_rate * (1 / credits_per_call) * idle_rate`. Ties broken by avg_latency_ms (lower is better). |
-| **SOUL.md v2 sync** — skills[] array in multi-skill card auto-generated from SOUL.md H2 sections | Existing `parseSoulMd()` already maps H2 sections to capabilities. Extending it to emit skills[] for the new schema closes the loop between agent identity and network identity. | LOW | `parseSoulMd()` (v1.1), multi-skill card schema (v2.0) | Backward compatible extension. Each H2 section = one skill entry. |
-| **Agent message bus transport** — use OpenClaw message bus as alternative to HTTP for gateway transport | OpenClaw agents already have a message bus. Supporting it as a transport option makes AgentBnB feel native to OpenClaw rather than bolted on. | HIGH | Gateway (v1.1), OpenClaw message bus API (external dependency) | LOW confidence: OpenClaw message bus API details need verification before committing to this. Mark as research flag in roadmap. |
-| **Autonomy audit log** — every autonomous action (auto-share, auto-request, escrow, settle) written to append-only local log | Owners need to trust the agent. An audit trail lets them review all autonomous decisions after the fact. Also required for Tier 2 "notify after" behavior. | LOW | Credit ledger (v1.1), escrow (v1.1), request_log (v1.1 UX layer) | Extend existing request_log table. Add `action_type` (auto-share / auto-request / settle / release) and `tier_invoked` columns. |
+| Feature | Value Proposition | Complexity | Dependencies on Existing |
+|---------|-------------------|------------|--------------------------|
+| Activity Feed (real-time capability exchanges) | Shows live proof that the network is active — agents requesting, completing, earning credits. No other agent marketplace visualizes the actual exchange economy in real time. Creates social proof and FOMO for developer onboarding. | MEDIUM | `useRequests` hook already fetches request log data; activity feed = 10-second polling of `/requests` endpoint (no WebSocket/SSE needed for MVP); format events as `"agent-X used skill-Y from agent-Z · 5cr · 2m ago"` |
+| Claude Code plugin marketplace (`marketplace.json`) | AgentBnB becomes discoverable inside Claude Code via `/plugin marketplace add`. The verified schema requires `name`, `owner.name`, `plugins[].name`, `plugins[].source`. This is the primary inbound distribution channel for the tool's target audience (developers using Claude Code). | LOW | SKILL.md already exists (v2.1); only needs `.claude-plugin/marketplace.json` + `plugin.json` manifest files added to repo root; zero hub code changes |
+| Cross-tool SKILL.md distribution (Antigravity, Codex, Cursor, Copilot) | The SKILL.md open standard is now verified cross-agent: same file works on Claude Code, Codex CLI, Antigravity, Cursor, GitHub Copilot, and 35+ other platforms. Adding frontmatter metadata gets AgentBnB indexed by SkillsMP (351k+ skills) and Skills.sh (8M+ installs). | LOW | SKILL.md exists; enhancement = add YAML frontmatter `name:`, `description:`, `compatible-tools:` fields; add GitHub topics to repo settings |
+| Auto-index preparation (GitHub topics + frontmatter) | SkillsMP crawls GitHub daily for `SKILL.md` files. Skills.sh (Vercel-run) tracks install counts. Proper setup turns organic discovery into a passive distribution channel with zero ongoing cost. | LOW | Static repo config changes only; no code |
+| Design system polish pass (ambient glow, hover animations, OwnerDashboard migration) | Hub is the recruiter. Visual polish signals production quality. The existing `OwnerDashboard` uses `slate-*` Tailwind tokens inconsistent with the rest of the hub's `hub-*` design tokens — a visible quality gap. | MEDIUM | All existing components; `OwnerDashboard.tsx` must be migrated from `slate-*` to `hub-*` tokens to match the premium dark aesthetic established in v2.1 |
+| README visual overhaul (hero image, badges, architecture diagram) | GitHub README is the first page any developer sees. Polished READMEs drive adoption — Microsoft published 98 agent skills with professional READMEs and accumulated 1.7M installs. | LOW | Static asset work; shields.io badges, SVG architecture diagram; no code changes |
 
 ### Anti-Features (Commonly Requested, Often Problematic)
 
 | Feature | Why Requested | Why Problematic | Alternative |
 |---------|---------------|-----------------|-------------|
-| **Real-time idle rate dashboard polling** (sub-second updates) | Owners want to see utilization live | Polling creates load that itself inflates the "utilization" metric being measured. A sliding window updated every 60s is sufficient and doesn't distort the signal. | 60-second refresh in Hub dashboard. Display window: last-hour rolling average. |
-| **Global auto-request for any capability gap** (no limit) | Agents should fill every gap automatically | Without tier limits, a recursive loop (agent A requests agent B, which requests agent A) produces unbounded credit spend. The $47,000 API bill incident shows this is a real failure mode. | Enforce tier credit thresholds before every auto-request. Require explicit capability gap definition in HEARTBEAT.md rules. |
-| **Multi-agent card ownership** (one card, many owners) | Teams want to share a card | Splits accountability. When a request fails, who owns the reputation hit? Owner isolation (current model) creates clear accountability. | Each team member runs their own card. Use OpenClaw agent teams for coordination. |
-| **Automatic pricing adjustment** (dynamic price based on demand) | Agents should earn more when demand is high | Dynamic pricing creates instability for requesting agents who budget in advance. Ruins the credit reserve model (agent budgets for X credits/call, but actual cost varies). | Allow owners to manually adjust price via dashboard. Emit surplus alert when demand is consistently high as a signal to increase price. |
-| **Cloud relay for gateway transport** (hosted intermediary) | Users don't want to expose ports | Introduces centralization and creates an infrastructure cost/dependency. Against the local-first design principle. | Document port-forwarding options. Support mDNS for LAN. For remote, document ngrok/cloudflare tunnel as user-managed option. |
-| **Cross-agent credit transfers** (send credits to another agent directly) | Users want to gift or pay agents outside transactions | Credits without backing capability exchange = gift economy, not economic incentive system. Undermines the share-to-earn loop. | Credits only move via escrow (request → settle). No direct transfer. |
+| WebSocket real-time activity feed | "Real-time" sounds better than polling | WebSockets require persistent connections, add server infrastructure complexity, and are hard to maintain in a local-first SQLite-backed server. For capability exchanges that happen every few seconds at most, 10-second polling is functionally identical to WebSocket push. | Start with `setInterval` 10-second polling using existing `/requests` endpoint. No new server infrastructure. Upgrade to SSE only if polling latency creates visible UX problems. |
+| Full MDX documentation system with search | Developers want searchable docs | Adding Algolia DocSearch, Fumadocs, or a full MDX pipeline into a Vite SPA adds significant build complexity and dependency surface. The hub docs need only 4-6 static pages total. | Render static markdown with `react-markdown` (lightweight, zero bundler config, no remark/rehype pipeline). Tab navigation handles page discovery. Browser Ctrl+F handles in-page search. |
+| Real money / payment integration | Credits seem arbitrary | Out of scope per PROJECT.md. Real payments require PCI compliance, payment processor accounts, legal structures, and tax handling — none appropriate for an MIT-licensed P2P protocol. | Credit-based economy with clear `cr` symbol and earning dashboard. The economic layer is the feature; real money changes the legal character. |
+| Agent social graph (follow, like, comment) | Makes it feel like a community | Creates content moderation responsibility, increases database schema complexity, and does not align with agent-native philosophy. Agents do not follow each other — they discover by capability match. | Activity feed + ranking leaderboard provides social proof without social graph complexity. |
+| Per-skill public install counts | Drives FOMO and social proof | Fabricated or low counts damage credibility more than help. Install counts require a central tracking server, which contradicts local-first. | Show `success_rate` and `avg_latency_ms` (already tracked via EWA) as quality proxies — verifiable and meaningful to agents evaluating peers. |
+| Cloud-hosted central registry | "Just works" without setup | Introduces centralization, operational cost, SLA responsibility, and contradicts the local-first philosophy. | mDNS peer discovery + public registry API (already built) handles multi-node coordination. The npm analogy: registry is a well-known but replaceable component. |
 
 ---
 
 ## Feature Dependencies
 
 ```
-[Idle Rate Detection]
-    └──requires──> [_internal field in CapabilityCard] (v1.1 done)
-    └──enables──>  [Auto-Share Trigger]
-                       └──requires──> [availability.online toggle + PATCH endpoint] (v1.1 done)
-                       └──enables──>  [Per-Skill Idle Rate] (if multi-skill cards exist)
+Agent Profiles (list view with ranking)
+    └──requires──> GET /cards endpoint (ALREADY EXISTS)
+    └──requires──> Ranking formula (success_rate × online_status from existing schema)
+    └──no new backend──> Pure frontend feature
 
-[Multi-Skill Capability Card]
-    └──requires──> [CapabilityCardSchema v2.0 extension]
-    └──requires──> [Registry store migration] (skills[] indexed for FTS5)
-    └──enables──>  [SOUL.md v2 sync]
-    └──enables──>  [Per-Skill Idle Rate]
-    └──enables──>  [Partial Pipeline Sharing] (future)
+Individual Agent Profile (detail view)
+    └──requires──> Agent Profiles list (navigation source)
+    └──reuses──>   CapabilityCard, LevelBadge, CategoryChip (ALREADY EXIST)
+    └──enhances──> CardModal (consistent modal overlay pattern)
 
-[Autonomy Tier Configuration]
-    └──requires──> [Config storage] (agentbnb.config.json, v1.1 partial)
-    └──enables──>  [Auto-Request]
-    └──enables──>  [Credit Reserve Enforcement]
+Activity Feed
+    └──requires──> /requests endpoint (ALREADY EXISTS via useRequests hook)
+    └──enhances──> StatsBar totalExchanges (feed shows what the counter counts)
+    └──no new backend──> 10-second polling is sufficient
 
-[Auto-Request]
-    └──requires──> [Autonomy Tier Configuration]
-    └──requires──> [Credit Reserve Enforcement]
-    └──requires──> [Reputation-Weighted Peer Selection]
-    └──requires──> [Escrow hold/settle] (v1.1 done)
-    └──requires──> [Discover endpoint] (v1.1 done)
+Credit Balance in Nav
+    └──requires──> useOwnerCards balance field (ALREADY EXISTS)
+    └──requires──> Auth state from useAuth (ALREADY EXISTS)
+    └──enhances──> Owner Dashboard (consistent display)
 
-[Credit Reserve Enforcement]
-    └──requires──> [Credit ledger balance query] (v1.1 done)
-    └──requires──> [Autonomy Tier Configuration]
+Credit Earning Chart
+    └──requires──> useRequests(apiKey, '30d') (ALREADY EXISTS)
+    └──requires──> recharts AreaChart (NEW dependency)
+    └──enhances──> Owner Dashboard (visual layer on existing count data)
 
-[OpenClaw SKILL.md Package]
-    └──requires──> [auto-share.ts module]
-    └──requires──> [auto-request.ts module]
-    └──requires──> [credit-mgr.ts module]
-    └──enhances──> [HEARTBEAT.md Rule Injection]
+Sign-up / Earn CTA
+    └──requires──> Credit Balance in Nav (contextual prompt when unauthenticated)
+    └──enhances──> Share page (conversion funnel)
 
-[Autonomy Audit Log]
-    └──requires──> [request_log table] (v1.1 UX layer done)
-    └──enhances──> [Autonomy Tier Configuration] (Tier 2 notify-after needs the log)
+In-Hub Docs Page
+    └──requires──> New tab entry in App.tsx TABS array
+    └──requires──> react-markdown (NEW dependency, or static JSX)
+    └──no backend changes──> All content is static
 
-[Reputation-Weighted Peer Selection]
-    └──requires──> [Idle Rate Detection] (for idle_rate in score)
-    └──requires──> [Reputation system EWA] (v1.1 done)
-    └──feeds──>    [Auto-Request] (provides the ranked peer list)
+Skill Detail Modal Enhancement (request button, availability, related skills)
+    └──requires──> CardModal (ALREADY EXISTS — enhancement only)
+    └──enhances──> Agent Profiles (link from profile to skill detail)
+
+Mobile Responsive Layout
+    └──enhances──> All existing and new components
+    └──requires──> Tailwind md: breakpoints in App.tsx header/nav
+    └──conflicts with──> OwnerDashboard slate-* token usage (must fix simultaneously)
+
+Design System Polish
+    └──enhances──> All new pages (must use hub-* tokens, not slate-* tokens)
+    └──conflicts with──> OwnerDashboard (currently slate-*, needs migration to hub-*)
+
+Claude Code Marketplace (.claude-plugin/)
+    └──requires──> SKILL.md (ALREADY EXISTS — may need minor frontmatter)
+    └──no code changes──> File additions to repo root only
+
+Cross-tool SKILL.md Compatibility
+    └──requires──> SKILL.md YAML frontmatter enhancement (existing file)
+    └──enhances──> Claude Code Marketplace (same file, broader compatibility)
+
+Auto-index Preparation (GitHub topics)
+    └──no code dependencies──> Repo settings only
+    └──requires──> SKILL.md frontmatter (same as cross-tool compatibility)
+
+README Visual Overhaul
+    └──no code dependencies──> Static asset + markdown changes
+    └──should come last──> Screenshots need final hub design
 ```
 
 ### Dependency Notes
 
-- **Multi-skill cards must come before per-skill idle rate**: The schema and registry migration needed for multi-skill cards is a prerequisite. Building idle rate per-skill before the schema exists creates throwaway code.
-- **Autonomy tiers must come before auto-request**: Auto-request without tier enforcement is dangerous (unbounded spend). Never ship auto-request without credit thresholds gating every execution.
-- **Idle rate detection must come before auto-share**: Auto-share without a utilization signal defaults to "always share", which defeats the economic model.
-- **Credit reserve enforcement conflicts with credit surplus alert**: They are inverses (floor vs ceiling). Implement reserve first (safety), surplus second (optimization signal).
+- **Activity Feed has no new backend dependencies:** The endpoint, hook, and data are all already built. This is purely a presentation-layer feature.
+- **Credit Chart requires recharts:** Recharts is the verified current recommendation for low-density React SaaS dashboards (builds on D3, fully declarative, no bundler config required). Add as new dependency — no alternatives needed.
+- **Design system conflicts with OwnerDashboard:** `OwnerDashboard.tsx` uses `slate-*` Tailwind tokens (e.g., `bg-slate-800`, `text-slate-400`) while all other hub components use `hub-*` custom tokens (`bg-hub-bg`, `text-hub-text-primary`). The polish pass must migrate OwnerDashboard. This is a correctness fix, not a stylistic choice.
+- **Claude Code Marketplace has zero hub code dependencies:** It is purely `.claude-plugin/marketplace.json` + `plugin.json` file additions to the repo root. Can ship in any phase alongside hub work.
+- **Mobile responsive depends on all components:** It is a horizontal concern touching every page. Build each new page mobile-first so the responsive pass is minimal at the end.
 
 ---
 
-## MVP Definition
+## MVP Definition for This Milestone (v2.2)
 
-### Launch With (v2.0 — "Agent Handles Everything")
+### Launch With (v2.2 core — defines the milestone)
 
-The minimum set that delivers the core promise: the agent monitors itself, shares when idle, requests when stuck, and never violates the owner's configured limits.
+- [ ] Agent Profiles page (list + individual) — establishes the agent directory that makes the network tangible
+- [ ] Activity Feed — social proof that the exchange economy is real and active
+- [ ] In-Hub Documentation page — removes the barrier to evaluation for developers
+- [ ] Credit system UI (nav balance display with `cr` symbol, earning chart in dashboard, sign-up CTA) — makes the economic layer visible to newcomers
+- [ ] Skill Detail Modal enhancement (request button, availability section) — closes the discovery-to-action loop
+- [ ] Claude Code plugin marketplace (`.claude-plugin/marketplace.json`) — primary distribution channel; lowest effort, highest reach
+- [ ] Mobile responsive layout — hub is a recruiting tool, must work everywhere
+- [ ] Design system polish pass (ambient glow on new pages, OwnerDashboard migration to hub-* tokens) — brand coherence for screenshots
 
-- [ ] **Idle rate detection** — sliding window counter per card, stored in `_internal`, computed during `agentbnb serve` background loop
-- [ ] **Auto-share trigger** — when idle_rate > configured threshold, flip `availability.online = true`; below threshold, flip false
-- [ ] **Autonomy tier configuration** — store Tier 1/2/3 credit thresholds in config; enforce before every autonomous action
-- [ ] **Credit reserve enforcement** — block auto-request when balance at or below reserve; increase share priority
-- [ ] **Auto-request** — capability gap → discover → rank peers → escrow → execute → settle; respects tier thresholds
-- [ ] **Multi-skill Capability Card** — schema v2.0 with `skills[]` array; registry migration; one card = agent identity
-- [ ] **OpenClaw SKILL.md installable package** — `skills/agentbnb/SKILL.md` + `gateway.ts`, `auto-share.ts`, `auto-request.ts`, `credit-mgr.ts`
-- [ ] **HEARTBEAT.md rule injection** — emit ready-to-paste autonomy rules block; auto-patch on install
+### Add After Core (v2.2 secondary — same milestone if time allows)
 
-### Add After Validation (v2.1)
+- [ ] Cross-tool SKILL.md compatibility frontmatter — trivial once marketplace.json is done; same PR
+- [ ] Auto-index preparation (GitHub topics) — no code, can be done at any time
+- [ ] README visual overhaul — do last; screenshots must reflect the final hub design
 
-Features to add once the core autonomy loop is working and validated with OpenClaw agents.
+### Future Consideration (v2.3+)
 
-- [ ] **Credit surplus alert** — trigger: notify owner when balance exceeds surplus threshold; validates the earn-spend loop is profitable
-- [ ] **Per-skill idle rate** — requires multi-skill cards stable first; adds fine-grained idle detection per skill
-- [ ] **SOUL.md v2 sync** — extend `parseSoulMd()` to emit skills[] for new schema; closes identity loop
-- [ ] **Reputation-weighted peer selection** — refine auto-request with scored peer ranking (reputation x price x idle_rate)
-- [ ] **Autonomy audit log** — extend request_log with `action_type` and `tier_invoked`; required for Tier 2 "notify after"
-
-### Future Consideration (v2.2+)
-
-Features to defer until the autonomy loop is validated in production.
-
-- [ ] **Partial pipeline sharing** — complex schema extension; needs real use case evidence before building
-- [ ] **OpenClaw message bus transport** — requires OpenClaw message bus API research; LOW confidence on feasibility; flag for dedicated research phase
-- [ ] **Dynamic pricing signals** — notification-only (not auto-adjust); useful only after network has enough agents to create real demand signals
+- [ ] SSE-based real-time activity feed — upgrade from polling only if latency becomes visible to users
+- [ ] Searchable in-hub documentation — add only if docs grow beyond 6 pages or search requests emerge
+- [ ] Related skills suggestions in skill detail modal — requires semantic similarity or embedding search; defer until network has sufficient data
 
 ---
 
 ## Feature Prioritization Matrix
 
-| Feature | Agent Value | Implementation Cost | Priority |
-|---------|-------------|---------------------|----------|
-| Idle rate detection | HIGH | MEDIUM | P1 |
-| Auto-share trigger | HIGH | LOW | P1 |
-| Autonomy tier configuration | HIGH | LOW | P1 |
-| Credit reserve enforcement | HIGH | LOW | P1 |
-| Auto-request | HIGH | HIGH | P1 |
-| Multi-skill Capability Card | HIGH | MEDIUM | P1 |
-| OpenClaw SKILL.md package | HIGH | MEDIUM | P1 |
-| HEARTBEAT.md rule injection | HIGH | LOW | P1 |
-| Credit surplus alert | MEDIUM | LOW | P2 |
-| Per-skill idle rate | MEDIUM | MEDIUM | P2 |
-| SOUL.md v2 sync | MEDIUM | LOW | P2 |
-| Reputation-weighted peer selection | MEDIUM | MEDIUM | P2 |
-| Autonomy audit log | MEDIUM | LOW | P2 |
-| Partial pipeline sharing | LOW | HIGH | P3 |
-| OpenClaw message bus transport | MEDIUM | HIGH | P3 |
+| Feature | User Value | Implementation Cost | Priority |
+|---------|------------|---------------------|----------|
+| Claude Code `marketplace.json` | HIGH (primary distribution channel) | LOW (file additions only) | P1 |
+| Agent Profiles list + detail | HIGH (makes network visible, agent directory) | MEDIUM (new page + ranking logic) | P1 |
+| Activity Feed | HIGH (social proof, proves network is active) | MEDIUM (polling + event formatting) | P1 |
+| In-Hub Docs page | HIGH (removes onboarding barrier) | MEDIUM (static content + react-markdown) | P1 |
+| Credit nav display + earning chart | MEDIUM (makes economy visible) | LOW-MEDIUM (nav widget + recharts) | P1 |
+| Skill Detail Modal enhancement | MEDIUM (closes discovery-to-action loop) | LOW (CardModal enhancement) | P1 |
+| Mobile responsive layout | HIGH (recruiting tool must work everywhere) | MEDIUM (Tailwind breakpoints across components) | P1 |
+| Design system polish | MEDIUM (brand coherence, screenshot quality) | MEDIUM (OwnerDashboard migration + audit) | P2 |
+| Cross-tool SKILL.md compatibility | MEDIUM (broader passive discovery) | LOW (frontmatter only) | P2 |
+| Auto-index preparation | MEDIUM (passive distribution, no ongoing cost) | LOW (repo settings) | P2 |
+| README visual overhaul | MEDIUM (first impression on GitHub) | LOW (static assets) | P3 |
 
 **Priority key:**
-- P1: Must have for v2.0 launch — the autonomy loop is broken without it
-- P2: Add in v2.1 — improves reliability and visibility once core loop runs
-- P3: Deferred — complex or needs evidence of demand
+- P1: Must have for v2.2 — defines the milestone deliverables
+- P2: Should have — add in same milestone if time permits
+- P3: Nice to have — easy wins that ship last
 
 ---
 
 ## Competitor Feature Analysis
 
-| Feature | Google A2A | Salesforce AgentExchange | AgentBnB v2.0 |
-|---------|------------|--------------------------|---------------|
-| Who decides to share | Human IT admin configures | Human admin publishes | Agent auto-detects idle rate |
-| Who decides to request | Human selects agent | Human configures flows | Agent detects gap, selects peer autonomously |
-| Economic model | None (platform license) | None (license fee) | Credit-based: earn by sharing, spend by requesting |
-| Autonomy controls | All-or-nothing delegation | Role-based access | Tiered thresholds (Tier 1/2/3) per credit amount |
-| Identity model | Per-capability agent cards | Per-agent skills | One card = full agent identity with skills[] array |
-| Protocol lock-in | Google Cloud | Salesforce platform | MIT open source, network effect lock-in only |
-| Integration path | Enterprise API | Salesforce admin console | `openclaw install agentbnb` — one command |
+| Feature | npm (package registry) | Hugging Face (model hub) | Our Approach |
+|---------|------------------------|--------------------------|--------------|
+| Author/agent profiles | User profile with published packages + download counts | Author page with model cards + follower count | Agent profile with skills list, ranking score (success_rate × online_status), credit earnings — no follower count (agent-native, not social) |
+| Activity/exchange feed | Download stats page, recent publishes list | Trending models + spaces activity | Real-time capability exchange feed — timestamped events `"agent-X completed skill-Y for agent-Z (5cr)"` |
+| Documentation | README rendered on package page | Model card (markdown) | In-hub docs tab: Getting Started, Multi-Tool Install, Card Schema v2.0, API Reference |
+| Credit/billing display | Not applicable (free) | Not applicable (free) | Nav-level balance with `cr` symbol, 30-day earning chart, sign-up CTA for new users |
+| Distribution mechanism | `npm install <package>` | `pip install` or web download | Claude Code `/plugin marketplace add`, cross-tool SKILL.md, `install.sh` |
+| Mobile experience | Fully responsive | Fully responsive | Mobile responsive with hamburger nav — gap that must close for v2.2 |
 
 ---
 
-## Implementation Notes by Feature Area
+## Implementation Notes by Feature
 
-### Idle Rate Detection
+### Agent Profiles Page
 
-**Mechanism:** Sliding window counter. Per-card (and later per-skill), track timestamps of the last N successful requests in a circular buffer. `idle_rate = 1 - (requests_in_last_60min / capacity_per_hour)`. `capacity_per_hour` is owner-configured (default: 60 calls/hour = 1/min). Store the window state in `_internal` — it is private and never transmitted. Update on every incoming request settle/release event.
+**Data source:** `GET /cards` already returns all cards. Ranking formula: `score = (success_rate ?? 0.5) * (online ? 1.2 : 1.0)`. Sort descending. No new backend endpoint needed for MVP.
 
-**Confidence:** HIGH. Sliding window is the standard approach for API utilization tracking (verified via multiple rate-limiting implementation sources). The `_internal` field in CapabilityCardSchema is already built for exactly this use.
+**Structure:** Two states — profiles list (grid of agent cards showing 32px boring-avatar identicon + agent name + top skill label + ranking score + online status indicator) and individual profile view (agent's full skills list reusing existing card components, aggregate stats: total skills, online count, avg success rate, credit pricing range).
 
-### Autonomy Tiers
+**Route:** Add `Profiles` as a new tab in App.tsx TABS array. Individual profile view = modal overlay (consistent with CardModal pattern) — avoids React Router dependency. Selected agent stored in `useState<AgentProfile | null>`.
 
-**Mechanism:** Config-stored thresholds keyed to credit amounts. Before every autonomous action (auto-share, auto-request, escrow), check which tier applies. Tier 1 executes silently. Tier 2 executes then writes an audit event with `notify: true`. Tier 3 returns a `APPROVAL_REQUIRED` status and blocks until the owner responds (via CLI prompt or Hub notification).
+### Activity Feed
 
-**Confidence:** MEDIUM. The tier structure is well-defined in AGENT-NATIVE-PROTOCOL.md. The Tier 3 "ask before" human interaction mechanism needs design — specifically how the agent surfaces the ask (HEARTBEAT.md next cycle vs CLI prompt vs Hub push notification).
+**Data source:** `GET /requests` (useRequests hook, already exists). Poll every 10 seconds with `useEffect` + `setInterval`. Format each event: `"{requester} used {skill_name} from {card.owner} · {credits}cr · {time_ago}"`.
 
-### Multi-Skill Capability Card
+**Display:** Chronological list, newest first, max 20 events visible. Subtle CSS fade-in `@keyframes` (opacity 0→1, 300ms) for new events appended to the top. No WebSocket, no SSE — 10-second polling is consistent with local-first SQLite architecture and functionally indistinguishable for this use case.
 
-**Mechanism:** Schema v2.0 adds `skills: SkillEntry[]` to CapabilityCardSchema. Each `SkillEntry` has: `id`, `name`, `description`, `level` (1/2/3), `inputs`, `outputs`, `pricing`, `availability`, `shareable` (boolean), `idle_rate` (from `_internal`). The top-level card fields (`name`, `owner`, `description`) describe the agent identity. Individual skills are the tradeable units. Registry FTS5 indexes skill names/descriptions as well as card-level fields.
+**Location:** New `Feed` tab in App.tsx, or inline section on the Discover tab below StatsBar. The inline section is lower complexity (no new tab required, no auth gate) and creates a stronger "proof the network is alive" signal on the primary page.
 
-**Confidence:** MEDIUM. Schema extension is straightforward but the SQLite migration and FTS5 re-indexing need care. The 1:N agent-to-skills pattern is confirmed by Microsoft Agent Framework docs and the LOKA Protocol. Breaking schema change requires versioning strategy.
+### In-Hub Documentation
 
-### Auto-Request
+**Content:** 4 pages minimum — Getting Started (install + first publish), Multi-Tool Install (Claude Code, Codex CLI, Antigravity, Cursor instructions), Card Schema v2.0 (fields reference), API Reference (endpoints + request format).
 
-**Mechanism:** Agent detects capability gap (task type not in local skills[]), calls `discover` against public registry or known peers, ranks candidates by score = `success_rate * (1/credits_per_call) * idle_rate`, checks autonomy tier for the top candidate's price, checks credit reserve, initiates escrow hold, sends JSON-RPC request to peer gateway, receives result, settles escrow. Entire flow runs within the `agentbnb serve` background loop.
+**Rendering:** `react-markdown` (lightweight, zero remark/rehype pipeline, no bundler config changes, compatible with Vite SPA). Or static JSX strings for fully controlled rendering. Either choice avoids Fumadocs/Docusaurus complexity.
 
-**Confidence:** MEDIUM. The individual components (discover, escrow, gateway client) are all v1.1. The orchestration layer (gap detection, peer ranking, autonomous execution) is net new. Gap detection specifically — how does the agent know it cannot do a task? — requires a defined capability gap signal (likely: agent hits an unknown tool call or unsupported media type, emits a structured event the auto-request handler subscribes to).
+**Location:** New `Docs` tab in App.tsx. Sub-navigation via a simple in-component tab bar (not nested React Router routes). Tailwind `prose` class for typography rendering.
 
-### OpenClaw SKILL.md Package
+### Credit System UI
 
-**Mechanism:** Directory at `skills/agentbnb/` with `SKILL.md` (frontmatter: `name: agentbnb`, `description: P2P capability sharing — earn credits by sharing idle APIs, spend credits to request capabilities from peers`). Sub-files: `gateway.ts` (starts Gateway as agent lifecycle hook), `auto-share.ts` (monitors idle_rate, publishes), `auto-request.ts` (gap detection, peer selection, escrow), `credit-mgr.ts` (reserve enforcement, surplus alert). Installed by copying directory to `<workspace>/skills/agentbnb/` or via `openclaw install agentbnb` if published to ClawHub (5,400+ skills registry as of 2026).
+**Nav balance:** After login, display `{balance} cr` in the App.tsx header adjacent to the Disconnect button. Emerald (`text-hub-accent`) for balance ≥ 10, red (`text-red-400`) for balance < 10. The low-credit detection logic already exists in OwnerDashboard — extract and hoist to nav level.
 
-**Confidence:** HIGH. OpenClaw skill spec is verified from official docs. The SKILL.md format (YAML frontmatter + markdown instructions), loading precedence, and three-stage progressive disclosure pattern are confirmed. ClawHub is the distribution channel.
+**Earning chart:** `recharts` `AreaChart` with `ResponsiveContainer`. X-axis = last 30 days (date labels), Y-axis = cumulative credits earned from requests. Data: `useRequests(apiKey, '30d')` already provides the raw request array; aggregate by date client-side. Chart fill color = `rgba(16, 185, 129, 0.2)` (hub-accent with opacity), stroke = `#10B981`.
+
+**Sign-up CTA:** Banner above the Share tab content for unauthenticated users: `"Earn credits by sharing your agent's skills — connect your agent to get started"` with a link to the Share tab. Low friction, no new page.
+
+### Claude Code Marketplace (verified schema — HIGH confidence)
+
+**Files to add** (no code changes to existing files):
+
+`.claude-plugin/marketplace.json`:
+```json
+{
+  "name": "agentbnb",
+  "owner": { "name": "Cheng Wen Chen" },
+  "metadata": { "description": "P2P agent capability sharing — earn credits by sharing idle skills, spend credits to request capabilities from peers" },
+  "plugins": [
+    {
+      "name": "agentbnb-skill",
+      "source": { "source": "git-subdir", "url": "github.com/chengwenchen/agentbnb", "path": "skills/agentbnb" },
+      "description": "Install AgentBnB capability sharing into your agent",
+      "version": "2.2.0",
+      "license": "MIT",
+      "keywords": ["agent-marketplace", "capability-sharing", "p2p", "credits"]
+    }
+  ]
+}
+```
+
+**Verified required fields** (official Claude Code docs, March 2026): `name` (kebab-case string), `owner.name` (string), `plugins[].name` (string), `plugins[].source` (string for relative path, object with `source` type for external). Plugin source `git-subdir` allows pointing to the `skills/agentbnb/` subdirectory of the main repo.
+
+**User installation command:** `/plugin marketplace add chengwenchen/agentbnb` (after pushing to GitHub).
+
+### Cross-Tool SKILL.md Compatibility
+
+Add to existing `SKILL.md` frontmatter:
+```yaml
+---
+name: agentbnb
+description: P2P agent capability sharing — publish, discover, and request agent skills with credit-based exchange
+compatible-tools: claude-code, codex-cli, antigravity, cursor, github-copilot
+tags: [agent-marketplace, capability-sharing, p2p, credits, agentbnb]
+---
+```
+
+GitHub repository topics to add (repo settings, no code): `agent-skills`, `skill-discovery`, `claude-code`, `agentbnb`, `capability-sharing`.
+
+**Auto-indexing:** SkillsMP crawls daily for SKILL.md files (351k+ indexed). Skills.sh tracks installs (8M+ total). Both index AgentBnB automatically once frontmatter and topics are in place.
 
 ---
 
 ## Sources
 
-- [AGENT-NATIVE-PROTOCOL.md](../AGENT-NATIVE-PROTOCOL.md) — Design bible defining autonomy tiers, idle rate logic, OpenClaw integration
-- [OpenClaw Skills Documentation](https://docs.openclaw.ai/tools/skills) — SKILL.md format, loading precedence, ClawHub distribution (HIGH confidence)
-- [Microsoft Agent Framework — Agent Skills](https://learn.microsoft.com/en-us/agent-framework/agents/skills) — Progressive disclosure pattern, one agent : many skills architecture (HIGH confidence)
-- [Levels of Autonomy for AI Agents — Knight Columbia / Arxiv](https://knightcolumbia.org/content/levels-of-autonomy-for-ai-agents-1) — Autonomy tier frameworks, configurable boundary design (MEDIUM confidence)
-- [Anthropic — Measuring Agent Autonomy](https://www.anthropic.com/research/measuring-agent-autonomy) — Autonomy measurement methodology (MEDIUM confidence)
-- [AI Agent Observability — OpenTelemetry](https://opentelemetry.io/blog/2025/ai-agent-observability/) — Standardized agent metrics, resource utilization monitoring patterns (MEDIUM confidence)
-- [Agent Contracts: Resource-Bounded AI Systems — Arxiv](https://arxiv.org/html/2601.08815v1) — Credit/budget management for autonomous agents, stop conditions (HIGH confidence for the anti-pattern of missing limits)
-- [Sliding Window Rate Limiting — API7.ai](https://api7.ai/blog/rate-limiting-guide-algorithms-best-practices) — Sliding window algorithm for utilization tracking (HIGH confidence)
-- [AwesomeOpenClawSkills Registry](https://github.com/VoltAgent/awesome-openclaw-skills) — ClawHub skill count, community skill structure (MEDIUM confidence)
-- [Microsoft Entra Agent Registry](https://learn.microsoft.com/en-us/entra/agent-id/identity-platform/what-is-agent-registry) — 1:N agent identity to capabilities mapping (MEDIUM confidence)
-- [Agent-to-Agent Protocol (A2A) — EmergentMind](https://www.emergentmind.com/topics/agent-to-agent-protocol-a2a) — Competitive positioning vs Google A2A (MEDIUM confidence)
+- [Claude Code Plugin Marketplace official docs](https://code.claude.com/docs/en/plugin-marketplaces) — HIGH confidence, official Anthropic source, verified March 2026
+- [anthropics/claude-plugins-official GitHub](https://github.com/anthropics/claude-plugins-official) — HIGH confidence, official repository
+- [VoltAgent/awesome-agent-skills](https://github.com/VoltAgent/awesome-agent-skills) — MEDIUM confidence, cross-tool SKILL.md compatibility patterns
+- [Antigravity agent skills ecosystem](https://antigravity.codes/agent-skills) — MEDIUM confidence, 868+ skills cross-tool distribution
+- [Agent Skills Are the New npm — buildmvpfast.com 2026](https://www.buildmvpfast.com/blog/agent-skills-npm-ai-package-manager-2026) — MEDIUM confidence, distribution ecosystem context and SkillsMP/Skills.sh data
+- [Antigravity awesome-skills — sickn33/antigravity-awesome-skills](https://github.com/sickn33/antigravity-awesome-skills) — MEDIUM confidence, SKILL.md frontmatter format examples
+- [Top React Chart Libraries for 2026 — Syncfusion](https://www.syncfusion.com/blogs/post/top-5-react-chart-libraries) — MEDIUM confidence, recharts recommendation
+- [Recharts deep dive for React SaaS dashboards](https://react-news.com/mastering-data-visualization-a-deep-dive-into-recharts-for-modern-react-applications) — MEDIUM confidence, implementation patterns
+- [SSE vs WebSockets vs Polling — DEV Community 2025](https://dev.to/haraf/server-sent-events-sse-vs-websockets-vs-long-polling-whats-best-in-2025-5ep8) — MEDIUM confidence, polling recommendation for low-frequency activity feeds
+- [Activity Stream UI pattern — UI Patterns](https://ui-patterns.com/patterns/ActivityStream) — MEDIUM confidence, feed UX patterns
+- [Agent Rating and Leaderboards — AI Agents Directory 2025](https://aiagentsdirectory.com/blog/agent-rating-and-leaderboards-finding-the-best-ai-agents-in-2025) — MEDIUM confidence, ranking patterns for agent marketplaces
+- [Marketplace UX Design Guide — Rigby](https://www.rigbyjs.com/blog/marketplace-ux) — MEDIUM confidence, marketplace profile and feed patterns
 
 ---
 
-*Feature research for: AgentBnB v2.0 Agent Autonomy milestone*
-*Researched: 2026-03-15*
+*Feature research for: AgentBnB v2.2 Hub Expansion + Multi-Platform Distribution*
+*Researched: 2026-03-16*
