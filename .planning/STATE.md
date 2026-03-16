@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v2.2
 milestone_name: Full Hub + Distribution
 status: planning
-stopped_at: Completed 13-02-PLAN.md — Docs page with CopyButton and 4 sections
-last_updated: "2026-03-16T13:53:45.648Z"
+stopped_at: Completed 14-01-PLAN.md — formatCredits cr format, GET /me/transactions, useTransactions hook, Skeleton component
+last_updated: "2026-03-16T14:42:47.959Z"
 last_activity: 2026-03-16 — Roadmap created (4 phases, 37 requirements, 100% coverage)
 progress:
   total_phases: 4
   completed_phases: 2
-  total_plans: 5
-  completed_plans: 5
+  total_plans: 9
+  completed_plans: 6
   percent: 0
 ---
 
@@ -52,6 +52,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 12-foundation-agent-directory P03 | 3min | 2 tasks | 5 files |
 | Phase 13-activity-feed-docs-page P01 | 4m | 2 tasks | 8 files |
 | Phase 13-activity-feed-docs-page P02 | 3min | 2 tasks | 4 files |
+| Phase 14-credit-ui-modal-polish P01 | 7m | 2 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -91,6 +92,9 @@ Progress: [░░░░░░░░░░] 0%
 - [Phase Phase 13-02]: Docs content is static TypeScript JSX in lib/docs-content.tsx — no react-markdown, no network
 - [Phase Phase 13-02]: CopyButton reuses exact clipboard pattern from GetStartedCTA.tsx (useState + 1500ms timeout)
 - [Phase Phase 13-02]: DocsPage uses sticky sidebar on desktop, horizontal-scroll tab strip on mobile
+- [Phase Phase 14-01]: formatCredits returns 'cr X-Y/min' for per-minute pricing — concise symbol format consistent with cr prefix
+- [Phase Phase 14-01]: GET /me/transactions default limit is 20 (vs /requests default 10) — transactions change less frequently, slightly larger default appropriate
+- [Phase Phase 14-01]: useTransactions is a separate hook from useRequests — different endpoint, different data shape, same polling pattern
 
 ### Pending Todos
 
@@ -103,8 +107,8 @@ Progress: [░░░░░░░░░░] 0%
 
 ## Session Continuity
 
-Last session: 2026-03-16T13:49:23.625Z
-Stopped at: Completed 13-02-PLAN.md — Docs page with CopyButton and 4 sections
+Last session: 2026-03-16T14:42:47.957Z
+Stopped at: Completed 14-01-PLAN.md — formatCredits cr format, GET /me/transactions, useTransactions hook, Skeleton component
 Resume file: None
 
 ---

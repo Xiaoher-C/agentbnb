@@ -39,12 +39,12 @@ Requirements for v2.2 Full Hub + Distribution. Each maps to roadmap phases.
 
 ### Credit UI
 
-- [ ] **CREDIT-01**: `cr` currency symbol used consistently across all credit displays
-- [ ] **CREDIT-02**: Card display shows credits in accent color with monospace `cr` prefix
+- [x] **CREDIT-01**: `cr` currency symbol used consistently across all credit displays
+- [x] **CREDIT-02**: Card display shows credits in accent color with monospace `cr` prefix
 - [ ] **CREDIT-03**: My Agent dashboard shows credit balance with reserve/available breakdown
 - [ ] **CREDIT-04**: My Agent dashboard shows 30-day earning chart (recharts AreaChart)
 - [ ] **CREDIT-05**: My Agent dashboard shows recent transaction history
-- [ ] **CREDIT-06**: Backend GET /me/transactions returns credit transaction history
+- [x] **CREDIT-06**: Backend GET /me/transactions returns credit transaction history
 
 ### Modal Enhancement
 
@@ -65,7 +65,7 @@ Requirements for v2.2 Full Hub + Distribution. Each maps to roadmap phases.
 - [ ] **POLISH-01**: All pages responsive — cards stack on mobile, nav collapses to hamburger
 - [ ] **POLISH-02**: Modal becomes full-screen sheet on mobile with touch-friendly tap targets (44px min)
 - [ ] **POLISH-03**: OwnerDashboard migrated from slate-* to hub-* design tokens
-- [ ] **POLISH-04**: Loading skeletons for all async data fetches
+- [x] **POLISH-04**: Loading skeletons for all async data fetches
 - [ ] **POLISH-05**: iOS Safari scroll lock fix for all modals
 
 ## v2.3 Requirements
@@ -123,19 +123,19 @@ Which phases cover which requirements. Updated during roadmap creation.
 | DOCS-02 | Phase 13 | Complete |
 | DOCS-03 | Phase 13 | Complete |
 | DOCS-04 | Phase 13 | Complete |
-| CREDIT-01 | Phase 14 | Pending |
-| CREDIT-02 | Phase 14 | Pending |
+| CREDIT-01 | Phase 14 | Complete |
+| CREDIT-02 | Phase 14 | Complete |
 | CREDIT-03 | Phase 14 | Pending |
 | CREDIT-04 | Phase 14 | Pending |
 | CREDIT-05 | Phase 14 | Pending |
-| CREDIT-06 | Phase 14 | Pending |
+| CREDIT-06 | Phase 14 | Complete |
 | MODAL-01 | Phase 14 | Pending |
 | MODAL-02 | Phase 14 | Pending |
 | MODAL-03 | Phase 14 | Pending |
 | POLISH-01 | Phase 14 | Pending |
 | POLISH-02 | Phase 14 | Pending |
 | POLISH-03 | Phase 14 | Pending |
-| POLISH-04 | Phase 14 | Pending |
+| POLISH-04 | Phase 14 | Complete |
 | POLISH-05 | Phase 14 | Pending |
 | DIST-01 | Phase 15 | Pending |
 | DIST-02 | Phase 15 | Pending |
