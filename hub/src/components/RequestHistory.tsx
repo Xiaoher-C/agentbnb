@@ -4,6 +4,8 @@
  * Displays a dark-themed table with columns: Card Name, Status, Latency,
  * Credits, Time. Status is colour-coded: green for success, red for failure,
  * yellow for timeout. Shows an empty state when no requests are present.
+ *
+ * Uses hub-* design tokens exclusively (migrated from slate-* in v2.2).
  */
 import type { RequestLogEntry } from '../hooks/useRequests.js';
 
@@ -30,16 +32,16 @@ function formatTime(isoString: string): string {
 export default function RequestHistory({ requests }: RequestHistoryProps): JSX.Element {
   if (requests.length === 0) {
     return (
-      <div className="rounded-lg border border-slate-700 bg-slate-800/50 px-6 py-8 text-center">
-        <p className="text-sm text-slate-400">No requests yet</p>
+      <div className="rounded-lg border border-hub-border bg-hub-surface px-6 py-8 text-center">
+        <p className="text-sm text-hub-text-secondary">No requests yet</p>
       </div>
     );
   }
 
   return (
-    <div className="overflow-x-auto rounded-lg border border-slate-700">
-      <table className="w-full text-sm text-slate-300">
-        <thead className="bg-slate-800 text-xs uppercase text-slate-500">
+    <div className="overflow-x-auto rounded-lg border border-hub-border">
+      <table className="w-full text-sm text-hub-text-secondary">
+        <thead style={{ backgroundColor: '#111117' }} className="text-xs uppercase text-hub-text-tertiary">
           <tr>
             <th className="px-4 py-3 text-left">Card Name</th>
             <th className="px-4 py-3 text-left">Status</th>
@@ -48,16 +50,18 @@ export default function RequestHistory({ requests }: RequestHistoryProps): JSX.E
             <th className="px-4 py-3 text-right">Time</th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-slate-700/50 bg-slate-900/50">
+        <tbody className="divide-y divide-hub-border bg-hub-bg">
           {requests.map((req) => (
-            <tr key={req.id} className="hover:bg-slate-800/40 transition-colors">
-              <td className="px-4 py-3 font-medium text-slate-200">{req.card_name}</td>
+            <tr key={req.id} className="hover:bg-hub-surface-hover transition-colors">
+              <td className="px-4 py-3 font-medium text-hub-text-primary">{req.card_name}</td>
               <td className="px-4 py-3">
                 <span className={STATUS_CLASSES[req.status]}>{req.status}</span>
               </td>
-              <td className="px-4 py-3 text-right text-slate-400">{req.latency_ms} ms</td>
-              <td className="px-4 py-3 text-right text-slate-400">{req.credits_charged}</td>
-              <td className="px-4 py-3 text-right text-slate-500">{formatTime(req.created_at)}</td>
+              <td className="px-4 py-3 text-right text-hub-text-secondary">{req.latency_ms} ms</td>
+              <td className="px-4 py-3 text-right">
+                <span className="font-mono text-hub-accent">cr {req.credits_charged}</span>
+              </td>
+              <td className="px-4 py-3 text-right text-hub-text-tertiary">{formatTime(req.created_at)}</td>
             </tr>
           ))}
         </tbody>

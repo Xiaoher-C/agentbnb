@@ -25,7 +25,8 @@ describe('RequestHistory', () => {
     expect(screen.getByText('My GPT Tool')).toBeInTheDocument();
     expect(screen.getByText('success')).toBeInTheDocument();
     expect(screen.getByText('230 ms')).toBeInTheDocument();
-    expect(screen.getByText('5')).toBeInTheDocument();
+    // Credits now rendered as "cr 5" with cr prefix (v2.2 token migration)
+    expect(screen.getByText('cr 5')).toBeInTheDocument();
   });
 
   it('shows empty state when no requests', () => {
