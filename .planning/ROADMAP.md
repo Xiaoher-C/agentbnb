@@ -127,7 +127,7 @@ Plans:
 | 12. Foundation + Agent Directory | 3/3 | Complete    | 2026-03-16 | - |
 | 13. Activity Feed + Docs Page | 2/2 | Complete    | 2026-03-16 | - |
 | 14. Credit UI + Modal + Polish | 4/4 | Complete    | 2026-03-16 | - |
-| 15. Distribution + Discovery | 2/2 | Complete   | 2026-03-16 | - |
+| 15. Distribution + Discovery | 2/2 | Complete    | 2026-03-16 | - |
 
 **Total:** 20 phases, 57+ plans, 3 milestones shipped, 1 in progress.
 
