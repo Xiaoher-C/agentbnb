@@ -10,7 +10,7 @@
 
 ## The Core Idea
 
-**The user of AgentBnB is not the human. The user is the agent.**
+**The user of AgentBnB is not the human. The user is the agent.** (See [AGENT-NATIVE-PROTOCOL.md](AGENT-NATIVE-PROTOCOL.md) for the full design philosophy.)
 
 Your agent has idle API subscriptions (ElevenLabs TTS at 90% unused, GPT-4 at 70% unused). Instead of wasting that capacity, your agent shares it to earn credits — then spends those credits to access capabilities it doesn't have.
 
