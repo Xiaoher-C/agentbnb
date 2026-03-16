@@ -89,7 +89,7 @@ Requirements for the Ship It milestone. Each maps to roadmap phases.
 ### Repo Housekeeping
 
 - [x] **DOC-01**: CLAUDE.md update — reflect v1.1 (8 phases, 24 plans, 302+ tests), v2.0 (5 phases, 12 plans), current v2.1, agent-first philosophy, updated architecture
-- [ ] **DOC-02**: README.md rewrite — new tagline, multi-skill cards JSON example, autonomy tiers, auto-share/auto-request, Hub screenshot, OpenClaw integration, author update
+- [x] **DOC-02**: README.md rewrite — new tagline, multi-skill cards JSON example, autonomy tiers, auto-share/auto-request, Hub screenshot, OpenClaw integration, author update
 - [ ] **DOC-03**: AGENT-NATIVE-PROTOCOL.md in repo root — ensure the design bible is committed and accessible
 
 ## Future Requirements
@@ -164,7 +164,7 @@ Deferred to future release. Tracked but not in current roadmap.
 | CLW-04 | Phase 10 | Complete |
 | CLW-05 | Phase 10 | Complete |
 | DOC-01 | Phase 11 | Complete |
-| DOC-02 | Phase 11 | Pending |
+| DOC-02 | Phase 11 | Complete |
 | DOC-03 | Phase 11 | Pending |
 
 **Coverage:**
