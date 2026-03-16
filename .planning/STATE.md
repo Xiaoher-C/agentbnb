@@ -1,11 +1,11 @@
 ---
 gsd_state_version: 1.0
-milestone: v2.1
-milestone_name: Ship It
-status: planning
-stopped_at: Completed 11-repo-housekeeping 11-03-PLAN.md
-last_updated: "2026-03-16T11:16:40.393Z"
-last_activity: 2026-03-16 — Phase 9 signed off, proceeding to Phase 10
+milestone: none
+milestone_name: none
+status: between_milestones
+stopped_at: "v2.1 Ship It archived. Ready for v2.2."
+last_updated: "2026-03-16"
+last_activity: 2026-03-16 — v2.1 Ship It completed and archived
 progress:
   total_phases: 16
   completed_phases: 16

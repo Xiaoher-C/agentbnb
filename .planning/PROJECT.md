@@ -2,23 +2,22 @@
 
 ## What This Is
 
-A P2P agent capability sharing protocol. Agent owners publish what their agents can do (Capability Cards) and request capabilities from others, with a lightweight credit-based exchange system. Think Airbnb for AI agent pipelines — list your agent's idle capabilities, others book and use them.
+A P2P agent capability sharing protocol. Agent owners publish what their agents can do (Capability Cards) and request capabilities from others, with a lightweight credit-based exchange system. Your agent has idle APIs — it wants to trade them.
 
 ## Core Value
 
 No good protocol exists for agent-to-agent capability exchange. AgentBnB fills that gap — making it easy for any agent to discover and use another agent's skills, creating a marketplace where agent capabilities become composable building blocks.
 
-## Current Milestone: v2.1 Ship It
+## Current State
 
-**Goal:** Make AgentBnB launchable. Premium Hub UI, one-command OpenClaw skill install, repo ready for public.
+**v2.1 Ship It — SHIPPED 2026-03-16**
 
-**Target features:**
-- Hub UI redesign (premium dark SaaS, ambient glow, modal overlays, count-up animations)
-- ClaWHub installable skill (bootstrap.ts activate(), install.sh, SKILL.md rewrite, HEARTBEAT.rules.md)
-- Repo housekeeping (CLAUDE.md, README.md, AGENT-NATIVE-PROTOCOL.md updates)
+Three milestones complete:
+- **v1.1 Upgrade** — 8 phases, 24 plans, 302+ tests. Core protocol, CLI, Hub, registry, onboarding.
+- **v2.0 Agent Autonomy** — 5 phases, 12 plans. Multi-skill cards, autonomy tiers, auto-share, auto-request, OpenClaw integration.
+- **v2.1 Ship It** — 3 phases, 10 plans. Premium Hub UI, ClaWHub skill (activate/deactivate), repo docs.
 
 **Design bible:** `AGENT-NATIVE-PROTOCOL.md` in project root
-**UI spec:** `v2.1-milestone.md` in project root
 
 ## Requirements
 
@@ -45,19 +44,16 @@ No good protocol exists for agent-to-agent capability exchange. AgentBnB fills t
 - ✓ Multi-skill Capability Cards — v2.0
 - ✓ Credit budgeting (reserve, surplus, limits) — v2.0
 - ✓ OpenClaw deep integration (skill, HEARTBEAT.md, message bus) — v2.0
+- ✓ Premium dark Hub UI with ambient glow, modal overlays, count-up animations — v2.1
+- ✓ ClaWHub bootstrap.ts activate()/deactivate() single entry point — v2.1
+- ✓ install.sh zero-intervention agent onboarding — v2.1
+- ✓ SKILL.md agent-executable instructions — v2.1
+- ✓ HEARTBEAT.rules.md standalone autonomy template — v2.1
+- ✓ CLAUDE.md, README.md, AGENT-NATIVE-PROTOCOL.md launch-ready — v2.1
 
 ### Active
 
-- [ ] Hub UI redesign (premium dark SaaS with ambient atmosphere)
-- [ ] Card modal overlay with detail view
-- [ ] Stats bar with count-up animations
-- [ ] ClaWHub bootstrap.ts (single activate() entry point)
-- [ ] ClaWHub install.sh (post-install automation)
-- [ ] ClaWHub SKILL.md rewrite (agent-executable instructions)
-- [ ] ClaWHub HEARTBEAT.rules.md (autonomy rules template)
-- [ ] CLAUDE.md update to reflect v2.1
-- [ ] README.md rewrite for public launch
-- [ ] AGENT-NATIVE-PROTOCOL.md in repo root
+(No active milestone — planning v2.2 next)
 
 ### Out of Scope
 
@@ -74,6 +70,7 @@ No good protocol exists for agent-to-agent capability exchange. AgentBnB fills t
 - **Agent-native philosophy:** The user of AgentBnB is the agent, not the human. Features designed for agent consumption first, human consumption second. See AGENT-NATIVE-PROTOCOL.md.
 - **Open source:** MIT licensed, intended for community adoption. Lock-in from network effects, not code.
 - **npm analogy:** OpenClaw : AgentBnB :: Node.js : npm — the de facto capability sharing standard.
+- **Codebase:** ~3,800 LOC TypeScript (hub + skills), 302+ tests, premium dark SaaS Hub UI.
 
 ## Constraints
 
@@ -95,9 +92,10 @@ No good protocol exists for agent-to-agent capability exchange. AgentBnB fills t
 | EWA reputation (alpha=0.1) | Smooth outlier handling, bootstraps from first observation | ✓ Good |
 | Scoped Fastify plugins | Auth isolation without leaking to public routes | ✓ Good |
 | Agent-first design | Features for agent consumption first, human second | ✓ Good |
-| Premium dark UI | Screenshot-worthy > info density > mobile | — Pending |
-| Modal over in-place expand | Backdrop blur + centered modal for card details | — Pending |
-| Single activate() entry point | One function call = agent on network | — Pending |
+| Premium dark UI (#08080C + #10B981) | Screenshot-worthy > info density > mobile | ✓ Good |
+| Modal over in-place expand | Backdrop blur + centered modal for card details | ✓ Good |
+| Single activate() entry point | One function call = agent on network | ✓ Good |
+| SKILL.md for agents, not humans | Agent reads and acts without human interpretation | ✓ Good |
 
 ---
-*Last updated: 2026-03-16 after milestone v2.1 initialization*
+*Last updated: 2026-03-16 after v2.1 Ship It milestone completion*
