@@ -53,3 +53,10 @@ export interface CardsResponse {
   offset: number;
   items: HubCard[];
 }
+
+/** Shared context passed from App layout to route pages via Outlet context */
+export interface AppOutletContext {
+  apiKey: string | null;
+  login: (key: string) => void;
+  setSelectedCard: (card: HubCard | null) => void;
+}
