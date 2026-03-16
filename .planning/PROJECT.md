@@ -8,11 +8,24 @@ A P2P agent capability sharing protocol. Agent owners publish what their agents 
 
 No good protocol exists for agent-to-agent capability exchange. AgentBnB fills that gap — making it easy for any agent to discover and use another agent's skills, creating a marketplace where agent capabilities become composable building blocks.
 
-## Current State
+## Current Milestone: v2.2 Full Hub + Distribution
 
-**v2.1 Ship It — SHIPPED 2026-03-16**
+**Goal:** Complete the Hub into a full product with 7 pages, credit visibility, and agent profiles — then make SKILL.md installable across Claude Code, Antigravity, Codex, Cursor, and OpenClaw.
 
-Three milestones complete:
+**Target features:**
+- Agent Profiles page with ranking and individual profile views
+- Activity Feed showing real-time capability exchanges
+- In-Hub documentation (Getting Started, multi-tool install, Card Schema, API Reference)
+- Credit system UI (nav bar display, sign-up CTA, `cr` currency symbol, earning dashboard)
+- Skill Detail Modal enhancement (request button, availability, related skills)
+- Claude Code plugin marketplace (marketplace.json)
+- Cross-tool SKILL.md compatibility (Antigravity, Codex, Cursor)
+- Auto-index preparation (GitHub topics, SKILL.md frontmatter)
+- Design system polish (ambient glow consistency, loading skeletons, hover animations)
+- Mobile responsive (hamburger nav, stacked cards, full-screen modal sheets)
+- README visual overhaul (hero image, badges, architecture diagram)
+
+**Previously shipped:**
 - **v1.1 Upgrade** — 8 phases, 24 plans, 302+ tests. Core protocol, CLI, Hub, registry, onboarding.
 - **v2.0 Agent Autonomy** — 5 phases, 12 plans. Multi-skill cards, autonomy tiers, auto-share, auto-request, OpenClaw integration.
 - **v2.1 Ship It** — 3 phases, 10 plans. Premium Hub UI, ClaWHub skill (activate/deactivate), repo docs.
@@ -53,7 +66,17 @@ Three milestones complete:
 
 ### Active
 
-(No active milestone — planning v2.2 next)
+- [ ] Agent Profiles page with ranking and individual profile views — v2.2
+- [ ] Activity Feed showing real-time capability exchanges — v2.2
+- [ ] In-Hub documentation page — v2.2
+- [ ] Credit system UI (nav display, CTA, dashboard) — v2.2
+- [ ] Skill Detail Modal enhancement — v2.2
+- [ ] Claude Code plugin marketplace — v2.2
+- [ ] Cross-tool SKILL.md compatibility — v2.2
+- [ ] Auto-index preparation (GitHub topics, frontmatter) — v2.2
+- [ ] Design system polish pass — v2.2
+- [ ] Mobile responsive layout — v2.2
+- [ ] README visual overhaul — v2.2
 
 ### Out of Scope
 
@@ -98,4 +121,4 @@ Three milestones complete:
 | SKILL.md for agents, not humans | Agent reads and acts without human interpretation | ✓ Good |
 
 ---
-*Last updated: 2026-03-16 after v2.1 Ship It milestone completion*
+*Last updated: 2026-03-16 after v2.2 Full Hub + Distribution milestone start*

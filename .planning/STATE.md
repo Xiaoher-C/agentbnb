@@ -1,16 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: none
-milestone_name: none
-status: between_milestones
-stopped_at: "v2.1 Ship It archived. Ready for v2.2."
+milestone: v2.2
+milestone_name: Full Hub + Distribution
+status: defining_requirements
+stopped_at: "Milestone v2.2 started — defining requirements"
 last_updated: "2026-03-16"
-last_activity: 2026-03-16 — v2.1 Ship It completed and archived
+last_activity: 2026-03-16 — Milestone v2.2 started
 progress:
-  total_phases: 16
-  completed_phases: 16
-  total_plans: 46
-  completed_plans: 46
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
   percent: 0
 ---
 
@@ -21,41 +21,29 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-16)
 
 **Core value:** Fill the market gap for agent-to-agent capability exchange — make AgentBnB launchable.
-**Current focus:** v2.1 Ship It — Phase 10: ClaWHub Installable Skill
+**Current focus:** v2.2 Full Hub + Distribution
 
 ## Current Position
 
-Phase: 10 of 11 (ClaWHub Installable Skill)
-Plan: 0 of 5 — ready to plan
-Status: Ready to plan
-Last activity: 2026-03-16 — Phase 9 signed off, proceeding to Phase 10
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-03-16 — Milestone v2.2 started
 
 Progress: [░░░░░░░░░░] 0%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 36 (v1.1: 24, v2.0: 12)
+- Total plans completed: 46 (v1.1: 24, v2.0: 12, v2.1: 10)
 - Average duration: unknown
 - Total execution time: unknown
 
-**By Phase (v2.1):**
+**By Phase (v2.2):**
 
 | Phase | Plans | Status |
 |-------|-------|--------|
-| 9. Hub UI Redesign | 0/7 | Not started |
-| 10. ClaWHub Installable Skill | 0/5 | Not started |
-| 11. Repo Housekeeping | 0/3 | Not started |
-| Phase 09-hub-ui-redesign P01 | 6 | 2 tasks | 15 files |
-| Phase 09-hub-ui-redesign P03 | 8 | 2 tasks | 3 files |
-| Phase 09-hub-ui-redesign P02 | 150s | 2 tasks | 2 files |
-| Phase 09-hub-ui-redesign P04 | 8min | 1 tasks | 4 files |
-| Phase 10-clawHub-installable-skill P02 | 2min | 2 tasks | 2 files |
-| Phase 10-clawHub-installable-skill P01 | 3 | 1 tasks | 2 files |
-| Phase 10-clawHub-installable-skill P03 | 3min | 2 tasks | 2 files |
-| Phase 11-repo-housekeeping P01 | 1min | 1 tasks | 1 files |
-| Phase 11-repo-housekeeping P02 | 2min | 1 tasks | 1 files |
-| Phase 11-repo-housekeeping P03 | 2min | 1 tasks | 2 files |
+| (roadmap pending) | — | — |
 
 ## Accumulated Context
 
@@ -66,23 +54,13 @@ Progress: [░░░░░░░░░░] 0%
 - [v2.1 init]: Dark bg #08080C, accent emerald green #10B981, Inter + JetBrains Mono
 - [v2.1 init]: ClaWHub skill uses single activate() function — bootstrap.ts entry point
 - [v2.1 init]: SKILL.md must be agent-executable instructions, not human documentation
-- [Phase 09-hub-ui-redesign]: StatusColor type changed to 'accent'|'dim' to align with design token naming
-- [Phase 09-hub-ui-redesign]: CapabilityCard is compact-only with onClick prop; modal overlay wired in plan 09-02
-- [Phase 09-hub-ui-redesign]: Ghost chip pattern established: border-hub-border-hover bg-transparent rounded-full
-- [Phase 09-hub-ui-redesign]: Ambient glow placed in StatsBar.tsx not App.tsx — component owns its own atmosphere
-- [Phase 09-hub-ui-redesign]: Tab switcher changed from underline to pill fill (bg-white/[0.08]) per CONTEXT.md spec
-- [Phase 09-hub-ui-redesign]: CardModal uses CSS transitions on isVisible state — simpler than keyframes, animate-out delays onClose by 150ms
-- [Phase 09-hub-ui-redesign]: backdrop-filter uses inline style with WebkitBackdropFilter for Safari compatibility
-- [Phase 09-hub-ui-redesign]: useCountUp hook animates from 0 on every target change for alive feeling; grid overlay at 0.03 opacity included
-- [Phase 10-clawHub-installable-skill]: install.sh uses pnpm-first with npm fallback for CLI install — matches project package manager preference
-- [Phase 10-clawHub-installable-skill]: HEARTBEAT.rules.md uses example defaults (Tier 1:10, Tier 2:50, reserve:20) with pointer to agentbnb openclaw rules for real configured values
-- [Phase 10-clawHub-installable-skill]: bootstrap.ts uses try/catch in deactivate() for idempotent teardown; gatewayToken defaults to randomUUID(); FILE_NOT_FOUND error code for missing SOUL.md
-- [Phase Phase 10-clawHub-installable-skill]: SKILL.md uses imperative agent-executable language — answers 'what should I do?' not 'what is this?'
-- [Phase Phase 10-clawHub-installable-skill]: Integration test uses real activate()/deactivate() with :memory: DBs and no mocks — proves actual lifecycle not just call order
-- [Phase Phase 10-clawHub-installable-skill]: Gateway port 0 in tests for OS auto-assignment — eliminates port conflict failures in CI
-- [Phase 11-repo-housekeeping]: CLAUDE.md updated with all three milestones (v1.1, v2.0, v2.1) and shipped dates — accurate context for all future sessions
-- [Phase 11-repo-housekeeping]: README tagline changed to 'Your agent has idle APIs. It knows. It wants to trade them.' — agent-native, evocative framing
-- [Phase 11-repo-housekeeping]: AGENT-NATIVE-PROTOCOL.md is the authoritative design bible — 9 sections, self-contained prose, no implementation details, committed at repo root and linked from CLAUDE.md and README.md
+- [v2.2 init]: Hub navigation: 5 tabs — Discover, Agents, Activity, Docs, My Agent. Credit balance in nav bar.
+- [v2.2 init]: Agent profiles: Ranked list + individual profile page with all skills + recent activity
+- [v2.2 init]: Activity feed: Public exchange history (exchange_completed, capability_shared, agent_joined, milestone)
+- [v2.2 init]: Credit visibility: `cr` symbol everywhere. Nav bar shows balance. Sign-up CTA offers 50 free credits
+- [v2.2 init]: Docs: Getting Started + multi-tool install + Card Schema + API Reference + FAQ. Embedded in Hub
+- [v2.2 init]: Distribution: One SKILL.md, multiple install paths. marketplace.json for Claude Code
+- [v2.2 init]: Sign-up flow: No account creation. "Sign up" = run `agentbnb init` locally. Free 50 credits from initial credit grant
 
 ### Pending Todos
 
@@ -90,13 +68,13 @@ None yet.
 
 ### Blockers/Concerns
 
-- AGENT-NATIVE-PROTOCOL.md not yet in repo root (addressed by Phase 11, plan 11-03)
+- `docs/hub-screenshot.png` placeholder in README.md (cosmetic, from v2.1)
 
 ## Session Continuity
 
-Last session: 2026-03-16T11:13:30.903Z
-Stopped at: Completed 11-repo-housekeeping 11-03-PLAN.md
+Last session: 2026-03-16
+Stopped at: Milestone v2.2 started — defining requirements
 Resume file: None
 
 ---
-*Last updated: 2026-03-16 — v2.1 Ship It roadmap created (Phases 9-11)*
+*Last updated: 2026-03-16 — v2.2 Full Hub + Distribution milestone started*
