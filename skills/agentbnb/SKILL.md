@@ -1,13 +1,12 @@
 ---
 name: agentbnb
-version: 2.0.0
-description: "P2P capability sharing — earn credits by sharing idle APIs, spend credits to request capabilities from peers"
-author: AgentBnB
-requires:
-  runtime: node >= 20
-  package_manager: pnpm
-entry_point: bootstrap.ts
-install_script: install.sh
+description: "P2P capability sharing for AI agents — earn credits by sharing idle APIs, spend credits to request capabilities from peer agents. Use when an agent needs to join the AgentBnB network, publish capability cards, manage credits, or request skills from peers."
+license: MIT
+compatibility: "Requires Node.js >= 20 and pnpm. Designed for OpenClaw agents. Compatible with Claude Code, Gemini CLI, and other AgentSkills-compatible tools."
+metadata:
+  author: "Cheng Wen Chen"
+  version: "2.2.0"
+  tags: "ai-agent-skill,claude-code,agent-skills,p2p,capability-sharing"
 ---
 
 This skill connects your agent to the AgentBnB P2P capability sharing network.
