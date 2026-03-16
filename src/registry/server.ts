@@ -5,7 +5,7 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { existsSync } from 'node:fs';
 import type Database from 'better-sqlite3';
-import { getCard, updateCard } from './store.js';
+import { getCard, updateCard, listCards } from './store.js';
 import { listPendingRequests, resolvePendingRequest } from '../autonomy/pending-requests.js';
 import { searchCards, filterCards } from './matcher.js';
 import { getRequestLog } from './request-log.js';
@@ -13,7 +13,7 @@ import type { SincePeriod } from './request-log.js';
 import { getBalance } from '../credit/ledger.js';
 import { detectApiKeys, buildDraftCard, KNOWN_API_KEYS } from '../cli/onboarding.js';
 import { AgentBnBError } from '../types/index.js';
-import type { CapabilityCard } from '../types/index.js';
+import type { CapabilityCard, CapabilityCardV2 } from '../types/index.js';
 
 /**
  * Options for creating the public registry server.
@@ -223,6 +223,143 @@ export function createRegistryServer(opts: RegistryServerOptions): FastifyInstan
     }
 
     return reply.send(stripInternal(card));
+  });
+
+  /**
+   * GET /api/agents — Returns a reputation-sorted list of all agent profiles.
+   *
+   * Each agent profile is aggregated from their capability cards and request log.
+   * Sorted by success_rate DESC (nulls last), then total_earned DESC.
+   * credits_earned is computed via GROUP BY aggregate SQL, never stored as a column.
+   */
+  server.get('/api/agents', async (_request, reply) => {
+    const allCards = listCards(db);
+
+    // Group cards by owner
+    const ownerMap = new Map<string, CapabilityCard[]>();
+    for (const card of allCards) {
+      const existing = ownerMap.get(card.owner) ?? [];
+      existing.push(card);
+      ownerMap.set(card.owner, existing);
+    }
+
+    // Compute credits_earned per owner via single aggregate SQL (NOT per-owner loop)
+    const creditsStmt = db.prepare(`
+      SELECT cc.owner,
+             SUM(CASE WHEN rl.status = 'success' THEN rl.credits_charged ELSE 0 END) as credits_earned
+      FROM capability_cards cc
+      LEFT JOIN request_log rl ON rl.card_id = cc.id
+      GROUP BY cc.owner
+    `);
+    const creditsRows = creditsStmt.all() as Array<{ owner: string; credits_earned: number }>;
+    const creditsMap = new Map(creditsRows.map((r) => [r.owner, r.credits_earned ?? 0]));
+
+    // Build agent profiles
+    const agents = Array.from(ownerMap.entries()).map(([owner, cards]) => {
+      const skillCount = cards.reduce((sum, card) => sum + ((card as unknown as CapabilityCardV2).skills?.length ?? 1), 0);
+      const successRates = cards
+        .map((c) => c.metadata?.success_rate)
+        .filter((r): r is number => r != null);
+      const avgSuccessRate =
+        successRates.length > 0
+          ? successRates.reduce((a, b) => a + b, 0) / successRates.length
+          : null;
+
+      // member_since: use MIN of created_at from the SQL table (not from parsed JSON)
+      const memberStmt = db.prepare(
+        'SELECT MIN(created_at) as earliest FROM capability_cards WHERE owner = ?'
+      );
+      const memberRow = memberStmt.get(owner) as { earliest: string } | undefined;
+
+      return {
+        owner,
+        skill_count: skillCount,
+        success_rate: avgSuccessRate,
+        total_earned: creditsMap.get(owner) ?? 0,
+        member_since: memberRow?.earliest ?? new Date().toISOString(),
+      };
+    });
+
+    // Sort by reputation: success_rate DESC (nulls last), then total_earned DESC
+    agents.sort((a, b) => {
+      const aRate = a.success_rate ?? -1;
+      const bRate = b.success_rate ?? -1;
+      if (bRate !== aRate) return bRate - aRate;
+      return b.total_earned - a.total_earned;
+    });
+
+    return reply.send({ items: agents, total: agents.length });
+  });
+
+  /**
+   * GET /api/agents/:owner — Returns profile, skills, and recent activity for a specific agent.
+   *
+   * Returns 404 if the owner has no capability cards registered.
+   * recent_activity contains up to 10 most recent request log entries for this owner's cards.
+   */
+  server.get('/api/agents/:owner', async (request, reply) => {
+    const { owner } = request.params as { owner: string };
+    const ownerCards = listCards(db, owner);
+
+    if (ownerCards.length === 0) {
+      return reply.status(404).send({ error: 'Agent not found' });
+    }
+
+    const skillCount = ownerCards.reduce((sum, card) => sum + ((card as unknown as CapabilityCardV2).skills?.length ?? 1), 0);
+    const successRates = ownerCards
+      .map((c) => c.metadata?.success_rate)
+      .filter((r): r is number => r != null);
+    const avgSuccessRate =
+      successRates.length > 0
+        ? successRates.reduce((a, b) => a + b, 0) / successRates.length
+        : null;
+
+    // Credits earned via aggregate SQL
+    const creditsStmt = db.prepare(`
+      SELECT SUM(CASE WHEN rl.status = 'success' THEN rl.credits_charged ELSE 0 END) as credits_earned
+      FROM capability_cards cc
+      LEFT JOIN request_log rl ON rl.card_id = cc.id
+      WHERE cc.owner = ?
+    `);
+    const creditsRow = creditsStmt.get(owner) as { credits_earned: number } | undefined;
+
+    // member_since from earliest created_at
+    const memberStmt = db.prepare(
+      'SELECT MIN(created_at) as earliest FROM capability_cards WHERE owner = ?'
+    );
+    const memberRow = memberStmt.get(owner) as { earliest: string } | undefined;
+
+    // Recent activity (last 10 requests involving this owner's cards)
+    const activityStmt = db.prepare(`
+      SELECT rl.id, rl.card_name, rl.requester, rl.status, rl.credits_charged, rl.created_at
+      FROM request_log rl
+      INNER JOIN capability_cards cc ON rl.card_id = cc.id
+      WHERE cc.owner = ?
+      ORDER BY rl.created_at DESC
+      LIMIT 10
+    `);
+    const recentActivity = activityStmt.all(owner) as Array<{
+      id: string;
+      card_name: string;
+      requester: string;
+      status: string;
+      credits_charged: number;
+      created_at: string;
+    }>;
+
+    const profile = {
+      owner,
+      skill_count: skillCount,
+      success_rate: avgSuccessRate,
+      total_earned: creditsRow?.credits_earned ?? 0,
+      member_since: memberRow?.earliest ?? new Date().toISOString(),
+    };
+
+    return reply.send({
+      profile,
+      skills: ownerCards,
+      recent_activity: recentActivity,
+    });
   });
 
   // Register owner routes as a scoped plugin (NOT fastify-plugin) so the auth hook
