@@ -285,7 +285,7 @@ Plans:
   1. CLAUDE.md accurately reflects v1.1 (8 phases, 24 plans, 302+ tests), v2.0 (5 phases, 12 plans), and v2.1, with agent-first philosophy and current architecture — no stale references
   2. README.md opens with the new tagline, shows a multi-skill cards JSON example, explains autonomy tiers and auto-share/auto-request, and includes the Hub screenshot — a new visitor understands the project in under 2 minutes
   3. AGENT-NATIVE-PROTOCOL.md exists at the repo root and is committed — it is the design bible referenced throughout the codebase and must be publicly accessible
-**Plans:** 3 plans
+**Plans:** 1/3 plans executed
 
 Plans:
 - [ ] 11-01-PLAN.md — CLAUDE.md update: reflect v1.1, v2.0, v2.1, agent-first philosophy, updated architecture (DOC-01)
@@ -316,4 +316,4 @@ Phases execute in numeric order: 9 → 10 → 11
 | 8. OpenClaw Deep Integration | v2.0 | 3/3 | Complete | 2026-03-15 |
 | 9. Hub UI Redesign | v2.1 | 4/4 | Complete | 2026-03-16 |
 | 10. ClaWHub Installable Skill | 3/3 | Complete    | 2026-03-15 | - |
-| 11. Repo Housekeeping | v2.1 | 0/3 | Not started | - |
+| 11. Repo Housekeeping | 1/3 | In Progress|  | - |

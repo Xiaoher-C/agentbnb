@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v2.1
 milestone_name: Ship It
 status: planning
-stopped_at: Completed 10-clawHub-installable-skill 10-03-PLAN.md
-last_updated: "2026-03-15T19:54:12.714Z"
+stopped_at: Completed 11-repo-housekeeping 11-01-PLAN.md
+last_updated: "2026-03-16T11:12:11.910Z"
 last_activity: 2026-03-16 — Phase 9 signed off, proceeding to Phase 10
 progress:
   total_phases: 16
   completed_phases: 15
-  total_plans: 43
-  completed_plans: 43
+  total_plans: 46
+  completed_plans: 44
   percent: 0
 ---
 
@@ -53,6 +53,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 10-clawHub-installable-skill P02 | 2min | 2 tasks | 2 files |
 | Phase 10-clawHub-installable-skill P01 | 3 | 1 tasks | 2 files |
 | Phase 10-clawHub-installable-skill P03 | 3min | 2 tasks | 2 files |
+| Phase 11-repo-housekeeping P01 | 1min | 1 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -77,6 +78,7 @@ Progress: [░░░░░░░░░░] 0%
 - [Phase Phase 10-clawHub-installable-skill]: SKILL.md uses imperative agent-executable language — answers 'what should I do?' not 'what is this?'
 - [Phase Phase 10-clawHub-installable-skill]: Integration test uses real activate()/deactivate() with :memory: DBs and no mocks — proves actual lifecycle not just call order
 - [Phase Phase 10-clawHub-installable-skill]: Gateway port 0 in tests for OS auto-assignment — eliminates port conflict failures in CI
+- [Phase 11-repo-housekeeping]: CLAUDE.md updated with all three milestones (v1.1, v2.0, v2.1) and shipped dates — accurate context for all future sessions
 
 ### Pending Todos
 
@@ -88,8 +90,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-15T19:51:07.123Z
-Stopped at: Completed 10-clawHub-installable-skill 10-03-PLAN.md
+Last session: 2026-03-16T11:12:11.908Z
+Stopped at: Completed 11-repo-housekeeping 11-01-PLAN.md
 Resume file: None
 
 ---
