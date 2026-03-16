@@ -106,15 +106,29 @@ function MyAgentDropdown(): JSX.Element {
 export default function NavBar({ apiKey, balance, onLogout }: NavBarProps): JSX.Element {
   const [menuOpen, setMenuOpen] = useState(false);
 
-  // iOS-safe scroll lock when mobile drawer is open
+  // iOS-safe scroll lock when mobile drawer is open (position-fixed technique)
   useEffect(() => {
     if (menuOpen) {
-      document.body.style.overflow = 'hidden';
+      const scrollY = window.scrollY;
+      document.body.style.position = 'fixed';
+      document.body.style.top = `-${scrollY}px`;
+      document.body.style.width = '100%';
+      document.body.dataset.scrollY = String(scrollY);
     } else {
-      document.body.style.overflow = '';
+      const scrollY = parseInt(document.body.dataset.scrollY ?? '0', 10);
+      document.body.style.position = '';
+      document.body.style.top = '';
+      document.body.style.width = '';
+      delete document.body.dataset.scrollY;
+      window.scrollTo(0, scrollY);
     }
     return () => {
-      document.body.style.overflow = '';
+      const scrollY = parseInt(document.body.dataset.scrollY ?? '0', 10);
+      document.body.style.position = '';
+      document.body.style.top = '';
+      document.body.style.width = '';
+      delete document.body.dataset.scrollY;
+      window.scrollTo(0, scrollY);
     };
   }, [menuOpen]);
 

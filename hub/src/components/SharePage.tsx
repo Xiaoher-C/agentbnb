@@ -13,6 +13,7 @@
  */
 import { useState, useEffect, useCallback } from 'react';
 import type { HubCard } from '../types.js';
+import { Skeleton } from './Skeleton.js';
 
 export interface SharePageProps {
   /** Current API key from useAuth(). null when not authenticated. */
@@ -188,8 +189,10 @@ export default function SharePage({ apiKey }: SharePageProps): JSX.Element {
 
   if (draftLoading) {
     return (
-      <div className="flex items-center justify-center py-20 text-slate-400 text-sm">
-        Loading draft cards…
+      <div className="space-y-4 py-8">
+        <Skeleton className="h-6 w-48" />
+        <Skeleton className="h-32 w-full" />
+        <Skeleton className="h-32 w-full" />
       </div>
     );
   }

@@ -78,4 +78,17 @@ describe('NavBar', () => {
     renderNavBar({ ...defaultProps, apiKey: 'sk-test', balance: 42 });
     expect(screen.getByText(/cr 42/)).toBeInTheDocument();
   });
+
+  it('uses position-fixed scroll lock when drawer is open (iOS-safe)', () => {
+    renderNavBar();
+    const hamburger = screen.getByRole('button', { name: /toggle menu/i });
+
+    // Open drawer
+    fireEvent.click(hamburger);
+    expect(document.body.style.position).toBe('fixed');
+
+    // Close drawer
+    fireEvent.click(hamburger);
+    expect(document.body.style.position).toBe('');
+  });
 });
