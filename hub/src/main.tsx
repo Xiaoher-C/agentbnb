@@ -26,6 +26,7 @@ import AuthGate from './components/AuthGate.js';
 import OwnerDashboard from './components/OwnerDashboard.js';
 import AgentList from './components/AgentList.js';
 import ProfilePage from './components/ProfilePage.js';
+import ActivityFeed from './components/ActivityFeed.js';
 import type { AppOutletContext } from './types.js';
 
 /** Wrapper: reads apiKey from outlet context and passes it to SharePage */
@@ -60,11 +61,7 @@ const router = createHashRouter([
       },
       {
         path: 'activity',
-        element: (
-          <div className="text-hub-text-muted py-12 text-center">
-            Activity — Phase 13
-          </div>
-        ),
+        element: <ActivityFeed />,
       },
       {
         path: 'docs',

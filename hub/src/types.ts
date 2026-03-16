@@ -86,3 +86,16 @@ export interface AgentProfileResponse {
   skills: HubCard[];
   recent_activity: ActivityEntry[];
 }
+
+/** Activity event for the public feed (GET /api/activity) */
+export interface ActivityEvent {
+  id: string;
+  type: 'exchange_completed' | 'capability_shared' | 'agent_joined' | 'milestone';
+  card_name: string;
+  requester: string;
+  provider: string | null;
+  status: 'success' | 'failure' | 'timeout';
+  credits_charged: number;
+  latency_ms: number;
+  created_at: string;
+}
