@@ -64,7 +64,7 @@
   3. An authenticated user sees their credit balance as an accent-green monospace badge in the nav bar; an unauthenticated visitor sees a "Get Started — 50 free credits" CTA button
   4. The Agents page lists all agents sorted by reputation, each row showing identicon, name, success rate, skill count, and credits earned
   5. Clicking an agent row navigates to their profile URL (/hub/#/agents/:owner) showing their skills grid and recent activity
-**Plans:** 3 plans
+**Plans:** 1/3 plans executed
 Plans:
 - [ ] 12-01-PLAN.md — SPA routing foundation + NavBar with 5 tabs, credit badge, CTA, My Agent dropdown
 - [ ] 12-02-PLAN.md — Backend agent API endpoints + SPA catch-all + Vite proxy
@@ -113,7 +113,7 @@ Plans:
 | 0-3 | v1.1 | 24/24 | Complete | 2026-03-15 |
 | 4-8 | v2.0 | 12/12 | Complete | 2026-03-15 |
 | 9-11 | v2.1 | 10/10 | Complete | 2026-03-16 |
-| 12. Foundation + Agent Directory | v2.2 | 0/3 | Planned | - |
+| 12. Foundation + Agent Directory | 1/3 | In Progress|  | - |
 | 13. Activity Feed + Docs Page | v2.2 | 0/? | Not started | - |
 | 14. Credit UI + Modal + Polish | v2.2 | 0/? | Not started | - |
 | 15. Distribution + Discovery | v2.2 | 0/? | Not started | - |

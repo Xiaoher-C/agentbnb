@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v2.2
 milestone_name: Full Hub + Distribution
-status: roadmap_ready
-stopped_at: "Roadmap created — ready to plan Phase 12"
-last_updated: "2026-03-16"
-last_activity: 2026-03-16 — Roadmap created for v2.2 (4 phases, 37 requirements)
+status: planning
+stopped_at: Completed 12-01-PLAN.md — react-router foundation + NavBar
+last_updated: "2026-03-16T13:05:56.565Z"
+last_activity: 2026-03-16 — Roadmap created (4 phases, 37 requirements, 100% coverage)
 progress:
   total_phases: 4
   completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
+  total_plans: 3
+  completed_plans: 1
   percent: 0
 ---
 
@@ -47,6 +47,7 @@ Progress: [░░░░░░░░░░] 0%
 | 13. Activity Feed + Docs Page | 0/? | Not started |
 | 14. Credit UI + Modal + Polish | 0/? | Not started |
 | 15. Distribution + Discovery | 0/? | Not started |
+| Phase 12-foundation-agent-directory P01 | 4m | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -72,6 +73,9 @@ Progress: [░░░░░░░░░░] 0%
 - [v2.2 roadmap]: iOS Safari scroll lock fix must go in CardModal.tsx — position-fixed + saved scroll position
 - [v2.2 roadmap]: Docs page uses static TypeScript data in lib/docs-content.ts, not react-markdown fetch
 - [v2.2 roadmap]: plugin.json version discipline — version in plugin.json only, not duplicated in marketplace.json
+- [Phase 12]: react-router 7.13.1 hash mode (createHashRouter) — no Fastify fallback config change required
+- [Phase 12]: AppOutletContext typed with satisfies keyword in Outlet context prop for type-safe child routes
+- [Phase 12]: NavBar credit balance badge: font-mono emerald pill showing 'cr {balance}', fetched via /me in App layout shell
 
 ### Pending Todos
 
@@ -84,8 +88,8 @@ Progress: [░░░░░░░░░░] 0%
 
 ## Session Continuity
 
-Last session: 2026-03-16
-Stopped at: Roadmap created — 4 phases (12-15), 37/37 requirements mapped, ready for /gsd:plan-phase 12
+Last session: 2026-03-16T13:05:56.563Z
+Stopped at: Completed 12-01-PLAN.md — react-router foundation + NavBar
 Resume file: None
 
 ---

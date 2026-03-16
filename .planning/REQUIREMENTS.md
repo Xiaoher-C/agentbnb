@@ -9,11 +9,11 @@ Requirements for v2.2 Full Hub + Distribution. Each maps to roadmap phases.
 
 ### Navigation & Routing
 
-- [ ] **NAV-01**: Hub uses hash-based SPA routing for all 7 pages with browser back/forward support
-- [ ] **NAV-02**: Nav bar shows 5 tabs: Discover, Agents, Activity, Docs, My Agent
-- [ ] **NAV-03**: Nav bar displays credit balance badge (monospace, accent green) for authenticated users
-- [ ] **NAV-04**: Nav bar shows "Get Started — 50 free credits" CTA button for unauthenticated users
-- [ ] **NAV-05**: My Agent is a dropdown menu: Dashboard / Share / Settings
+- [x] **NAV-01**: Hub uses hash-based SPA routing for all 7 pages with browser back/forward support
+- [x] **NAV-02**: Nav bar shows 5 tabs: Discover, Agents, Activity, Docs, My Agent
+- [x] **NAV-03**: Nav bar displays credit balance badge (monospace, accent green) for authenticated users
+- [x] **NAV-04**: Nav bar shows "Get Started — 50 free credits" CTA button for unauthenticated users
+- [x] **NAV-05**: My Agent is a dropdown menu: Dashboard / Share / Settings
 
 ### Agent Directory
 
@@ -105,11 +105,11 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| NAV-01 | Phase 12 | Pending |
-| NAV-02 | Phase 12 | Pending |
-| NAV-03 | Phase 12 | Pending |
-| NAV-04 | Phase 12 | Pending |
-| NAV-05 | Phase 12 | Pending |
+| NAV-01 | Phase 12 | Complete |
+| NAV-02 | Phase 12 | Complete |
+| NAV-03 | Phase 12 | Complete |
+| NAV-04 | Phase 12 | Complete |
+| NAV-05 | Phase 12 | Complete |
 | AGENT-01 | Phase 12 | Pending |
 | AGENT-02 | Phase 12 | Pending |
 | AGENT-03 | Phase 12 | Pending |
