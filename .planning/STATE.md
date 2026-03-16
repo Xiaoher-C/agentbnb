@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v2.2
 milestone_name: Full Hub + Distribution
 status: planning
-stopped_at: Completed 12-01-PLAN.md — react-router foundation + NavBar
-last_updated: "2026-03-16T13:05:56.565Z"
+stopped_at: Completed 12-02-PLAN.md — agent directory backend routes
+last_updated: "2026-03-16T13:07:53.000Z"
 last_activity: 2026-03-16 — Roadmap created (4 phases, 37 requirements, 100% coverage)
 progress:
   total_phases: 4
   completed_phases: 0
   total_plans: 3
-  completed_plans: 1
+  completed_plans: 2
   percent: 0
 ---
 
@@ -48,6 +48,7 @@ Progress: [░░░░░░░░░░] 0%
 | 14. Credit UI + Modal + Polish | 0/? | Not started |
 | 15. Distribution + Discovery | 0/? | Not started |
 | Phase 12-foundation-agent-directory P01 | 4m | 2 tasks | 7 files |
+| Phase 12-foundation-agent-directory P02 | 5 | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -76,6 +77,9 @@ Progress: [░░░░░░░░░░] 0%
 - [Phase 12]: react-router 7.13.1 hash mode (createHashRouter) — no Fastify fallback config change required
 - [Phase 12]: AppOutletContext typed with satisfies keyword in Outlet context prop for type-safe child routes
 - [Phase 12]: NavBar credit balance badge: font-mono emerald pill showing 'cr {balance}', fetched via /me in App layout shell
+- [Phase 12-02]: SPA catch-all uses setNotFoundHandler not server.get('/hub/*') — @fastify/static registers HEAD+GET wildcard, competing GET causes Fastify 5 to throw immediately
+- [Phase 12-02]: credits_earned computed via GROUP BY aggregate SQL on request_log, never stored as a column
+- [Phase 12-02]: listCards() CapabilityCard[] typed but stores v2 cards at runtime — cast via (card as unknown as CapabilityCardV2) for skills?.length access
 
 ### Pending Todos
 
@@ -88,8 +92,8 @@ Progress: [░░░░░░░░░░] 0%
 
 ## Session Continuity
 
-Last session: 2026-03-16T13:05:56.563Z
-Stopped at: Completed 12-01-PLAN.md — react-router foundation + NavBar
+Last session: 2026-03-16T13:07:52.998Z
+Stopped at: Completed 12-02-PLAN.md — agent directory backend routes
 Resume file: None
 
 ---

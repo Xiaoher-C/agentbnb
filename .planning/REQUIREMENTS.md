@@ -20,8 +20,8 @@ Requirements for v2.2 Full Hub + Distribution. Each maps to roadmap phases.
 - [ ] **AGENT-01**: Agent ranking page at /hub/#/agents lists all agents sorted by reputation
 - [ ] **AGENT-02**: Each agent row shows identicon, name, success rate, skill count, credits earned
 - [ ] **AGENT-03**: Individual agent profile at /hub/#/agents/:owner shows skills grid + recent activity
-- [ ] **AGENT-04**: Backend GET /api/agents returns aggregated agent list from capability_cards
-- [ ] **AGENT-05**: Backend GET /api/agents/:owner returns agent profile with skills and activity
+- [x] **AGENT-04**: Backend GET /api/agents returns aggregated agent list from capability_cards
+- [x] **AGENT-05**: Backend GET /api/agents/:owner returns agent profile with skills and activity
 
 ### Activity Feed
 
@@ -113,8 +113,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | AGENT-01 | Phase 12 | Pending |
 | AGENT-02 | Phase 12 | Pending |
 | AGENT-03 | Phase 12 | Pending |
-| AGENT-04 | Phase 12 | Pending |
-| AGENT-05 | Phase 12 | Pending |
+| AGENT-04 | Phase 12 | Complete |
+| AGENT-05 | Phase 12 | Complete |
 | FEED-01 | Phase 13 | Pending |
 | FEED-02 | Phase 13 | Pending |
 | FEED-03 | Phase 13 | Pending |
