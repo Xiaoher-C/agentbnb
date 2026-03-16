@@ -100,10 +100,16 @@ export function createRegistryServer(opts: RegistryServerOptions): FastifyInstan
       return reply.redirect('/hub/');
     });
 
-    // SPA catch-all: serve index.html for all /hub/* sub-paths (deep links, direct URL access)
-    // Must be AFTER fastifyStatic registration so real assets take priority
-    server.get('/hub/*', async (_request, reply) => {
-      return reply.sendFile('index.html');
+    // SPA catch-all: serve index.html when fastifyStatic calls callNotFound()
+    // for /hub/* paths that don't match real static files (deep links, hash routes).
+    // fastifyStatic's wildcard handler already owns GET+HEAD /hub/* — we must NOT
+    // register a competing route. Instead, use setNotFoundHandler to intercept the
+    // callNotFound() signal and serve index.html for hub sub-paths.
+    server.setNotFoundHandler(async (request, reply) => {
+      if (request.url.startsWith('/hub/')) {
+        return reply.sendFile('index.html');
+      }
+      return reply.code(404).send({ error: 'Not found' });
     });
   }
 

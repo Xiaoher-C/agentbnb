@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { createRegistryServer } from './server.js';
 import { openDatabase, insertCard } from './store.js';
+import { insertRequestLog } from './request-log.js';
 import { openCreditDb, bootstrapAgent } from '../credit/ledger.js';
 import { createPendingRequest } from '../autonomy/pending-requests.js';
 import type { CapabilityCard } from '../types/index.js';
@@ -1023,6 +1024,324 @@ describe('createRegistryServer — pending-requests endpoints', () => {
       url: '/me/pending-requests/some-id/reject',
     });
     expect(response.statusCode).toBe(401);
+
+    await server.close();
+  });
+});
+
+describe('createRegistryServer — GET /api/agents', () => {
+  let db: Database.Database;
+
+  beforeEach(() => {
+    db = openDatabase(':memory:');
+  });
+
+  it('returns { items: [], total: 0 } when no cards registered', async () => {
+    const server = createRegistryServer({ registryDb: db, silent: true });
+    await server.ready();
+
+    const response = await server.inject({ method: 'GET', url: '/api/agents' });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ items: [], total: 0 });
+
+    await server.close();
+  });
+
+  it('returns agents with required fields: owner, skill_count, success_rate, total_earned, member_since', async () => {
+    insertCard(db, {
+      spec_version: '1.0',
+      id: crypto.randomUUID(),
+      owner: 'agent-alice',
+      name: 'Alice Capability',
+      description: 'Alice does things',
+      level: 1,
+      inputs: [],
+      outputs: [],
+      pricing: { credits_per_call: 5 },
+      availability: { online: true },
+      metadata: { success_rate: 0.9 },
+    });
+
+    const server = createRegistryServer({ registryDb: db, silent: true });
+    await server.ready();
+
+    const response = await server.inject({ method: 'GET', url: '/api/agents' });
+    expect(response.statusCode).toBe(200);
+    const body = response.json() as { items: unknown[]; total: number };
+    expect(body.total).toBe(1);
+    expect(body.items).toHaveLength(1);
+    const agent = body.items[0] as {
+      owner: string;
+      skill_count: number;
+      success_rate: number | null;
+      total_earned: number;
+      member_since: string;
+    };
+    expect(agent.owner).toBe('agent-alice');
+    expect(typeof agent.skill_count).toBe('number');
+    expect(typeof agent.total_earned).toBe('number');
+    expect(typeof agent.member_since).toBe('string');
+
+    await server.close();
+  });
+
+  it('returns agents sorted by success_rate DESC then total_earned DESC', async () => {
+    const cardIdHigh = crypto.randomUUID();
+    const cardIdLow = crypto.randomUUID();
+
+    // Agent "high-rep" has success_rate 0.95
+    insertCard(db, {
+      spec_version: '1.0',
+      id: cardIdHigh,
+      owner: 'agent-high-rep',
+      name: 'High Rep',
+      description: 'High reputation',
+      level: 1,
+      inputs: [],
+      outputs: [],
+      pricing: { credits_per_call: 5 },
+      availability: { online: true },
+      metadata: { success_rate: 0.95 },
+    });
+
+    // Agent "low-rep" has success_rate 0.5
+    insertCard(db, {
+      spec_version: '1.0',
+      id: cardIdLow,
+      owner: 'agent-low-rep',
+      name: 'Low Rep',
+      description: 'Low reputation',
+      level: 1,
+      inputs: [],
+      outputs: [],
+      pricing: { credits_per_call: 5 },
+      availability: { online: true },
+      metadata: { success_rate: 0.5 },
+    });
+
+    const server = createRegistryServer({ registryDb: db, silent: true });
+    await server.ready();
+
+    const response = await server.inject({ method: 'GET', url: '/api/agents' });
+    expect(response.statusCode).toBe(200);
+    const body = response.json() as { items: Array<{ owner: string }> };
+    expect(body.items[0].owner).toBe('agent-high-rep');
+    expect(body.items[1].owner).toBe('agent-low-rep');
+
+    await server.close();
+  });
+
+  it('total_earned is 0 for agent with no request_log entries', async () => {
+    insertCard(db, {
+      spec_version: '1.0',
+      id: crypto.randomUUID(),
+      owner: 'agent-no-log',
+      name: 'No Log',
+      description: 'Agent with no requests',
+      level: 1,
+      inputs: [],
+      outputs: [],
+      pricing: { credits_per_call: 5 },
+      availability: { online: true },
+      metadata: {},
+    });
+
+    const server = createRegistryServer({ registryDb: db, silent: true });
+    await server.ready();
+
+    const response = await server.inject({ method: 'GET', url: '/api/agents' });
+    const body = response.json() as { items: Array<{ total_earned: number; success_rate: number | null }> };
+    expect(body.items[0].total_earned).toBe(0);
+    expect(body.items[0].success_rate).toBeNull();
+
+    await server.close();
+  });
+
+  it('total_earned is computed from request_log success entries only', async () => {
+    const cardId = crypto.randomUUID();
+    insertCard(db, {
+      spec_version: '1.0',
+      id: cardId,
+      owner: 'agent-with-log',
+      name: 'Logged Agent',
+      description: 'Agent with requests',
+      level: 1,
+      inputs: [],
+      outputs: [],
+      pricing: { credits_per_call: 10 },
+      availability: { online: true },
+      metadata: {},
+    });
+
+    // Insert a success log entry (10 credits)
+    insertRequestLog(db, {
+      id: crypto.randomUUID(),
+      card_id: cardId,
+      card_name: 'Logged Agent',
+      requester: 'some-requester',
+      status: 'success',
+      latency_ms: 100,
+      credits_charged: 10,
+      created_at: new Date().toISOString(),
+    });
+
+    // Insert a failure log entry (0 credits — should not count)
+    insertRequestLog(db, {
+      id: crypto.randomUUID(),
+      card_id: cardId,
+      card_name: 'Logged Agent',
+      requester: 'some-requester',
+      status: 'failure',
+      latency_ms: 50,
+      credits_charged: 0,
+      created_at: new Date().toISOString(),
+    });
+
+    const server = createRegistryServer({ registryDb: db, silent: true });
+    await server.ready();
+
+    const response = await server.inject({ method: 'GET', url: '/api/agents' });
+    const body = response.json() as { items: Array<{ total_earned: number }> };
+    expect(body.items[0].total_earned).toBe(10);
+
+    await server.close();
+  });
+});
+
+describe('createRegistryServer — GET /api/agents/:owner', () => {
+  let db: Database.Database;
+
+  beforeEach(() => {
+    db = openDatabase(':memory:');
+  });
+
+  it('returns 404 for unknown owner', async () => {
+    const server = createRegistryServer({ registryDb: db, silent: true });
+    await server.ready();
+
+    const response = await server.inject({ method: 'GET', url: '/api/agents/nonexistent-owner' });
+    expect(response.statusCode).toBe(404);
+    expect(response.json()).toEqual({ error: 'Agent not found' });
+
+    await server.close();
+  });
+
+  it('returns profile, skills, and recent_activity for known owner', async () => {
+    const cardId = crypto.randomUUID();
+    insertCard(db, {
+      spec_version: '1.0',
+      id: cardId,
+      owner: 'agent-bob',
+      name: 'Bob Capability',
+      description: 'Bob does things',
+      level: 1,
+      inputs: [],
+      outputs: [],
+      pricing: { credits_per_call: 5 },
+      availability: { online: true },
+      metadata: { success_rate: 0.8 },
+    });
+
+    const server = createRegistryServer({ registryDb: db, silent: true });
+    await server.ready();
+
+    const response = await server.inject({ method: 'GET', url: '/api/agents/agent-bob' });
+    expect(response.statusCode).toBe(200);
+    const body = response.json() as {
+      profile: { owner: string; skill_count: number; success_rate: number | null; total_earned: number; member_since: string };
+      skills: unknown[];
+      recent_activity: unknown[];
+    };
+    expect(body.profile.owner).toBe('agent-bob');
+    expect(typeof body.profile.skill_count).toBe('number');
+    expect(typeof body.profile.total_earned).toBe('number');
+    expect(typeof body.profile.member_since).toBe('string');
+    expect(Array.isArray(body.skills)).toBe(true);
+    expect(body.skills).toHaveLength(1);
+    expect(Array.isArray(body.recent_activity)).toBe(true);
+
+    await server.close();
+  });
+
+  it('skills array contains the owner\'s cards', async () => {
+    const cardId1 = crypto.randomUUID();
+    const cardId2 = crypto.randomUUID();
+    insertCard(db, {
+      spec_version: '1.0',
+      id: cardId1,
+      owner: 'agent-charlie',
+      name: 'Charlie Skill One',
+      description: 'First skill',
+      level: 1,
+      inputs: [],
+      outputs: [],
+      pricing: { credits_per_call: 5 },
+      availability: { online: true },
+      metadata: {},
+    });
+    insertCard(db, {
+      spec_version: '1.0',
+      id: cardId2,
+      owner: 'agent-charlie',
+      name: 'Charlie Skill Two',
+      description: 'Second skill',
+      level: 2,
+      inputs: [],
+      outputs: [],
+      pricing: { credits_per_call: 10 },
+      availability: { online: false },
+      metadata: {},
+    });
+
+    const server = createRegistryServer({ registryDb: db, silent: true });
+    await server.ready();
+
+    const response = await server.inject({ method: 'GET', url: '/api/agents/agent-charlie' });
+    expect(response.statusCode).toBe(200);
+    const body = response.json() as { skills: Array<{ owner: string }> };
+    expect(body.skills).toHaveLength(2);
+    for (const skill of body.skills) {
+      expect(skill.owner).toBe('agent-charlie');
+    }
+
+    await server.close();
+  });
+
+  it('recent_activity contains request log entries for the owner', async () => {
+    const cardId = crypto.randomUUID();
+    insertCard(db, {
+      spec_version: '1.0',
+      id: cardId,
+      owner: 'agent-diana',
+      name: 'Diana Cap',
+      description: 'Diana capability',
+      level: 1,
+      inputs: [],
+      outputs: [],
+      pricing: { credits_per_call: 5 },
+      availability: { online: true },
+      metadata: {},
+    });
+
+    insertRequestLog(db, {
+      id: crypto.randomUUID(),
+      card_id: cardId,
+      card_name: 'Diana Cap',
+      requester: 'some-agent',
+      status: 'success',
+      latency_ms: 200,
+      credits_charged: 5,
+      created_at: new Date().toISOString(),
+    });
+
+    const server = createRegistryServer({ registryDb: db, silent: true });
+    await server.ready();
+
+    const response = await server.inject({ method: 'GET', url: '/api/agents/agent-diana' });
+    expect(response.statusCode).toBe(200);
+    const body = response.json() as { recent_activity: Array<{ card_name: string }> };
+    expect(body.recent_activity).toHaveLength(1);
+    expect(body.recent_activity[0].card_name).toBe('Diana Cap');
 
     await server.close();
   });
