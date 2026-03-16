@@ -79,7 +79,7 @@ Plans:
   2. New activity events prepend to the top of the feed; the user does not lose their place when the feed refreshes
   3. The Docs page shows Getting Started, multi-tool install commands with copy buttons, Card Schema reference, and API endpoint reference — all without any network request
   4. Install commands on the Docs page are copyable and cover Claude Code, OpenClaw, Antigravity, and CLI
-**Plans:** 2 plans
+**Plans:** 1/2 plans executed
 Plans:
 - [ ] 13-01-PLAN.md — Activity feed backend endpoint + frontend hook and components with 10s polling
 - [ ] 13-02-PLAN.md — Docs page with static content, CopyButton, and sidebar navigation
@@ -117,7 +117,7 @@ Plans:
 | 4-8 | v2.0 | 12/12 | Complete | 2026-03-15 |
 | 9-11 | v2.1 | 10/10 | Complete | 2026-03-16 |
 | 12. Foundation + Agent Directory | 3/3 | Complete    | 2026-03-16 | - |
-| 13. Activity Feed + Docs Page | v2.2 | 0/2 | Planning | - |
+| 13. Activity Feed + Docs Page | 1/2 | In Progress|  | - |
 | 14. Credit UI + Modal + Polish | v2.2 | 0/? | Not started | - |
 | 15. Distribution + Discovery | v2.2 | 0/? | Not started | - |
 

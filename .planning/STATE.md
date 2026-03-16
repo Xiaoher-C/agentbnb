@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v2.2
 milestone_name: Full Hub + Distribution
 status: planning
-stopped_at: Completed 12-03-PLAN.md — frontend agent directory
-last_updated: "2026-03-16T13:17:51.471Z"
+stopped_at: Completed 13-01-PLAN.md — activity feed backend + frontend
+last_updated: "2026-03-16T13:42:52.790Z"
 last_activity: 2026-03-16 — Roadmap created (4 phases, 37 requirements, 100% coverage)
 progress:
   total_phases: 4
   completed_phases: 1
-  total_plans: 3
-  completed_plans: 3
+  total_plans: 5
+  completed_plans: 4
   percent: 0
 ---
 
@@ -50,6 +50,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 12-foundation-agent-directory P01 | 4m | 2 tasks | 7 files |
 | Phase 12-foundation-agent-directory P02 | 5 | 2 tasks | 3 files |
 | Phase 12-foundation-agent-directory P03 | 3min | 2 tasks | 5 files |
+| Phase 13-activity-feed-docs-page P01 | 4m | 2 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -83,6 +84,9 @@ Progress: [░░░░░░░░░░] 0%
 - [Phase 12-02]: listCards() CapabilityCard[] typed but stores v2 cards at runtime — cast via (card as unknown as CapabilityCardV2) for skills?.length access
 - [Phase Phase 12-03]: ProfilePage uses useOutletContext setSelectedCard to open CardModal — consistent with DiscoverPage pattern
 - [Phase Phase 12-03]: timeAgo() kept inline in ProfilePage — single-use, plan specified inline implementation
+- [Phase Phase 13]: Activity feed uses ISO string since param (not SincePeriod enum) to support arbitrary timestamp-based polling
+- [Phase Phase 13]: auto_request rows excluded at SQL level; auto_share rows included — single WHERE clause filter
+- [Phase Phase 13]: Event type derived client-side from action_type to avoid computed DB columns
 
 ### Pending Todos
 
@@ -95,8 +99,8 @@ Progress: [░░░░░░░░░░] 0%
 
 ## Session Continuity
 
-Last session: 2026-03-16T13:13:33.636Z
-Stopped at: Completed 12-03-PLAN.md — frontend agent directory
+Last session: 2026-03-16T13:42:45.911Z
+Stopped at: Completed 13-01-PLAN.md — activity feed backend + frontend
 Resume file: None
 
 ---

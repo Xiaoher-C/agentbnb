@@ -25,10 +25,10 @@ Requirements for v2.2 Full Hub + Distribution. Each maps to roadmap phases.
 
 ### Activity Feed
 
-- [ ] **FEED-01**: Activity feed page at /hub/#/activity shows public exchange history
-- [ ] **FEED-02**: Feed displays 4 event types: exchange_completed, capability_shared, agent_joined, milestone
-- [ ] **FEED-03**: Feed polls backend every 10 seconds with prepend-only updates
-- [ ] **FEED-04**: Backend GET /api/activity returns paginated activity from request_log JOIN capability_cards
+- [x] **FEED-01**: Activity feed page at /hub/#/activity shows public exchange history
+- [x] **FEED-02**: Feed displays 4 event types: exchange_completed, capability_shared, agent_joined, milestone
+- [x] **FEED-03**: Feed polls backend every 10 seconds with prepend-only updates
+- [x] **FEED-04**: Backend GET /api/activity returns paginated activity from request_log JOIN capability_cards
 
 ### Documentation
 
@@ -115,10 +115,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | AGENT-03 | Phase 12 | Complete |
 | AGENT-04 | Phase 12 | Complete |
 | AGENT-05 | Phase 12 | Complete |
-| FEED-01 | Phase 13 | Pending |
-| FEED-02 | Phase 13 | Pending |
-| FEED-03 | Phase 13 | Pending |
-| FEED-04 | Phase 13 | Pending |
+| FEED-01 | Phase 13 | Complete |
+| FEED-02 | Phase 13 | Complete |
+| FEED-03 | Phase 13 | Complete |
+| FEED-04 | Phase 13 | Complete |
 | DOCS-01 | Phase 13 | Pending |
 | DOCS-02 | Phase 13 | Pending |
 | DOCS-03 | Phase 13 | Pending |
