@@ -41,9 +41,9 @@ Requirements for v2.2 Full Hub + Distribution. Each maps to roadmap phases.
 
 - [x] **CREDIT-01**: `cr` currency symbol used consistently across all credit displays
 - [x] **CREDIT-02**: Card display shows credits in accent color with monospace `cr` prefix
-- [ ] **CREDIT-03**: My Agent dashboard shows credit balance with reserve/available breakdown
-- [ ] **CREDIT-04**: My Agent dashboard shows 30-day earning chart (recharts AreaChart)
-- [ ] **CREDIT-05**: My Agent dashboard shows recent transaction history
+- [x] **CREDIT-03**: My Agent dashboard shows credit balance with reserve/available breakdown
+- [x] **CREDIT-04**: My Agent dashboard shows 30-day earning chart (recharts AreaChart)
+- [x] **CREDIT-05**: My Agent dashboard shows recent transaction history
 - [x] **CREDIT-06**: Backend GET /me/transactions returns credit transaction history
 
 ### Modal Enhancement
@@ -64,7 +64,7 @@ Requirements for v2.2 Full Hub + Distribution. Each maps to roadmap phases.
 
 - [x] **POLISH-01**: All pages responsive — cards stack on mobile, nav collapses to hamburger
 - [x] **POLISH-02**: Modal becomes full-screen sheet on mobile with touch-friendly tap targets (44px min)
-- [ ] **POLISH-03**: OwnerDashboard migrated from slate-* to hub-* design tokens
+- [x] **POLISH-03**: OwnerDashboard migrated from slate-* to hub-* design tokens
 - [x] **POLISH-04**: Loading skeletons for all async data fetches
 - [x] **POLISH-05**: iOS Safari scroll lock fix for all modals
 
@@ -125,16 +125,16 @@ Which phases cover which requirements. Updated during roadmap creation.
 | DOCS-04 | Phase 13 | Complete |
 | CREDIT-01 | Phase 14 | Complete |
 | CREDIT-02 | Phase 14 | Complete |
-| CREDIT-03 | Phase 14 | Pending |
-| CREDIT-04 | Phase 14 | Pending |
-| CREDIT-05 | Phase 14 | Pending |
+| CREDIT-03 | Phase 14 | Complete |
+| CREDIT-04 | Phase 14 | Complete |
+| CREDIT-05 | Phase 14 | Complete |
 | CREDIT-06 | Phase 14 | Complete |
 | MODAL-01 | Phase 14 | Complete |
 | MODAL-02 | Phase 14 | Complete |
 | MODAL-03 | Phase 14 | Complete |
 | POLISH-01 | Phase 14 | Complete |
 | POLISH-02 | Phase 14 | Complete |
-| POLISH-03 | Phase 14 | Pending |
+| POLISH-03 | Phase 14 | Complete |
 | POLISH-04 | Phase 14 | Complete |
 | POLISH-05 | Phase 14 | Complete |
 | DIST-01 | Phase 15 | Pending |

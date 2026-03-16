@@ -47,7 +47,7 @@
 
 - [x] **Phase 12: Foundation + Agent Directory** - SPA routing, 5-tab nav, credit badge, CTA, agent ranking list and individual profile pages (completed 2026-03-16)
 - [x] **Phase 13: Activity Feed + Docs Page** - Public exchange feed with 10s polling, 4-section embedded documentation (completed 2026-03-16)
-- [ ] **Phase 14: Credit UI + Modal + Polish** - Credit dashboard with earning chart, modal enhancements, design token migration, mobile responsive
+- [x] **Phase 14: Credit UI + Modal + Polish** - Credit dashboard with earning chart, modal enhancements, design token migration, mobile responsive (completed 2026-03-16)
 - [ ] **Phase 15: Distribution + Discovery** - Claude Code plugin, cross-tool SKILL.md, GitHub topics, README visual overhaul
 
 ---
@@ -94,7 +94,7 @@ Plans:
   3. The Skill Detail Modal shows a "Request this skill" button with a copyable CLI command, a real-time availability indicator, and a link to the skill owner's agent profile
   4. On a mobile viewport (< 768px), the nav collapses to a hamburger menu, card grids stack to single column, and the Skill Detail Modal becomes a full-screen bottom sheet with 44px tap targets
   5. All async data fetches show loading skeletons while data is pending; the OwnerDashboard uses hub-* design tokens with no slate-* token leakage
-**Plans:** 3/4 plans executed
+**Plans:** 4/4 plans complete
 Plans:
 - [ ] 14-01-PLAN.md — formatCredits cr prefix, backend /me/transactions, useTransactions hook, Skeleton component
 - [ ] 14-02-PLAN.md — OwnerDashboard credit dashboard with EarningsChart, TransactionHistory, and slate-to-hub token migration
@@ -123,7 +123,7 @@ Plans:
 | 9-11 | v2.1 | 10/10 | Complete | 2026-03-16 |
 | 12. Foundation + Agent Directory | 3/3 | Complete    | 2026-03-16 | - |
 | 13. Activity Feed + Docs Page | 2/2 | Complete    | 2026-03-16 | - |
-| 14. Credit UI + Modal + Polish | 3/4 | In Progress|  | - |
+| 14. Credit UI + Modal + Polish | 4/4 | Complete   | 2026-03-16 | - |
 | 15. Distribution + Discovery | v2.2 | 0/? | Not started | - |
 
 **Total:** 20 phases, 55+ plans, 3 milestones shipped, 1 in progress.

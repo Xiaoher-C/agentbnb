@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v2.2
 milestone_name: Full Hub + Distribution
 status: planning
-stopped_at: "Completed 14-03-PLAN.md — CardModal enhancements: iOS scroll lock, request button, availability, owner link, mobile sheet"
-last_updated: "2026-03-16T14:48:22.254Z"
+stopped_at: Completed 14-02-PLAN.md — EarningsChart, TransactionHistory, hub-* migration
+last_updated: "2026-03-16T14:50:21.122Z"
 last_activity: 2026-03-16 — Roadmap created (4 phases, 37 requirements, 100% coverage)
 progress:
   total_phases: 4
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 9
-  completed_plans: 8
+  completed_plans: 9
   percent: 0
 ---
 
@@ -55,6 +55,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 14-credit-ui-modal-polish P01 | 7m | 2 tasks | 8 files |
 | Phase 14-credit-ui-modal-polish P04 | 2 | 1 tasks | 2 files |
 | Phase 14-credit-ui-modal-polish P03 | 4m | 2 tasks | 3 files |
+| Phase 14-credit-ui-modal-polish P02 | 5m | 2 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -102,6 +103,9 @@ Progress: [░░░░░░░░░░] 0%
 - [Phase Phase 14-03]: iOS scroll lock uses position-fixed + saved scrollY in CardModal, not overflow:hidden — prevents Safari rubber-band bug
 - [Phase Phase 14-03]: Owner profile navigation uses setTimeout(160) after handleClose() to ensure 150ms close animation completes before route change
 - [Phase Phase 14-03]: CopyButton reused from Phase 13 in CardModal request section — DRY pattern, consistent copy UX
+- [Phase Phase 14-02]: recharts mocked as passthrough divs in jsdom tests — vi.mock('recharts') with data-testid on containers
+- [Phase Phase 14-02]: RESERVE_FLOOR hardcoded as 20 in OwnerDashboard — BudgetManager is server-side only, frontend shows static reserve floor
+- [Phase Phase 14-02]: React.memo on EarningsChart — prevents unnecessary re-renders from parent polling cycle (3 useRequests hooks every 30s)
 
 ### Pending Todos
 
@@ -114,8 +118,8 @@ Progress: [░░░░░░░░░░] 0%
 
 ## Session Continuity
 
-Last session: 2026-03-16T14:48:22.252Z
-Stopped at: Completed 14-03-PLAN.md — CardModal enhancements: iOS scroll lock, request button, availability, owner link, mobile sheet
+Last session: 2026-03-16T14:50:12.174Z
+Stopped at: Completed 14-02-PLAN.md — EarningsChart, TransactionHistory, hub-* migration
 Resume file: None
 
 ---
