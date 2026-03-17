@@ -127,7 +127,8 @@ export function applyInputMapping(
         pathParams[key] = String(value);
         break;
       case 'header':
-        headers[key] = String(value);
+        // Strip CRLF to prevent header injection attacks
+        headers[key] = String(value).replace(/[\r\n]/g, '');
         break;
     }
   }

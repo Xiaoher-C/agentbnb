@@ -2,9 +2,9 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { OpenClawBridge } from './openclaw-bridge.js';
 import type { OpenClawSkillConfig } from './skill-config.js';
 
-// Mock node:child_process at module level so ESM can replace execSync
+// Mock node:child_process at module level so ESM can replace execFileSync
 vi.mock('node:child_process', () => ({
-  execSync: vi.fn(),
+  execFileSync: vi.fn(),
 }));
 
 import * as child_process from 'node:child_process';
@@ -142,25 +142,27 @@ describe('OpenClawBridge — process channel', () => {
   });
 
   it('spawns openclaw run command with JSON input', async () => {
-    const execSyncSpy = vi
-      .spyOn(child_process, 'execSync')
+    const execFileSyncSpy = vi
+      .spyOn(child_process, 'execFileSync')
       .mockReturnValue(Buffer.from(JSON.stringify({ result: 'done' })));
 
     const bridge = new OpenClawBridge();
     const config = makeConfig({ channel: 'process' });
     const result = await bridge.execute(config, { key: 'value' });
 
-    expect(execSyncSpy).toHaveBeenCalledOnce();
-    const cmd = execSyncSpy.mock.calls[0]![0] as string;
-    expect(cmd).toContain('openclaw run my-agent');
-    expect(cmd).toContain('--input');
+    expect(execFileSyncSpy).toHaveBeenCalledOnce();
+    const args = execFileSyncSpy.mock.calls[0]![1] as string[];
+    expect(execFileSyncSpy.mock.calls[0]![0]).toBe('openclaw');
+    expect(args[0]).toBe('run');
+    expect(args[1]).toBe('my-agent');
+    expect(args[2]).toBe('--input');
 
     expect(result.success).toBe(true);
     expect(result.result).toEqual({ result: 'done' });
   });
 
   it('passes task payload as JSON in --input flag', async () => {
-    vi.spyOn(child_process, 'execSync').mockImplementation((cmd: unknown) => {
+    vi.spyOn(child_process, 'execFileSync').mockImplementation((cmd: unknown) => {
       const cmdStr = cmd as string;
       const match = cmdStr.match(/--input '(.+)'$/);
       if (!match) throw new Error('No --input found in: ' + cmdStr);
@@ -176,7 +178,7 @@ describe('OpenClawBridge — process channel', () => {
   });
 
   it('returns error when command fails', async () => {
-    vi.spyOn(child_process, 'execSync').mockImplementation(() => {
+    vi.spyOn(child_process, 'execFileSync').mockImplementation(() => {
       throw new Error('Command not found: openclaw');
     });
 
@@ -189,7 +191,7 @@ describe('OpenClawBridge — process channel', () => {
   });
 
   it('returns error when stdout is invalid JSON', async () => {
-    vi.spyOn(child_process, 'execSync').mockReturnValue(Buffer.from('not json'));
+    vi.spyOn(child_process, 'execFileSync').mockReturnValue(Buffer.from('not json'));
 
     const bridge = new OpenClawBridge();
     const config = makeConfig({ channel: 'process' });
@@ -306,17 +308,18 @@ describe('OpenClawBridge — timeout', () => {
     expect(result.error).toMatch(/timed out|aborted/i);
   });
 
-  it('process: timeout option is passed to execSync', async () => {
-    const execSyncSpy = vi
-      .spyOn(child_process, 'execSync')
+  it('process: timeout option is passed to execFileSync', async () => {
+    const execFileSyncSpy = vi
+      .spyOn(child_process, 'execFileSync')
       .mockReturnValue(Buffer.from(JSON.stringify({ ok: true })));
 
     const bridge = new OpenClawBridge();
     const config = makeConfig({ channel: 'process', timeout_ms: 3000 });
     await bridge.execute(config, {});
 
-    expect(execSyncSpy).toHaveBeenCalledOnce();
-    const opts = execSyncSpy.mock.calls[0]![1] as { timeout?: number };
+    expect(execFileSyncSpy).toHaveBeenCalledOnce();
+    // execFileSync('openclaw', [...args], { timeout })
+    const opts = execFileSyncSpy.mock.calls[0]![2] as { timeout?: number };
     expect(opts?.timeout).toBe(3000);
   });
 });

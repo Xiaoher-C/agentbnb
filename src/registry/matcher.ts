@@ -28,16 +28,18 @@ export function searchCards(
   query: string,
   filters: SearchFilters = {}
 ): CapabilityCard[] {
-  // Build FTS5 MATCH query — wrap each word in double-quotes to treat as phrase
-  // tokens. This prevents FTS5 from interpreting hyphens, *, etc. as operators.
+  // Build FTS5 MATCH query — sanitize input to prevent FTS5 injection.
+  // Strip FTS5 operators and wrap each word in double-quotes to treat as
+  // literal phrase tokens. Hyphens within words are preserved (common in
+  // skill names like "text-to-speech").
   const words = query
     .trim()
     .split(/\s+/)
-    .map((w) => w.replace(/"/g, ''))
+    .map((w) => w.replace(/["*^{}():]/g, ''))  // Strip FTS5 operators and quotes
     .filter((w) => w.length > 0);
   if (words.length === 0) return [];
 
-  // Each word is quoted so special chars are treated as literals inside the token
+  // Each word is quoted so remaining chars are treated as literals
   const ftsQuery = words.map((w) => `"${w}"`).join(' OR ');
 
   // Build filter conditions on the main table joined via rowid

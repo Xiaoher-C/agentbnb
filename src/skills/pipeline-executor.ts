@@ -1,12 +1,48 @@
-import { exec } from 'node:child_process';
+import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import type { ExecutorMode, ExecutionResult } from './executor.js';
 import { SkillExecutor } from './executor.js';
 import type { SkillConfig } from './skill-config.js';
 import type { PipelineSkillConfig } from './skill-config.js';
-import { interpolate, interpolateObject } from '../utils/interpolation.js';
+import { interpolateObject } from '../utils/interpolation.js';
 
-const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
+
+/**
+ * Shell-escapes a string value to prevent injection.
+ */
+function shellEscape(value: string): string {
+  return "'" + value.replace(/'/g, "'\\''") + "'";
+}
+
+/**
+ * Interpolates a command template with shell-escaped substitutions.
+ */
+function safeInterpolateCommand(
+  template: string,
+  context: Record<string, unknown>,
+): string {
+  return template.replace(/\$\{([^}]+)\}/g, (_match, expr: string) => {
+    const parts = expr.split('.');
+    let current: unknown = context;
+    for (const part of parts) {
+      if (current === null || typeof current !== 'object') return '';
+      const bracketMatch = part.match(/^(\w+)\[(\d+)\]$/);
+      if (bracketMatch) {
+        current = (current as Record<string, unknown>)[bracketMatch[1]!];
+        if (Array.isArray(current)) {
+          current = current[parseInt(bracketMatch[2]!, 10)];
+        } else {
+          return '';
+        }
+      } else {
+        current = (current as Record<string, unknown>)[part];
+      }
+    }
+    if (current === undefined || current === null) return '';
+    return shellEscape(String(current));
+  });
+}
 
 /**
  * Runtime context accumulated as pipeline steps execute.
@@ -105,14 +141,14 @@ export class PipelineExecutor implements ExecutorMode {
         }
         stepResult = subResult.result;
       } else if ('command' in step && step.command) {
-        // Shell command execution — interpolate command string against context
-        const interpolatedCommand = interpolate(
+        // Shell command execution — interpolate with shell escaping to prevent injection
+        const interpolatedCommand = safeInterpolateCommand(
           step.command,
           context as unknown as Record<string, unknown>,
         );
 
         try {
-          const { stdout } = await execAsync(interpolatedCommand, { timeout: 30000 });
+          const { stdout } = await execFileAsync('/bin/sh', ['-c', interpolatedCommand], { timeout: 30000 });
           stepResult = stdout.trim();
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);

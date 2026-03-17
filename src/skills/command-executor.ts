@@ -1,15 +1,55 @@
-import { exec, type ExecOptions } from 'child_process';
+import { execFile, type ExecFileOptions } from 'child_process';
 import type { ExecutorMode, ExecutionResult } from './executor.js';
 import type { SkillConfig, CommandSkillConfig } from './skill-config.js';
-import { interpolate } from '../utils/interpolation.js';
+// interpolate import removed — using safeInterpolateCommand with shell escaping instead
 
-/** Promisified exec that returns string buffers. */
-function execAsync(
-  command: string,
-  options: ExecOptions,
+/**
+ * Shell-escapes a string value to prevent injection.
+ * Wraps in single quotes and escapes embedded single quotes.
+ */
+function shellEscape(value: string): string {
+  return "'" + value.replace(/'/g, "'\\''") + "'";
+}
+
+/**
+ * Interpolates a command template, shell-escaping all substituted values
+ * to prevent shell injection attacks.
+ */
+function safeInterpolateCommand(
+  template: string,
+  context: Record<string, unknown>,
+): string {
+  return template.replace(/\$\{([^}]+)\}/g, (_match, expr: string) => {
+    // Resolve the expression from context
+    const parts = expr.split('.');
+    let current: unknown = context;
+    for (const part of parts) {
+      if (current === null || typeof current !== 'object') return '';
+      const bracketMatch = part.match(/^(\w+)\[(\d+)\]$/);
+      if (bracketMatch) {
+        current = (current as Record<string, unknown>)[bracketMatch[1]!];
+        if (Array.isArray(current)) {
+          current = current[parseInt(bracketMatch[2]!, 10)];
+        } else {
+          return '';
+        }
+      } else {
+        current = (current as Record<string, unknown>)[part];
+      }
+    }
+    if (current === undefined || current === null) return '';
+    return shellEscape(String(current));
+  });
+}
+
+/** Promisified execFile that returns string buffers. */
+function execFileAsync(
+  file: string,
+  args: string[],
+  options: ExecFileOptions,
 ): Promise<{ stdout: string; stderr: string }> {
   return new Promise((resolve, reject) => {
-    exec(command, options, (error, stdout, stderr) => {
+    execFile(file, args, options, (error, stdout, stderr) => {
       const stdoutStr = typeof stdout === 'string' ? stdout : stdout.toString();
       const stderrStr = typeof stderr === 'string' ? stderr : stderr.toString();
       if (error) {
@@ -63,21 +103,20 @@ export class CommandExecutor implements ExecutorMode {
       }
     }
 
-    // Step 2: Interpolate command string with params
-    const interpolatedCommand = interpolate(cmdConfig.command, { params });
+    // Step 2: Interpolate command string with shell-escaped params
+    const interpolatedCommand = safeInterpolateCommand(cmdConfig.command, { params });
 
-    // Step 3: Execute command
+    // Step 3: Execute command via /bin/sh -c (execFile avoids double shell parsing)
     const timeout = cmdConfig.timeout_ms ?? 30000;
     const cwd = cmdConfig.working_dir ?? process.cwd();
 
     let stdout: string;
 
     try {
-      const result = await execAsync(interpolatedCommand, {
+      const result = await execFileAsync('/bin/sh', ['-c', interpolatedCommand], {
         timeout,
         cwd,
         maxBuffer: 10 * 1024 * 1024, // 10 MB
-        shell: '/bin/sh',
       });
       stdout = result.stdout;
     } catch (err) {

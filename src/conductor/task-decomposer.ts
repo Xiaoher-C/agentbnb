@@ -141,11 +141,11 @@ export function decompose(task: string, _availableCapabilities?: string[]): SubT
     const ids = template.steps.map(() => randomUUID());
 
     return template.steps.map((step, i): SubTask => ({
-      id: ids[i],
+      id: ids[i]!,
       description: step.description,
       required_capability: step.required_capability,
       params: {},
-      depends_on: step.depends_on_indices.map((idx) => ids[idx]),
+      depends_on: step.depends_on_indices.map((idx) => ids[idx]!),
       estimated_credits: step.estimated_credits,
     }));
   }

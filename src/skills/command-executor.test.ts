@@ -110,11 +110,29 @@ describe('CommandExecutor', () => {
 
   it('substitutes multiple params in command template', async () => {
     const config = makeConfig({
-      command: 'echo "${params.a} ${params.b}"',
+      command: 'echo ${params.a} ${params.b}',
       output_type: 'text',
     });
     const result = await executor.execute(config, { a: 'hello', b: 'world' });
     expect(result.success).toBe(true);
     expect(result.result).toBe('hello world');
+  });
+
+  it('prevents shell injection via params', async () => {
+    const config = makeConfig({
+      command: 'echo ${params.text}',
+      output_type: 'text',
+    });
+    // Malicious input attempting command injection
+    const result = await executor.execute(config, {
+      text: "hello'; rm -rf /; echo '",
+    });
+    expect(result.success).toBe(true);
+    // Shell-escaped: the entire malicious payload is echoed as a literal string
+    // (single quotes prevent shell interpretation of ; and other operators)
+    const output = result.result as string;
+    expect(output).toContain("hello");
+    expect(output).toContain("rm -rf"); // printed as text, NOT executed
+    expect(output).toContain("echo"); // the injected echo is literal text
   });
 });

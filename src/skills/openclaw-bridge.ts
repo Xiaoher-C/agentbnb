@@ -1,4 +1,4 @@
-import { execSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import type { ExecutorMode, ExecutionResult } from './executor.js';
 import type { SkillConfig, OpenClawSkillConfig } from './skill-config.js';
 
@@ -81,8 +81,16 @@ async function executeWebhook(
 }
 
 /**
+ * Validates an agent name to prevent command injection.
+ * Only allows alphanumeric, hyphens, underscores, and dots.
+ */
+function validateAgentName(name: string): boolean {
+  return /^[a-zA-Z0-9._-]+$/.test(name);
+}
+
+/**
  * Executes the process channel: spawns `openclaw run <agent_name> --input '<JSON>'`
- * via child_process.execSync and parses stdout as JSON.
+ * via child_process.execFileSync (no shell interpolation) and parses stdout as JSON.
  *
  * @param config - OpenClaw skill config.
  * @param payload - Task payload to pass via --input flag.
@@ -93,11 +101,22 @@ function executeProcess(
   payload: Record<string, unknown>,
 ): Omit<ExecutionResult, 'latency_ms'> {
   const timeoutMs = config.timeout_ms ?? DEFAULT_TIMEOUT_MS;
+
+  // Validate agent_name to prevent injection
+  if (!validateAgentName(config.agent_name)) {
+    return {
+      success: false,
+      error: `Invalid agent name: "${config.agent_name}" (only alphanumeric, hyphens, underscores, dots allowed)`,
+    };
+  }
+
   const inputJson = JSON.stringify(payload);
-  const cmd = `openclaw run ${config.agent_name} --input '${inputJson}'`;
 
   try {
-    const stdout = execSync(cmd, { timeout: timeoutMs });
+    // Use execFileSync with array args — no shell, no injection
+    const stdout = execFileSync('openclaw', ['run', config.agent_name, '--input', inputJson], {
+      timeout: timeoutMs,
+    });
     const text = stdout.toString().trim();
     const result: unknown = JSON.parse(text);
     return { success: true, result };

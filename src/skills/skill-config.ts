@@ -157,12 +157,21 @@ export type ConductorSkillConfig = z.infer<typeof ConductorSkillConfigSchema>;
 /**
  * Expands `${VAR_NAME}` patterns in a string using process.env.
  *
+ * Only matches env-var-style names: uppercase letters, digits, and underscores
+ * (e.g. `${API_KEY}`, `${MY_TOKEN_123}`). Patterns containing dots or lowercase
+ * letters (e.g. `${params.text}`, `${prev.result}`) are left untouched — those
+ * are runtime interpolation placeholders handled by the interpolation engine.
+ *
  * @param value - The string potentially containing `${ENV_VAR}` references.
- * @returns The string with all env var references replaced.
+ * @returns The string with env var references replaced; runtime placeholders preserved.
  * @throws Error if a referenced env var is not defined.
  */
 export function expandEnvVars(value: string): string {
   return value.replace(/\$\{([^}]+)\}/g, (_match, varName: string) => {
+    // Skip runtime interpolation placeholders (contain dots or lowercase letters)
+    if (/[.a-z]/.test(varName)) {
+      return _match;
+    }
     const envValue = process.env[varName];
     if (envValue === undefined) {
       throw new Error(`Environment variable "${varName}" is not defined`);
