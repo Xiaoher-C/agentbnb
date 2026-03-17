@@ -91,10 +91,10 @@ Requirements for v2.3 Launch Ready. Each maps to roadmap phases 16-19.
 
 ### Hub Below-Fold Sections
 
-- [ ] **FOLD-01**: "Compatible With" section below the Discover card grid using Marquee component — shows tool/framework logos
-- [ ] **FOLD-02**: FAQ accordion section with common questions about AgentBnB
-- [ ] **FOLD-03**: Brief description / value proposition section explaining the protocol
-- [ ] **FOLD-04**: Below-fold sections maintain the existing minimalist dark aesthetic
+- [x] **FOLD-01**: "Compatible With" section below the Discover card grid using Marquee component — shows tool/framework logos
+- [x] **FOLD-02**: FAQ accordion section with common questions about AgentBnB
+- [x] **FOLD-03**: Brief description / value proposition section explaining the protocol
+- [x] **FOLD-04**: Below-fold sections maintain the existing minimalist dark aesthetic
 
 ### Mascot
 

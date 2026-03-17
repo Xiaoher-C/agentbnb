@@ -57,7 +57,7 @@
 ### v2.3 Launch Ready
 
 - [x] **Phase 16: SPA Routing Fix + Hub Enhancement** — Fix reply.sendFile 500 error, extract Magic UI components into Hub, add doodle creature mascot (completed 2026-03-17)
-- [ ] **Phase 17: Below-Fold Sections** — Compatible With marquee, FAQ accordion, brief description below Discover card grid
+- [x] **Phase 17: Below-Fold Sections** — Compatible With marquee, FAQ accordion, brief description below Discover card grid (completed 2026-03-17)
 - [ ] **Phase 18: README Visual Overhaul** — Badges, hero image, structured layout, real hub screenshot
 - [ ] **Phase 19: Deployment + Go Public** — Fly.io registry, DNS config, Cloudflare Tunnel, GitHub public pre-flight
 
@@ -89,7 +89,7 @@ Plans:
   2. A FAQ accordion section with common AgentBnB questions is visible below Compatible With
   3. A brief value proposition section explains the protocol
   4. All below-fold sections use the existing dark theme (#08080C bg, emerald accent) and feel native to the current Hub aesthetic
-**Plans:** 1 plan
+**Plans:** 1/1 plans complete
 
 Plans:
 - [ ] 17-01-PLAN.md — Three below-fold sections (Compatible With marquee, FAQ accordion, value proposition) + wiring into DiscoverPage
@@ -127,7 +127,7 @@ Plans:
 | 9-11 | v2.1 | 10/10 | Complete | 2026-03-16 |
 | 12-15 | v2.2 | 11/11 | Complete | 2026-03-16 |
 | 16. SPA Fix + Hub Enhancement | v2.3 | 2/2 | Complete | 2026-03-17 |
-| 17. Below-Fold Sections | v2.3 | 0/1 | Not started | — |
+| 17. Below-Fold Sections | 1/1 | Complete   | 2026-03-17 | — |
 | 18. README Visual Overhaul | v2.3 | 0/? | Not started | — |
 | 19. Deployment + Go Public | v2.3 | 0/? | Not started | — |
 
