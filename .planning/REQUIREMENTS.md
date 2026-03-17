@@ -77,8 +77,8 @@ Requirements for v2.3 Launch Ready. Each maps to roadmap phases 16-19.
 
 ### SPA Routing Fix
 
-- [ ] **SPA-01**: Remove `decorateReply: false` from @fastify/static registration so `reply.sendFile()` works on /hub/* sub-routes
-- [ ] **SPA-02**: Direct URL access to any /hub/* sub-route (e.g., /hub/#/agents) returns 200, not 500
+- [x] **SPA-01**: Remove `decorateReply: false` from @fastify/static registration so `reply.sendFile()` works on /hub/* sub-routes
+- [x] **SPA-02**: Direct URL access to any /hub/* sub-route (e.g., /hub/#/agents) returns 200, not 500
 
 ### Hub Enhancement — Magic UI Components
 
