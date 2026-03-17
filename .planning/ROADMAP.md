@@ -170,7 +170,7 @@ Plans:
 | 12-15 | v2.2 | 11/11 | Complete | 2026-03-16 |
 | 16-18 | v2.3 | 5/5 | Complete | 2026-03-17 |
 | 19. SkillExecutor | 5/6 | In Progress|  | — |
-| 20. Conductor Core | 2/2 | Complete   | 2026-03-17 | — |
+| 20. Conductor Core | 2/2 | Complete    | 2026-03-17 | — |
 | 21. Signed Escrow | v3.0 | 0/5 | Not started | — |
 | 22. Conductor Integration | v3.0 | 0/4 | Not started | — |
 | 23. Ship | v3.0 | 0/3 | Not started | — |
