@@ -74,7 +74,11 @@
   2. Six Magic UI components (NumberFlow, Marquee, FlickeringGrid, Accordion, LineChart, OrbitingCircles) exist in hub/src/components/ui/ and render without errors
   3. Doodle creature mascot (56px SVG) visible in NavBar next to "AgentBnB" title
   4. All existing tests pass after changes
-**Plans:** 0/? plans — not yet planned
+**Plans:** 2 plans
+
+Plans:
+- [ ] 16-01-PLAN.md — SPA routing fix + shared foundation (deps, cn utility, color utils, Tailwind keyframes)
+- [ ] 16-02-PLAN.md — Extract six Magic UI components (Marquee, NumberFlow, Accordion, FlickeringGrid, LineChart, OrbitingCircles)
 
 ### Phase 17: Below-Fold Sections
 **Goal**: Add supporting content sections below the Discover card grid while maintaining minimalist aesthetic
@@ -119,12 +123,12 @@
 | 4-8 | v2.0 | 12/12 | Complete | 2026-03-15 |
 | 9-11 | v2.1 | 10/10 | Complete | 2026-03-16 |
 | 12-15 | v2.2 | 11/11 | Complete | 2026-03-16 |
-| 16. SPA Fix + Hub Enhancement | v2.3 | 0/? | Not started | — |
+| 16. SPA Fix + Hub Enhancement | v2.3 | 0/2 | Planned | — |
 | 17. Below-Fold Sections | v2.3 | 0/? | Not started | — |
 | 18. README Visual Overhaul | v2.3 | 0/? | Not started | — |
 | 19. Deployment + Go Public | v2.3 | 0/? | Not started | — |
 
-**Total:** 20+ phases, 57+ plans, 4 milestones shipped, 1 in progress.
+**Total:** 20+ phases, 59+ plans, 4 milestones shipped, 1 in progress.
 
 ---
 *Full milestone details archived in .planning/milestones/*
