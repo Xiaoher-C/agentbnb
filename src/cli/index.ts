@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { randomBytes } from 'node:crypto';
 import { join } from 'node:path';
-import { networkInterfaces } from 'node:os';
+import { networkInterfaces, homedir } from 'node:os';
 
 import { createInterface } from 'node:readline';
 
@@ -628,9 +628,10 @@ program
   .description('Start the AgentBnB gateway server')
   .option('--port <port>', 'Port to listen on (overrides config)')
   .option('--handler-url <url>', 'Local capability handler URL', 'http://localhost:8080')
+  .option('--skills-yaml <path>', 'Path to skills.yaml (default: ~/.agentbnb/skills.yaml)')
   .option('--registry-port <port>', 'Public registry API port (0 to disable)', '7701')
   .option('--announce', 'Announce this gateway on the local network via mDNS')
-  .action(async (opts: { port?: string; handlerUrl: string; registryPort: string; announce?: boolean }) => {
+  .action(async (opts: { port?: string; handlerUrl: string; skillsYaml?: string; registryPort: string; announce?: boolean }) => {
     const config = loadConfig();
     if (!config) {
       console.error('Error: not initialized. Run `agentbnb init` first.');
@@ -640,12 +641,18 @@ program
     const port = opts.port ? parseInt(opts.port, 10) : config.gateway_port;
     const registryPort = parseInt(opts.registryPort, 10);
 
+    const skillsYamlPath = opts.skillsYaml ?? join(homedir(), '.agentbnb', 'skills.yaml');
     const runtime = new AgentRuntime({
       registryDbPath: config.db_path,
       creditDbPath: config.credit_db_path,
       owner: config.owner,
+      skillsYamlPath,
     });
     await runtime.start();
+
+    if (runtime.skillExecutor) {
+      console.log(`SkillExecutor initialized from ${skillsYamlPath}`);
+    }
 
     // Start IdleMonitor background loop
     const autonomyConfig = config.autonomy ?? DEFAULT_AUTONOMY_CONFIG;
@@ -664,6 +671,7 @@ program
       creditDb: runtime.creditDb,
       tokens: [config.token],
       handlerUrl: opts.handlerUrl,
+      skillExecutor: runtime.skillExecutor,
     });
 
     // Start public registry server if registry-port > 0
