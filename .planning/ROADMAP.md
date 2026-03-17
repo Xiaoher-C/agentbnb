@@ -103,7 +103,11 @@ Plans:
   2. A hero image or banner is prominently displayed
   3. README has clear structured sections: What, Install, Quick Start, Architecture, Contributing
   4. docs/hub-screenshot.png is a real screenshot (not 0-byte placeholder)
-**Plans:** 0/? plans — not yet planned
+**Plans:** 2 plans
+
+Plans:
+- [ ] 18-01-PLAN.md — Create hero banner SVG and capture real Hub screenshot
+- [ ] 18-02-PLAN.md — Rewrite README.md with badges, banner, structured sections, screenshot
 
 ### Phase 19: Deployment + Go Public
 **Goal**: AgentBnB registry is accessible at agentbnb.dev and the GitHub repository is public
@@ -128,10 +132,10 @@ Plans:
 | 12-15 | v2.2 | 11/11 | Complete | 2026-03-16 |
 | 16. SPA Fix + Hub Enhancement | v2.3 | 2/2 | Complete | 2026-03-17 |
 | 17. Below-Fold Sections | 1/1 | Complete    | 2026-03-17 | — |
-| 18. README Visual Overhaul | v2.3 | 0/? | Not started | — |
+| 18. README Visual Overhaul | v2.3 | 0/2 | Planned | — |
 | 19. Deployment + Go Public | v2.3 | 0/? | Not started | — |
 
-**Total:** 20+ phases, 60+ plans, 4 milestones shipped, 1 in progress.
+**Total:** 20+ phases, 62+ plans, 4 milestones shipped, 1 in progress.
 
 ---
 *Full milestone details archived in .planning/milestones/*
