@@ -643,8 +643,9 @@ program
   .option('--handler-url <url>', 'Local capability handler URL', 'http://localhost:8080')
   .option('--skills-yaml <path>', 'Path to skills.yaml (default: ~/.agentbnb/skills.yaml)')
   .option('--registry-port <port>', 'Public registry API port (0 to disable)', '7701')
+  .option('--conductor', 'Enable Conductor orchestration mode')
   .option('--announce', 'Announce this gateway on the local network via mDNS')
-  .action(async (opts: { port?: string; handlerUrl: string; skillsYaml?: string; registryPort: string; announce?: boolean }) => {
+  .action(async (opts: { port?: string; handlerUrl: string; skillsYaml?: string; registryPort: string; conductor?: boolean; announce?: boolean }) => {
     const config = loadConfig();
     if (!config) {
       console.error('Error: not initialized. Run `agentbnb init` first.');
@@ -660,11 +661,16 @@ program
       creditDbPath: config.credit_db_path,
       owner: config.owner,
       skillsYamlPath,
+      conductorEnabled: opts.conductor ?? false,
+      conductorToken: config.token,
     });
     await runtime.start();
 
     if (runtime.skillExecutor) {
       console.log(`SkillExecutor initialized from ${skillsYamlPath}`);
+    }
+    if (opts.conductor) {
+      console.log('Conductor mode enabled — orchestrate/plan skills available via gateway');
     }
 
     // Start IdleMonitor background loop

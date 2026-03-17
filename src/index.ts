@@ -64,6 +64,16 @@ export {
   type OrchestrationResult,
 } from './conductor/types.js';
 
+// v3.0 — Conductor Integration
+export {
+  orchestrate,
+  type OrchestrateOptions,
+} from './conductor/pipeline-orchestrator.js';
+export {
+  ConductorMode,
+  type ConductorModeOptions,
+} from './conductor/conductor-mode.js';
+
 // v3.0 — Signed Escrow
 export {
   generateKeyPair,
@@ -73,3 +83,14 @@ export {
   loadKeyPair,
   type KeyPair,
 } from './credit/signing.js';
+export {
+  createSignedEscrowReceipt,
+  EscrowReceiptSchema,
+  type CreateReceiptOpts,
+} from './credit/escrow-receipt.js';
+export {
+  settleProviderEarning,
+  settleRequesterEscrow,
+  releaseRequesterEscrow,
+} from './credit/settlement.js';
+export { type EscrowReceipt } from './types/index.js';
