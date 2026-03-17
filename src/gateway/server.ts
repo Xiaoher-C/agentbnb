@@ -5,8 +5,10 @@ import { getCard, updateReputation } from '../registry/store.js';
 import { getBalance } from '../credit/ledger.js';
 import { holdEscrow, settleEscrow, releaseEscrow } from '../credit/escrow.js';
 import { insertRequestLog } from '../registry/request-log.js';
+import { verifyEscrowReceipt } from '../credit/signing.js';
+import { settleProviderEarning } from '../credit/settlement.js';
 import { AgentBnBError } from '../types/index.js';
-import type { CapabilityCardV2 } from '../types/index.js';
+import type { CapabilityCardV2, EscrowReceipt } from '../types/index.js';
 import type { SkillExecutor } from '../skills/executor.js';
 
 /**
@@ -172,25 +174,61 @@ export function createGatewayServer(opts: GatewayOptions): FastifyInstance {
       cardName = card.name;
     }
 
-    // Check balance and hold escrow
-    let escrowId: string;
-    try {
-      const balance = getBalance(creditDb, requester);
-      if (balance < creditsNeeded) {
+    // Check balance and hold escrow — or verify signed receipt for remote P2P
+    const receipt = params.escrow_receipt as EscrowReceipt | undefined;
+    let escrowId: string | null = null;
+    let isRemoteEscrow = false;
+
+    if (receipt) {
+      // Remote P2P path: verify signed escrow receipt
+      const { signature, ...receiptData } = receipt;
+      const publicKeyBuf = Buffer.from(receipt.requester_public_key, 'hex');
+      const valid = verifyEscrowReceipt(receiptData as Record<string, unknown>, signature, publicKeyBuf);
+      if (!valid) {
         return reply.send({
           jsonrpc: '2.0',
           id,
-          error: { code: -32603, message: 'Insufficient credits' },
+          error: { code: -32603, message: 'Invalid escrow receipt signature' },
         });
       }
-      escrowId = holdEscrow(creditDb, requester, creditsNeeded, cardId);
-    } catch (err) {
-      const msg = err instanceof AgentBnBError ? err.message : 'Failed to hold escrow';
-      return reply.send({
-        jsonrpc: '2.0',
-        id,
-        error: { code: -32603, message: msg },
-      });
+      if (receipt.amount < creditsNeeded) {
+        return reply.send({
+          jsonrpc: '2.0',
+          id,
+          error: { code: -32603, message: 'Insufficient escrow amount' },
+        });
+      }
+      // Check receipt freshness (5 minute window)
+      const receiptAge = Date.now() - new Date(receipt.timestamp).getTime();
+      if (receiptAge > 5 * 60 * 1000) {
+        return reply.send({
+          jsonrpc: '2.0',
+          id,
+          error: { code: -32603, message: 'Escrow receipt expired' },
+        });
+      }
+      isRemoteEscrow = true;
+      // No local escrow hold — credits are committed on requester's machine
+    } else {
+      // Local/same-machine path: existing behavior
+      try {
+        const balance = getBalance(creditDb, requester);
+        if (balance < creditsNeeded) {
+          return reply.send({
+            jsonrpc: '2.0',
+            id,
+            error: { code: -32603, message: 'Insufficient credits' },
+          });
+        }
+        escrowId = holdEscrow(creditDb, requester, creditsNeeded, cardId);
+      } catch (err) {
+        const msg = err instanceof AgentBnBError ? err.message : 'Failed to hold escrow';
+        return reply.send({
+          jsonrpc: '2.0',
+          id,
+          error: { code: -32603, message: msg },
+        });
+      }
     }
 
     const startMs = Date.now();
@@ -210,7 +248,7 @@ export function createGatewayServer(opts: GatewayOptions): FastifyInstance {
         execResult = await skillExecutor.execute(targetSkillId, params);
       } catch (err) {
         // Unexpected throw from executor itself — treat as failure
-        releaseEscrow(creditDb, escrowId);
+        if (!isRemoteEscrow && escrowId) releaseEscrow(creditDb, escrowId);
         updateReputation(registryDb, cardId, false, Date.now() - startMs);
         try {
           insertRequestLog(registryDb, {
@@ -229,12 +267,16 @@ export function createGatewayServer(opts: GatewayOptions): FastifyInstance {
         return reply.send({
           jsonrpc: '2.0',
           id,
-          error: { code: -32603, message },
+          error: {
+            code: -32603,
+            message,
+            ...(isRemoteEscrow ? { data: { receipt_released: true } } : {}),
+          },
         });
       }
 
       if (!execResult.success) {
-        releaseEscrow(creditDb, escrowId);
+        if (!isRemoteEscrow && escrowId) releaseEscrow(creditDb, escrowId);
         updateReputation(registryDb, cardId, false, execResult.latency_ms);
         try {
           insertRequestLog(registryDb, {
@@ -252,11 +294,19 @@ export function createGatewayServer(opts: GatewayOptions): FastifyInstance {
         return reply.send({
           jsonrpc: '2.0',
           id,
-          error: { code: -32603, message: execResult.error ?? 'Execution failed' },
+          error: {
+            code: -32603,
+            message: execResult.error ?? 'Execution failed',
+            ...(isRemoteEscrow ? { data: { receipt_released: true } } : {}),
+          },
         });
       }
 
-      settleEscrow(creditDb, escrowId, card.owner);
+      if (isRemoteEscrow && receipt) {
+        settleProviderEarning(creditDb, card.owner, receipt);
+      } else if (escrowId) {
+        settleEscrow(creditDb, escrowId, card.owner);
+      }
       updateReputation(registryDb, cardId, true, execResult.latency_ms);
       try {
         insertRequestLog(registryDb, {
@@ -272,7 +322,10 @@ export function createGatewayServer(opts: GatewayOptions): FastifyInstance {
         });
       } catch { /* silent no-op */ }
 
-      return reply.send({ jsonrpc: '2.0', id, result: execResult.result });
+      const successResult = isRemoteEscrow
+        ? { ...(typeof execResult.result === 'object' && execResult.result !== null ? execResult.result : { data: execResult.result }), receipt_settled: true, receipt_nonce: receipt!.nonce }
+        : execResult.result;
+      return reply.send({ jsonrpc: '2.0', id, result: successResult });
     }
 
     // ── Legacy handlerUrl path (backward compat) ─────────────────────────────
@@ -291,7 +344,7 @@ export function createGatewayServer(opts: GatewayOptions): FastifyInstance {
       clearTimeout(timer);
 
       if (!response.ok) {
-        releaseEscrow(creditDb, escrowId);
+        if (!isRemoteEscrow && escrowId) releaseEscrow(creditDb, escrowId);
         updateReputation(registryDb, cardId, false, Date.now() - startMs);
         // Log failed execution — logging failures are silently ignored
         try {
@@ -310,12 +363,20 @@ export function createGatewayServer(opts: GatewayOptions): FastifyInstance {
         return reply.send({
           jsonrpc: '2.0',
           id,
-          error: { code: -32603, message: `Handler returned ${response.status}` },
+          error: {
+            code: -32603,
+            message: `Handler returned ${response.status}`,
+            ...(isRemoteEscrow ? { data: { receipt_released: true } } : {}),
+          },
         });
       }
 
       const result = (await response.json()) as unknown;
-      settleEscrow(creditDb, escrowId, card.owner);
+      if (isRemoteEscrow && receipt) {
+        settleProviderEarning(creditDb, card.owner, receipt);
+      } else if (escrowId) {
+        settleEscrow(creditDb, escrowId, card.owner);
+      }
       updateReputation(registryDb, cardId, true, Date.now() - startMs);
       // Log successful execution — logging failures are silently ignored
       try {
@@ -332,10 +393,13 @@ export function createGatewayServer(opts: GatewayOptions): FastifyInstance {
         });
       } catch { /* silent no-op */ }
 
-      return reply.send({ jsonrpc: '2.0', id, result });
+      const successResult = isRemoteEscrow
+        ? { ...(typeof result === 'object' && result !== null ? result as Record<string, unknown> : { data: result }), receipt_settled: true, receipt_nonce: receipt!.nonce }
+        : result;
+      return reply.send({ jsonrpc: '2.0', id, result: successResult });
     } catch (err) {
       clearTimeout(timer);
-      releaseEscrow(creditDb, escrowId);
+      if (!isRemoteEscrow && escrowId) releaseEscrow(creditDb, escrowId);
       updateReputation(registryDb, cardId, false, Date.now() - startMs);
 
       const isTimeout = err instanceof Error && err.name === 'AbortError';
@@ -357,7 +421,11 @@ export function createGatewayServer(opts: GatewayOptions): FastifyInstance {
       return reply.send({
         jsonrpc: '2.0',
         id,
-        error: { code: -32603, message: isTimeout ? 'Execution timeout' : 'Handler error' },
+        error: {
+          code: -32603,
+          message: isTimeout ? 'Execution timeout' : 'Handler error',
+          ...(isRemoteEscrow ? { data: { receipt_released: true } } : {}),
+        },
       });
     }
   });

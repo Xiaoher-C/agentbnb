@@ -4,10 +4,11 @@ import type { FastifyInstance } from 'fastify';
 import { randomUUID } from 'node:crypto';
 import { createGatewayServer } from './server.js';
 import { openDatabase, insertCard, getCard } from '../registry/store.js';
-import { openCreditDb, bootstrapAgent } from '../credit/ledger.js';
+import { openCreditDb, bootstrapAgent, getBalance } from '../credit/ledger.js';
 import { requestCapability } from './client.js';
 import { getRequestLog } from '../registry/request-log.js';
-import type { CapabilityCard, CapabilityCardV2 } from '../types/index.js';
+import { generateKeyPair, signEscrowReceipt } from '../credit/signing.js';
+import type { CapabilityCard, CapabilityCardV2, EscrowReceipt } from '../types/index.js';
 import type Database from 'better-sqlite3';
 
 // ─── Helper: insert a v2.0 card directly into the DB ─────────────────────────
@@ -918,7 +919,7 @@ describe('Gateway skill_id routing', () => {
     expect(log[0].skill_id).toBe('skill-tts');
   });
 
-  it('Test 8: v1.0 backward compat — migrated card works without skill_id', async () => {
+  it('Test 8: v1.0 backward compat -- migrated card works without skill_id', async () => {
     // Insert a v1.0 card — it will be migrated to v2.0 shape on openDatabase
     // but inserted after the DB is open, so we need to use a fresh DB with v1.0 card
     const freshRegistryDb = openDatabase(':memory:');
@@ -960,6 +961,277 @@ describe('Gateway skill_id routing', () => {
     } finally {
       await v1Gateway.close();
       freshRegistryDb.close();
+    }
+  });
+});
+
+// ─── Escrow Receipt Verification tests ───────────────────────────────────────
+
+/** Creates a valid signed escrow receipt for testing. */
+function makeSignedReceipt(
+  overrides: Partial<Omit<EscrowReceipt, 'signature'>> & { privateKey?: Buffer; publicKey?: Buffer } = {},
+): { receipt: EscrowReceipt; publicKey: Buffer; privateKey: Buffer } {
+  const keys = generateKeyPair();
+  const privateKey = overrides.privateKey ?? keys.privateKey;
+  const publicKey = overrides.publicKey ?? keys.publicKey;
+
+  const receiptData: Omit<EscrowReceipt, 'signature'> = {
+    requester_owner: overrides.requester_owner ?? 'remote-requester',
+    requester_public_key: publicKey.toString('hex'),
+    amount: overrides.amount ?? 10,
+    card_id: overrides.card_id ?? randomUUID(),
+    ...(overrides.skill_id ? { skill_id: overrides.skill_id } : {}),
+    timestamp: overrides.timestamp ?? new Date().toISOString(),
+    nonce: overrides.nonce ?? randomUUID(),
+  };
+
+  const signature = signEscrowReceipt(receiptData as Record<string, unknown>, privateKey);
+  const receipt: EscrowReceipt = { ...receiptData, signature };
+
+  return { receipt, publicKey, privateKey };
+}
+
+describe('Gateway Escrow Receipt Verification', () => {
+  let registryDb: Database.Database;
+  let creditDb: Database.Database;
+  let gateway: FastifyInstance;
+  let mockHandler: { server: FastifyInstance; url: string };
+  let testCard: CapabilityCard;
+  const validToken = 'receipt-test-token';
+
+  beforeEach(async () => {
+    registryDb = openDatabase(':memory:');
+    creditDb = openCreditDb(':memory:');
+
+    // Bootstrap provider with some credits (provider earns more via settlement)
+    bootstrapAgent(creditDb, 'provider-agent', 50);
+    // Also bootstrap local requester for backward compat test
+    bootstrapAgent(creditDb, 'requester-agent', 100);
+
+    testCard = makeCard({ id: randomUUID(), owner: 'provider-agent' });
+    insertCard(registryDb, testCard);
+
+    mockHandler = await createMockHandler({ output: 'receipt-verified result' });
+
+    gateway = createGatewayServer({
+      registryDb,
+      creditDb,
+      tokens: [validToken],
+      handlerUrl: mockHandler.url,
+      timeoutMs: 5000,
+      silent: true,
+    });
+
+    await gateway.ready();
+  });
+
+  afterEach(async () => {
+    await gateway.close();
+    await mockHandler.server.close();
+    registryDb.close();
+    creditDb.close();
+  });
+
+  it('valid escrow receipt: execution succeeds, response includes receipt_settled, provider balance increases', async () => {
+    const providerBalanceBefore = getBalance(creditDb, 'provider-agent');
+    const { receipt } = makeSignedReceipt({
+      card_id: testCard.id,
+      amount: testCard.pricing.credits_per_call,
+    });
+
+    const res = await gateway.inject({
+      method: 'POST',
+      url: '/rpc',
+      headers: { authorization: `Bearer ${validToken}` },
+      payload: {
+        jsonrpc: '2.0',
+        method: 'capability.execute',
+        params: {
+          card_id: testCard.id,
+          requester: 'remote-requester',
+          escrow_receipt: receipt,
+        },
+        id: 'receipt-1',
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{ jsonrpc: string; result: unknown; id: string }>();
+    expect(body.jsonrpc).toBe('2.0');
+    expect(body.result).toBeDefined();
+    // Check that result includes receipt_settled flag
+    expect((body.result as Record<string, unknown>).receipt_settled).toBe(true);
+
+    // Provider balance should increase by the receipt amount
+    const providerBalanceAfter = getBalance(creditDb, 'provider-agent');
+    expect(providerBalanceAfter).toBe(providerBalanceBefore + testCard.pricing.credits_per_call);
+  });
+
+  it('tampered receipt: returns signature error', async () => {
+    const { receipt } = makeSignedReceipt({
+      card_id: testCard.id,
+      amount: testCard.pricing.credits_per_call,
+    });
+    // Tamper with the receipt amount after signing
+    receipt.amount = 999;
+
+    const res = await gateway.inject({
+      method: 'POST',
+      url: '/rpc',
+      headers: { authorization: `Bearer ${validToken}` },
+      payload: {
+        jsonrpc: '2.0',
+        method: 'capability.execute',
+        params: {
+          card_id: testCard.id,
+          requester: 'remote-requester',
+          escrow_receipt: receipt,
+        },
+        id: 'receipt-2',
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{ error: { code: number; message: string } }>();
+    expect(body.error.code).toBe(-32603);
+    expect(body.error.message).toMatch(/invalid escrow receipt signature/i);
+  });
+
+  it('insufficient receipt amount: returns amount error', async () => {
+    const { receipt } = makeSignedReceipt({
+      card_id: testCard.id,
+      amount: 1, // Less than credits_per_call (10)
+    });
+
+    const res = await gateway.inject({
+      method: 'POST',
+      url: '/rpc',
+      headers: { authorization: `Bearer ${validToken}` },
+      payload: {
+        jsonrpc: '2.0',
+        method: 'capability.execute',
+        params: {
+          card_id: testCard.id,
+          requester: 'remote-requester',
+          escrow_receipt: receipt,
+        },
+        id: 'receipt-3',
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{ error: { code: number; message: string } }>();
+    expect(body.error.code).toBe(-32603);
+    expect(body.error.message).toMatch(/insufficient escrow amount/i);
+  });
+
+  it('expired receipt: returns expired error', async () => {
+    // Create a receipt with a timestamp 10 minutes in the past
+    const pastTimestamp = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+    const { receipt } = makeSignedReceipt({
+      card_id: testCard.id,
+      amount: testCard.pricing.credits_per_call,
+      timestamp: pastTimestamp,
+    });
+
+    const res = await gateway.inject({
+      method: 'POST',
+      url: '/rpc',
+      headers: { authorization: `Bearer ${validToken}` },
+      payload: {
+        jsonrpc: '2.0',
+        method: 'capability.execute',
+        params: {
+          card_id: testCard.id,
+          requester: 'remote-requester',
+          escrow_receipt: receipt,
+        },
+        id: 'receipt-4',
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{ error: { code: number; message: string } }>();
+    expect(body.error.code).toBe(-32603);
+    expect(body.error.message).toMatch(/escrow receipt expired/i);
+  });
+
+  it('no receipt: falls back to local DB check (backward compat)', async () => {
+    const balanceBefore = getBalance(creditDb, 'requester-agent');
+
+    const res = await gateway.inject({
+      method: 'POST',
+      url: '/rpc',
+      headers: { authorization: `Bearer ${validToken}` },
+      payload: {
+        jsonrpc: '2.0',
+        method: 'capability.execute',
+        params: {
+          card_id: testCard.id,
+          requester: 'requester-agent',
+        },
+        id: 'receipt-5',
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{ jsonrpc: string; result: unknown }>();
+    expect(body.result).toBeDefined();
+    // Local escrow path: requester balance should decrease
+    const balanceAfter = getBalance(creditDb, 'requester-agent');
+    expect(balanceAfter).toBe(balanceBefore - testCard.pricing.credits_per_call);
+    // Should NOT have receipt_settled flag (local path)
+    expect((body.result as Record<string, unknown>).receipt_settled).toBeUndefined();
+  });
+
+  it('valid receipt but execution fails: provider balance unchanged, response includes receipt_released', async () => {
+    const errorHandler = await createMockHandler({ error: 'exec failed' }, 500);
+    const errorGateway = createGatewayServer({
+      registryDb,
+      creditDb,
+      tokens: [validToken],
+      handlerUrl: errorHandler.url,
+      timeoutMs: 5000,
+      silent: true,
+    });
+    await errorGateway.ready();
+
+    const providerBalanceBefore = getBalance(creditDb, 'provider-agent');
+    const { receipt } = makeSignedReceipt({
+      card_id: testCard.id,
+      amount: testCard.pricing.credits_per_call,
+    });
+
+    try {
+      const res = await errorGateway.inject({
+        method: 'POST',
+        url: '/rpc',
+        headers: { authorization: `Bearer ${validToken}` },
+        payload: {
+          jsonrpc: '2.0',
+          method: 'capability.execute',
+          params: {
+            card_id: testCard.id,
+            requester: 'remote-requester',
+            escrow_receipt: receipt,
+          },
+          id: 'receipt-6',
+        },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json<{ error: { code: number; message: string; data?: Record<string, unknown> } }>();
+      expect(body.error).toBeDefined();
+      expect(body.error.code).toBe(-32603);
+      // Check receipt_released flag in error data
+      expect(body.error.data?.receipt_released).toBe(true);
+
+      // Provider balance should NOT change
+      const providerBalanceAfter = getBalance(creditDb, 'provider-agent');
+      expect(providerBalanceAfter).toBe(providerBalanceBefore);
+    } finally {
+      await errorGateway.close();
+      await errorHandler.server.close();
     }
   });
 });
