@@ -279,7 +279,9 @@ export function registerWebSocketRelay(
   }
 
   // Register WebSocket route
-  server.get('/ws', { websocket: true }, (socket) => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  server.get('/ws', { websocket: true } as any, (rawSocket: any, _request: any) => {
+    const socket = rawSocket as import('ws').WebSocket;
     let registeredOwner: string | undefined;
 
     socket.on('message', (raw: Buffer | string) => {
