@@ -32,6 +32,16 @@ export interface RuntimeOptions {
    * If provided and the file exists, SkillExecutor is initialized on start().
    */
   skillsYamlPath?: string;
+  /**
+   * When true, registers ConductorMode in the SkillExecutor with orchestrate/plan skills.
+   * Defaults to false.
+   */
+  conductorEnabled?: boolean;
+  /**
+   * Bearer token for authenticating with remote agents during orchestration.
+   * Only used when conductorEnabled is true.
+   */
+  conductorToken?: string;
 }
 
 /**
@@ -67,6 +77,9 @@ export class AgentRuntime {
   private draining: boolean = false;
   private readonly orphanedEscrowAgeMinutes: number;
   private readonly skillsYamlPath?: string;
+  private readonly conductorEnabled: boolean;
+  private readonly conductorToken: string;
+  private readonly config: RuntimeOptions;
 
   /**
    * Creates a new AgentRuntime instance.
@@ -79,6 +92,9 @@ export class AgentRuntime {
     this.owner = options.owner;
     this.orphanedEscrowAgeMinutes = options.orphanedEscrowAgeMinutes ?? 10;
     this.skillsYamlPath = options.skillsYamlPath;
+    this.conductorEnabled = options.conductorEnabled ?? false;
+    this.conductorToken = options.conductorToken ?? '';
+    this.config = options;
 
     // Open databases with schema migrations (WAL + foreign_keys already applied by these functions)
     this.registryDb = openDatabase(options.registryDbPath);
@@ -122,26 +138,93 @@ export class AgentRuntime {
    * 3. Populate the Map with all 4 modes — SkillExecutor sees them via reference.
    */
   private async initSkillExecutor(): Promise<void> {
-    if (!this.skillsYamlPath || !existsSync(this.skillsYamlPath)) {
+    const hasSkillsYaml = this.skillsYamlPath && existsSync(this.skillsYamlPath);
+
+    // If neither skills.yaml nor conductor mode, nothing to initialize
+    if (!hasSkillsYaml && !this.conductorEnabled) {
       return;
     }
 
-    const yamlContent = readFileSync(this.skillsYamlPath, 'utf8');
-    const configs = parseSkillsFile(yamlContent);
+    // Parse skills.yaml configs if available
+    let configs: import('../skills/skill-config.js').SkillConfig[] = [];
+    if (hasSkillsYaml) {
+      const yamlContent = readFileSync(this.skillsYamlPath!, 'utf8');
+      configs = parseSkillsFile(yamlContent);
+    }
 
     // Step 1: Create the modes Map and the SkillExecutor holding a reference to it.
     // The Map is mutated below — SkillExecutor.modeMap points to the same object.
     const modes = new Map<string, import('../skills/executor.js').ExecutorMode>();
+
+    // Step 2: Add conductor skill configs and mode if enabled
+    if (this.conductorEnabled) {
+      const { ConductorMode } = await import('../conductor/conductor-mode.js');
+      const { registerConductorCard, CONDUCTOR_OWNER } = await import('../conductor/card.js');
+      const { loadPeers } = await import('../cli/peers.js');
+
+      // Register the Conductor card in the registry
+      registerConductorCard(this.registryDb);
+
+      // Build resolveAgentUrl from loadPeers()
+      const resolveAgentUrl = (owner: string): { url: string; cardId: string } => {
+        const peers = loadPeers();
+        const peer = peers.find(p => p.name.toLowerCase() === owner.toLowerCase());
+        if (!peer) {
+          throw new Error(
+            `No peer found for agent owner "${owner}". Add with: agentbnb peers add ${owner} <url> <token>`,
+          );
+        }
+        // Look up this peer's card ID from registry DB
+        const stmt = this.registryDb.prepare(
+          'SELECT id FROM capability_cards WHERE owner = ? LIMIT 1',
+        );
+        const row = stmt.get(owner) as { id: string } | undefined;
+        const cardId = row?.id ?? owner; // fallback to owner name if no card found
+        return { url: peer.url, cardId };
+      };
+
+      // Create and register ConductorMode
+      const conductorMode = new ConductorMode({
+        db: this.registryDb,
+        creditDb: this.creditDb,
+        conductorOwner: CONDUCTOR_OWNER,
+        gatewayToken: this.conductorToken,
+        resolveAgentUrl,
+        maxBudget: 100,
+      });
+      modes.set('conductor', conductorMode);
+
+      // Add conductor skill configs
+      configs.push(
+        {
+          id: 'orchestrate',
+          type: 'conductor' as const,
+          name: 'Orchestrate',
+          conductor_skill: 'orchestrate' as const,
+          pricing: { credits_per_call: 5 },
+        },
+        {
+          id: 'plan',
+          type: 'conductor' as const,
+          name: 'Plan',
+          conductor_skill: 'plan' as const,
+          pricing: { credits_per_call: 1 },
+        },
+      );
+    }
+
     const executor = createSkillExecutor(configs, modes);
 
-    // Step 2: Create PipelineExecutor with the executor reference (circular dep solved).
-    const pipelineExecutor = new PipelineExecutor(executor);
+    // Step 3: Create PipelineExecutor with the executor reference (circular dep solved).
+    if (hasSkillsYaml) {
+      const pipelineExecutor = new PipelineExecutor(executor);
 
-    // Step 3: Register all 4 executor modes into the shared Map.
-    modes.set('api', new ApiExecutor());
-    modes.set('pipeline', pipelineExecutor);
-    modes.set('openclaw', new OpenClawBridge());
-    modes.set('command', new CommandExecutor());
+      // Step 4: Register all 4 executor modes into the shared Map.
+      modes.set('api', new ApiExecutor());
+      modes.set('pipeline', pipelineExecutor);
+      modes.set('openclaw', new OpenClawBridge());
+      modes.set('command', new CommandExecutor());
+    }
 
     this.skillExecutor = executor;
   }
