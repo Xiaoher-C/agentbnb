@@ -164,6 +164,49 @@ export function releaseEscrow(db: Database.Database, escrowId: string): void {
 }
 
 /**
+ * Confirms an escrow debit for P2P settlement.
+ * Marks escrow status as 'settled' WITHOUT crediting any recipient.
+ * Used by the requester side in cross-machine settlement — the credits were
+ * already deducted by holdEscrow, and the provider records earnings in their own DB.
+ *
+ * @param db - The requester's local credit database.
+ * @param escrowId - The escrow ID to confirm.
+ * @throws {AgentBnBError} with code 'ESCROW_NOT_FOUND' if escrow does not exist.
+ * @throws {AgentBnBError} with code 'ESCROW_ALREADY_SETTLED' if escrow is not in 'held' status.
+ */
+export function confirmEscrowDebit(db: Database.Database, escrowId: string): void {
+  const now = new Date().toISOString();
+
+  const confirm = db.transaction(() => {
+    const escrow = db
+      .prepare('SELECT id, owner, amount, status FROM credit_escrow WHERE id = ?')
+      .get(escrowId) as { id: string; owner: string; amount: number; status: string } | undefined;
+
+    if (!escrow) {
+      throw new AgentBnBError(`Escrow not found: ${escrowId}`, 'ESCROW_NOT_FOUND');
+    }
+    if (escrow.status !== 'held') {
+      throw new AgentBnBError(
+        `Escrow ${escrowId} is already ${escrow.status}`,
+        'ESCROW_ALREADY_SETTLED',
+      );
+    }
+
+    // Mark escrow as settled — no credit transfer (provider records in their own DB)
+    db.prepare(
+      'UPDATE credit_escrow SET status = ?, settled_at = ? WHERE id = ?',
+    ).run('settled', now, escrowId);
+
+    // Log confirmation transaction
+    db.prepare(
+      'INSERT INTO credit_transactions (id, owner, amount, reason, reference_id, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+    ).run(randomUUID(), escrow.owner, 0, 'remote_settlement_confirmed', escrowId, now);
+  });
+
+  confirm();
+}
+
+/**
  * Returns the current escrow record, or null if not found.
  *
  * @param db - The credit database instance.

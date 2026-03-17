@@ -10,7 +10,7 @@ export interface CreditTransaction {
   owner: string;
   /** Positive = credit, negative = debit */
   amount: number;
-  reason: 'bootstrap' | 'escrow_hold' | 'escrow_release' | 'settlement' | 'refund';
+  reason: 'bootstrap' | 'escrow_hold' | 'escrow_release' | 'settlement' | 'refund' | 'remote_earning' | 'remote_settlement_confirmed';
   reference_id: string | null;
   created_at: string;
 }
@@ -124,6 +124,49 @@ export function getTransactions(
       'SELECT id, owner, amount, reason, reference_id, created_at FROM credit_transactions WHERE owner = ? ORDER BY created_at DESC LIMIT ?',
     )
     .all(owner, limit) as CreditTransaction[];
+}
+
+/**
+ * Records a remote earning for the provider.
+ * Idempotent on nonce — calling twice with the same nonce does not double-credit.
+ * Used by the provider side in P2P settlement to credit earnings from a signed receipt.
+ *
+ * @param db - The provider's local credit database.
+ * @param owner - Provider agent identifier.
+ * @param amount - Number of credits earned.
+ * @param cardId - Capability Card ID that was executed.
+ * @param receiptNonce - Receipt nonce for replay protection.
+ */
+export function recordEarning(
+  db: Database.Database,
+  owner: string,
+  amount: number,
+  _cardId: string,
+  receiptNonce: string,
+): void {
+  const now = new Date().toISOString();
+  db.transaction(() => {
+    // Idempotency: check if this nonce was already recorded
+    const existing = db
+      .prepare(
+        "SELECT id FROM credit_transactions WHERE reference_id = ? AND reason = 'remote_earning'",
+      )
+      .get(receiptNonce) as { id: string } | undefined;
+    if (existing) return; // Already recorded — skip
+
+    // Ensure balance row exists
+    db.prepare(
+      'INSERT OR IGNORE INTO credit_balances (owner, balance, updated_at) VALUES (?, 0, ?)',
+    ).run(owner, now);
+    // Credit the earnings
+    db.prepare(
+      'UPDATE credit_balances SET balance = balance + ?, updated_at = ? WHERE owner = ?',
+    ).run(amount, now, owner);
+    // Log transaction with receipt nonce as reference_id
+    db.prepare(
+      'INSERT INTO credit_transactions (id, owner, amount, reason, reference_id, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+    ).run(randomUUID(), owner, amount, 'remote_earning', receiptNonce, now);
+  })();
 }
 
 // Re-export error for use in escrow module
