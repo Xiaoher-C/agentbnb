@@ -7,6 +7,7 @@ import { holdEscrow, settleEscrow, releaseEscrow } from '../credit/escrow.js';
 import { insertRequestLog } from '../registry/request-log.js';
 import { AgentBnBError } from '../types/index.js';
 import type { CapabilityCardV2 } from '../types/index.js';
+import type { SkillExecutor } from '../skills/executor.js';
 
 /**
  * Options for creating a gateway server.
@@ -26,6 +27,13 @@ export interface GatewayOptions {
   timeoutMs?: number;
   /** Disable logging (useful for tests). */
   silent?: boolean;
+  /**
+   * Optional SkillExecutor instance.
+   * When provided, skill execution is dispatched through SkillExecutor.execute()
+   * instead of forwarding via fetch(handlerUrl).
+   * When absent, the original handlerUrl fetch path is used (backward compat).
+   */
+  skillExecutor?: SkillExecutor;
 }
 
 const VERSION = '0.0.1';
@@ -47,6 +55,7 @@ export function createGatewayServer(opts: GatewayOptions): FastifyInstance {
     handlerUrl,
     timeoutMs = 30_000,
     silent = false,
+    skillExecutor,
   } = opts;
 
   const fastify = Fastify({ logger: !silent });
@@ -184,10 +193,92 @@ export function createGatewayServer(opts: GatewayOptions): FastifyInstance {
       });
     }
 
+    const startMs = Date.now();
+
+    // ── SkillExecutor path (new) ─────────────────────────────────────────────
+    // When a SkillExecutor is configured, dispatch directly through it instead
+    // of forwarding over HTTP to handlerUrl. All escrow/reputation/logging logic
+    // is preserved. Falls back to fetch(handlerUrl) when skillExecutor is absent.
+    if (skillExecutor) {
+      // Prefer the v2-resolved skill ID, then the raw skill_id param, then fall back to cardId.
+      // This handles both v1 cards (where resolvedSkillId is undefined but skill_id may still
+      // be passed) and v2 cards (where resolvedSkillId is always set).
+      const targetSkillId = resolvedSkillId ?? skillId ?? cardId;
+      let execResult: import('../skills/executor.js').ExecutionResult;
+
+      try {
+        execResult = await skillExecutor.execute(targetSkillId, params);
+      } catch (err) {
+        // Unexpected throw from executor itself — treat as failure
+        releaseEscrow(creditDb, escrowId);
+        updateReputation(registryDb, cardId, false, Date.now() - startMs);
+        try {
+          insertRequestLog(registryDb, {
+            id: randomUUID(),
+            card_id: cardId,
+            card_name: cardName,
+            skill_id: resolvedSkillId,
+            requester,
+            status: 'failure',
+            latency_ms: Date.now() - startMs,
+            credits_charged: 0,
+            created_at: new Date().toISOString(),
+          });
+        } catch { /* silent no-op */ }
+        const message = err instanceof Error ? err.message : 'Execution error';
+        return reply.send({
+          jsonrpc: '2.0',
+          id,
+          error: { code: -32603, message },
+        });
+      }
+
+      if (!execResult.success) {
+        releaseEscrow(creditDb, escrowId);
+        updateReputation(registryDb, cardId, false, execResult.latency_ms);
+        try {
+          insertRequestLog(registryDb, {
+            id: randomUUID(),
+            card_id: cardId,
+            card_name: cardName,
+            skill_id: resolvedSkillId,
+            requester,
+            status: 'failure',
+            latency_ms: execResult.latency_ms,
+            credits_charged: 0,
+            created_at: new Date().toISOString(),
+          });
+        } catch { /* silent no-op */ }
+        return reply.send({
+          jsonrpc: '2.0',
+          id,
+          error: { code: -32603, message: execResult.error ?? 'Execution failed' },
+        });
+      }
+
+      settleEscrow(creditDb, escrowId, card.owner);
+      updateReputation(registryDb, cardId, true, execResult.latency_ms);
+      try {
+        insertRequestLog(registryDb, {
+          id: randomUUID(),
+          card_id: cardId,
+          card_name: cardName,
+          skill_id: resolvedSkillId,
+          requester,
+          status: 'success',
+          latency_ms: execResult.latency_ms,
+          credits_charged: creditsNeeded,
+          created_at: new Date().toISOString(),
+        });
+      } catch { /* silent no-op */ }
+
+      return reply.send({ jsonrpc: '2.0', id, result: execResult.result });
+    }
+
+    // ── Legacy handlerUrl path (backward compat) ─────────────────────────────
     // Execute at handler URL with configurable timeout via AbortController
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
-    const startMs = Date.now();
 
     try {
       const response = await fetch(handlerUrl, {
