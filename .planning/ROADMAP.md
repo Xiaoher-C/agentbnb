@@ -99,7 +99,14 @@
   4. OpenClaw Bridge forwards requests to OpenClaw agent and returns result
   5. Command Executor runs sandboxed shell commands with timeout
   6. Gateway dispatches to SkillExecutor instead of empty handler URL
-**Plans:** 0/6 — not yet planned
+**Plans:** 6 plans
+Plans:
+- [ ] 19-01-PLAN.md — Skill Config Schema + SkillExecutor Interface + YAML Parser
+- [ ] 19-02-PLAN.md — API Executor (Mode A — config-driven REST API calls)
+- [ ] 19-03-PLAN.md — Pipeline Executor (Mode B — chain skills with ${prev.result})
+- [ ] 19-04-PLAN.md — OpenClaw Bridge (Mode C — forward to OpenClaw agent)
+- [ ] 19-05-PLAN.md — Command Executor (Mode D — sandboxed shell commands)
+- [ ] 19-06-PLAN.md — Gateway Integration (wire SkillExecutor into Gateway dispatch)
 
 ### Phase 20: Conductor Core
 **Goal**: Build independent Conductor components that don't depend on SkillExecutor
@@ -139,10 +146,7 @@ Plans:
   2. Conductor's orchestrate skill is callable via SkillExecutor
   3. `agentbnb conduct "task"` CLI command works end-to-end
   4. E2E test with 3 agents (Conductor + 2 providers) passes
-**Plans:** 2 plans
-Plans:
-- [ ] 20-01-PLAN.md — Types + TaskDecomposer + Conductor Card registration
-- [ ] 20-02-PLAN.md — CapabilityMatcher + BudgetController
+**Plans:** 0/4 — not yet planned
 
 ### Phase 23: Ship
 **Goal**: AgentBnB deployed to production, GitHub repo public
@@ -165,7 +169,7 @@ Plans:
 | 9-11 | v2.1 | 10/10 | Complete | 2026-03-16 |
 | 12-15 | v2.2 | 11/11 | Complete | 2026-03-16 |
 | 16-18 | v2.3 | 5/5 | Complete | 2026-03-17 |
-| 19. SkillExecutor | v3.0 | 0/6 | Not started | — |
+| 19. SkillExecutor | v3.0 | 0/6 | Planned | — |
 | 20. Conductor Core | v3.0 | 0/2 | Planned | — |
 | 21. Signed Escrow | v3.0 | 0/5 | Not started | — |
 | 22. Conductor Integration | v3.0 | 0/4 | Not started | — |
