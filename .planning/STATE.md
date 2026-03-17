@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v3.0
 milestone_name: Production-Ready Launch
 status: executing
-stopped_at: Completed 22-01-PLAN.md
-last_updated: "2026-03-17T12:04:42.845Z"
-last_activity: 2026-03-17 — Completed 22-01 (PipelineOrchestrator + ConductorMode)
+stopped_at: Completed 22-02-PLAN.md
+last_updated: "2026-03-17T12:12:53Z"
+last_activity: 2026-03-17 — Completed 22-02 (CLI conduct + Runtime wiring + Integration tests)
 progress:
   total_phases: 6
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 16
-  completed_plans: 13
-  percent: 96
+  completed_plans: 14
+  percent: 100
 ---
 
 # AgentBnB — Project State
@@ -26,16 +26,16 @@ See: .planning/PROJECT.md (updated 2026-03-17)
 ## Current Position
 
 Phase: Phase 22 — Conductor Integration
-Plan: 22-01 complete (1/2)
-Status: Phase 22 in progress
-Last activity: 2026-03-17 — Completed 22-01 (PipelineOrchestrator + ConductorMode)
+Plan: 22-02 complete (2/2)
+Status: Phase 22 complete
+Last activity: 2026-03-17 — Completed 22-02 (CLI conduct + Runtime wiring + Integration tests)
 
-Progress: [██████████] 96%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 61 (v1.1: 24, v2.0: 12, v2.1: 10, v2.2: 11, v2.3: 2, v3.0: 2)
+- Total plans completed: 62 (v1.1: 24, v2.0: 12, v2.1: 10, v2.2: 11, v2.3: 2, v3.0: 3)
 - Average duration: unknown
 - Total execution time: unknown
 
@@ -66,6 +66,7 @@ Progress: [██████████] 96%
 | Phase 21 P02 | 337s | 2 tasks | 4 files |
 | Phase 21 P04 | 141s | 1 tasks | 1 files |
 | Phase 22 P01 | 223s | 2 tasks | 5 files |
+| Phase 22 P02 | 430s | 3 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -128,6 +129,9 @@ Progress: [██████████] 96%
 - [Phase 22]: PipelineOrchestrator uses resolveAgentUrl callback to decouple from peer registry — enables clean test mocking
 - [Phase 22]: Budget enforcement is caller responsibility (ConductorMode), not PipelineOrchestrator — single responsibility
 - [Phase 22]: ConductorMode supports both orchestrate and plan conductor skills through single execute() method
+- [Phase 22]: Extracted conductAction() as testable function — CLI handler is thin wrapper with dynamic import
+- [Phase 22]: AgentRuntime creates SkillExecutor without skills.yaml when conductorEnabled is true — conductor-only agents work
+- [Phase 22]: Integration tests use FTS5-searchable skill names to ensure matchSubTasks discovers providers
 
 ### Pending Todos
 
@@ -141,8 +145,8 @@ Progress: [██████████] 96%
 
 ## Session Continuity
 
-Last session: 2026-03-17T12:04:42.842Z
-Stopped at: Completed 22-01-PLAN.md
+Last session: 2026-03-17T12:12:53Z
+Stopped at: Completed 22-02-PLAN.md
 Resume file: None
 
 ---
