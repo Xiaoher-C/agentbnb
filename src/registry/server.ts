@@ -112,6 +112,11 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
       prefix: '/hub/',
     });
 
+    // Redirect root to /hub/ — Hub IS the landing page for MVP
+    server.get('/', async (_request, reply) => {
+      return reply.redirect('/hub/');
+    });
+
     // Redirect /hub (no trailing slash) to /hub/ so assets resolve correctly
     server.get('/hub', async (_request, reply) => {
       return reply.redirect('/hub/');
