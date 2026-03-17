@@ -123,7 +123,7 @@ Plans:
 | 4-8 | v2.0 | 12/12 | Complete | 2026-03-15 |
 | 9-11 | v2.1 | 10/10 | Complete | 2026-03-16 |
 | 12-15 | v2.2 | 11/11 | Complete | 2026-03-16 |
-| 16. SPA Fix + Hub Enhancement | 2/2 | Complete   | 2026-03-17 | — |
+| 16. SPA Fix + Hub Enhancement | 2/2 | Complete    | 2026-03-17 | — |
 | 17. Below-Fold Sections | v2.3 | 0/? | Not started | — |
 | 18. README Visual Overhaul | v2.3 | 0/? | Not started | — |
 | 19. Deployment + Go Public | v2.3 | 0/? | Not started | — |
