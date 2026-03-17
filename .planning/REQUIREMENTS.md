@@ -102,9 +102,9 @@ Requirements for v2.3 Launch Ready. Each maps to roadmap phases 16-19.
 
 ### README Visual Overhaul
 
-- [ ] **README-01**: OpenClaw-style badges at top of README (npm version, tests passing, license)
+- [x] **README-01**: OpenClaw-style badges at top of README (npm version, tests passing, license)
 - [x] **README-02**: Hero image or banner at top of README
-- [ ] **README-03**: Structured layout with clear sections (What, Install, Quick Start, Architecture, Contributing)
+- [x] **README-03**: Structured layout with clear sections (What, Install, Quick Start, Architecture, Contributing)
 - [x] **README-04**: Real hub screenshot replaces the 0-byte placeholder at docs/hub-screenshot.png
 
 ### Deployment

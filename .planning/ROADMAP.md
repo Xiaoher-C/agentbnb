@@ -58,7 +58,7 @@
 
 - [x] **Phase 16: SPA Routing Fix + Hub Enhancement** — Fix reply.sendFile 500 error, extract Magic UI components into Hub, add doodle creature mascot (completed 2026-03-17)
 - [x] **Phase 17: Below-Fold Sections** — Compatible With marquee, FAQ accordion, brief description below Discover card grid (completed 2026-03-17)
-- [ ] **Phase 18: README Visual Overhaul** — Badges, hero image, structured layout, real hub screenshot
+- [x] **Phase 18: README Visual Overhaul** — Badges, hero image, structured layout, real hub screenshot (completed 2026-03-17)
 - [ ] **Phase 19: Deployment + Go Public** — Fly.io registry, DNS config, Cloudflare Tunnel, GitHub public pre-flight
 
 ---
@@ -103,7 +103,7 @@ Plans:
   2. A hero image or banner is prominently displayed
   3. README has clear structured sections: What, Install, Quick Start, Architecture, Contributing
   4. docs/hub-screenshot.png is a real screenshot (not 0-byte placeholder)
-**Plans:** 1/2 plans executed
+**Plans:** 2/2 plans complete
 
 Plans:
 - [ ] 18-01-PLAN.md — Create hero banner SVG and capture real Hub screenshot
@@ -132,7 +132,7 @@ Plans:
 | 12-15 | v2.2 | 11/11 | Complete | 2026-03-16 |
 | 16. SPA Fix + Hub Enhancement | v2.3 | 2/2 | Complete | 2026-03-17 |
 | 17. Below-Fold Sections | 1/1 | Complete    | 2026-03-17 | — |
-| 18. README Visual Overhaul | 1/2 | In Progress|  | — |
+| 18. README Visual Overhaul | 2/2 | Complete   | 2026-03-17 | — |
 | 19. Deployment + Go Public | v2.3 | 0/? | Not started | — |
 
 **Total:** 20+ phases, 62+ plans, 4 milestones shipped, 1 in progress.

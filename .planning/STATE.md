@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v2.3
 milestone_name: Launch Ready
 status: completed
-stopped_at: Completed 18-01-PLAN.md
-last_updated: "2026-03-17T07:17:57.248Z"
-last_activity: 2026-03-17 — Completed 16-02 (Magic UI component extraction)
+stopped_at: Completed 18-02-PLAN.md
+last_updated: "2026-03-17T07:45:03Z"
+last_activity: 2026-03-17 — Completed 18-02 (README visual overhaul)
 progress:
   total_phases: 4
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 5
-  completed_plans: 4
-  percent: 98
+  completed_plans: 5
+  percent: 100
 ---
 
 # AgentBnB — Project State
@@ -25,12 +25,12 @@ See: .planning/PROJECT.md (updated 2026-03-17)
 
 ## Current Position
 
-Phase: Phase 16 — SPA Routing Fix + Hub Enhancement (Plan 2/2 complete)
-Plan: 16-02 complete, Phase 16 done
-Status: Phase 16 complete, Phase 17 next
-Last activity: 2026-03-17 — Completed 16-02 (Magic UI component extraction)
+Phase: Phase 18 — README Visual Overhaul (Plan 2/2 complete)
+Plan: 18-02 complete, Phase 18 done
+Status: Phase 18 complete, Phase 19 next
+Last activity: 2026-03-17 — Completed 18-02 (README visual overhaul with hero banner, Hub screenshot, badges)
 
-Progress: [██████████] 98%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
@@ -44,11 +44,17 @@ Progress: [██████████] 98%
 | Phase | Plans | Status |
 |-------|-------|--------|
 | 16. SPA Routing Fix + Hub Enhancement | 2/2 | Complete |
-| 17. Below-Fold Sections | 0/? | Not started |
-| 18. README Visual Overhaul | 0/? | Not started |
+| 17. Below-Fold Sections | 1/1 | Complete |
+| 18. README Visual Overhaul | 2/2 | Complete |
 | 19. Deployment + Go Public | 0/? | Not started |
-| Phase 17 P01 | 205 | 2 tasks | 7 files |
-| Phase 18-readme-visual-overhaul P01 | 3min | 2 tasks | 3 files |
+
+**Performance Metrics:**
+
+| Phase | Duration | Tasks | Files |
+|-------|----------|-------|-------|
+| Phase 17 P01 | ~5min | 2 tasks | 7 files |
+| Phase 18-01 | 3min | 2 tasks | 3 files |
+| Phase 18-02 | ~10min | 2 tasks | 1 file |
 
 ## Accumulated Context
 
@@ -83,6 +89,9 @@ Progress: [██████████] 98%
 - [Phase 18-01]: Banner SVG uses translate(820,60) scale(0.18) to position doodle creature to right of title
 - [Phase 18-01]: Creature strokes changed from #2C2C2A to rgba(255,255,255,0.7) for dark background visibility
 - [Phase 18-01]: Screenshot script handles graceful fallback when backend API unavailable
+- [Phase 18-02]: README structure: badges → hero banner → tagline → What Is This → Agent Hub (screenshot) → Install → Quick Start → Key Features → Architecture → Development → Contributing → License
+- [Phase 18-02]: Static shields.io tests-passing badge used (not CI-linked) — CI setup deferred to Phase 19
+- [Phase 18-02]: Verbose technical sections (JSON schema, Autonomy Tiers table, Commands Reference) condensed to bullet points — detail lives in CLAUDE.md
 
 ### Pending Todos
 
@@ -96,9 +105,9 @@ Progress: [██████████] 98%
 
 ## Session Continuity
 
-Last session: 2026-03-17T07:17:57.246Z
-Stopped at: Completed 18-01-PLAN.md
+Last session: 2026-03-17T07:45:03Z
+Stopped at: Completed 18-02-PLAN.md
 Resume file: None
 
 ---
-*Last updated: 2026-03-17 — Phase 16 complete (SPA Routing Fix + Hub Enhancement)*
+*Last updated: 2026-03-17 — Phase 18 complete (README Visual Overhaul)*
