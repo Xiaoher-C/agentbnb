@@ -77,8 +77,8 @@
 **Plans:** 2/2 plans complete
 
 Plans:
-- [ ] 16-01-PLAN.md — SPA routing fix + shared foundation (deps, cn utility, color utils, Tailwind keyframes)
-- [ ] 16-02-PLAN.md — Extract six Magic UI components (Marquee, NumberFlow, Accordion, FlickeringGrid, LineChart, OrbitingCircles)
+- [x] 16-01-PLAN.md — SPA routing fix + shared foundation (deps, cn utility, color utils, Tailwind keyframes)
+- [x] 16-02-PLAN.md — Extract six Magic UI components (Marquee, NumberFlow, Accordion, FlickeringGrid, LineChart, OrbitingCircles)
 
 ### Phase 17: Below-Fold Sections
 **Goal**: Add supporting content sections below the Discover card grid while maintaining minimalist aesthetic
@@ -89,7 +89,10 @@ Plans:
   2. A FAQ accordion section with common AgentBnB questions is visible below Compatible With
   3. A brief value proposition section explains the protocol
   4. All below-fold sections use the existing dark theme (#08080C bg, emerald accent) and feel native to the current Hub aesthetic
-**Plans:** 0/? plans — not yet planned
+**Plans:** 1 plan
+
+Plans:
+- [ ] 17-01-PLAN.md — Three below-fold sections (Compatible With marquee, FAQ accordion, value proposition) + wiring into DiscoverPage
 
 ### Phase 18: README Visual Overhaul
 **Goal**: Make the GitHub README visually compelling and informative for first-time visitors
@@ -123,12 +126,12 @@ Plans:
 | 4-8 | v2.0 | 12/12 | Complete | 2026-03-15 |
 | 9-11 | v2.1 | 10/10 | Complete | 2026-03-16 |
 | 12-15 | v2.2 | 11/11 | Complete | 2026-03-16 |
-| 16. SPA Fix + Hub Enhancement | 2/2 | Complete    | 2026-03-17 | — |
-| 17. Below-Fold Sections | v2.3 | 0/? | Not started | — |
+| 16. SPA Fix + Hub Enhancement | v2.3 | 2/2 | Complete | 2026-03-17 |
+| 17. Below-Fold Sections | v2.3 | 0/1 | Not started | — |
 | 18. README Visual Overhaul | v2.3 | 0/? | Not started | — |
 | 19. Deployment + Go Public | v2.3 | 0/? | Not started | — |
 
-**Total:** 20+ phases, 59+ plans, 4 milestones shipped, 1 in progress.
+**Total:** 20+ phases, 60+ plans, 4 milestones shipped, 1 in progress.
 
 ---
 *Full milestone details archived in .planning/milestones/*
