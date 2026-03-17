@@ -169,6 +169,15 @@ Plans:
 - [ ] 23-01-PLAN.md — Deployment infrastructure (Dockerfile, fly.toml, CI, .env.example)
 - [ ] 23-02-PLAN.md — GitHub public checklist (secrets scan, social preview, verification)
 
+### Phase 24: Code Quality Polish
+**Goal**: Clean up type casts and duplicated patterns for maintainability
+**Depends on**: Phase 23 (v3.0 shipped)
+**Requirements**: POLISH-01 through POLISH-02
+**Success Criteria** (what must be TRUE):
+  1. `as unknown as` casts reduced from 27 to under 5 (legitimate uses only)
+  2. v1/v2 card shape detection consolidated into a single shared type guard
+**Plans:** 0/2 — not yet planned
+
 ---
 
 ## Progress
@@ -184,9 +193,10 @@ Plans:
 | 20. Conductor Core | v3.0 | 2/2 | Complete | 2026-03-17 |
 | 21. Signed Escrow | v3.0 | 4/4 | Complete | 2026-03-17 |
 | 22. Conductor Integration | v3.0 | 0/2 | Not started | — |
-| 23. Ship | v3.0 | 0/2 | Not started | — |
+| 23. Ship | v3.0 | 0/2 | Planned | — |
+| 24. Code Quality Polish | v3.1 | 0/2 | Not started | — |
 
-**Total:** 23 phases, 71+ plans, 5 milestones shipped, 1 in progress.
+**Total:** 24 phases, 73+ plans, 5 milestones shipped, 1 in progress.
 
 ---
 *Full milestone details archived in .planning/milestones/*
