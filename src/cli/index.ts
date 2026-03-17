@@ -10,6 +10,7 @@ import { networkInterfaces, homedir } from 'node:os';
 import { createInterface } from 'node:readline';
 
 import { loadConfig, saveConfig, getConfigDir } from './config.js';
+import { generateKeyPair, saveKeyPair, loadKeyPair } from '../credit/signing.js';
 import { DEFAULT_AUTONOMY_CONFIG } from '../autonomy/tiers.js';
 import { IdleMonitor } from '../autonomy/idle-monitor.js';
 import { BudgetManager, DEFAULT_BUDGET_CONFIG } from '../credit/budget.js';
@@ -114,6 +115,16 @@ program
 
     saveConfig(config);
 
+    // Generate Ed25519 keypair (idempotent — preserves existing keypair)
+    let keypairStatus = 'existing';
+    try {
+      loadKeyPair(configDir);
+    } catch {
+      const keys = generateKeyPair();
+      saveKeyPair(configDir, keys);
+      keypairStatus = 'generated';
+    }
+
     // Bootstrap credit ledger with 100 credits
     const creditDb = openCreditDb(creditDbPath);
     bootstrapAgent(creditDb, owner, 100);
@@ -195,6 +206,7 @@ program
         config_dir: configDir,
         token,
         gateway_url: config.gateway_url,
+        keypair: keypairStatus,
       };
       if (!skipDetect) {
         jsonOutput.detected_keys = detectedKeys;
@@ -207,6 +219,7 @@ program
       console.log(`  Token:   ${token}`);
       console.log(`  Config:  ${configDir}/config.json`);
       console.log(`  Credits: 100 (starter grant)`);
+      console.log(`  Keypair: ${keypairStatus === 'generated' ? 'generated (Ed25519)' : 'preserved (existing)'}`);
       console.log(`  Gateway: http://${ip}:${port}`);
     }
   });

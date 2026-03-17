@@ -41,6 +41,8 @@ export interface AgentBnBConfig {
    * Set via `agentbnb config set reserve <N>`.
    */
   budget?: BudgetConfig;
+  /** Hex-encoded Ed25519 public key for convenience (canonical source is public.key file). */
+  public_key?: string;
 }
 
 /**
