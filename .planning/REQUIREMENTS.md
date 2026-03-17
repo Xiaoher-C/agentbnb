@@ -82,12 +82,12 @@ Requirements for v2.3 Launch Ready. Each maps to roadmap phases 16-19.
 
 ### Hub Enhancement — Magic UI Components
 
-- [ ] **MAGICUI-01**: Extract and integrate NumberFlow component into hub/src/components/ui/ for animated number transitions
-- [ ] **MAGICUI-02**: Extract and integrate Marquee component for "Compatible With" scrolling logo strip
-- [ ] **MAGICUI-03**: Extract and integrate FlickeringGrid component as subtle background texture
-- [ ] **MAGICUI-04**: Extract and integrate Accordion component for FAQ section
-- [ ] **MAGICUI-05**: Extract and integrate LineChart (SVG-based) component for lightweight chart alternative
-- [ ] **MAGICUI-06**: Extract and integrate Orbiting Circles component for visual decoration
+- [x] **MAGICUI-01**: Extract and integrate NumberFlow component into hub/src/components/ui/ for animated number transitions
+- [x] **MAGICUI-02**: Extract and integrate Marquee component for "Compatible With" scrolling logo strip
+- [x] **MAGICUI-03**: Extract and integrate FlickeringGrid component as subtle background texture
+- [x] **MAGICUI-04**: Extract and integrate Accordion component for FAQ section
+- [x] **MAGICUI-05**: Extract and integrate LineChart (SVG-based) component for lightweight chart alternative
+- [x] **MAGICUI-06**: Extract and integrate Orbiting Circles component for visual decoration
 
 ### Hub Below-Fold Sections
 

@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v2.3
 milestone_name: Launch Ready
 status: executing
-stopped_at: Completed 16-01-PLAN.md
-last_updated: "2026-03-17T05:04:22.072Z"
-last_activity: 2026-03-17 — Completed 16-01 (SPA routing fix + Magic UI foundation)
+stopped_at: Completed 16-02-PLAN.md
+last_updated: "2026-03-17T05:10:14Z"
+last_activity: 2026-03-17 — Completed 16-02 (Magic UI component extraction)
 progress:
   total_phases: 4
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 2
-  completed_plans: 1
+  completed_plans: 2
   percent: 98
 ---
 
@@ -25,17 +25,17 @@ See: .planning/PROJECT.md (updated 2026-03-17)
 
 ## Current Position
 
-Phase: Phase 16 — SPA Routing Fix + Hub Enhancement (Plan 1/2 complete)
-Plan: 16-01 complete, 16-02 next
-Status: Executing Phase 16
-Last activity: 2026-03-17 — Completed 16-01 (SPA routing fix + Magic UI foundation)
+Phase: Phase 16 — SPA Routing Fix + Hub Enhancement (Plan 2/2 complete)
+Plan: 16-02 complete, Phase 16 done
+Status: Phase 16 complete, Phase 17 next
+Last activity: 2026-03-17 — Completed 16-02 (Magic UI component extraction)
 
 Progress: [██████████] 98%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 58 (v1.1: 24, v2.0: 12, v2.1: 10, v2.2: 11, v2.3: 1)
+- Total plans completed: 59 (v1.1: 24, v2.0: 12, v2.1: 10, v2.2: 11, v2.3: 2)
 - Average duration: unknown
 - Total execution time: unknown
 
@@ -43,7 +43,7 @@ Progress: [██████████] 98%
 
 | Phase | Plans | Status |
 |-------|-------|--------|
-| 16. SPA Routing Fix + Hub Enhancement | 1/2 | In progress |
+| 16. SPA Routing Fix + Hub Enhancement | 2/2 | Complete |
 | 17. Below-Fold Sections | 0/? | Not started |
 | 18. README Visual Overhaul | 0/? | Not started |
 | 19. Deployment + Go Public | 0/? | Not started |
@@ -74,6 +74,9 @@ Progress: [██████████] 98%
 - [v2.3 init]: Keep minimalist aesthetic — the homepage should show agents immediately, supporting info below fold
 - [Phase 16]: Removed decorateReply: false from @fastify/static to enable reply.sendFile() in setNotFoundHandler
 - [Phase 16]: color.ts retains CSS variable resolution (var()) support for future flexibility
+- [Phase 16]: Used Format type from @number-flow/react for NumberFlowCell type safety
+- [Phase 16]: FlickeringGrid simplified — removed text-mask canvas logic for background use case
+- [Phase 16]: Hub UI primitives live in hub/src/components/ui/ with relative imports, dark-only
 
 ### Pending Todos
 
@@ -87,9 +90,9 @@ Progress: [██████████] 98%
 
 ## Session Continuity
 
-Last session: 2026-03-17T05:04:22.070Z
-Stopped at: Completed 16-01-PLAN.md
+Last session: 2026-03-17T05:10:14Z
+Stopped at: Completed 16-02-PLAN.md
 Resume file: None
 
 ---
-*Last updated: 2026-03-17 — v2.3 Launch Ready milestone planned*
+*Last updated: 2026-03-17 — Phase 16 complete (SPA Routing Fix + Hub Enhancement)*
