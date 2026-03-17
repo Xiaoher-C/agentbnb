@@ -1,0 +1,34 @@
+{
+  "id": "a1b2c3d4-1111-2222-3333-444455556666",
+  "owner": "chengwen-openclaw",
+  "name": "ElevenLabs TTS Pro (zh-TW)",
+  "description": "高品質中文語音合成，支援多語言。Powered by ElevenLabs Multilingual v2。",
+  "level": 1,
+  "inputs": [
+    {
+      "name": "text",
+      "type": "text",
+      "description": "要轉換為語音的文字內容",
+      "required": true
+    }
+  ],
+  "outputs": [
+    {
+      "name": "audio",
+      "type": "audio",
+      "description": "生成的語音音檔 (WAV)"
+    }
+  ],
+  "pricing": {
+    "credits_per_call": 5
+  },
+  "availability": {
+    "online": true
+  },
+  "metadata": {
+    "apis_used": ["elevenlabs"],
+    "avg_latency_ms": 3200,
+    "success_rate": 0.97,
+    "tags": ["tts", "zh-TW", "multilingual", "voice", "audio"]
+  }
+}
