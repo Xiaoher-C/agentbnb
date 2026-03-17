@@ -92,7 +92,6 @@ export function createRegistryServer(opts: RegistryServerOptions): FastifyInstan
     void server.register(fastifyStatic, {
       root: hubDistDir,
       prefix: '/hub/',
-      decorateReply: false,
     });
 
     // Redirect /hub (no trailing slash) to /hub/ so assets resolve correctly
