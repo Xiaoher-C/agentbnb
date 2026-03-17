@@ -149,12 +149,29 @@ export function useCards(): UseCardsResult {
     return result;
   })();
 
-  // Stats
-  const agentsOnline = new Set(
+  // Stats — fetch from /api/stats for accurate counts
+  const [stats, setStats] = useState({ agents_online: 0, total_exchanges: 0 });
+  useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        const res = await fetch('/api/stats');
+        if (res.ok) {
+          const data = await res.json() as { agents_online: number; total_capabilities: number; total_exchanges: number };
+          setStats({ agents_online: data.agents_online, total_exchanges: data.total_exchanges });
+        }
+      } catch { /* graceful degradation */ }
+    };
+    void fetchStats();
+    const interval = setInterval(() => { void fetchStats(); }, POLL_INTERVAL_MS);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Fallback: use card data for online count if stats endpoint unavailable
+  const agentsOnline = stats.agents_online || new Set(
     allCards.filter((c) => c.availability.online).map((c) => c.owner),
   ).size;
   const totalCapabilities = total;
-  const totalExchanges = 0; // No exchange endpoint yet
+  const totalExchanges = stats.total_exchanges;
 
   const retry = useCallback(() => {
     setLoading(true);

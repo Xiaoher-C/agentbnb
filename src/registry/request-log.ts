@@ -204,7 +204,7 @@ export function getActivityFeed(
              r.status, r.credits_charged, r.latency_ms, r.created_at, r.action_type
       FROM request_log r
       LEFT JOIN capability_cards c ON r.card_id = c.id
-      WHERE (r.action_type IS NULL OR r.action_type = 'auto_share')
+      WHERE (r.action_type IS NULL OR r.action_type IN ('auto_share', 'agent_joined'))
         AND r.created_at > ?
       ORDER BY r.created_at DESC
       LIMIT ?
@@ -217,7 +217,7 @@ export function getActivityFeed(
            r.status, r.credits_charged, r.latency_ms, r.created_at, r.action_type
     FROM request_log r
     LEFT JOIN capability_cards c ON r.card_id = c.id
-    WHERE (r.action_type IS NULL OR r.action_type = 'auto_share')
+    WHERE (r.action_type IS NULL OR r.action_type IN ('auto_share', 'agent_joined'))
     ORDER BY r.created_at DESC
     LIMIT ?
   `);

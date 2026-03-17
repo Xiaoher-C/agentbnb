@@ -80,3 +80,54 @@ export async function requestCapability(opts: RequestOptions): Promise<unknown> 
 
   return body.result;
 }
+
+/**
+ * Options for requesting a capability via WebSocket relay.
+ */
+export interface RelayRequestOptions {
+  /** Target agent owner to relay the request to. */
+  targetOwner: string;
+  /** Capability Card ID to execute. */
+  cardId: string;
+  /** Optional skill ID within the card. */
+  skillId?: string;
+  /** Input parameters for the capability. */
+  params?: Record<string, unknown>;
+  /** Signed escrow receipt for cross-machine credit verification. */
+  escrowReceipt?: EscrowReceipt;
+  /** Timeout in milliseconds. Default 30000. */
+  timeoutMs?: number;
+}
+
+/**
+ * Sends a capability request to another agent via the WebSocket relay.
+ *
+ * @param relay - Connected RelayClient instance.
+ * @param opts - Relay request options.
+ * @returns The result from the capability execution.
+ * @throws {AgentBnBError} on relay error, timeout, or target agent offline.
+ */
+export async function requestViaRelay(
+  relay: import('../relay/websocket-client.js').RelayClient,
+  opts: RelayRequestOptions,
+): Promise<unknown> {
+  try {
+    return await relay.request({
+      targetOwner: opts.targetOwner,
+      cardId: opts.cardId,
+      skillId: opts.skillId,
+      params: opts.params ?? {},
+      escrowReceipt: opts.escrowReceipt as Record<string, unknown> | undefined,
+      timeoutMs: opts.timeoutMs,
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    if (message.includes('timeout')) {
+      throw new AgentBnBError(message, 'TIMEOUT');
+    }
+    if (message.includes('offline')) {
+      throw new AgentBnBError(message, 'AGENT_OFFLINE');
+    }
+    throw new AgentBnBError(message, 'RELAY_ERROR');
+  }
+}

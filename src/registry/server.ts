@@ -1,6 +1,7 @@
 import Fastify, { type FastifyInstance } from 'fastify';
 import cors from '@fastify/cors';
 import fastifyStatic from '@fastify/static';
+import fastifyWebsocket from '@fastify/websocket';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { existsSync } from 'node:fs';
@@ -14,6 +15,8 @@ import { getBalance, getTransactions } from '../credit/ledger.js';
 import { detectApiKeys, buildDraftCard, KNOWN_API_KEYS } from '../cli/onboarding.js';
 import { AgentBnBError } from '../types/index.js';
 import type { CapabilityCard, CapabilityCardV2 } from '../types/index.js';
+import { registerWebSocketRelay } from '../relay/websocket-relay.js';
+import type { RelayState } from '../relay/types.js';
 
 /**
  * Options for creating the public registry server.
@@ -66,7 +69,13 @@ function stripInternal(card: CapabilityCard): Omit<CapabilityCard, '_internal'> 
  * @param opts - Server options including the database and optional silent flag.
  * @returns A Fastify instance (not yet listening — caller calls .listen() or uses .inject() in tests).
  */
-export function createRegistryServer(opts: RegistryServerOptions): FastifyInstance {
+/** Return type from createRegistryServer — includes relay state for lifecycle management. */
+export interface RegistryServerResult {
+  server: FastifyInstance;
+  relayState: RelayState | null;
+}
+
+export function createRegistryServer(opts: RegistryServerOptions): RegistryServerResult {
   const { registryDb: db, silent = false } = opts;
 
   const server = Fastify({ logger: !silent });
@@ -77,6 +86,15 @@ export function createRegistryServer(opts: RegistryServerOptions): FastifyInstan
     methods: ['GET', 'POST', 'PATCH', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
   });
+
+  // Register WebSocket support for relay
+  void server.register(fastifyWebsocket);
+
+  // Register WebSocket relay — agents connect via /ws for zero-config networking
+  let relayState: RelayState | null = null;
+  if (opts.creditDb) {
+    relayState = registerWebSocketRelay(server, db);
+  }
 
   // Register static file serving for the hub SPA (optional — skipped if hub not built)
   // Resolve hub/dist/ relative to this file's compiled location in dist/registry/server.js
@@ -381,6 +399,42 @@ export function createRegistryServer(opts: RegistryServerOptions): FastifyInstan
     return reply.send({ items, total: items.length, limit });
   });
 
+  /**
+   * GET /api/stats — Returns aggregate network statistics for the Hub.
+   *
+   * - agents_online: count of connected agents via WebSocket relay + cards with online=true
+   * - total_capabilities: total number of registered capability cards
+   * - total_exchanges: count of successful exchanges (excluding autonomy audits)
+   */
+  server.get('/api/stats', async (_request, reply) => {
+    const allCards = listCards(db);
+
+    // Online agents: relay connections + cards marked online (deduplicated by owner)
+    const onlineOwners = new Set<string>();
+    if (relayState) {
+      for (const owner of relayState.getOnlineOwners()) {
+        onlineOwners.add(owner);
+      }
+    }
+    for (const card of allCards) {
+      if (card.availability.online) {
+        onlineOwners.add(card.owner);
+      }
+    }
+
+    // Total exchanges: successful requests excluding autonomy audits
+    const exchangeStmt = db.prepare(
+      "SELECT COUNT(*) as count FROM request_log WHERE status = 'success' AND (action_type IS NULL OR action_type = 'auto_share')"
+    );
+    const exchangeRow = exchangeStmt.get() as { count: number };
+
+    return reply.send({
+      agents_online: onlineOwners.size,
+      total_capabilities: allCards.length,
+      total_exchanges: exchangeRow.count,
+    });
+  });
+
   // Register owner routes as a scoped plugin (NOT fastify-plugin) so the auth hook
   // only applies to these routes and does NOT affect public /cards and /health endpoints.
   if (opts.ownerApiKey && opts.ownerName) {
@@ -559,5 +613,5 @@ export function createRegistryServer(opts: RegistryServerOptions): FastifyInstan
     });
   }
 
-  return server;
+  return { server, relayState };
 }

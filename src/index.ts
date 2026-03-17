@@ -94,3 +94,21 @@ export {
   releaseRequesterEscrow,
 } from './credit/settlement.js';
 export { type EscrowReceipt } from './types/index.js';
+
+// v3.1 — WebSocket Relay
+export {
+  RelayMessageSchema,
+  type RelayMessage,
+  type RegisterMessage,
+  type RegisteredMessage,
+  type RelayRequestMessage,
+  type IncomingRequestMessage,
+  type RelayResponseMessage,
+  type ResponseMessage,
+  type ErrorMessage,
+  type RelayState,
+} from './relay/types.js';
+export { registerWebSocketRelay } from './relay/websocket-relay.js';
+export { RelayClient, type RelayClientOptions, type RelayHandlerResult } from './relay/websocket-client.js';
+export { executeCapabilityRequest, type ExecuteRequestOptions, type ExecuteResult } from './gateway/execute.js';
+export { requestViaRelay, type RelayRequestOptions } from './gateway/client.js';

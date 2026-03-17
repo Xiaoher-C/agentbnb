@@ -41,7 +41,7 @@ describe('createRegistryServer', () => {
 
   // Test 1: GET /health returns { status: 'ok' }
   it('GET /health returns { status: "ok" }', async () => {
-    const server = createRegistryServer({ registryDb: db, silent: true });
+    const { server } = createRegistryServer({ registryDb: db, silent: true });
     await server.ready();
 
     const response = await server.inject({ method: 'GET', url: '/health' });
@@ -53,7 +53,7 @@ describe('createRegistryServer', () => {
 
   // Test 2: GET /cards with no cards returns empty paginated result
   it('GET /cards with no cards returns empty paginated result', async () => {
-    const server = createRegistryServer({ registryDb: db, silent: true });
+    const { server } = createRegistryServer({ registryDb: db, silent: true });
     await server.ready();
 
     const response = await server.inject({ method: 'GET', url: '/cards' });
@@ -69,7 +69,7 @@ describe('createRegistryServer', () => {
     insertCard(db, makeCard({ name: 'Card Two', description: 'Second capability' }));
     insertCard(db, makeCard({ name: 'Card Three', description: 'Third capability' }));
 
-    const server = createRegistryServer({ registryDb: db, silent: true });
+    const { server } = createRegistryServer({ registryDb: db, silent: true });
     await server.ready();
 
     const response = await server.inject({ method: 'GET', url: '/cards' });
@@ -86,7 +86,7 @@ describe('createRegistryServer', () => {
     insertCard(db, makeCard({ name: 'Voice Synthesis', description: 'TTS capability' }));
     insertCard(db, makeCard({ name: 'Image Classifier', description: 'Classify images' }));
 
-    const server = createRegistryServer({ registryDb: db, silent: true });
+    const { server } = createRegistryServer({ registryDb: db, silent: true });
     await server.ready();
 
     const response = await server.inject({ method: 'GET', url: '/cards?q=voice' });
@@ -104,7 +104,7 @@ describe('createRegistryServer', () => {
     insertCard(db, makeCard({ name: 'Pipeline Cap', description: 'Level 2', level: 2 }));
     insertCard(db, makeCard({ name: 'Env Cap', description: 'Level 3', level: 3 }));
 
-    const server = createRegistryServer({ registryDb: db, silent: true });
+    const { server } = createRegistryServer({ registryDb: db, silent: true });
     await server.ready();
 
     const response = await server.inject({ method: 'GET', url: '/cards?level=1' });
@@ -127,7 +127,7 @@ describe('createRegistryServer', () => {
       makeCard({ name: 'Offline Card', description: 'Offline', availability: { online: false } })
     );
 
-    const server = createRegistryServer({ registryDb: db, silent: true });
+    const { server } = createRegistryServer({ registryDb: db, silent: true });
     await server.ready();
 
     const response = await server.inject({ method: 'GET', url: '/cards?online=true' });
@@ -158,7 +158,7 @@ describe('createRegistryServer', () => {
       })
     );
 
-    const server = createRegistryServer({ registryDb: db, silent: true });
+    const { server } = createRegistryServer({ registryDb: db, silent: true });
     await server.ready();
 
     const response = await server.inject({ method: 'GET', url: '/cards?tag=tts' });
@@ -193,7 +193,7 @@ describe('createRegistryServer', () => {
       makeCard({ name: 'No Success', description: 'No success rate', metadata: {} })
     );
 
-    const server = createRegistryServer({ registryDb: db, silent: true });
+    const { server } = createRegistryServer({ registryDb: db, silent: true });
     await server.ready();
 
     const response = await server.inject({ method: 'GET', url: '/cards?min_success_rate=0.8' });
@@ -228,7 +228,7 @@ describe('createRegistryServer', () => {
       makeCard({ name: 'No Latency', description: 'No latency data', metadata: {} })
     );
 
-    const server = createRegistryServer({ registryDb: db, silent: true });
+    const { server } = createRegistryServer({ registryDb: db, silent: true });
     await server.ready();
 
     const response = await server.inject({ method: 'GET', url: '/cards?max_latency_ms=100' });
@@ -267,7 +267,7 @@ describe('createRegistryServer', () => {
       })
     );
 
-    const server = createRegistryServer({ registryDb: db, silent: true });
+    const { server } = createRegistryServer({ registryDb: db, silent: true });
     await server.ready();
 
     const response = await server.inject({ method: 'GET', url: '/cards?sort=success_rate' });
@@ -307,7 +307,7 @@ describe('createRegistryServer', () => {
       })
     );
 
-    const server = createRegistryServer({ registryDb: db, silent: true });
+    const { server } = createRegistryServer({ registryDb: db, silent: true });
     await server.ready();
 
     const response = await server.inject({ method: 'GET', url: '/cards?sort=latency' });
@@ -326,7 +326,7 @@ describe('createRegistryServer', () => {
     insertCard(db, makeCard({ name: 'Card B', description: 'Second' }));
     insertCard(db, makeCard({ name: 'Card C', description: 'Third' }));
 
-    const server = createRegistryServer({ registryDb: db, silent: true });
+    const { server } = createRegistryServer({ registryDb: db, silent: true });
     await server.ready();
 
     const response = await server.inject({ method: 'GET', url: '/cards?limit=2&offset=1' });
@@ -342,7 +342,7 @@ describe('createRegistryServer', () => {
 
   // Test 13: GET /cards?limit=200 is capped at 100
   it('GET /cards?limit=200 is capped at 100', async () => {
-    const server = createRegistryServer({ registryDb: db, silent: true });
+    const { server } = createRegistryServer({ registryDb: db, silent: true });
     await server.ready();
 
     const response = await server.inject({ method: 'GET', url: '/cards?limit=200' });
@@ -358,7 +358,7 @@ describe('createRegistryServer', () => {
     const card = makeCard({ name: 'Specific Card', description: 'A specific capability' });
     insertCard(db, card);
 
-    const server = createRegistryServer({ registryDb: db, silent: true });
+    const { server } = createRegistryServer({ registryDb: db, silent: true });
     await server.ready();
 
     const response = await server.inject({ method: 'GET', url: `/cards/${card.id}` });
@@ -372,7 +372,7 @@ describe('createRegistryServer', () => {
 
   // Test 15: GET /cards/:id with non-existent ID returns 404
   it('GET /cards/:id with non-existent ID returns 404', async () => {
-    const server = createRegistryServer({ registryDb: db, silent: true });
+    const { server } = createRegistryServer({ registryDb: db, silent: true });
     await server.ready();
 
     const response = await server.inject({
@@ -394,7 +394,7 @@ describe('createRegistryServer', () => {
     // Cast to insert _internal field which is valid in the schema but should be stripped
     insertCard(db, { ...cardWithInternal, _internal: { secret: 'sensitive-value' } } as CapabilityCard);
 
-    const server = createRegistryServer({ registryDb: db, silent: true });
+    const { server } = createRegistryServer({ registryDb: db, silent: true });
     await server.ready();
 
     const response = await server.inject({ method: 'GET', url: '/cards' });
@@ -414,7 +414,7 @@ describe('createRegistryServer', () => {
     });
     insertCard(db, { ...cardWithInternal, _internal: { key: 'top-secret' } } as CapabilityCard);
 
-    const server = createRegistryServer({ registryDb: db, silent: true });
+    const { server } = createRegistryServer({ registryDb: db, silent: true });
     await server.ready();
 
     const response = await server.inject({ method: 'GET', url: `/cards/${cardWithInternal.id}` });
@@ -428,7 +428,7 @@ describe('createRegistryServer', () => {
 
   // Test 16: Response headers include access-control-allow-origin (CORS)
   it('Response headers include CORS access-control-allow-origin', async () => {
-    const server = createRegistryServer({ registryDb: db, silent: true });
+    const { server } = createRegistryServer({ registryDb: db, silent: true });
     await server.ready();
 
     const response = await server.inject({
@@ -474,7 +474,7 @@ describe('createRegistryServer — owner endpoints', () => {
 
   // Test: GET /me with valid Bearer token returns 200 + { owner, balance }
   it('GET /me with valid Bearer token returns 200 + { owner, balance }', async () => {
-    const server = createRegistryServer({
+    const { server } = createRegistryServer({
       registryDb: db,
       silent: true,
       ownerApiKey: API_KEY,
@@ -498,7 +498,7 @@ describe('createRegistryServer — owner endpoints', () => {
 
   // Test: GET /me with invalid Bearer token returns 401
   it('GET /me with invalid Bearer token returns 401', async () => {
-    const server = createRegistryServer({
+    const { server } = createRegistryServer({
       registryDb: db,
       silent: true,
       ownerApiKey: API_KEY,
@@ -519,7 +519,7 @@ describe('createRegistryServer — owner endpoints', () => {
 
   // Test: GET /me with no Authorization header returns 401
   it('GET /me with no Authorization header returns 401', async () => {
-    const server = createRegistryServer({
+    const { server } = createRegistryServer({
       registryDb: db,
       silent: true,
       ownerApiKey: API_KEY,
@@ -536,7 +536,7 @@ describe('createRegistryServer — owner endpoints', () => {
 
   // Test: GET /requests with valid key returns { items: [...], limit: N } newest-first
   it('GET /requests with valid key returns { items, limit }', async () => {
-    const server = createRegistryServer({
+    const { server } = createRegistryServer({
       registryDb: db,
       silent: true,
       ownerApiKey: API_KEY,
@@ -560,7 +560,7 @@ describe('createRegistryServer — owner endpoints', () => {
 
   // Test: GET /requests?limit=5 returns at most 5 entries
   it('GET /requests?limit=5 returns at most 5 entries', async () => {
-    const server = createRegistryServer({
+    const { server } = createRegistryServer({
       registryDb: db,
       silent: true,
       ownerApiKey: API_KEY,
@@ -583,7 +583,7 @@ describe('createRegistryServer — owner endpoints', () => {
 
   // Test: GET /requests?since=24h returns only entries from last 24 hours
   it('GET /requests?since=24h is accepted without error', async () => {
-    const server = createRegistryServer({
+    const { server } = createRegistryServer({
       registryDb: db,
       silent: true,
       ownerApiKey: API_KEY,
@@ -620,7 +620,7 @@ describe('createRegistryServer — owner endpoints', () => {
       metadata: {},
     });
 
-    const server = createRegistryServer({
+    const { server } = createRegistryServer({
       registryDb: db,
       silent: true,
       ownerApiKey: API_KEY,
@@ -649,7 +649,7 @@ describe('createRegistryServer — owner endpoints', () => {
     vi.mocked(detectApiKeys).mockReturnValue([]);
     vi.mocked(buildDraftCard).mockReturnValue(null);
 
-    const server = createRegistryServer({
+    const { server } = createRegistryServer({
       registryDb: db,
       silent: true,
       ownerApiKey: API_KEY,
@@ -676,7 +676,7 @@ describe('createRegistryServer — owner endpoints', () => {
     const card = makeOwnerCard({ availability: { online: true } });
     insertCard(db, card);
 
-    const server = createRegistryServer({
+    const { server } = createRegistryServer({
       registryDb: db,
       silent: true,
       ownerApiKey: API_KEY,
@@ -703,7 +703,7 @@ describe('createRegistryServer — owner endpoints', () => {
     const card = makeOwnerCard({ owner: 'other-owner' });
     insertCard(db, card);
 
-    const server = createRegistryServer({
+    const { server } = createRegistryServer({
       registryDb: db,
       silent: true,
       ownerApiKey: API_KEY,
@@ -724,7 +724,7 @@ describe('createRegistryServer — owner endpoints', () => {
 
   // Test: POST /cards/:id/toggle-online returns 404 for non-existent card
   it('POST /cards/:id/toggle-online returns 404 for non-existent card', async () => {
-    const server = createRegistryServer({
+    const { server } = createRegistryServer({
       registryDb: db,
       silent: true,
       ownerApiKey: API_KEY,
@@ -748,7 +748,7 @@ describe('createRegistryServer — owner endpoints', () => {
     const card = makeOwnerCard();
     insertCard(db, card);
 
-    const server = createRegistryServer({
+    const { server } = createRegistryServer({
       registryDb: db,
       silent: true,
       ownerApiKey: API_KEY,
@@ -780,7 +780,7 @@ describe('createRegistryServer — owner endpoints', () => {
     const card = makeOwnerCard({ owner: 'other-owner' });
     insertCard(db, card);
 
-    const server = createRegistryServer({
+    const { server } = createRegistryServer({
       registryDb: db,
       silent: true,
       ownerApiKey: API_KEY,
@@ -805,7 +805,7 @@ describe('createRegistryServer — owner endpoints', () => {
 
   // Regression: GET /cards (public) still returns 200 without auth header
   it('GET /cards still returns 200 without auth header (regression)', async () => {
-    const server = createRegistryServer({
+    const { server } = createRegistryServer({
       registryDb: db,
       silent: true,
       ownerApiKey: API_KEY,
@@ -822,7 +822,7 @@ describe('createRegistryServer — owner endpoints', () => {
 
   // Regression: GET /health still returns 200 without auth header
   it('GET /health still returns 200 without auth header (regression)', async () => {
-    const server = createRegistryServer({
+    const { server } = createRegistryServer({
       registryDb: db,
       silent: true,
       ownerApiKey: API_KEY,
@@ -857,7 +857,7 @@ describe('createRegistryServer — pending-requests endpoints', () => {
       ownerApiKey: API_KEY,
       ownerName: OWNER,
       creditDb,
-    });
+    }).server;
   }
 
   it('GET /me/pending-requests returns 200 with empty array when no pending requests', async () => {
@@ -1037,7 +1037,7 @@ describe('createRegistryServer — GET /api/agents', () => {
   });
 
   it('returns { items: [], total: 0 } when no cards registered', async () => {
-    const server = createRegistryServer({ registryDb: db, silent: true });
+    const { server } = createRegistryServer({ registryDb: db, silent: true });
     await server.ready();
 
     const response = await server.inject({ method: 'GET', url: '/api/agents' });
@@ -1062,7 +1062,7 @@ describe('createRegistryServer — GET /api/agents', () => {
       metadata: { success_rate: 0.9 },
     });
 
-    const server = createRegistryServer({ registryDb: db, silent: true });
+    const { server } = createRegistryServer({ registryDb: db, silent: true });
     await server.ready();
 
     const response = await server.inject({ method: 'GET', url: '/api/agents' });
@@ -1119,7 +1119,7 @@ describe('createRegistryServer — GET /api/agents', () => {
       metadata: { success_rate: 0.5 },
     });
 
-    const server = createRegistryServer({ registryDb: db, silent: true });
+    const { server } = createRegistryServer({ registryDb: db, silent: true });
     await server.ready();
 
     const response = await server.inject({ method: 'GET', url: '/api/agents' });
@@ -1146,7 +1146,7 @@ describe('createRegistryServer — GET /api/agents', () => {
       metadata: {},
     });
 
-    const server = createRegistryServer({ registryDb: db, silent: true });
+    const { server } = createRegistryServer({ registryDb: db, silent: true });
     await server.ready();
 
     const response = await server.inject({ method: 'GET', url: '/api/agents' });
@@ -1197,7 +1197,7 @@ describe('createRegistryServer — GET /api/agents', () => {
       created_at: new Date().toISOString(),
     });
 
-    const server = createRegistryServer({ registryDb: db, silent: true });
+    const { server } = createRegistryServer({ registryDb: db, silent: true });
     await server.ready();
 
     const response = await server.inject({ method: 'GET', url: '/api/agents' });
@@ -1216,7 +1216,7 @@ describe('createRegistryServer — GET /api/agents/:owner', () => {
   });
 
   it('returns 404 for unknown owner', async () => {
-    const server = createRegistryServer({ registryDb: db, silent: true });
+    const { server } = createRegistryServer({ registryDb: db, silent: true });
     await server.ready();
 
     const response = await server.inject({ method: 'GET', url: '/api/agents/nonexistent-owner' });
@@ -1242,7 +1242,7 @@ describe('createRegistryServer — GET /api/agents/:owner', () => {
       metadata: { success_rate: 0.8 },
     });
 
-    const server = createRegistryServer({ registryDb: db, silent: true });
+    const { server } = createRegistryServer({ registryDb: db, silent: true });
     await server.ready();
 
     const response = await server.inject({ method: 'GET', url: '/api/agents/agent-bob' });
@@ -1293,7 +1293,7 @@ describe('createRegistryServer — GET /api/agents/:owner', () => {
       metadata: {},
     });
 
-    const server = createRegistryServer({ registryDb: db, silent: true });
+    const { server } = createRegistryServer({ registryDb: db, silent: true });
     await server.ready();
 
     const response = await server.inject({ method: 'GET', url: '/api/agents/agent-charlie' });
@@ -1334,7 +1334,7 @@ describe('createRegistryServer — GET /api/agents/:owner', () => {
       created_at: new Date().toISOString(),
     });
 
-    const server = createRegistryServer({ registryDb: db, silent: true });
+    const { server } = createRegistryServer({ registryDb: db, silent: true });
     await server.ready();
 
     const response = await server.inject({ method: 'GET', url: '/api/agents/agent-diana' });
@@ -1355,7 +1355,7 @@ describe('createRegistryServer — GET /api/activity', () => {
   });
 
   it('returns { items: [], total: 0, limit: 20 } when no log entries', async () => {
-    const server = createRegistryServer({ registryDb: db, silent: true });
+    const { server } = createRegistryServer({ registryDb: db, silent: true });
     await server.ready();
 
     const response = await server.inject({ method: 'GET', url: '/api/activity' });
@@ -1395,7 +1395,7 @@ describe('createRegistryServer — GET /api/activity', () => {
       action_type: null,
     });
 
-    const server = createRegistryServer({ registryDb: db, silent: true });
+    const { server } = createRegistryServer({ registryDb: db, silent: true });
     await server.ready();
 
     const response = await server.inject({ method: 'GET', url: '/api/activity' });
@@ -1471,7 +1471,7 @@ describe('createRegistryServer — GET /api/activity', () => {
       action_type: 'auto_request',
     });
 
-    const server = createRegistryServer({ registryDb: db, silent: true });
+    const { server } = createRegistryServer({ registryDb: db, silent: true });
     await server.ready();
 
     const response = await server.inject({ method: 'GET', url: '/api/activity' });
@@ -1514,7 +1514,7 @@ describe('createRegistryServer — GET /api/activity', () => {
       action_type: 'auto_share',
     });
 
-    const server = createRegistryServer({ registryDb: db, silent: true });
+    const { server } = createRegistryServer({ registryDb: db, silent: true });
     await server.ready();
 
     const response = await server.inject({ method: 'GET', url: '/api/activity' });
@@ -1572,7 +1572,7 @@ describe('createRegistryServer — GET /api/activity', () => {
       action_type: null,
     });
 
-    const server = createRegistryServer({ registryDb: db, silent: true });
+    const { server } = createRegistryServer({ registryDb: db, silent: true });
     await server.ready();
 
     const response = await server.inject({
@@ -1618,7 +1618,7 @@ describe('createRegistryServer — GET /api/activity', () => {
       });
     }
 
-    const server = createRegistryServer({ registryDb: db, silent: true });
+    const { server } = createRegistryServer({ registryDb: db, silent: true });
     await server.ready();
 
     const response = await server.inject({ method: 'GET', url: '/api/activity?limit=2' });
@@ -1672,7 +1672,7 @@ describe('createRegistryServer — GET /api/activity', () => {
       action_type: null,
     });
 
-    const server = createRegistryServer({ registryDb: db, silent: true });
+    const { server } = createRegistryServer({ registryDb: db, silent: true });
     await server.ready();
 
     const response = await server.inject({ method: 'GET', url: '/api/activity' });
@@ -1698,7 +1698,7 @@ describe('createRegistryServer — GET /api/activity', () => {
       action_type: null,
     });
 
-    const server = createRegistryServer({ registryDb: db, silent: true });
+    const { server } = createRegistryServer({ registryDb: db, silent: true });
     await server.ready();
 
     const response = await server.inject({ method: 'GET', url: '/api/activity' });
@@ -1728,7 +1728,7 @@ describe('createRegistryServer — GET /me/transactions', () => {
       ownerApiKey: API_KEY,
       ownerName: OWNER,
       creditDb: withCreditDb ? creditDb : undefined,
-    });
+    }).server;
   }
 
   it('GET /me/transactions returns 200 with { items, limit } structure', async () => {

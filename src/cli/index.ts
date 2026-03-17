@@ -22,7 +22,7 @@ import type { TaggedCard } from './remote-registry.js';
 import { loadPeers, savePeer, removePeer, findPeer } from './peers.js';
 import { detectApiKeys, detectOpenPorts, buildDraftCard, KNOWN_API_KEYS } from './onboarding.js';
 import { CapabilityCardSchema } from '../types/index.js';
-import { openDatabase, insertCard } from '../registry/store.js';
+import { openDatabase, insertCard, listCards } from '../registry/store.js';
 import { searchCards, filterCards } from '../registry/matcher.js';
 import { openCreditDb, getBalance, bootstrapAgent, getTransactions } from '../credit/ledger.js';
 import { AgentRuntime } from '../runtime/agent-runtime.js';
@@ -728,9 +728,10 @@ program
   .option('--handler-url <url>', 'Local capability handler URL', 'http://localhost:8080')
   .option('--skills-yaml <path>', 'Path to skills.yaml (default: ~/.agentbnb/skills.yaml)')
   .option('--registry-port <port>', 'Public registry API port (0 to disable)', '7701')
+  .option('--registry <url>', 'Connect to remote registry via WebSocket relay (e.g., hub.agentbnb.dev)')
   .option('--conductor', 'Enable Conductor orchestration mode')
   .option('--announce', 'Announce this gateway on the local network via mDNS')
-  .action(async (opts: { port?: string; handlerUrl: string; skillsYaml?: string; registryPort: string; conductor?: boolean; announce?: boolean }) => {
+  .action(async (opts: { port?: string; handlerUrl: string; skillsYaml?: string; registryPort: string; registry?: string; conductor?: boolean; announce?: boolean }) => {
     const config = loadConfig();
     if (!config) {
       console.error('Error: not initialized. Run `agentbnb init` first.');
@@ -779,15 +780,19 @@ program
     });
 
     // Start public registry server if registry-port > 0
-    let registryServer: ReturnType<typeof createRegistryServer> | null = null;
+    let registryFastify: import('fastify').FastifyInstance | null = null;
+    let relayClient: import('../relay/websocket-client.js').RelayClient | null = null;
 
     const gracefulShutdown = async () => {
       console.log('\nShutting down...');
+      if (relayClient) {
+        relayClient.disconnect();
+      }
       if (opts.announce) {
         await stopAnnouncement();
       }
-      if (registryServer) {
-        await registryServer.close();
+      if (registryFastify) {
+        await registryFastify.close();
       }
       await server.close();
       await runtime.shutdown();
@@ -805,15 +810,72 @@ program
         if (!config.api_key) {
           console.warn('No API key found. Run `agentbnb init` to enable dashboard features.');
         }
-        registryServer = createRegistryServer({
+        const { server: regServer, relayState } = createRegistryServer({
           registryDb: runtime.registryDb,
           silent: false,
           ownerName: config.owner,
           ownerApiKey: config.api_key,
           creditDb: runtime.creditDb,
         });
-        await registryServer.listen({ port: registryPort, host: '0.0.0.0' });
+        registryFastify = regServer;
+        await registryFastify.listen({ port: registryPort, host: '0.0.0.0' });
         console.log(`Registry API: http://0.0.0.0:${registryPort}/cards`);
+        if (relayState) {
+          console.log(`WebSocket relay active on /ws`);
+        }
+      }
+
+      // Connect to remote registry via WebSocket relay
+      if (opts.registry) {
+        const { RelayClient } = await import('../relay/websocket-client.js');
+        const { executeCapabilityRequest } = await import('../gateway/execute.js');
+
+        // Build card data for registration
+        const cards = listCards(runtime.registryDb, config.owner);
+        const card = cards[0] ?? {
+          id: config.owner,
+          owner: config.owner,
+          name: config.owner,
+          description: 'Agent registered via CLI',
+          spec_version: '1.0',
+          level: 1,
+          inputs: [],
+          outputs: [],
+          pricing: { credits_per_call: 0 },
+          availability: { online: true },
+        };
+
+        relayClient = new RelayClient({
+          registryUrl: opts.registry,
+          owner: config.owner,
+          token: config.token,
+          card: card as Record<string, unknown>,
+          onRequest: async (req) => {
+            const result = await executeCapabilityRequest({
+              registryDb: runtime.registryDb,
+              creditDb: runtime.creditDb,
+              cardId: req.card_id,
+              skillId: req.skill_id,
+              params: req.params as Record<string, unknown>,
+              requester: req.requester ?? req.from_owner,
+              escrowReceipt: req.escrow_receipt as import('../types/index.js').EscrowReceipt | undefined,
+              skillExecutor: runtime.skillExecutor,
+              handlerUrl: opts.handlerUrl,
+            });
+            if (result.success) {
+              return { result: result.result };
+            }
+            return { error: { code: result.error.code, message: result.error.message } };
+          },
+        });
+
+        try {
+          await relayClient.connect();
+          console.log(`Connected to registry: ${opts.registry}`);
+        } catch (err) {
+          console.warn(`Warning: could not connect to registry ${opts.registry}: ${err instanceof Error ? err.message : err}`);
+          console.warn('Will auto-reconnect in background...');
+        }
       }
 
       if (opts.announce) {
@@ -822,8 +884,9 @@ program
       }
     } catch (err) {
       console.error('Failed to start:', err);
-      if (registryServer) {
-        await registryServer.close().catch(() => {});
+      if (relayClient) relayClient.disconnect();
+      if (registryFastify) {
+        await registryFastify.close().catch(() => {});
       }
       await runtime.shutdown();
       process.exit(1);

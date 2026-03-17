@@ -51,7 +51,7 @@ insertCard(db, {
   metadata: { tags: ['nlp'] },
 });
 
-const server = createRegistryServer({ registryDb: db, silent: true });
+const { server } = createRegistryServer({ registryDb: db, silent: true });
 await server.listen({ port: 0, host: '127.0.0.1' });
 const port = (server.server.address() as AddressInfo).port;
 
