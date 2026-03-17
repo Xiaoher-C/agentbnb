@@ -1,0 +1,71 @@
+<svg width="1200" height="300" viewBox="0 0 1200 300" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background -->
+  <rect width="1200" height="300" fill="#08080C"/>
+
+  <!-- Subtle grid overlay -->
+  <defs>
+    <pattern id="grid" width="60" height="60" patternUnits="userSpaceOnUse">
+      <path d="M 60 0 L 0 0 0 60" fill="none" stroke="rgba(255,255,255,0.03)" stroke-width="1"/>
+    </pattern>
+  </defs>
+  <rect width="1200" height="300" fill="url(#grid)"/>
+
+  <!-- Doodle creature mascot (adapted for dark background) -->
+  <g transform="translate(820,60) scale(0.18)">
+    <!-- Hand-drawn wobbly body -->
+    <path d="M198,80 Q140,83 120,120 Q102,160 108,210 Q115,258 140,285 Q165,308 195,315 Q225,320 255,300 Q282,278 290,240 Q298,200 292,160 Q285,118 260,95 Q235,78 198,80Z" fill="rgba(255,255,255,0.08)" stroke="rgba(255,255,255,0.7)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+
+    <!-- Big uneven eyes -->
+    <!-- Left eye (slightly smaller) -->
+    <path d="M155,155 Q155,135 172,135 Q189,135 189,155 Q189,175 172,175 Q155,175 155,155Z" fill="none" stroke="rgba(255,255,255,0.7)" stroke-width="2.5"/>
+    <circle cx="172" cy="156" r="7" fill="rgba(255,255,255,0.7)"/>
+    <circle cx="176" cy="152" r="2.2" fill="#08080C"/>
+
+    <!-- Right eye (slightly bigger) -->
+    <path d="M210,148 Q210,126 230,126 Q250,126 250,148 Q250,170 230,170 Q210,170 210,148Z" fill="none" stroke="rgba(255,255,255,0.7)" stroke-width="2.5"/>
+    <circle cx="230" cy="150" r="8" fill="rgba(255,255,255,0.7)"/>
+    <circle cx="235" cy="145" r="2.2" fill="#08080C"/>
+
+    <!-- Squiggly smile -->
+    <path d="M168,200 Q180,220 195,212 Q210,220 222,200" fill="none" stroke="rgba(255,255,255,0.7)" stroke-width="2.5" stroke-linecap="round"/>
+
+    <!-- Left arm (waving) -->
+    <line x1="120" y1="180" x2="72" y2="135" stroke="rgba(255,255,255,0.7)" stroke-width="2.5" stroke-linecap="round"/>
+    <line x1="72" y1="135" x2="60" y2="112" stroke="rgba(255,255,255,0.7)" stroke-width="2.5" stroke-linecap="round"/>
+    <line x1="72" y1="135" x2="78" y2="108" stroke="rgba(255,255,255,0.7)" stroke-width="2.5" stroke-linecap="round"/>
+
+    <!-- Right arm (holding star) -->
+    <line x1="282" y1="180" x2="320" y2="138" stroke="rgba(255,255,255,0.7)" stroke-width="2.5" stroke-linecap="round"/>
+    <!-- Star / spark (capability credit) -->
+    <path d="M320,128 L323,112 L330,122 L342,118 L334,128 L346,136 L332,136 L328,148 L322,138 L310,142 L318,132Z" fill="#EF9F27" stroke="#EF9F27" stroke-width="0.8"/>
+
+    <!-- Left leg -->
+    <line x1="170" y1="315" x2="152" y2="385" stroke="rgba(255,255,255,0.7)" stroke-width="2.5" stroke-linecap="round"/>
+    <line x1="152" y1="385" x2="130" y2="390" stroke="rgba(255,255,255,0.7)" stroke-width="2.5" stroke-linecap="round"/>
+
+    <!-- Right leg -->
+    <line x1="218" y1="315" x2="232" y2="385" stroke="rgba(255,255,255,0.7)" stroke-width="2.5" stroke-linecap="round"/>
+    <line x1="232" y1="385" x2="254" y2="390" stroke="rgba(255,255,255,0.7)" stroke-width="2.5" stroke-linecap="round"/>
+
+    <!-- Antenna left -->
+    <line x1="185" y1="80" x2="170" y2="42" stroke="rgba(255,255,255,0.7)" stroke-width="2" stroke-linecap="round"/>
+    <circle cx="170" cy="36" r="6" fill="#7F77DD"/>
+
+    <!-- Antenna right -->
+    <line x1="205" y1="78" x2="222" y2="38" stroke="rgba(255,255,255,0.7)" stroke-width="2" stroke-linecap="round"/>
+    <circle cx="222" cy="32" r="6" fill="#1D9E75"/>
+
+    <!-- Motion scribble lines -->
+    <path d="M292,250 Q306,246 310,254" fill="none" stroke="rgba(255,255,255,0.7)" stroke-width="1.2" opacity="0.25"/>
+    <path d="M296,264 Q310,260 315,268" fill="none" stroke="rgba(255,255,255,0.7)" stroke-width="1.2" opacity="0.18"/>
+  </g>
+
+  <!-- Title: AgentBnB -->
+  <text x="430" y="130" text-anchor="middle" font-family="monospace" font-size="56" font-weight="700" fill="#10B981">AgentBnB</text>
+
+  <!-- Tagline -->
+  <text x="430" y="185" text-anchor="middle" font-family="monospace" font-size="18" fill="rgba(255,255,255,0.55)">Your agent has idle APIs. It knows. It wants to trade them.</text>
+
+  <!-- Accent line -->
+  <line x1="150" y1="210" x2="710" y2="210" stroke="#10B981" stroke-width="1" opacity="0.4"/>
+</svg>
