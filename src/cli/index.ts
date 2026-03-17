@@ -1044,6 +1044,56 @@ openclaw
   });
 
 // ---------------------------------------------------------------------------
+// conduct
+// ---------------------------------------------------------------------------
+
+program
+  .command('conduct <task>')
+  .description('Orchestrate a complex task across the AgentBnB network')
+  .option('--plan-only', 'Show execution plan without executing')
+  .option('--max-budget <credits>', 'Maximum credits to spend', '100')
+  .option('--json', 'Output as JSON')
+  .action(async (task: string, opts: { planOnly?: boolean; maxBudget: string; json?: boolean }) => {
+    const { conductAction } = await import('./conduct.js');
+    const result = await conductAction(task, opts);
+
+    if (opts.json) {
+      console.log(JSON.stringify(result, null, 2));
+      if (!result.success) process.exit(1);
+      return;
+    }
+
+    if (!result.success) {
+      console.error(`Error: ${result.error}`);
+      process.exit(1);
+    }
+
+    // Display plan
+    const plan = result.plan as { steps: Array<{ step: number; description: string; capability: string; agent: string; credits: number; depends_on: string[] }>; orchestration_fee: number; estimated_total: number };
+    console.log('\nExecution Plan:');
+    for (const step of plan.steps) {
+      const deps = step.depends_on.length > 0 ? ` [depends on prior steps]` : '';
+      console.log(`  Step ${step.step}: ${step.description} (${step.capability}) -> @${step.agent} (${step.credits} cr)${deps}`);
+    }
+    console.log(`  Orchestration fee: ${plan.orchestration_fee} cr`);
+    console.log(`  Total estimated: ${plan.estimated_total} cr`);
+
+    if (result.execution) {
+      console.log('\nResults:');
+      console.log(JSON.stringify(result.execution, null, 2));
+      console.log(`\nTotal credits spent: ${result.total_credits ?? 0} cr`);
+      console.log(`Latency: ${result.latency_ms ?? 0} ms`);
+    }
+
+    if (result.errors && result.errors.length > 0) {
+      console.log('\nErrors:');
+      for (const err of result.errors) {
+        console.log(`  - ${err}`);
+      }
+    }
+  });
+
+// ---------------------------------------------------------------------------
 // Execute
 // ---------------------------------------------------------------------------
 
