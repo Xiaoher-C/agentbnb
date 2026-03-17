@@ -10,12 +10,10 @@ import { matchSubTasks } from '../conductor/capability-matcher.js';
 import { BudgetController, ORCHESTRATION_FEE } from '../conductor/budget-controller.js';
 import { orchestrate } from '../conductor/pipeline-orchestrator.js';
 import { BudgetManager } from '../credit/budget.js';
-import { CONDUCTOR_OWNER } from '../conductor/card.js';
 import { loadPeers } from './peers.js';
-import { loadConfig, getConfigDir } from './config.js';
+import { loadConfig } from './config.js';
 import { openDatabase } from '../registry/store.js';
 import { openCreditDb } from '../credit/ledger.js';
-import { join } from 'node:path';
 import type { MatchResult } from '../conductor/types.js';
 
 /**

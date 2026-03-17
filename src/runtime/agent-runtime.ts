@@ -79,7 +79,6 @@ export class AgentRuntime {
   private readonly skillsYamlPath?: string;
   private readonly conductorEnabled: boolean;
   private readonly conductorToken: string;
-  private readonly config: RuntimeOptions;
 
   /**
    * Creates a new AgentRuntime instance.
@@ -94,7 +93,6 @@ export class AgentRuntime {
     this.skillsYamlPath = options.skillsYamlPath;
     this.conductorEnabled = options.conductorEnabled ?? false;
     this.conductorToken = options.conductorToken ?? '';
-    this.config = options;
 
     // Open databases with schema migrations (WAL + foreign_keys already applied by these functions)
     this.registryDb = openDatabase(options.registryDbPath);
