@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v3.0
 milestone_name: Production-Ready Launch
 status: executing
-stopped_at: Completed 21-01-PLAN.md
+stopped_at: Completed 21-03-PLAN.md
 last_updated: "2026-03-17T11:06:46.071Z"
 last_activity: 2026-03-17 — Completed 20-02 (CapabilityMatcher + BudgetController)
 progress:
@@ -25,10 +25,10 @@ See: .planning/PROJECT.md (updated 2026-03-17)
 
 ## Current Position
 
-Phase: Phase 20 — Conductor Core (Plan 2/? complete)
-Plan: 20-02 complete
-Status: Phase 20 in progress
-Last activity: 2026-03-17 — Completed 20-02 (CapabilityMatcher + BudgetController)
+Phase: Phase 21 — Signed Escrow Receipt (Plan 3/4 complete)
+Plan: 21-03 complete
+Status: Phase 21 in progress
+Last activity: 2026-03-17 — Completed 21-03 (Settlement Protocol)
 
 Progress: [██--------] 15%
 
@@ -62,6 +62,7 @@ Progress: [██--------] 15%
 | Phase 19-skillexecutor P03 | 4m17s | 2 tasks | 4 files |
 | Phase 19-skillexecutor P06 | 468s | 2 tasks | 3 files |
 | Phase 21 P01 | 227s | 2 tasks | 7 files |
+| Phase 21 P03 | 182s | 1 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -118,6 +119,7 @@ Progress: [██--------] 15%
 - [Phase 19-06]: Gateway targetSkillId resolves as resolvedSkillId ?? skillId ?? cardId for v1/v2 card compat
 - [Phase 19-06]: Mutable Map reference enables PipelineExecutor circular dep resolution without new SkillExecutor API
 - [Phase 21]: Ed25519 with DER encoding via Node.js crypto — zero external deps, canonical JSON for deterministic signatures
+- [Phase 21-03]: P2P settlement: each side updates only own SQLite; confirmEscrowDebit marks settled without crediting recipient; recordEarning uses nonce for replay protection
 
 ### Pending Todos
 
@@ -131,8 +133,8 @@ Progress: [██--------] 15%
 
 ## Session Continuity
 
-Last session: 2026-03-17T11:06:46.069Z
-Stopped at: Completed 21-01-PLAN.md
+Last session: 2026-03-17T11:11:20Z
+Stopped at: Completed 21-03-PLAN.md
 Resume file: None
 
 ---
