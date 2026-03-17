@@ -72,7 +72,7 @@
 **Track A — Core Infrastructure (main branch):**
 
 - [x] **Phase 19: SkillExecutor** — Config-driven execution engine with 4 modes (API/Pipeline/OpenClaw/Command), Gateway integration (6 plans) 🔴 CRITICAL (completed 2026-03-17)
-- [ ] **Phase 21: Signed Escrow Receipt** — Ed25519 keypair, cross-machine credit verification, settlement protocol, real P2P tests (4 plans) 🔴 CRITICAL
+- [x] **Phase 21: Signed Escrow Receipt** — Ed25519 keypair, cross-machine credit verification, settlement protocol, real P2P tests (4 plans) 🔴 CRITICAL (completed 2026-03-17)
 
 **Track B — Conductor Foundation (conductor-core worktree, parallel with Phase 19):**
 
@@ -134,7 +134,7 @@ Plans:
   3. Provider verifies receipt signature with requester's public key
   4. Credits settle independently on both agents' local SQLite DBs
   5. Integration tests pass with TWO separate SQLite databases
-**Plans:** 3/4 plans executed
+**Plans:** 4/4 plans complete
 Plans:
 - [ ] 21-01-PLAN.md — Ed25519 keypair generation + EscrowReceipt type + signing functions
 - [ ] 21-02-PLAN.md — Gateway credit verification update + client receipt attachment
@@ -179,7 +179,7 @@ Plans:
 | 16-18 | v2.3 | 5/5 | Complete | 2026-03-17 |
 | 19. SkillExecutor | v3.0 | 6/6 | Complete | 2026-03-17 |
 | 20. Conductor Core | v3.0 | 2/2 | Complete | 2026-03-17 |
-| 21. Signed Escrow | 3/4 | In Progress|  | — |
+| 21. Signed Escrow | 4/4 | Complete   | 2026-03-17 | — |
 | 22. Conductor Integration | v3.0 | 0/4 | Not started | — |
 | 23. Ship | v3.0 | 0/2 | Not started | — |
 
