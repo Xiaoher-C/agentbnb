@@ -11,6 +11,8 @@ import { createInterface } from 'node:readline';
 
 import { loadConfig, saveConfig, getConfigDir } from './config.js';
 import { generateKeyPair, saveKeyPair, loadKeyPair } from '../credit/signing.js';
+import { createSignedEscrowReceipt } from '../credit/escrow-receipt.js';
+import { settleRequesterEscrow, releaseRequesterEscrow } from '../credit/settlement.js';
 import { DEFAULT_AUTONOMY_CONFIG } from '../autonomy/tiers.js';
 import { IdleMonitor } from '../autonomy/idle-monitor.js';
 import { BudgetManager, DEFAULT_BUDGET_CONFIG } from '../credit/budget.js';
@@ -469,10 +471,13 @@ program
   .description('Request a capability from another agent — direct (card-id) or auto (--query)')
   .option('--params <json>', 'Input parameters as JSON string', '{}')
   .option('--peer <name>', 'Peer name to send request to (resolves URL+token from peer registry)')
+  .option('--skill <id>', 'Skill ID within a v2.0 card')
+  .option('--cost <credits>', 'Credits to commit (required for cross-machine peer requests)')
   .option('--query <text>', 'Search query for capability gap (triggers auto-request flow)')
   .option('--max-cost <credits>', 'Maximum credits to spend on auto-request (default: 50)')
+  .option('--no-receipt', 'Skip signed escrow receipt (local-only mode)')
   .option('--json', 'Output as JSON')
-  .action(async (cardId: string | undefined, opts: { params: string; peer?: string; query?: string; maxCost?: string; json?: boolean }) => {
+  .action(async (cardId: string | undefined, opts: { params: string; peer?: string; skill?: string; cost?: string; query?: string; maxCost?: string; receipt: boolean; json?: boolean }) => {
     const config = loadConfig();
     if (!config) {
       console.error('Error: not initialized. Run `agentbnb init` first.');
@@ -537,6 +542,7 @@ program
     // Resolve gateway URL and token: use --peer if provided, otherwise use config
     let gatewayUrl: string;
     let token: string;
+    const isPeerRequest = !!opts.peer;
 
     if (opts.peer) {
       const peer = findPeer(opts.peer);
@@ -551,21 +557,100 @@ program
       token = config.token;
     }
 
+    // Cross-machine peer requests use signed escrow receipts
+    const useReceipt = isPeerRequest && opts.receipt !== false;
+
+    if (useReceipt && !opts.cost) {
+      console.error('Error: --cost <credits> is required for peer requests. Specify the credits to commit.');
+      process.exit(1);
+    }
+
+    let escrowId: string | undefined;
+    let escrowReceipt: import('../types/index.js').EscrowReceipt | undefined;
+
+    if (useReceipt) {
+      const configDir = getConfigDir();
+      const creditDb = openCreditDb(join(configDir, 'credit.db'));
+      creditDb.pragma('busy_timeout = 5000');
+
+      try {
+        const keys = loadKeyPair(configDir);
+        const amount = Number(opts.cost);
+        if (isNaN(amount) || amount <= 0) {
+          console.error('Error: --cost must be a positive number.');
+          process.exit(1);
+        }
+
+        const receiptResult = createSignedEscrowReceipt(creditDb, keys.privateKey, keys.publicKey, {
+          owner: config.owner,
+          amount,
+          cardId,
+          skillId: opts.skill,
+        });
+        escrowId = receiptResult.escrowId;
+        escrowReceipt = receiptResult.receipt;
+
+        if (!opts.json) {
+          console.log(`Escrow: ${amount} credits held (ID: ${escrowId.slice(0, 8)}...)`);
+        }
+      } catch (err) {
+        creditDb.close();
+        const msg = err instanceof Error ? err.message : String(err);
+        if (opts.json) {
+          console.log(JSON.stringify({ success: false, error: msg }, null, 2));
+        } else {
+          console.error(`Error creating escrow receipt: ${msg}`);
+        }
+        process.exit(1);
+      }
+    }
+
     try {
       const result = await requestCapability({
         gatewayUrl,
         token,
         cardId,
-        params,
+        params: { ...params, ...(opts.skill ? { skill_id: opts.skill } : {}) },
+        escrowReceipt,
       });
+
+      // On success: settle escrow (make debit permanent)
+      if (useReceipt && escrowId) {
+        const configDir = getConfigDir();
+        const creditDb = openCreditDb(join(configDir, 'credit.db'));
+        creditDb.pragma('busy_timeout = 5000');
+        try {
+          settleRequesterEscrow(creditDb, escrowId);
+          if (!opts.json) {
+            console.log(`Escrow settled: ${opts.cost} credits deducted.`);
+          }
+        } finally {
+          creditDb.close();
+        }
+      }
 
       if (opts.json) {
         console.log(JSON.stringify({ success: true, result }, null, 2));
       } else {
         console.log('Result:');
-        console.log(JSON.stringify(result, null, 2));
+        console.log(typeof result === 'string' ? result : JSON.stringify(result, null, 2));
       }
     } catch (err) {
+      // On failure: release escrow (refund credits)
+      if (useReceipt && escrowId) {
+        const configDir = getConfigDir();
+        const creditDb = openCreditDb(join(configDir, 'credit.db'));
+        creditDb.pragma('busy_timeout = 5000');
+        try {
+          releaseRequesterEscrow(creditDb, escrowId);
+          if (!opts.json) {
+            console.log('Escrow released: credits refunded.');
+          }
+        } finally {
+          creditDb.close();
+        }
+      }
+
       const msg = err instanceof Error ? err.message : String(err);
       if (opts.json) {
         console.log(JSON.stringify({ success: false, error: msg }, null, 2));

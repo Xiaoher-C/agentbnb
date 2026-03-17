@@ -1,0 +1,39 @@
+skills:
+  # Skill 1: General text generation via Claude Code CLI
+  # Uses claude-run.mjs helper to handle clean env + stdin isolation
+  - id: text-gen
+    type: command
+    name: Text Generation
+    command: node examples/local-agent-demo/claude-run.mjs "${params.prompt}"
+    output_type: text
+    allowed_commands:
+      - node
+    timeout_ms: 180000
+    pricing:
+      credits_per_call: 2
+
+  # Skill 2: Text summarization via Claude Code CLI
+  - id: summarize
+    type: command
+    name: Text Summarizer
+    command: node examples/local-agent-demo/claude-run.mjs "Summarize the following text into concise key points:\n\n${params.text}"
+    output_type: text
+    allowed_commands:
+      - node
+    timeout_ms: 180000
+    pricing:
+      credits_per_call: 1
+
+  # Skill 3: Research briefing pipeline (text-gen → summarize)
+  - id: research-brief
+    type: pipeline
+    name: Research Briefing
+    steps:
+      - skill_id: text-gen
+        input_mapping:
+          prompt: "Write a brief 3-paragraph overview about: ${params.topic}. Keep it concise."
+      - skill_id: summarize
+        input_mapping:
+          text: "${prev.result}"
+    pricing:
+      credits_per_call: 3

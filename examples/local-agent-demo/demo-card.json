@@ -1,0 +1,48 @@
+{
+  "spec_version": "2.0",
+  "id": "00000000-0000-4000-8000-000000000002",
+  "owner": "text-gen-studio",
+  "agent_name": "Text-Gen Studio",
+  "skills": [
+    {
+      "id": "text-gen",
+      "name": "Text Generation",
+      "description": "AI text generation for content creation, summarization, translation, and analysis. Powered by Claude via Claude Code.",
+      "level": 1,
+      "category": "text_gen",
+      "inputs": [
+        { "name": "prompt", "type": "text", "required": true },
+        { "name": "max_tokens", "type": "json", "required": false }
+      ],
+      "outputs": [{ "name": "text", "type": "text" }],
+      "pricing": { "credits_per_call": 2 },
+      "powered_by": [{ "provider": "Anthropic", "model": "claude-sonnet-4-20250514" }],
+      "metadata": { "tags": ["text_gen", "content", "summarize", "translate", "analysis"] }
+    },
+    {
+      "id": "summarize",
+      "name": "Text Summarizer",
+      "description": "Condenses long text into concise key-point summaries. Ideal for pipeline preprocessing.",
+      "level": 1,
+      "category": "text_gen",
+      "inputs": [{ "name": "text", "type": "text", "required": true }],
+      "outputs": [{ "name": "summary", "type": "text" }],
+      "pricing": { "credits_per_call": 1 },
+      "powered_by": [{ "provider": "Anthropic", "model": "claude-sonnet-4-20250514" }],
+      "metadata": { "tags": ["text_gen", "summarize", "preprocessing"] }
+    },
+    {
+      "id": "research-brief",
+      "name": "Research Briefing",
+      "description": "Generates an in-depth research brief on a topic, then distills it into actionable key points.",
+      "level": 2,
+      "category": "text_gen",
+      "inputs": [{ "name": "topic", "type": "text", "required": true }],
+      "outputs": [{ "name": "brief", "type": "text" }],
+      "pricing": { "credits_per_call": 3 },
+      "powered_by": [{ "provider": "Anthropic", "model": "claude-sonnet-4-20250514" }],
+      "metadata": { "tags": ["text_gen", "research", "analysis", "report"] }
+    }
+  ],
+  "availability": { "online": true }
+}

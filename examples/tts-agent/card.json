@@ -1,0 +1,24 @@
+{
+  "spec_version": "2.0",
+  "id": "00000000-0000-4000-8000-000000000003",
+  "owner": "tts-studio",
+  "agent_name": "TTS Studio",
+  "skills": [
+    {
+      "id": "tts",
+      "name": "Text to Speech",
+      "description": "High-quality text-to-speech synthesis powered by ElevenLabs. Converts text into natural-sounding audio.",
+      "level": 1,
+      "category": "tts",
+      "inputs": [
+        { "name": "text", "type": "text", "required": true },
+        { "name": "voice_id", "type": "text", "required": false }
+      ],
+      "outputs": [{ "name": "audio", "type": "audio" }],
+      "pricing": { "credits_per_call": 3 },
+      "powered_by": [{ "provider": "ElevenLabs", "model": "eleven_multilingual_v2" }],
+      "metadata": { "tags": ["tts", "audio", "voice", "speech", "elevenlabs"], "avg_latency_ms": 3000 }
+    }
+  ],
+  "availability": { "online": true }
+}

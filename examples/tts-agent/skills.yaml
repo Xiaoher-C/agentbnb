@@ -1,0 +1,13 @@
+skills:
+  # ElevenLabs Text-to-Speech
+  # Requires ELEVENLABS_API_KEY environment variable
+  - id: tts
+    type: command
+    name: Text to Speech
+    command: node examples/tts-agent/tts-run.mjs "${params.text}" "${params.voice_id}"
+    output_type: json
+    allowed_commands:
+      - node
+    timeout_ms: 30000
+    pricing:
+      credits_per_call: 3
