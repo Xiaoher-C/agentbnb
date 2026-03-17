@@ -58,7 +58,7 @@ describe('createRegistryServer', () => {
 
     const response = await server.inject({ method: 'GET', url: '/cards' });
     expect(response.statusCode).toBe(200);
-    expect(response.json()).toEqual({ total: 0, limit: 20, offset: 0, items: [] });
+    expect(response.json()).toEqual({ total: 0, limit: 20, offset: 0, items: [], uses_this_week: {} });
 
     await server.close();
   });

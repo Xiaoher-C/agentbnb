@@ -41,6 +41,8 @@ export default function DiscoverPage(): JSX.Element {
     setCategory,
     onlineOnly,
     setOnlineOnly,
+    sort,
+    setSort,
     availableCategories,
     retry,
     agentsOnline,
@@ -66,6 +68,8 @@ export default function DiscoverPage(): JSX.Element {
         onlineOnly={onlineOnly}
         onOnlineOnlyChange={setOnlineOnly}
         availableCategories={availableCategories}
+        sort={sort}
+        onSortChange={setSort}
       />
 
       {loading ? (

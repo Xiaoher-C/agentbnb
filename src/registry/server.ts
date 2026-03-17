@@ -35,16 +35,6 @@ export interface RegistryServerOptions {
 }
 
 /**
- * Paginated response envelope for card listing.
- */
-interface PaginatedCards {
-  total: number;
-  limit: number;
-  offset: number;
-  items: CapabilityCard[];
-}
-
-/**
  * Strips the `_internal` field from a card before sending it over the network.
  * `_internal` is private per-card metadata — it must never be transmitted to clients.
  *
@@ -207,13 +197,55 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
       );
     }
 
+    // Compute uses_this_week for all cards (single SQL query)
+    const usesStmt = db.prepare(`
+      SELECT card_id, skill_id, COUNT(*) as cnt
+      FROM request_log
+      WHERE status = 'success'
+        AND created_at > datetime('now', '-7 days')
+        AND (action_type IS NULL OR action_type = 'auto_share')
+      GROUP BY card_id, skill_id
+    `);
+    const usesRows = usesStmt.all() as Array<{ card_id: string; skill_id: string | null; cnt: number }>;
+    const usesMap = new Map<string, number>();
+    for (const row of usesRows) {
+      // Accumulate by card_id
+      usesMap.set(row.card_id, (usesMap.get(row.card_id) ?? 0) + row.cnt);
+      // Also store by skill_id if available
+      if (row.skill_id) {
+        usesMap.set(row.skill_id, (usesMap.get(row.skill_id) ?? 0) + row.cnt);
+      }
+    }
+
     // Sorting
-    if (sort === 'success_rate') {
+    if (sort === 'popular') {
+      // Sort by uses this week descending
+      cards = [...cards].sort((a, b) => {
+        const aUses = usesMap.get(a.id) ?? 0;
+        const bUses = usesMap.get(b.id) ?? 0;
+        return bUses - aUses;
+      });
+    } else if (sort === 'rated' || sort === 'success_rate') {
       // Sort descending — cards without a rating go last (treat as -1)
       cards = [...cards].sort((a, b) => {
         const aRate = a.metadata?.success_rate ?? -1;
         const bRate = b.metadata?.success_rate ?? -1;
         return bRate - aRate;
+      });
+    } else if (sort === 'cheapest') {
+      // Sort by credits_per_call ascending
+      cards = [...cards].sort((a, b) => {
+        return a.pricing.credits_per_call - b.pricing.credits_per_call;
+      });
+    } else if (sort === 'newest') {
+      // Sort by created_at descending — use SQL table row, not JSON
+      const createdStmt = db.prepare('SELECT id, created_at FROM capability_cards');
+      const createdRows = createdStmt.all() as Array<{ id: string; created_at: string }>;
+      const createdMap = new Map(createdRows.map((r) => [r.id, r.created_at]));
+      cards = [...cards].sort((a, b) => {
+        const aDate = createdMap.get(a.id) ?? '';
+        const bDate = createdMap.get(b.id) ?? '';
+        return bDate.localeCompare(aDate);
       });
     } else if (sort === 'latency') {
       // Sort ascending — cards without latency data go last (treat as Infinity)
@@ -227,8 +259,44 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
     const total = cards.length;
     const items = cards.slice(offset, offset + limit).map(stripInternal);
 
-    const result: PaginatedCards = { total, limit, offset, items: items as CapabilityCard[] };
+    // Build uses_this_week lookup for returned items
+    const usesThisWeek: Record<string, number> = {};
+    for (const [key, count] of usesMap) {
+      if (count > 0) usesThisWeek[key] = count;
+    }
+
+    const result = { total, limit, offset, items: items as CapabilityCard[], uses_this_week: usesThisWeek };
     return reply.send(result);
+  });
+
+  /**
+   * GET /api/cards/trending — Returns top 10 skills by successful request count in the last 7 days.
+   *
+   * Each item includes the full card data plus `uses_this_week` count.
+   * Only cards with at least 1 successful request in the window are included.
+   */
+  server.get('/api/cards/trending', async (_request, reply) => {
+    const trendingStmt = db.prepare(`
+      SELECT rl.card_id, COUNT(*) as recent_requests
+      FROM request_log rl
+      WHERE rl.status = 'success'
+        AND rl.created_at > datetime('now', '-7 days')
+        AND (rl.action_type IS NULL OR rl.action_type = 'auto_share')
+      GROUP BY rl.card_id
+      ORDER BY recent_requests DESC
+      LIMIT 10
+    `);
+    const trendingRows = trendingStmt.all() as Array<{ card_id: string; recent_requests: number }>;
+
+    const items = trendingRows
+      .map((row) => {
+        const card = getCard(db, row.card_id);
+        if (!card) return null;
+        return { ...stripInternal(card), uses_this_week: row.recent_requests };
+      })
+      .filter((item): item is NonNullable<typeof item> => item !== null);
+
+    return reply.send({ items });
   });
 
   /**

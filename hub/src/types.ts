@@ -28,6 +28,8 @@ export interface HubCard {
     tags?: string[];
     idle_rate?: number;
   };
+  /** Number of successful uses in the last 7 days (enriched by API) */
+  uses_this_week?: number;
 }
 
 export interface Category {
@@ -53,7 +55,11 @@ export interface CardsResponse {
   limit: number;
   offset: number;
   items: HubCard[];
+  uses_this_week?: Record<string, number>;
 }
+
+/** Sort options for the Discover page */
+export type SortOption = 'popular' | 'rated' | 'cheapest' | 'newest';
 
 /** Shared context passed from App layout to route pages via Outlet context */
 export interface AppOutletContext {

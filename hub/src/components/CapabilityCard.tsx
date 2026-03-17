@@ -64,7 +64,7 @@ export default function CapabilityCard({ card, onClick }: CapabilityCardProps) {
       </div>
 
       {/* Stats row */}
-      <div className="mt-3 flex items-center gap-3 text-xs text-hub-text-secondary">
+      <div className="mt-3 flex items-center gap-3 text-xs text-hub-text-secondary flex-wrap">
         <span className="flex items-center gap-1.5">
           <StatusDot online={online} />
           {online ? 'Online' : 'Offline'}
@@ -73,6 +73,12 @@ export default function CapabilityCard({ card, onClick }: CapabilityCardProps) {
           <>
             <span className="text-hub-text-tertiary">·</span>
             <span>{Math.round(successRate * 100)}% success</span>
+          </>
+        )}
+        {card.uses_this_week !== undefined && card.uses_this_week > 0 && (
+          <>
+            <span className="text-hub-text-tertiary">·</span>
+            <span>{card.uses_this_week} uses this week</span>
           </>
         )}
         <span className="text-hub-text-tertiary">·</span>

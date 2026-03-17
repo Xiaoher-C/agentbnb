@@ -1,39 +1,45 @@
 /**
  * useCards — Data fetching hook for the AgentBnB Hub page.
  *
- * Manages search/filter state, fetches from /cards API, polls every 30s,
+ * Manages search/filter/sort state, fetches from /cards API, polls every 30s,
  * and computes derived stats and available categories.
  */
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { inferCategories } from '../lib/categories.js';
-import type { Category, HubCard } from '../types.js';
+import type { Category, HubCard, SortOption } from '../types.js';
 
 const POLL_INTERVAL_MS = 30_000;
+const DEBOUNCE_MS = 300;
 
 /**
  * Normalize a v2.0 API card (with skills[]) into HubCard shapes.
  * Each skill becomes its own HubCard so all skills are visible in the grid.
  * v1.0 cards pass through unchanged.
  */
-function normalizeCard(raw: Record<string, unknown>): HubCard[] {
+function normalizeCard(raw: Record<string, unknown>, usesMap?: Record<string, number>): HubCard[] {
   // v2.0 card with skills[] array — one HubCard per skill
   if (raw.skills && Array.isArray(raw.skills) && raw.skills.length > 0) {
-    return (raw.skills as Record<string, unknown>[]).map((skill) => ({
-      id: (skill.id as string) || (raw.id as string),
-      owner: raw.owner as string,
-      name: (skill.name as string) || (raw.name as string) || 'Unknown',
-      description: (skill.description as string) || '',
-      level: (skill.level as 1 | 2 | 3) || 1,
-      inputs: (skill.inputs as HubCard['inputs']) || [],
-      outputs: (skill.outputs as HubCard['outputs']) || [],
-      pricing: (skill.pricing as HubCard['pricing']) || { credits_per_call: 0 },
-      availability: (skill.availability as HubCard['availability']) || (raw.availability as HubCard['availability']) || { online: false },
-      powered_by: (skill.powered_by as HubCard['powered_by']) || (raw.powered_by as HubCard['powered_by']),
-      metadata: (skill.metadata as HubCard['metadata']) || (raw.metadata as HubCard['metadata']),
-    }));
+    return (raw.skills as Record<string, unknown>[]).map((skill) => {
+      const skillId = (skill.id as string) || (raw.id as string);
+      return {
+        id: skillId,
+        owner: raw.owner as string,
+        name: (skill.name as string) || (raw.name as string) || 'Unknown',
+        description: (skill.description as string) || '',
+        level: (skill.level as 1 | 2 | 3) || 1,
+        inputs: (skill.inputs as HubCard['inputs']) || [],
+        outputs: (skill.outputs as HubCard['outputs']) || [],
+        pricing: (skill.pricing as HubCard['pricing']) || { credits_per_call: 0 },
+        availability: (skill.availability as HubCard['availability']) || (raw.availability as HubCard['availability']) || { online: false },
+        powered_by: (skill.powered_by as HubCard['powered_by']) || (raw.powered_by as HubCard['powered_by']),
+        metadata: (skill.metadata as HubCard['metadata']) || (raw.metadata as HubCard['metadata']),
+        uses_this_week: usesMap?.[skillId] ?? usesMap?.[raw.id as string] ?? undefined,
+      };
+    });
   }
   // v1.0 card — already in HubCard shape
-  return [raw as unknown as HubCard];
+  const card = raw as unknown as HubCard;
+  return [{ ...card, uses_this_week: usesMap?.[card.id] ?? undefined }];
 }
 
 interface UseCardsResult {
@@ -51,6 +57,9 @@ interface UseCardsResult {
   setCategory: (c: string | null) => void;
   onlineOnly: boolean;
   setOnlineOnly: (v: boolean) => void;
+  // Sort state
+  sort: SortOption;
+  setSort: (s: SortOption) => void;
   // Derived
   availableCategories: Category[];
   retry: () => void;
@@ -61,9 +70,10 @@ interface UseCardsResult {
 }
 
 /**
- * Fetches capability cards from the /cards API with search, filter, and 30s polling.
+ * Fetches capability cards from the /cards API with search, filter, sort, and 30s polling.
  *
  * Category filtering is client-side (the API has no category param).
+ * Search query is debounced at 300ms.
  * Stats are derived from fetched cards (agentsOnline = unique online owners).
  */
 export function useCards(): UseCardsResult {
@@ -73,19 +83,30 @@ export function useCards(): UseCardsResult {
   const [error, setError] = useState<string | null>(null);
 
   const [query, setQuery] = useState('');
+  const [debouncedQuery, setDebouncedQuery] = useState('');
   const [level, setLevel] = useState<number | null>(null);
   const [category, setCategory] = useState<string | null>(null);
   const [onlineOnly, setOnlineOnly] = useState(false);
+  const [sort, setSort] = useState<SortOption>('popular');
 
   // Track whether this is the initial fetch
   const isFirstFetch = useRef(true);
 
+  // Debounce the search query
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedQuery(query);
+    }, DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [query]);
+
   const fetchCards = useCallback(async () => {
     try {
       const params = new URLSearchParams();
-      if (query.trim()) params.set('q', query.trim());
+      if (debouncedQuery.trim()) params.set('q', debouncedQuery.trim());
       if (level !== null) params.set('level', String(level));
       if (onlineOnly) params.set('online', 'true');
+      params.set('sort', sort);
       params.set('limit', '100');
 
       const url = `/cards?${params.toString()}`;
@@ -93,8 +114,15 @@ export function useCards(): UseCardsResult {
       if (!res.ok) {
         throw new Error(`Registry returned ${res.status}`);
       }
-      const data = await res.json() as { total: number; limit: number; offset: number; items: Record<string, unknown>[] };
-      setAllCards(data.items.flatMap(normalizeCard));
+      const data = await res.json() as {
+        total: number;
+        limit: number;
+        offset: number;
+        items: Record<string, unknown>[];
+        uses_this_week?: Record<string, number>;
+      };
+      const usesMap = data.uses_this_week ?? {};
+      setAllCards(data.items.flatMap((item) => normalizeCard(item, usesMap)));
       setTotal(data.total);
       setError(null);
     } catch (err) {
@@ -107,7 +135,7 @@ export function useCards(): UseCardsResult {
         setLoading(false);
       }
     }
-  }, [query, level, onlineOnly]);
+  }, [debouncedQuery, level, onlineOnly, sort]);
 
   // Fetch on mount and when filters change
   useEffect(() => {
@@ -134,7 +162,7 @@ export function useCards(): UseCardsResult {
         });
 
   // Available categories from ALL fetched cards (before client-side filter)
-  const availableCategories: Category[] = (() => {
+  const availableCategories: Category[] = useMemo(() => {
     const seen = new Set<string>();
     const result: Category[] = [];
     for (const card of allCards) {
@@ -147,7 +175,7 @@ export function useCards(): UseCardsResult {
       }
     }
     return result;
-  })();
+  }, [allCards]);
 
   // Stats — fetch from /api/stats for accurate counts
   const [stats, setStats] = useState({ agents_online: 0, total_exchanges: 0 });
@@ -192,6 +220,8 @@ export function useCards(): UseCardsResult {
     setCategory,
     onlineOnly,
     setOnlineOnly,
+    sort,
+    setSort,
     availableCategories,
     retry,
     agentsOnline,

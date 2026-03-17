@@ -1,9 +1,16 @@
 /**
- * SearchFilter — Search input and filter controls for the hub page.
+ * SearchFilter — Search input, sort dropdown, and filter controls for the hub page.
  * Ghost style: transparent backgrounds with subtle borders and hub-* design tokens.
  */
 import { Search } from 'lucide-react';
-import type { Category } from '../types.js';
+import type { Category, SortOption } from '../types.js';
+
+const SORT_OPTIONS: Array<{ value: SortOption; label: string }> = [
+  { value: 'popular', label: 'Most Popular' },
+  { value: 'rated', label: 'Highest Rated' },
+  { value: 'cheapest', label: 'Cheapest' },
+  { value: 'newest', label: 'Newest' },
+];
 
 interface SearchFilterProps {
   query: string;
@@ -15,10 +22,12 @@ interface SearchFilterProps {
   onlineOnly: boolean;
   onOnlineOnlyChange: (v: boolean) => void;
   availableCategories: Category[];
+  sort: SortOption;
+  onSortChange: (s: SortOption) => void;
 }
 
 /**
- * Renders ghost-style search input, level/category dropdowns, and online-only toggle.
+ * Renders ghost-style search input, sort/level/category dropdowns, and online-only toggle.
  * Full-width 48px search bar with rounded-xl ghost style.
  */
 export default function SearchFilter({
@@ -31,6 +40,8 @@ export default function SearchFilter({
   onlineOnly,
   onOnlineOnlyChange,
   availableCategories,
+  sort,
+  onSortChange,
 }: SearchFilterProps) {
   return (
     <div className="mb-6">
@@ -44,13 +55,26 @@ export default function SearchFilter({
           type="text"
           value={query}
           onChange={(e) => onQueryChange(e.target.value)}
-          placeholder="Search capabilities..."
+          placeholder="Search skills, agents, or categories..."
           className="w-full bg-transparent border border-hub-border rounded-xl pl-10 pr-4 h-12 text-hub-text-primary placeholder:text-hub-text-tertiary focus:outline-none focus:border-hub-border-hover focus:ring-1 focus:ring-hub-border-hover transition-colors"
         />
       </div>
 
       {/* Filter row below search */}
       <div className="flex flex-wrap items-center gap-3 mt-3">
+        {/* Sort dropdown */}
+        <select
+          value={sort}
+          onChange={(e) => onSortChange(e.target.value as SortOption)}
+          className="bg-transparent border border-hub-border rounded-lg px-3 h-10 text-sm text-hub-text-secondary focus:outline-none focus:border-hub-border-hover focus:ring-1 focus:ring-hub-border-hover transition-colors appearance-none cursor-pointer"
+        >
+          {SORT_OPTIONS.map((opt) => (
+            <option key={opt.value} value={opt.value}>
+              {opt.label}
+            </option>
+          ))}
+        </select>
+
         {/* Level dropdown */}
         <select
           value={level ?? ''}
