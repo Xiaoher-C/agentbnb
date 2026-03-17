@@ -120,7 +120,7 @@ Plans:
   4. Conductor's CapabilityCardV2 registers on the network
 **Plans:** 2 plans
 Plans:
-- [ ] 20-01-PLAN.md — Types + TaskDecomposer + Conductor Card registration
+- [x] 20-01-PLAN.md — Types + TaskDecomposer + Conductor Card registration
 - [ ] 20-02-PLAN.md — CapabilityMatcher + BudgetController
 
 ### Phase 21: Signed Escrow Receipt
@@ -170,7 +170,7 @@ Plans:
 | 12-15 | v2.2 | 11/11 | Complete | 2026-03-16 |
 | 16-18 | v2.3 | 5/5 | Complete | 2026-03-17 |
 | 19. SkillExecutor | 1/6 | In Progress|  | — |
-| 20. Conductor Core | v3.0 | 0/2 | Planned | — |
+| 20. Conductor Core | v3.0 | 1/2 | In Progress | — |
 | 21. Signed Escrow | v3.0 | 0/5 | Not started | — |
 | 22. Conductor Integration | v3.0 | 0/4 | Not started | — |
 | 23. Ship | v3.0 | 0/3 | Not started | — |
