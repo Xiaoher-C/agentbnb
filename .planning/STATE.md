@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v3.0
 milestone_name: Production-Ready Launch
-status: completed
-stopped_at: Completed 21-04-PLAN.md
-last_updated: "2026-03-17T11:30:24.364Z"
-last_activity: 2026-03-17 — Completed 21-04 (P2P Credit Integration Tests)
+status: executing
+stopped_at: Completed 22-01-PLAN.md
+last_updated: "2026-03-17T12:04:42.845Z"
+last_activity: 2026-03-17 — Completed 22-01 (PipelineOrchestrator + ConductorMode)
 progress:
-  total_phases: 5
+  total_phases: 6
   completed_phases: 3
-  total_plans: 14
-  completed_plans: 12
-  percent: 97
+  total_plans: 16
+  completed_plans: 13
+  percent: 96
 ---
 
 # AgentBnB — Project State
@@ -25,12 +25,12 @@ See: .planning/PROJECT.md (updated 2026-03-17)
 
 ## Current Position
 
-Phase: Phase 21 — Signed Escrow Receipt (Complete)
-Plan: 21-04 complete (4/4)
-Status: Phase 21 complete
-Last activity: 2026-03-17 — Completed 21-04 (P2P Credit Integration Tests)
+Phase: Phase 22 — Conductor Integration
+Plan: 22-01 complete (1/2)
+Status: Phase 22 in progress
+Last activity: 2026-03-17 — Completed 22-01 (PipelineOrchestrator + ConductorMode)
 
-Progress: [██████████] 97%
+Progress: [██████████] 96%
 
 ## Performance Metrics
 
@@ -65,6 +65,7 @@ Progress: [██████████] 97%
 | Phase 21 P03 | 182s | 1 tasks | 4 files |
 | Phase 21 P02 | 337s | 2 tasks | 4 files |
 | Phase 21 P04 | 141s | 1 tasks | 1 files |
+| Phase 22 P01 | 223s | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -124,6 +125,9 @@ Progress: [██████████] 97%
 - [Phase 21-03]: P2P settlement: each side updates only own SQLite; confirmEscrowDebit marks settled without crediting recipient; recordEarning uses nonce for replay protection
 - [Phase 21-02]: Gateway receipt-or-local branching: isRemoteEscrow flag controls settlement path; receipt_settled/receipt_released flags in response for requester-side settlement coordination
 - [Phase 21]: P2P integration tests use Fastify inject() with mock SkillExecutor for deterministic cross-DB credit flow testing
+- [Phase 22]: PipelineOrchestrator uses resolveAgentUrl callback to decouple from peer registry — enables clean test mocking
+- [Phase 22]: Budget enforcement is caller responsibility (ConductorMode), not PipelineOrchestrator — single responsibility
+- [Phase 22]: ConductorMode supports both orchestrate and plan conductor skills through single execute() method
 
 ### Pending Todos
 
@@ -137,8 +141,8 @@ Progress: [██████████] 97%
 
 ## Session Continuity
 
-Last session: 2026-03-17T11:26:29.294Z
-Stopped at: Completed 21-04-PLAN.md
+Last session: 2026-03-17T12:04:42.842Z
+Stopped at: Completed 22-01-PLAN.md
 Resume file: None
 
 ---

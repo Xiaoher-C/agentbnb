@@ -151,7 +151,7 @@ Plans:
   2. Conductor's orchestrate skill is callable via SkillExecutor
   3. `agentbnb conduct "task"` CLI command works end-to-end
   4. E2E test with 3 agents (Conductor + 2 providers) passes
-**Plans:** 2 plans
+**Plans:** 1/2 plans executed
 Plans:
 - [ ] 22-01-PLAN.md — PipelineOrchestrator + ConductorMode (ExecutorMode adapter)
 - [ ] 22-02-PLAN.md — CLI `agentbnb conduct` + E2E 3-agent tests
@@ -192,7 +192,7 @@ Plans:
 | 19. SkillExecutor | v3.0 | 6/6 | Complete | 2026-03-17 |
 | 20. Conductor Core | v3.0 | 2/2 | Complete | 2026-03-17 |
 | 21. Signed Escrow | v3.0 | 4/4 | Complete | 2026-03-17 |
-| 22. Conductor Integration | v3.0 | 0/2 | Not started | — |
+| 22. Conductor Integration | 1/2 | In Progress|  | — |
 | 23. Ship | v3.0 | 0/2 | Planned | — |
 | 24. Code Quality Polish | v3.1 | 0/2 | Not started | — |
 
