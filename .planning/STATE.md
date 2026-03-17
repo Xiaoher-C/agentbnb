@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v3.0
 milestone_name: Production-Ready Launch
 status: completed
-stopped_at: Completed 23-01-PLAN.md
-last_updated: "2026-03-17T12:27:39.613Z"
+stopped_at: Completed 23-02-PLAN.md
+last_updated: "2026-03-17T12:31:52.543Z"
 last_activity: 2026-03-17 — Completed 22-02 (CLI conduct + Runtime wiring + Integration tests)
 progress:
   total_phases: 6
-  completed_phases: 4
+  completed_phases: 5
   total_plans: 16
-  completed_plans: 15
+  completed_plans: 16
   percent: 100
 ---
 
@@ -68,6 +68,7 @@ Progress: [██████████] 100%
 | Phase 22 P01 | 223s | 2 tasks | 5 files |
 | Phase 22 P02 | 430s | 3 tasks | 6 files |
 | Phase 23-ship P01 | 180 | 3 tasks | 7 files |
+| Phase 23-ship P02 | 189 | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -136,6 +137,8 @@ Progress: [██████████] 100%
 - [Phase 23-ship]: node:20-slim multi-stage Dockerfile: build stage runs pnpm build:all, production stage uses pnpm install --prod to rebuild better-sqlite3 native module
 - [Phase 23-ship]: CI typecheck and hub tests use continue-on-error to handle pre-existing TS issues without blocking the pipeline
 - [Phase 23-ship]: fly.toml: nrt (Tokyo) region, 256mb shared VM, auto-stop/start for MVP cost efficiency
+- [Phase 23-ship]: Social preview is self-contained HTML+CSS (no external deps) for reliable GitHub rendering
+- [Phase 23-ship]: v3.0 docs added as 5th section in DOCS_SECTIONS array — sidebar nav auto-picks it up without component changes
 
 ### Pending Todos
 
@@ -149,8 +152,8 @@ Progress: [██████████] 100%
 
 ## Session Continuity
 
-Last session: 2026-03-17T12:27:39.611Z
-Stopped at: Completed 23-01-PLAN.md
+Last session: 2026-03-17T12:31:52.541Z
+Stopped at: Completed 23-02-PLAN.md
 Resume file: None
 
 ---
