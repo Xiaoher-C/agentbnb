@@ -17,7 +17,10 @@ AgentBnB is a P2P agent capability sharing protocol. Agent owners publish what t
 - **v1.1 Milestone**: 8/8 phases complete, 24 plans, 302+ tests — shipped 2026-03-15
 - **v2.0 Milestone**: 5/5 phases complete (Phases 4-8), 12 plans — shipped 2026-03-15
 - **v2.1 Milestone**: 3/3 phases complete (Phases 9-11), ~10 plans — shipped 2026-03-16
-- **Current phase**: v2.1 complete. Repo ready for public launch.
+- **v2.2 Milestone**: Hub multi-tab UI, Agent profiles, Activity feed, Credits, Docs — shipped 2026-03-17
+- **v2.3 Milestone**: Hub landing page polish, Magic UI components, SPA routing fix — shipped 2026-03-17
+- **v3.0 Milestone**: SkillExecutor (5 modes), Conductor, Signed Escrow — shipped 2026-03-17
+- **Current phase**: v3.0 complete. Deployment infra ready. Repo ready for public launch.
 
 ## Tech Stack
 
@@ -47,7 +50,9 @@ src/
 ├── credit/          # Credit tracking and escrow
 │   ├── ledger.ts    # Credit balance management
 │   ├── escrow.ts    # Hold credits during capability execution
-│   └── budget.ts    # BudgetManager (reserve floor enforcement)
+│   ├── budget.ts    # BudgetManager (reserve floor enforcement)
+│   ├── signing.ts   # Ed25519 key generation + escrow receipt signing/verification
+│   └── settlement.ts # P2P credit settlement (requester ↔ provider)
 ├── runtime/         # Agent runtime lifecycle
 │   └── agent-runtime.ts  # Centralized DB ownership, SIGTERM, background jobs
 ├── autonomy/        # Agent autonomous behavior
@@ -59,9 +64,25 @@ src/
 │   ├── soul-sync.ts     # Parse SOUL.md → multi-skill Capability Card
 │   ├── heartbeat-writer.ts # Generate HEARTBEAT.md autonomy rules
 │   └── skill.ts         # OpenClaw status info
-├── skills/          # Capability execution handlers
+├── skills/          # Capability execution handlers + SkillExecutor
+│   ├── executor.ts         # SkillExecutor: dispatch to registered modes
+│   ├── skill-config.ts     # skills.yaml schema (Zod) + YAML parser
+│   ├── api-executor.ts     # ApiExecutor: HTTP API mode
+│   ├── pipeline-executor.ts # PipelineExecutor: sequential step mode
+│   ├── openclaw-bridge.ts  # OpenClawBridge: OpenClaw skill mode
+│   ├── command-executor.ts # CommandExecutor: local subprocess mode
 │   ├── handle-request.ts   # Request handler routing
 │   └── publish-capability.ts
+├── conductor/       # Conductor: orchestrate multi-agent pipelines
+│   ├── types.ts            # SubTask, MatchResult, ExecutionBudget, OrchestrationResult
+│   ├── task-decomposer.ts  # decompose(): NLP task → SubTask[] (template matching)
+│   ├── capability-matcher.ts # matchSubTasks(): match SubTasks to registry cards
+│   ├── budget-controller.ts # BudgetController: per-task budget enforcement
+│   ├── pipeline-orchestrator.ts # PipelineOrchestrator: execute DAG of sub-tasks
+│   ├── conductor-mode.ts   # ConductorMode: SkillExecutor mode for orchestration
+│   └── card.ts             # buildConductorCard/registerConductorCard
+├── utils/           # Shared utilities
+│   └── interpolation.ts    # interpolate/interpolateObject: {{variable}} substitution
 ├── discovery/       # mDNS peer discovery
 │   └── mdns.ts
 ├── cli/             # CLI interface
@@ -170,10 +191,26 @@ This project uses GSD for spec-driven development:
 - `.planning/REQUIREMENTS.md` — Detailed requirements
 - `.planning/config.json` — GSD configuration
 
+## v3.0 Architecture — Key Additions
+
+### SkillExecutor
+Executes agent capabilities defined in `skills.yaml`. Five modes:
+- **ApiExecutor** — HTTP REST calls with auth, input/output mapping
+- **PipelineExecutor** — Sequential multi-step skill chains
+- **OpenClawBridge** — Delegates to another OpenClaw skill
+- **CommandExecutor** — Local subprocess execution (allowlisted commands)
+- **ConductorMode** — Orchestrates multi-agent pipelines via Conductor
+
+### Conductor
+Decomposes natural-language tasks into sub-tasks, matches them to registry cards, enforces budget, and executes as a DAG via PipelineOrchestrator. Access via `agentbnb conduct "<task>"`.
+
+### Signed Escrow (Ed25519)
+Every credit transfer generates a signed escrow receipt (Ed25519 + canonical JSON). Providers verify receipts on settlement. Zero external crypto dependencies — uses Node.js built-in `crypto`.
+
 ## Important Context
 
-- v1.1 + v2.0 + v2.1 complete. Project is launch-ready.
-- v2.1 added: premium Hub UI (dark theme, modal overlays, count-up animations), ClaWHub installable skill (single activate() entry point), repo documentation updates.
+- v1.1 + v2.0 + v2.1 + v2.2 + v2.3 + v3.0 complete. Deployment infrastructure ready.
+- v3.0 added: SkillExecutor (5 executor modes), Conductor orchestration, Ed25519 signed escrow, `agentbnb conduct` CLI command.
 - Founder (Cheng Wen Chen) is the primary developer using vibe coding with Claude Code + GSD.
 - Agent-first philosophy: every feature must pass "Does this require human intervention? If yes, redesign."
 - Hub at `/hub` is the recruiting tool — must be visually polished.
