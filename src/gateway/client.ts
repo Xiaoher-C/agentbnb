@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { AgentBnBError } from '../types/index.js';
+import type { EscrowReceipt } from '../types/index.js';
 
 /**
  * Options for requesting a capability from a remote gateway.
@@ -15,6 +16,8 @@ export interface RequestOptions {
   params?: Record<string, unknown>;
   /** Timeout in milliseconds. Default 30000. */
   timeoutMs?: number;
+  /** Signed escrow receipt for cross-machine credit verification. */
+  escrowReceipt?: EscrowReceipt;
 }
 
 /**
@@ -25,14 +28,18 @@ export interface RequestOptions {
  * @throws {AgentBnBError} on JSON-RPC error, network failure, or timeout.
  */
 export async function requestCapability(opts: RequestOptions): Promise<unknown> {
-  const { gatewayUrl, token, cardId, params = {}, timeoutMs = 30_000 } = opts;
+  const { gatewayUrl, token, cardId, params = {}, timeoutMs = 30_000, escrowReceipt } = opts;
 
   const id = randomUUID();
   const payload = {
     jsonrpc: '2.0',
     id,
     method: 'capability.execute',
-    params: { card_id: cardId, ...params },
+    params: {
+      card_id: cardId,
+      ...params,
+      ...(escrowReceipt ? { escrow_receipt: escrowReceipt } : {}),
+    },
   };
 
   const controller = new AbortController();
