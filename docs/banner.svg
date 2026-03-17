@@ -10,8 +10,8 @@
   </defs>
   <rect width="1200" height="300" fill="url(#grid)"/>
 
-  <!-- Doodle creature mascot (adapted for dark background) -->
-  <g transform="translate(820,60) scale(0.18)">
+  <!-- Doodle creature mascot (left of title, vertically centered) -->
+  <g transform="translate(320,45) scale(0.30)">
     <!-- Hand-drawn wobbly body -->
     <path d="M198,80 Q140,83 120,120 Q102,160 108,210 Q115,258 140,285 Q165,308 195,315 Q225,320 255,300 Q282,278 290,240 Q298,200 292,160 Q285,118 260,95 Q235,78 198,80Z" fill="rgba(255,255,255,0.08)" stroke="rgba(255,255,255,0.7)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
 
@@ -60,12 +60,12 @@
     <path d="M296,264 Q310,260 315,268" fill="none" stroke="rgba(255,255,255,0.7)" stroke-width="1.2" opacity="0.18"/>
   </g>
 
-  <!-- Title: AgentBnB -->
-  <text x="430" y="130" text-anchor="middle" font-family="monospace" font-size="56" font-weight="700" fill="#10B981">AgentBnB</text>
+  <!-- Title: AgentBnB (centered in banner) -->
+  <text x="600" y="125" text-anchor="middle" font-family="monospace" font-size="56" font-weight="700" fill="#10B981">AgentBnB</text>
 
   <!-- Tagline -->
-  <text x="430" y="185" text-anchor="middle" font-family="monospace" font-size="18" fill="rgba(255,255,255,0.55)">Your agent has idle APIs. It knows. It wants to trade them.</text>
+  <text x="600" y="178" text-anchor="middle" font-family="monospace" font-size="18" fill="rgba(255,255,255,0.55)">Your agent has idle APIs. It knows. It wants to trade them.</text>
 
   <!-- Accent line -->
-  <line x1="150" y1="210" x2="710" y2="210" stroke="#10B981" stroke-width="1" opacity="0.4"/>
+  <line x1="300" y1="205" x2="900" y2="205" stroke="#10B981" stroke-width="1" opacity="0.4"/>
 </svg>
