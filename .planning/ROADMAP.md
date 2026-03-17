@@ -81,7 +81,7 @@
 **Post-Merge:**
 
 - [ ] **Phase 22: Conductor Integration** — PipelineOrchestrator, Gateway wiring, CLI `agentbnb conduct`, E2E tests (4 plans) 🟡 HIGH
-- [ ] **Phase 23: Ship** — My Agent route fix, Dockerfile + fly.toml + CI/CD, GitHub public checklist (3 plans) 🟡 MEDIUM
+- [ ] **Phase 23: Ship** — Deployment infrastructure, GitHub public checklist (2 plans) 🟡 MEDIUM
 
 ---
 
@@ -161,7 +161,10 @@ Plans:
   1. /#/my-agent Hub route renders OwnerDashboard
   2. Registry + Hub deployed on Fly.io at agentbnb.dev
   3. GitHub repo is public with no secrets, correct license, CI passing
-**Plans:** 0/3 — not yet planned
+**Plans:** 2 plans
+Plans:
+- [ ] 23-01-PLAN.md — Deployment infrastructure (Dockerfile, fly.toml, CI, .env.example)
+- [ ] 23-02-PLAN.md — GitHub public checklist (secrets scan, social preview, verification)
 
 ---
 
@@ -178,7 +181,7 @@ Plans:
 | 20. Conductor Core | v3.0 | 2/2 | Complete | 2026-03-17 |
 | 21. Signed Escrow | v3.0 | 3/4 | In Progress | — |
 | 22. Conductor Integration | v3.0 | 0/4 | Not started | — |
-| 23. Ship | v3.0 | 0/3 | Not started | — |
+| 23. Ship | v3.0 | 0/2 | Not started | — |
 
 **Total:** 23 phases, 71+ plans, 5 milestones shipped, 1 in progress.
 
