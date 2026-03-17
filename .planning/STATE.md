@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v3.0
 milestone_name: Production-Ready Launch
 status: executing
-stopped_at: Completed 19-02-PLAN.md
-last_updated: "2026-03-17T10:20:41.975Z"
+stopped_at: Completed 19-05-PLAN.md
+last_updated: "2026-03-17T10:21:41.743Z"
 last_activity: 2026-03-17 — Completed 20-01 (Conductor types, TaskDecomposer, Card registration)
 progress:
   total_phases: 5
   completed_phases: 0
   total_plans: 8
-  completed_plans: 3
+  completed_plans: 6
   percent: 10
 ---
 
@@ -57,6 +57,8 @@ Progress: [█---------] 10%
 | Phase 18-02 | ~10min | 2 tasks | 1 file |
 | Phase 19-skillexecutor P01 | 3m14s | 2 tasks | 4 files |
 | Phase 19-skillexecutor P02 | 3min | 1 tasks | 2 files |
+| Phase 19-skillexecutor P04 | 195s | 1 tasks | 2 files |
+| Phase 19-skillexecutor P05 | 4min | 1 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -99,6 +101,11 @@ Progress: [█---------] 10%
 - [Phase 20-01]: Template steps use depends_on_indices resolved to UUIDs at decomposition time for DAG correctness
 - [Phase 20-01]: Check-then-insert/update for idempotent card registration (works with FTS triggers)
 - [Phase 19-02]: output_mapping empty returns full response body; response. prefix stripped in output paths; pre-existing TS errors in task-decomposer/command-executor deferred
+- [Phase 19-04]: Base URL configurable via OPENCLAW_BASE_URL env var — supports non-standard OpenClaw ports without code changes
+- [Phase 19-04]: vi.mock('node:child_process') required at module level for ESM test compatibility — vi.spyOn alone fails for built-in ESM exports
+- [Phase 19-04]: Telegram channel is MVP fire-and-forget — TELEGRAM_CHAT_ID from env var, not skill config, to avoid leaking chat IDs
+- [Phase 19-05]: Custom execAsync wrapper used instead of promisify(exec) to avoid TypeScript Buffer vs string type ambiguity in child_process
+- [Phase 19-05]: CommandExecutor security check uses base command before interpolation to prevent allowlist bypass via param injection
 
 ### Pending Todos
 
@@ -112,8 +119,8 @@ Progress: [█---------] 10%
 
 ## Session Continuity
 
-Last session: 2026-03-17T10:20:41.974Z
-Stopped at: Completed 19-02-PLAN.md
+Last session: 2026-03-17T10:21:41.741Z
+Stopped at: Completed 19-05-PLAN.md
 Resume file: None
 
 ---

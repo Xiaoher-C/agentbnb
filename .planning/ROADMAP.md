@@ -99,7 +99,7 @@
   4. OpenClaw Bridge forwards requests to OpenClaw agent and returns result
   5. Command Executor runs sandboxed shell commands with timeout
   6. Gateway dispatches to SkillExecutor instead of empty handler URL
-**Plans:** 2/6 plans executed
+**Plans:** 5/6 plans executed
 Plans:
 - [ ] 19-01-PLAN.md — Skill Config Schema + SkillExecutor Interface + YAML Parser
 - [ ] 19-02-PLAN.md — API Executor (Mode A — config-driven REST API calls)
@@ -169,7 +169,7 @@ Plans:
 | 9-11 | v2.1 | 10/10 | Complete | 2026-03-16 |
 | 12-15 | v2.2 | 11/11 | Complete | 2026-03-16 |
 | 16-18 | v2.3 | 5/5 | Complete | 2026-03-17 |
-| 19. SkillExecutor | 2/6 | In Progress|  | — |
+| 19. SkillExecutor | 5/6 | In Progress|  | — |
 | 20. Conductor Core | v3.0 | 1/2 | In Progress | — |
 | 21. Signed Escrow | v3.0 | 0/5 | Not started | — |
 | 22. Conductor Integration | v3.0 | 0/4 | Not started | — |
