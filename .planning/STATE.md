@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v2.3
 milestone_name: Launch Ready
 status: completed
-stopped_at: Completed 17-01-PLAN.md
-last_updated: "2026-03-17T06:51:48.817Z"
+stopped_at: Completed 18-01-PLAN.md
+last_updated: "2026-03-17T07:17:57.248Z"
 last_activity: 2026-03-17 — Completed 16-02 (Magic UI component extraction)
 progress:
   total_phases: 4
   completed_phases: 2
-  total_plans: 3
-  completed_plans: 3
+  total_plans: 5
+  completed_plans: 4
   percent: 98
 ---
 
@@ -48,6 +48,7 @@ Progress: [██████████] 98%
 | 18. README Visual Overhaul | 0/? | Not started |
 | 19. Deployment + Go Public | 0/? | Not started |
 | Phase 17 P01 | 205 | 2 tasks | 7 files |
+| Phase 18-readme-visual-overhaul P01 | 3min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -79,6 +80,9 @@ Progress: [██████████] 98%
 - [Phase 16]: FlickeringGrid simplified — removed text-mask canvas logic for background use case
 - [Phase 16]: Hub UI primitives live in hub/src/components/ui/ with relative imports, dark-only
 - [Phase 17]: Radix accordion content is lazily mounted — tests click triggers to reveal answer text rather than checking hidden DOM
+- [Phase 18-01]: Banner SVG uses translate(820,60) scale(0.18) to position doodle creature to right of title
+- [Phase 18-01]: Creature strokes changed from #2C2C2A to rgba(255,255,255,0.7) for dark background visibility
+- [Phase 18-01]: Screenshot script handles graceful fallback when backend API unavailable
 
 ### Pending Todos
 
@@ -92,8 +96,8 @@ Progress: [██████████] 98%
 
 ## Session Continuity
 
-Last session: 2026-03-17T06:48:44.216Z
-Stopped at: Completed 17-01-PLAN.md
+Last session: 2026-03-17T07:17:57.246Z
+Stopped at: Completed 18-01-PLAN.md
 Resume file: None
 
 ---

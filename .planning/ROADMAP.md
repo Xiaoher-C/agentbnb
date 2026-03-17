@@ -103,7 +103,7 @@ Plans:
   2. A hero image or banner is prominently displayed
   3. README has clear structured sections: What, Install, Quick Start, Architecture, Contributing
   4. docs/hub-screenshot.png is a real screenshot (not 0-byte placeholder)
-**Plans:** 2 plans
+**Plans:** 1/2 plans executed
 
 Plans:
 - [ ] 18-01-PLAN.md — Create hero banner SVG and capture real Hub screenshot
@@ -132,7 +132,7 @@ Plans:
 | 12-15 | v2.2 | 11/11 | Complete | 2026-03-16 |
 | 16. SPA Fix + Hub Enhancement | v2.3 | 2/2 | Complete | 2026-03-17 |
 | 17. Below-Fold Sections | 1/1 | Complete    | 2026-03-17 | — |
-| 18. README Visual Overhaul | v2.3 | 0/2 | Planned | — |
+| 18. README Visual Overhaul | 1/2 | In Progress|  | — |
 | 19. Deployment + Go Public | v2.3 | 0/? | Not started | — |
 
 **Total:** 20+ phases, 62+ plans, 4 milestones shipped, 1 in progress.
