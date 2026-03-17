@@ -10,12 +10,18 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@number-flow/react": "^0.6.0",
+    "@radix-ui/react-accordion": "^1.2.12",
     "boring-avatars": "^1.11.2",
+    "clsx": "^2.1.1",
+    "color-bits": "^1.1.1",
     "lucide-react": "^0.469.0",
+    "motion": "^12.37.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-router": "^7.13.1",
-    "recharts": "^3.8.0"
+    "recharts": "^3.8.0",
+    "tailwind-merge": "^3.5.0"
   },
   "devDependencies": {
     "@testing-library/jest-dom": "^6.6.3",
