@@ -109,7 +109,20 @@ export const CommandSkillConfigSchema = z.object({
 });
 
 /**
- * Discriminated union over all four skill configuration types.
+ * Schema for conductor orchestration skills (Mode E).
+ * Routes execution to the ConductorMode for task decomposition and multi-agent orchestration.
+ */
+export const ConductorSkillConfigSchema = z.object({
+  id: z.string().min(1),
+  type: z.literal('conductor'),
+  name: z.string().min(1),
+  conductor_skill: z.enum(['orchestrate', 'plan']),
+  pricing: PricingSchema,
+  timeout_ms: z.number().positive().optional(),
+});
+
+/**
+ * Discriminated union over all five skill configuration types.
  * Used by SkillExecutor to dispatch to the correct executor mode.
  */
 export const SkillConfigSchema = z.discriminatedUnion('type', [
@@ -117,6 +130,7 @@ export const SkillConfigSchema = z.discriminatedUnion('type', [
   PipelineSkillConfigSchema,
   OpenClawSkillConfigSchema,
   CommandSkillConfigSchema,
+  ConductorSkillConfigSchema,
 ]);
 
 /**
@@ -137,6 +151,8 @@ export type PipelineSkillConfig = z.infer<typeof PipelineSkillConfigSchema>;
 export type OpenClawSkillConfig = z.infer<typeof OpenClawSkillConfigSchema>;
 /** TypeScript type for a command-mode skill config */
 export type CommandSkillConfig = z.infer<typeof CommandSkillConfigSchema>;
+/** TypeScript type for a conductor-mode skill config */
+export type ConductorSkillConfig = z.infer<typeof ConductorSkillConfigSchema>;
 
 /**
  * Expands `${VAR_NAME}` patterns in a string using process.env.
