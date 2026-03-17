@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v3.0
 milestone_name: Production-Ready Launch
 status: executing
-stopped_at: Completed 21-03-PLAN.md
+stopped_at: Completed 21-02-PLAN.md
 last_updated: "2026-03-17T11:06:46.071Z"
 last_activity: 2026-03-17 — Completed 20-02 (CapabilityMatcher + BudgetController)
 progress:
   total_phases: 5
   completed_phases: 2
   total_plans: 12
-  completed_plans: 9
-  percent: 15
+  completed_plans: 10
+  percent: 17
 ---
 
 # AgentBnB — Project State
@@ -25,10 +25,10 @@ See: .planning/PROJECT.md (updated 2026-03-17)
 
 ## Current Position
 
-Phase: Phase 21 — Signed Escrow Receipt (Plan 3/4 complete)
-Plan: 21-03 complete
+Phase: Phase 21 — Signed Escrow Receipt (Plan 4/4 complete)
+Plan: 21-02 complete
 Status: Phase 21 in progress
-Last activity: 2026-03-17 — Completed 21-03 (Settlement Protocol)
+Last activity: 2026-03-17 — Completed 21-02 (Gateway Escrow Receipt Integration)
 
 Progress: [██--------] 15%
 
@@ -63,6 +63,7 @@ Progress: [██--------] 15%
 | Phase 19-skillexecutor P06 | 468s | 2 tasks | 3 files |
 | Phase 21 P01 | 227s | 2 tasks | 7 files |
 | Phase 21 P03 | 182s | 1 tasks | 4 files |
+| Phase 21 P02 | 337s | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -120,6 +121,7 @@ Progress: [██--------] 15%
 - [Phase 19-06]: Mutable Map reference enables PipelineExecutor circular dep resolution without new SkillExecutor API
 - [Phase 21]: Ed25519 with DER encoding via Node.js crypto — zero external deps, canonical JSON for deterministic signatures
 - [Phase 21-03]: P2P settlement: each side updates only own SQLite; confirmEscrowDebit marks settled without crediting recipient; recordEarning uses nonce for replay protection
+- [Phase 21-02]: Gateway receipt-or-local branching: isRemoteEscrow flag controls settlement path; receipt_settled/receipt_released flags in response for requester-side settlement coordination
 
 ### Pending Todos
 
@@ -133,8 +135,8 @@ Progress: [██--------] 15%
 
 ## Session Continuity
 
-Last session: 2026-03-17T11:11:20Z
-Stopped at: Completed 21-03-PLAN.md
+Last session: 2026-03-17T11:20:16Z
+Stopped at: Completed 21-02-PLAN.md
 Resume file: None
 
 ---
