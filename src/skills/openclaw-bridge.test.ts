@@ -1,6 +1,12 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { OpenClawBridge } from './openclaw-bridge.js';
 import type { OpenClawSkillConfig } from './skill-config.js';
+
+// Mock node:child_process at module level so ESM can replace execSync
+vi.mock('node:child_process', () => ({
+  execSync: vi.fn(),
+}));
+
 import * as child_process from 'node:child_process';
 
 // ---------------------------------------------------------------------------
