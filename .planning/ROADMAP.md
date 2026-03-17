@@ -80,7 +80,7 @@
 
 **Post-Merge:**
 
-- [ ] **Phase 22: Conductor Integration** — PipelineOrchestrator, Gateway wiring, CLI `agentbnb conduct`, E2E tests (4 plans) 🟡 HIGH
+- [ ] **Phase 22: Conductor Integration** — PipelineOrchestrator, ConductorMode, CLI `agentbnb conduct`, E2E tests (2 plans) 🟡 HIGH
 - [ ] **Phase 23: Ship** — Deployment infrastructure, GitHub public checklist (2 plans) 🟡 MEDIUM
 
 ---
@@ -151,7 +151,10 @@ Plans:
   2. Conductor's orchestrate skill is callable via SkillExecutor
   3. `agentbnb conduct "task"` CLI command works end-to-end
   4. E2E test with 3 agents (Conductor + 2 providers) passes
-**Plans:** 0/4 — not yet planned
+**Plans:** 2 plans
+Plans:
+- [ ] 22-01-PLAN.md — PipelineOrchestrator + ConductorMode (ExecutorMode adapter)
+- [ ] 22-02-PLAN.md — CLI `agentbnb conduct` + E2E 3-agent tests
 
 ### Phase 23: Ship
 **Goal**: AgentBnB deployed to production, GitHub repo public
@@ -179,8 +182,8 @@ Plans:
 | 16-18 | v2.3 | 5/5 | Complete | 2026-03-17 |
 | 19. SkillExecutor | v3.0 | 6/6 | Complete | 2026-03-17 |
 | 20. Conductor Core | v3.0 | 2/2 | Complete | 2026-03-17 |
-| 21. Signed Escrow | 4/4 | Complete    | 2026-03-17 | — |
-| 22. Conductor Integration | v3.0 | 0/4 | Not started | — |
+| 21. Signed Escrow | v3.0 | 4/4 | Complete | 2026-03-17 |
+| 22. Conductor Integration | v3.0 | 0/2 | Not started | — |
 | 23. Ship | v3.0 | 0/2 | Not started | — |
 
 **Total:** 23 phases, 71+ plans, 5 milestones shipped, 1 in progress.
