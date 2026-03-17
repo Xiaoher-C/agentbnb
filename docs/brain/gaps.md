@@ -115,13 +115,15 @@ app.listen({ port: 8080 });
 ## Summary Priority
 
 ```
-0. 🔴 SkillExecutor — agent has no way to actually execute capabilities
-1. 🔴 Cross-Machine Credits — blocks ALL real P2P usage
-2. 🔴 Handler Implementation — no example handlers (related to #0)
+✅ SkillExecutor — RESOLVED in v3.0
+✅ Cross-Machine Credits — RESOLVED in v3.0 (signed escrow receipts)
+✅ Handler Implementation — RESOLVED in v3.0 (SkillExecutor replaces handlers)
+✅ Remote Registry Sync — RESOLVED in v3.1 (WebSocket relay auto-publishes)
+✅ Deployment — RESOLVED in v3.1 (fly.toml + Dockerfile ready)
+1. 🟡 parseSoulMdV2 metadata — card quality gap (v3.2)
+2. 🟡 Relay long-task support — 30s timeout blocks 5+ min skills (v3.2)
 3. 🟡 My Agent Route — quick fix, broken page
-4. 🟡 Deployment — blocks public access
-5. 🟢 Remote Registry Push — blocks central discovery
-6. 🟢 CI/CD — nice to have
+4. 🟢 CI/CD — nice to have
 ```
 
 ## SkillExecutor — Agent Self-Execution Engine {#skill-executor}
@@ -177,4 +179,59 @@ AgentRuntime
 - Agent can self-execute without human writing custom HTTP servers
 - The full agent-native loop closes: detect idle → share → receive request → execute → settle credits
 
-**Status**: Not designed. This is the single most important architecture addition needed.
+**Status**: ✅ RESOLVED in v3.0 — SkillExecutor with 5 modes (API, Pipeline, OpenClaw, Command, Conductor) shipped 2026-03-17.
+
+## parseSoulMdV2 Metadata Enrichment {#soul-md-v2}
+
+**Severity**: 🟡 MEDIUM — Card quality gap
+**Target**: v3.2
+
+**Problem**: `agentbnb openclaw sync` generates cards from SOUL.md but the output lacks `category`, `powered_by`, and precise `inputs`/`outputs`. Agent owners must manually edit card.json to add this metadata, defeating the zero-config promise.
+
+**What's needed**: SOUL.md H2 sections should support YAML frontmatter or special markers to define rich metadata:
+
+```markdown
+## ElevenLabs TTS Pro
+<!-- agentbnb:
+  category: tts
+  powered_by: [{ provider: elevenlabs, model: multilingual-v2 }]
+  inputs: [{ name: text, type: text, required: true }]
+  outputs: [{ name: audio, type: audio }]
+  pricing: { credits_per_call: 5 }
+-->
+```
+
+`parseSoulMdV2()` would extract these blocks and merge them into the generated CapabilityCard, producing publication-ready cards without manual JSON editing.
+
+**Status**: Not started. Planned for v3.2.
+
+## WebSocket Relay Long-Task Support {#relay-long-tasks}
+
+**Severity**: 🟡 MEDIUM — Blocks long-running skills via relay
+**Target**: v3.2
+
+**Problem**: The WebSocket relay in `src/relay/websocket-relay.ts` has a 30-second timeout per `relay_request`. Skills like `stock-analyst` (full deep analysis mode) need 5+ minutes to execute. These requests timeout and fail through the relay path.
+
+**Possible solutions**:
+
+| Solution | Pros | Cons |
+|----------|------|------|
+| A. Streaming progress | Real-time feedback, natural WS fit | Complex state management on both sides |
+| B. Job-based async (submit → poll → result) | Simple, resilient to reconnects | Requires job store on registry, polling overhead |
+| C. Configurable per-skill timeout | Minimal change | Still blocks the WS connection, no progress feedback |
+
+**Recommended**: Option B (job-based async) with Option A (streaming) as enhancement.
+
+Flow:
+```
+Agent A → relay_request { long_running: true }
+Registry → incoming_request to Agent B
+Agent B → relay_ack { job_id: "..." }          // immediate ack
+Registry → response { job_id: "..." }          // A gets job_id
+... Agent B works for 5 min ...
+Agent B → relay_job_complete { job_id, result }
+Registry → forwards to Agent A (if connected) or stores for poll
+Agent A → relay_poll { job_id }                // if reconnected
+```
+
+**Status**: Not started. Planned for v3.2.

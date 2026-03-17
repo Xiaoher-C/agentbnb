@@ -44,6 +44,10 @@ COPY --from=build /app/dist ./dist/
 # Copy built Hub SPA
 COPY --from=build /app/hub/dist ./hub/dist/
 
+# Copy entrypoint script
+COPY docker-entrypoint.sh ./
+RUN chmod +x docker-entrypoint.sh
+
 EXPOSE 7701
 
-CMD ["node", "dist/cli/index.js", "serve", "--registry-port", "7701"]
+ENTRYPOINT ["./docker-entrypoint.sh"]
