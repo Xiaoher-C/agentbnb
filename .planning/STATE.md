@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v3.0
 milestone_name: Production-Ready Launch
 status: executing
-stopped_at: Completed 20-02-PLAN.md
-last_updated: "2026-03-17T10:26:11.530Z"
+stopped_at: Completed 19-06-PLAN.md
+last_updated: "2026-03-17T10:32:18.608Z"
 last_activity: 2026-03-17 — Completed 20-02 (CapabilityMatcher + BudgetController)
 progress:
   total_phases: 5
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 8
-  completed_plans: 7
+  completed_plans: 8
   percent: 15
 ---
 
@@ -60,6 +60,7 @@ Progress: [██--------] 15%
 | Phase 19-skillexecutor P04 | 195s | 1 tasks | 2 files |
 | Phase 19-skillexecutor P05 | 4min | 1 tasks | 2 files |
 | Phase 19-skillexecutor P03 | 4m17s | 2 tasks | 4 files |
+| Phase 19-skillexecutor P06 | 468s | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -113,6 +114,8 @@ Progress: [██--------] 15%
 - [Phase 19-03]: interpolateObject deep-walks arrays too for list-style input_mappings
 - [Phase 19-03]: PipelineExecutor accepts SkillExecutor by reference for clean dependency inversion
 - [Phase 19-03]: step undefined guard added for TypeScript strict-mode loop safety (TS18048)
+- [Phase 19-06]: Gateway targetSkillId resolves as resolvedSkillId ?? skillId ?? cardId for v1/v2 card compat
+- [Phase 19-06]: Mutable Map reference enables PipelineExecutor circular dep resolution without new SkillExecutor API
 
 ### Pending Todos
 
@@ -126,8 +129,8 @@ Progress: [██--------] 15%
 
 ## Session Continuity
 
-Last session: 2026-03-17T10:21:33Z
-Stopped at: Completed 20-02-PLAN.md
+Last session: 2026-03-17T10:32:18.606Z
+Stopped at: Completed 19-06-PLAN.md
 Resume file: None
 
 ---
