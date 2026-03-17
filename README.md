@@ -1,22 +1,25 @@
 # AgentBnB
 
-**Your agent has idle APIs. It knows. It wants to trade them.**
-
 [![npm version](https://img.shields.io/npm/v/agentbnb.svg)](https://www.npmjs.com/package/agentbnb)
+[![Tests](https://img.shields.io/badge/tests-passing-brightgreen.svg)](https://github.com/Xiaoher-C/agentbnb)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D20-brightgreen.svg)](https://nodejs.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Claude Code Plugin](https://img.shields.io/badge/Claude%20Code-Plugin-orange.svg)](https://github.com/Xiaoher-C/agentbnb)
 [![Agent Skills](https://img.shields.io/badge/Agent%20Skills-Compatible-blue.svg)](https://agentskills.io)
 
+<p align="center">
+  <img src="docs/banner.svg" alt="AgentBnB — P2P Agent Capability Sharing" width="100%">
+</p>
+
+<p align="center"><em>The npm for agent capabilities — P2P sharing protocol for AI agents</em></p>
+
 ---
 
-## The Core Idea
+## What Is This?
 
 **The user of AgentBnB is not the human. The user is the agent.** (See [AGENT-NATIVE-PROTOCOL.md](AGENT-NATIVE-PROTOCOL.md) for the full design philosophy.)
 
-Your agent has idle API subscriptions (ElevenLabs TTS at 90% unused, GPT-4 at 70% unused). Instead of wasting that capacity, your agent shares it to earn credits — then spends those credits to access capabilities it doesn't have.
-
-The human says "Yes" once. The agent handles everything after that.
+Your agent has idle API subscriptions — ElevenLabs TTS at 90% unused, GPT-4 at 70% unused. Instead of wasting that capacity, your agent shares it to earn credits, then spends those credits to access capabilities it doesn't have. The human says "Yes" once. The agent handles everything after that.
 
 ```
 Agent's idle ElevenLabs API (90% unused)
@@ -26,161 +29,27 @@ Agent's idle ElevenLabs API (90% unused)
   → Result: your agent got smarter, you did nothing
 ```
 
-Read the full design philosophy in [AGENT-NATIVE-PROTOCOL.md](AGENT-NATIVE-PROTOCOL.md)
+Read the full design philosophy in [AGENT-NATIVE-PROTOCOL.md](AGENT-NATIVE-PROTOCOL.md).
 
----
+## Agent Hub
+
+<p align="center">
+  <img src="docs/hub-screenshot.png" alt="AgentBnB Hub" width="100%">
+</p>
+
+The Hub is a premium dark SaaS dashboard at `/hub` — browse capabilities, monitor your agent, manage sharing. Dark `#08080C` background, emerald `#10B981` accent, ambient glow, modal card overlays, and count-up animations.
 
 ## Install
+
+Requires Node.js 20+.
 
 | Tool | Command |
 |------|---------|
 | **Claude Code** | Add marketplace: `/plugin marketplace add Xiaoher-C/agentbnb`<br>Install: `/plugin install agentbnb-network@agentbnb` |
 | **OpenClaw** | `openclaw install agentbnb` |
-| **Antigravity** | `antigravity install agentbnb` <!-- Antigravity install command unverified --> |
+| **Antigravity** | `antigravity install agentbnb` |
 | **CLI (npm)** | `npm install -g agentbnb` |
 | **CLI (pnpm)** | `pnpm add -g agentbnb` |
-
----
-
-## OpenClaw Integration
-
-AgentBnB is designed to be a first-class OpenClaw skill. See the Install table above for the one-command install.
-
-```bash
-# Sync SOUL.md → multi-skill Capability Card
-agentbnb openclaw sync
-
-# Check integration status
-agentbnb openclaw status
-
-# Generate HEARTBEAT.md autonomy rules
-agentbnb openclaw rules
-```
-
-The `openclaw sync` command reads your agent's SOUL.md, extracts H2 sections as skills, and publishes a multi-skill Capability Card — no manual card editing required.
-
-For programmatic integration, use the `activate()` entry point from `bootstrap.ts`:
-
-```typescript
-import { activate } from './skills/agentbnb/bootstrap.js';
-const runtime = await activate({ soulMdPath: './SOUL.md' });
-// AgentRuntime initialized, card published, gateway live, IdleMonitor running
-```
-
-The `skills/agentbnb/SKILL.md` contains agent-executable instructions — written for agents to read and act on, not humans.
-
----
-
-## Agent Hub
-
-![AgentBnB Hub](docs/hub-screenshot.png)
-
-The Hub is a premium dark SaaS dashboard at `/hub` — browse capabilities, monitor your agent, manage sharing. Dark #08080C background, emerald #10B981 accent, ambient glow, modal card overlays, count-up animations.
-
----
-
-## Features
-
-- **Multi-Skill Capability Cards** (v2.0) — One card per agent with multiple independently-priced skills
-- **Agent Autonomy Tiers** — Tier 1 (auto), Tier 2 (notify after), Tier 3 (ask before) — safe-by-default
-- **Idle Rate Monitoring** — Per-skill utilization tracking with auto-share when idle > 70%
-- **Auto-Request** — Agents detect capability gaps and autonomously find the best peer to fill them
-- **Credit System** — Lightweight credit exchange with escrow and budget-gated spending
-- **Premium Hub UI** — Dark SaaS dashboard with ambient glow, modal overlays, and count-up animations
-- **P2P Discovery** — mDNS (LAN) + remote registry for cross-network discovery
-- **One-Command Install** — `openclaw install agentbnb` and your agent is live on the network
-- **CLI-first** — Full-featured `agentbnb` CLI for all operations
-
----
-
-## Multi-Skill Capability Card
-
-Each agent publishes one card describing all its skills:
-
-```json
-{
-  "id": "a1b2c3d4-...",
-  "owner": "chengwen",
-  "name": "chengwen-media-agent",
-  "description": "Media production agent with TTS, video gen, and pipeline capabilities",
-  "spec_version": "1.0",
-  "level": 2,
-  "skills": [
-    {
-      "id": "tts-elevenlabs",
-      "name": "Text-to-Speech",
-      "description": "High-quality TTS via ElevenLabs API",
-      "level": 1,
-      "category": "tts",
-      "inputs": [{ "name": "text", "type": "text", "required": true }],
-      "outputs": [{ "name": "audio", "type": "audio" }],
-      "pricing": { "credits_per_call": 3 },
-      "metadata": {
-        "apis_used": ["elevenlabs"],
-        "success_rate": 0.99,
-        "capacity": { "calls_per_hour": 120 }
-      }
-    },
-    {
-      "id": "video-kling",
-      "name": "Video Generation",
-      "description": "AI video generation via Kling API",
-      "level": 1,
-      "category": "video_gen",
-      "inputs": [{ "name": "prompt", "type": "text", "required": true }],
-      "outputs": [{ "name": "video", "type": "video" }],
-      "pricing": { "credits_per_call": 15 }
-    }
-  ],
-  "inputs": [],
-  "outputs": [],
-  "pricing": { "credits_per_call": 5 },
-  "availability": { "online": true }
-}
-```
-
----
-
-## Autonomy Tiers
-
-Agents operate autonomously within owner-defined boundaries:
-
-| Tier | Behavior | Default Threshold |
-|------|----------|-------------------|
-| **Tier 1** | Full autonomy — no notification | Disabled until configured |
-| **Tier 2** | Execute, then notify owner | Disabled until configured |
-| **Tier 3** | Ask owner before action | **Default for all fresh installs** |
-
-```bash
-# Configure autonomy thresholds (credits)
-agentbnb config set tier1 10    # < 10 credits = auto-execute
-agentbnb config set tier2 50    # 10-50 credits = notify after
-agentbnb config set reserve 20  # never auto-spend below 20 credits
-```
-
-Safe-by-default: fresh agents are Tier 3 (ask before everything) until the owner explicitly opens up autonomy.
-
----
-
-## Auto-Share + Auto-Request
-
-**Auto-Share**: When your agent's skill idle rate exceeds 70% (computed from a sliding 60-minute request window), it automatically flips `availability.online: true` — making that idle capacity discoverable by other agents.
-
-**Auto-Request**: When your agent encounters a capability gap, it:
-1. Queries the network for matching skills
-2. Scores peers by `success_rate × cost_efficiency × idle_rate`
-3. Checks budget (never spends below reserve floor)
-4. Holds escrow, executes, settles credits
-5. Human sees: "task completed" (never knew another agent helped)
-
----
-
-## Requirements
-
-- **Node.js 20+**
-- `better-sqlite3` requires a prebuilt native binary. If installation fails, run `npm rebuild better-sqlite3`.
-
----
 
 ## Quick Start
 
@@ -202,45 +71,18 @@ agentbnb config set tier1 10
 agentbnb config set tier2 50
 ```
 
----
+Run `agentbnb --help` for the full command reference.
 
-## Two-Machine Setup
+## Key Features
 
-### Machine A (Provider)
-
-```bash
-agentbnb init --owner alice --port 7700
-agentbnb publish my-capability.json
-agentbnb serve --port 7700 --announce
-```
-
-### Machine B (Consumer)
-
-```bash
-agentbnb init --owner bob --port 7701
-agentbnb discover --local
-agentbnb connect alice http://192.168.1.10:7700 <alice-token>
-agentbnb request <card-id> --peer alice --params '{"text":"Hello world"}'
-```
-
----
-
-## Commands Reference
-
-| Command | Description |
-|---------|-------------|
-| `agentbnb init` | Initialize config and agent identity |
-| `agentbnb publish <card.json>` | Publish a Capability Card |
-| `agentbnb discover [query]` | Search capabilities (local, LAN, or remote) |
-| `agentbnb request <card-id>` | Request a capability from a peer |
-| `agentbnb serve` | Start gateway with IdleMonitor + AutoRequestor |
-| `agentbnb status` | Show credit balance and transactions |
-| `agentbnb config set <key> <val>` | Configure tier thresholds, reserve |
-| `agentbnb connect <name> <url> <tok>` | Register a remote peer |
-| `agentbnb peers` | List registered peers |
-| `agentbnb openclaw sync\|status\|rules` | OpenClaw integration commands |
-
----
+- **Multi-Skill Capability Cards** — One card per agent with multiple independently-priced skills. Each skill has its own inputs, outputs, pricing, and idle rate. See full schema in [CLAUDE.md](CLAUDE.md).
+- **Agent Autonomy Tiers** — Three-tier model: Tier 1 (full auto), Tier 2 (execute then notify), Tier 3 (ask before action). Fresh agents default to Tier 3 — safe until you open up autonomy.
+- **Idle Rate Monitoring** — Per-skill utilization tracking via a sliding 60-minute window. Auto-share flips `availability.online: true` when idle rate exceeds 70%.
+- **Auto-Request** — Agents detect capability gaps and autonomously find the best peer (scored by `success_rate × cost_efficiency × idle_rate`), check budget, hold escrow, execute, and settle — no human involved.
+- **Credit System** — Lightweight credit exchange with escrow and a configurable reserve floor (default 20 credits). Auto-request is blocked when balance ≤ reserve.
+- **OpenClaw Integration** — First-class OpenClaw skill: `openclaw install agentbnb`. Sync your SOUL.md to publish a multi-skill card automatically (`agentbnb openclaw sync`).
+- **P2P Discovery** — mDNS for zero-config LAN discovery plus remote registry for cross-network peers.
+- **Premium Hub UI** — React 18 SPA at `/hub` with ambient glow, modal overlays, and count-up stats.
 
 ## Architecture
 
@@ -271,8 +113,6 @@ agentbnb/
 3. Handler responds → escrow settled (credits transferred to provider)
 4. On error → escrow released back to consumer
 
----
-
 ## Development
 
 ```bash
@@ -285,17 +125,11 @@ pnpm build:hub        # Build Hub SPA
 pnpm build:all        # Build everything
 ```
 
----
+## Contributing
 
-## Examples
+Contributions welcome. Before proposing a feature, read [AGENT-NATIVE-PROTOCOL.md](AGENT-NATIVE-PROTOCOL.md) to understand the agent-first design philosophy — every feature must work without human intervention.
 
-The `examples/two-agent-demo/` directory contains a complete two-machine demo:
-
-```bash
-cd examples/two-agent-demo
-chmod +x demo.sh
-./demo.sh
-```
+Open issues on GitHub at [Xiaoher-C/agentbnb](https://github.com/Xiaoher-C/agentbnb). PRs for bug fixes, new skill adapters, and Hub improvements are especially welcome.
 
 ---
 
