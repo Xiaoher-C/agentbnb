@@ -6,7 +6,8 @@
 - ✅ **v2.0 Agent Autonomy** - Phases 4-8 (shipped 2026-03-15)
 - ✅ **v2.1 Ship It** - Phases 9-11 (shipped 2026-03-16)
 - ✅ **v2.2 Full Hub + Distribution** - Phases 12-15 (shipped 2026-03-16)
-- 🚧 **v2.3 Launch Ready** - Phases 16-19 (in progress)
+- ✅ **v2.3 Launch Ready** - Phases 16-18 (shipped 2026-03-17)
+- 🚧 **v3.0 Production-Ready Launch** - Phases 19-23 (in progress)
 
 ## Phases
 
@@ -54,71 +55,104 @@
 
 </details>
 
-### v2.3 Launch Ready
+<details>
+<summary>✅ v2.3 Launch Ready (Phases 16-18) - SHIPPED 2026-03-17</summary>
 
-- [x] **Phase 16: SPA Routing Fix + Hub Enhancement** — Fix reply.sendFile 500 error, extract Magic UI components into Hub, add doodle creature mascot (completed 2026-03-17)
-- [x] **Phase 17: Below-Fold Sections** — Compatible With marquee, FAQ accordion, brief description below Discover card grid (completed 2026-03-17)
-- [x] **Phase 18: README Visual Overhaul** — Badges, hero image, structured layout, real hub screenshot (completed 2026-03-17)
-- [ ] **Phase 19: Deployment + Go Public** — Fly.io registry, DNS config, Cloudflare Tunnel, GitHub public pre-flight
+- [x] Phase 16: SPA Routing Fix + Hub Enhancement (2/2 plans) — Fix reply.sendFile 500 error, extract Magic UI components into Hub, add doodle creature mascot
+- [x] Phase 17: Below-Fold Sections (1/1 plans) — Compatible With marquee, FAQ accordion, brief description below Discover card grid
+- [x] Phase 18: README Visual Overhaul (2/2 plans) — Badges, hero image, structured layout, real hub screenshot
+
+</details>
+
+### v3.0 Production-Ready Launch (Dual-Track Parallel)
+
+> See [v3.0-milestone.md](/v3.0-milestone.md) for full specification.
+> Track A (main branch) and Track B (conductor-core worktree) develop in parallel.
+
+**Track A — Core Infrastructure (main branch):**
+
+- [ ] **Phase 19: SkillExecutor** — Config-driven execution engine with 4 modes (API/Pipeline/OpenClaw/Command), Gateway integration (6 plans) 🔴 CRITICAL
+- [ ] **Phase 21: Signed Escrow Receipt** — Ed25519 keypair, cross-machine credit verification, settlement protocol, real P2P tests (5 plans) 🔴 CRITICAL
+
+**Track B — Conductor Foundation (conductor-core worktree, parallel with Phase 19):**
+
+- [ ] **Phase 20: Conductor Core** — TaskDecomposer, CapabilityMatcher, BudgetController, Conductor Card registration (2 plans) 🟡 HIGH
+
+**Post-Merge:**
+
+- [ ] **Phase 22: Conductor Integration** — PipelineOrchestrator, Gateway wiring, CLI `agentbnb conduct`, E2E tests (4 plans) 🟡 HIGH
+- [ ] **Phase 23: Ship** — My Agent route fix, Dockerfile + fly.toml + CI/CD, GitHub public checklist (3 plans) 🟡 MEDIUM
 
 ---
 
 ## Phase Details
 
-### Phase 16: SPA Routing Fix + Hub Enhancement
-**Goal**: Fix the /hub/* sub-route 500 error and extract useful Magic UI components into the Hub's component library
-**Depends on**: Phase 15 (v2.2 complete)
-**Requirements**: SPA-01, SPA-02, MAGICUI-01, MAGICUI-02, MAGICUI-03, MAGICUI-04, MAGICUI-05, MAGICUI-06, MASCOT-01
+### Phase 19: SkillExecutor
+**Goal**: Agent can execute capabilities via config-driven skills.yaml — no more empty localhost:8080
+**Depends on**: Phase 18 (v2.3 complete)
+**Track**: A (main branch)
+**Requirements**: EXEC-01 through EXEC-06
 **Success Criteria** (what must be TRUE):
-  1. Direct URL access to /hub/#/agents, /hub/#/activity, /hub/#/docs all return 200 (not 500)
-  2. Six Magic UI components (NumberFlow, Marquee, FlickeringGrid, Accordion, LineChart, OrbitingCircles) exist in hub/src/components/ui/ and render without errors
-  3. Doodle creature mascot (56px SVG) visible in NavBar next to "AgentBnB" title
-  4. All existing tests pass after changes
-**Plans:** 2/2 plans complete
+  1. `agentbnb serve` with skills.yaml starts SkillExecutor alongside Gateway
+  2. API Executor successfully calls external REST APIs with auth and input/output mapping
+  3. Pipeline Executor chains multiple skills with `${prev.result}` piping
+  4. OpenClaw Bridge forwards requests to OpenClaw agent and returns result
+  5. Command Executor runs sandboxed shell commands with timeout
+  6. Gateway dispatches to SkillExecutor instead of empty handler URL
+**Plans:** 0/6 — not yet planned
 
+### Phase 20: Conductor Core
+**Goal**: Build independent Conductor components that don't depend on SkillExecutor
+**Depends on**: Phase 18 (v2.3 complete, for shared code access)
+**Track**: B (conductor-core worktree, parallel with Phase 19)
+**Requirements**: COND-01 through COND-04
+**Success Criteria** (what must be TRUE):
+  1. TaskDecomposer decomposes tasks into SubTask[] via hardcoded templates
+  2. CapabilityMatcher finds best agent for each sub-task using existing peer scoring
+  3. BudgetController pre-calculates cost and enforces spending limits
+  4. Conductor's CapabilityCardV2 registers on the network
+**Plans:** 2 plans
 Plans:
-- [x] 16-01-PLAN.md — SPA routing fix + shared foundation (deps, cn utility, color utils, Tailwind keyframes)
-- [x] 16-02-PLAN.md — Extract six Magic UI components (Marquee, NumberFlow, Accordion, FlickeringGrid, LineChart, OrbitingCircles)
+- [ ] 20-01-PLAN.md — Types + TaskDecomposer + Conductor Card registration
+- [ ] 20-02-PLAN.md — CapabilityMatcher + BudgetController
 
-### Phase 17: Below-Fold Sections
-**Goal**: Add supporting content sections below the Discover card grid while maintaining minimalist aesthetic
-**Depends on**: Phase 16 (Magic UI components available)
-**Requirements**: FOLD-01, FOLD-02, FOLD-03, FOLD-04
+### Phase 21: Signed Escrow Receipt
+**Goal**: Cross-machine credit verification works — two agents on different machines can exchange credits
+**Depends on**: Phase 19 (SkillExecutor complete)
+**Track**: A (main branch)
+**Requirements**: CREDIT-01 through CREDIT-05
 **Success Criteria** (what must be TRUE):
-  1. A "Compatible With" section with scrolling marquee of tool/framework logos appears below the Discover card grid
-  2. A FAQ accordion section with common AgentBnB questions is visible below Compatible With
-  3. A brief value proposition section explains the protocol
-  4. All below-fold sections use the existing dark theme (#08080C bg, emerald accent) and feel native to the current Hub aesthetic
-**Plans:** 1/1 plans complete
+  1. `agentbnb init` generates Ed25519 keypair at `~/.agentbnb/`
+  2. Requester signs escrow receipt with private key
+  3. Provider verifies receipt signature with requester's public key
+  4. Credits settle independently on both agents' local SQLite DBs
+  5. Integration tests pass with TWO separate SQLite databases
+**Plans:** 0/5 — not yet planned
 
+### Phase 22: Conductor Integration
+**Goal**: Wire Conductor components to SkillExecutor and Signed Escrow for end-to-end orchestration
+**Depends on**: Phase 19, Phase 20, Phase 21 (all complete + merge)
+**Track**: main (post-merge)
+**Requirements**: COND-05 through COND-08
+**Success Criteria** (what must be TRUE):
+  1. PipelineOrchestrator executes sub-tasks across remote agents via Gateway
+  2. Conductor's orchestrate skill is callable via SkillExecutor
+  3. `agentbnb conduct "task"` CLI command works end-to-end
+  4. E2E test with 3 agents (Conductor + 2 providers) passes
+**Plans:** 2 plans
 Plans:
-- [ ] 17-01-PLAN.md — Three below-fold sections (Compatible With marquee, FAQ accordion, value proposition) + wiring into DiscoverPage
+- [ ] 20-01-PLAN.md — Types + TaskDecomposer + Conductor Card registration
+- [ ] 20-02-PLAN.md — CapabilityMatcher + BudgetController
 
-### Phase 18: README Visual Overhaul
-**Goal**: Make the GitHub README visually compelling and informative for first-time visitors
-**Depends on**: Phase 16 (Hub working for screenshot)
-**Requirements**: README-01, README-02, README-03, README-04
+### Phase 23: Ship
+**Goal**: AgentBnB deployed to production, GitHub repo public
+**Depends on**: Phase 22 (Conductor integrated)
+**Requirements**: SHIP-01 through SHIP-03
 **Success Criteria** (what must be TRUE):
-  1. README has OpenClaw-style badges (npm version, tests, license) at the top
-  2. A hero image or banner is prominently displayed
-  3. README has clear structured sections: What, Install, Quick Start, Architecture, Contributing
-  4. docs/hub-screenshot.png is a real screenshot (not 0-byte placeholder)
-**Plans:** 2/2 plans complete
-
-Plans:
-- [ ] 18-01-PLAN.md — Create hero banner SVG and capture real Hub screenshot
-- [ ] 18-02-PLAN.md — Rewrite README.md with badges, banner, structured sections, screenshot
-
-### Phase 19: Deployment + Go Public
-**Goal**: AgentBnB registry is accessible at agentbnb.dev and the GitHub repository is public
-**Depends on**: Phase 17, Phase 18 (Hub polished, README ready)
-**Requirements**: DEPLOY-01, DEPLOY-02, DEPLOY-03, DEPLOY-04
-**Success Criteria** (what must be TRUE):
-  1. Registry server runs on Fly.io and responds to API requests
-  2. agentbnb.dev DNS resolves to the deployed services
-  3. Cloudflare Tunnel connects Mac Mini gateway to the public internet
-  4. GitHub repository is public with no leaked secrets, correct license, and clean .gitignore
-**Plans:** 0/? plans — not yet planned
+  1. /#/my-agent Hub route renders OwnerDashboard
+  2. Registry + Hub deployed on Fly.io at agentbnb.dev
+  3. GitHub repo is public with no secrets, correct license, CI passing
+**Plans:** 0/3 — not yet planned
 
 ---
 
@@ -130,12 +164,14 @@ Plans:
 | 4-8 | v2.0 | 12/12 | Complete | 2026-03-15 |
 | 9-11 | v2.1 | 10/10 | Complete | 2026-03-16 |
 | 12-15 | v2.2 | 11/11 | Complete | 2026-03-16 |
-| 16. SPA Fix + Hub Enhancement | v2.3 | 2/2 | Complete | 2026-03-17 |
-| 17. Below-Fold Sections | 1/1 | Complete    | 2026-03-17 | — |
-| 18. README Visual Overhaul | 2/2 | Complete    | 2026-03-17 | — |
-| 19. Deployment + Go Public | v2.3 | 0/? | Not started | — |
+| 16-18 | v2.3 | 5/5 | Complete | 2026-03-17 |
+| 19. SkillExecutor | v3.0 | 0/6 | Not started | — |
+| 20. Conductor Core | v3.0 | 0/2 | Planned | — |
+| 21. Signed Escrow | v3.0 | 0/5 | Not started | — |
+| 22. Conductor Integration | v3.0 | 0/4 | Not started | — |
+| 23. Ship | v3.0 | 0/3 | Not started | — |
 
-**Total:** 20+ phases, 62+ plans, 4 milestones shipped, 1 in progress.
+**Total:** 23 phases, 67+ plans, 5 milestones shipped, 1 in progress.
 
 ---
 *Full milestone details archived in .planning/milestones/*
