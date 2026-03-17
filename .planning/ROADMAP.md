@@ -72,7 +72,7 @@
 **Track A — Core Infrastructure (main branch):**
 
 - [x] **Phase 19: SkillExecutor** — Config-driven execution engine with 4 modes (API/Pipeline/OpenClaw/Command), Gateway integration (6 plans) 🔴 CRITICAL (completed 2026-03-17)
-- [ ] **Phase 21: Signed Escrow Receipt** — Ed25519 keypair, cross-machine credit verification, settlement protocol, real P2P tests (5 plans) 🔴 CRITICAL
+- [ ] **Phase 21: Signed Escrow Receipt** — Ed25519 keypair, cross-machine credit verification, settlement protocol, real P2P tests (4 plans) 🔴 CRITICAL
 
 **Track B — Conductor Foundation (conductor-core worktree, parallel with Phase 19):**
 
@@ -134,7 +134,12 @@ Plans:
   3. Provider verifies receipt signature with requester's public key
   4. Credits settle independently on both agents' local SQLite DBs
   5. Integration tests pass with TWO separate SQLite databases
-**Plans:** 0/5 — not yet planned
+**Plans:** 4 plans
+Plans:
+- [ ] 21-01-PLAN.md — Ed25519 keypair generation + EscrowReceipt type + signing functions
+- [ ] 21-02-PLAN.md — Gateway credit verification update + client receipt attachment
+- [ ] 21-03-PLAN.md — Settlement protocol (independent credit resolution)
+- [ ] 21-04-PLAN.md — Full P2P integration tests with two separate SQLite databases
 
 ### Phase 22: Conductor Integration
 **Goal**: Wire Conductor components to SkillExecutor and Signed Escrow for end-to-end orchestration
@@ -169,13 +174,13 @@ Plans:
 | 9-11 | v2.1 | 10/10 | Complete | 2026-03-16 |
 | 12-15 | v2.2 | 11/11 | Complete | 2026-03-16 |
 | 16-18 | v2.3 | 5/5 | Complete | 2026-03-17 |
-| 19. SkillExecutor | 6/6 | Complete    | 2026-03-17 | — |
-| 20. Conductor Core | 2/2 | Complete    | 2026-03-17 | — |
-| 21. Signed Escrow | v3.0 | 0/5 | Not started | — |
+| 19. SkillExecutor | v3.0 | 6/6 | Complete | 2026-03-17 |
+| 20. Conductor Core | v3.0 | 2/2 | Complete | 2026-03-17 |
+| 21. Signed Escrow | v3.0 | 0/4 | Planned | — |
 | 22. Conductor Integration | v3.0 | 0/4 | Not started | — |
 | 23. Ship | v3.0 | 0/3 | Not started | — |
 
-**Total:** 23 phases, 67+ plans, 5 milestones shipped, 1 in progress.
+**Total:** 23 phases, 71+ plans, 5 milestones shipped, 1 in progress.
 
 ---
 *Full milestone details archived in .planning/milestones/*
