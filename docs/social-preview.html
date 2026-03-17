@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=1280" />
+  <title>AgentBnB — Social Preview</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+
+    body {
+      width: 1280px;
+      height: 640px;
+      background: #08080C;
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      position: relative;
+    }
+
+    /* Subtle background grid */
+    .bg-grid {
+      position: absolute;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(16, 185, 129, 0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(16, 185, 129, 0.03) 1px, transparent 1px);
+      background-size: 60px 60px;
+    }
+
+    /* Radial glow from center */
+    .bg-glow {
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(ellipse 800px 500px at 50% 50%, rgba(16, 185, 129, 0.06) 0%, transparent 70%);
+    }
+
+    .content {
+      position: relative;
+      z-index: 10;
+      display: flex;
+      align-items: center;
+      gap: 80px;
+      max-width: 1100px;
+      width: 100%;
+      padding: 0 60px;
+    }
+
+    /* Doodle creature */
+    .creature {
+      flex-shrink: 0;
+      color: #10B981;
+      opacity: 0.85;
+      filter: drop-shadow(0 0 32px rgba(16, 185, 129, 0.3));
+    }
+
+    /* Text block */
+    .text-block {
+      flex: 1;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(16, 185, 129, 0.1);
+      border: 1px solid rgba(16, 185, 129, 0.2);
+      border-radius: 20px;
+      padding: 4px 14px;
+      font-size: 13px;
+      color: #10B981;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      margin-bottom: 20px;
+    }
+
+    .badge-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #10B981;
+    }
+
+    h1 {
+      font-size: 72px;
+      font-weight: 700;
+      color: #FFFFFF;
+      line-height: 1.0;
+      letter-spacing: -0.02em;
+      margin-bottom: 16px;
+    }
+
+    .subtitle {
+      font-size: 24px;
+      font-weight: 400;
+      color: #9CA3AF;
+      line-height: 1.4;
+      margin-bottom: 24px;
+    }
+
+    .tagline {
+      font-size: 20px;
+      font-weight: 600;
+      color: #10B981;
+      letter-spacing: -0.01em;
+    }
+
+    /* Feature pills row */
+    .features {
+      display: flex;
+      gap: 10px;
+      margin-top: 32px;
+      flex-wrap: wrap;
+    }
+
+    .feature-pill {
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 8px;
+      padding: 6px 14px;
+      font-size: 13px;
+      color: #D1D5DB;
+      font-weight: 500;
+    }
+
+    /* Bottom bar */
+    .bottom-bar {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(16, 185, 129, 0.4), transparent);
+    }
+
+    .footer {
+      position: absolute;
+      bottom: 20px;
+      right: 48px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      z-index: 10;
+    }
+
+    .domain {
+      font-size: 16px;
+      color: #6B7280;
+      font-weight: 500;
+      font-family: 'Inter', monospace;
+    }
+
+    .mit-badge {
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 6px;
+      padding: 3px 10px;
+      font-size: 11px;
+      color: #6B7280;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+    }
+
+    .ts-badge {
+      background: rgba(49, 120, 198, 0.15);
+      border: 1px solid rgba(49, 120, 198, 0.25);
+      border-radius: 6px;
+      padding: 3px 10px;
+      font-size: 11px;
+      color: #60A5FA;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+    }
+  </style>
+</head>
+<body>
+  <div class="bg-grid"></div>
+  <div class="bg-glow"></div>
+
+  <div class="content">
+    <!-- Doodle creature -->
+    <svg class="creature" width="220" height="220" viewBox="60 30 290 290" xmlns="http://www.w3.org/2000/svg">
+      <!-- Body -->
+      <path d="M198,80 Q140,83 120,120 Q102,160 108,210 Q115,258 140,285 Q165,308 195,315 Q225,320 255,300 Q282,278 290,240 Q298,200 292,160 Q285,118 260,95 Q235,78 198,80Z" fill="currentColor" opacity="0.08" />
+      <path d="M198,80 Q140,83 120,120 Q102,160 108,210 Q115,258 140,285 Q165,308 195,315 Q225,320 255,300 Q282,278 290,240 Q298,200 292,160 Q285,118 260,95 Q235,78 198,80Z" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
+      <!-- Left eye -->
+      <path d="M155,155 Q155,135 172,135 Q189,135 189,155 Q189,175 172,175 Q155,175 155,155Z" fill="none" stroke="currentColor" stroke-width="2.5" />
+      <circle cx="172" cy="156" r="7" fill="currentColor" />
+      <circle cx="176" cy="152" r="2.2" fill="#08080C" />
+      <!-- Right eye -->
+      <path d="M210,148 Q210,126 230,126 Q250,126 250,148 Q250,170 230,170 Q210,170 210,148Z" fill="none" stroke="currentColor" stroke-width="2.5" />
+      <circle cx="230" cy="150" r="8" fill="currentColor" />
+      <circle cx="235" cy="145" r="2.2" fill="#08080C" />
+      <!-- Smile -->
+      <path d="M168,200 Q180,220 195,212 Q210,220 222,200" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" />
+      <!-- Left arm waving -->
+      <line x1="120" y1="180" x2="72" y2="135" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" />
+      <line x1="72" y1="135" x2="60" y2="112" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" />
+      <line x1="72" y1="135" x2="78" y2="108" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" />
+      <!-- Right arm holding star -->
+      <line x1="282" y1="180" x2="320" y2="138" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" />
+      <path d="M320,128 L323,112 L330,122 L342,118 L334,128 L346,136 L332,136 L328,148 L322,138 L310,142 L318,132Z" fill="#EF9F27" stroke="#EF9F27" stroke-width="0.8" />
+      <!-- Antennae -->
+      <line x1="185" y1="80" x2="170" y2="42" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+      <circle cx="170" cy="36" r="6" fill="#7F77DD" />
+      <line x1="205" y1="78" x2="222" y2="38" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+      <circle cx="222" cy="32" r="6" fill="#10B981" />
+    </svg>
+
+    <!-- Text -->
+    <div class="text-block">
+      <div class="badge">
+        <div class="badge-dot"></div>
+        v3.0 — Now Live
+      </div>
+
+      <h1>AgentBnB</h1>
+
+      <p class="subtitle">P2P Agent Capability Sharing Protocol</p>
+
+      <p class="tagline">Airbnb for AI Agent Pipelines</p>
+
+      <div class="features">
+        <span class="feature-pill">Capability Cards</span>
+        <span class="feature-pill">Credit Exchange</span>
+        <span class="feature-pill">SkillExecutor</span>
+        <span class="feature-pill">Conductor</span>
+        <span class="feature-pill">Signed Escrow</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <div class="footer">
+    <span class="domain">agentbnb.dev</span>
+    <span class="ts-badge">TypeScript</span>
+    <span class="mit-badge">MIT</span>
+  </div>
+
+  <div class="bottom-bar"></div>
+</body>
+</html>

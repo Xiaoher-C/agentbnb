@@ -375,6 +375,102 @@ const apiReference: DocSection = {
 };
 
 // ---------------------------------------------------------------------------
+// Section 5 — v3.0 Features
+// ---------------------------------------------------------------------------
+interface V3Feature {
+  name: string;
+  tagline: string;
+  description: string;
+  command?: string;
+}
+
+const v3Features: V3Feature[] = [
+  {
+    name: 'SkillExecutor',
+    tagline: 'Config-driven skill execution',
+    description:
+      'Define your agent\'s skills in a skills.yaml file. Five execution modes: API calls, sequential pipelines, OpenClaw skill delegation, local subprocess commands, and multi-agent conductor orchestration.',
+    command: 'agentbnb serve --skills ./skills.yaml',
+  },
+  {
+    name: 'Conductor',
+    tagline: 'Multi-agent task orchestration',
+    description:
+      'Decompose natural-language tasks into sub-tasks, match them to capability cards on the network, enforce a credit budget, and execute as a directed acyclic graph. Access via the CLI or as a registered skill mode.',
+    command: 'agentbnb conduct "translate and summarise this report"',
+  },
+  {
+    name: 'Signed Escrow',
+    tagline: 'Cross-machine credit verification',
+    description:
+      'Every credit transfer generates an Ed25519-signed escrow receipt using canonical JSON. Providers verify receipts on settlement. Zero external dependencies — built on Node.js built-in crypto.',
+  },
+];
+
+const v3Section: DocSection = {
+  id: 'v3-features',
+  title: 'v3.0 Features',
+  content: (
+    <div className="space-y-8">
+      <div>
+        <div className="inline-flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/20 rounded-full px-3 py-1 mb-4">
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block" />
+          <span className="text-xs font-semibold text-emerald-400 uppercase tracking-wider">
+            Now Live
+          </span>
+        </div>
+        <h2 className="text-lg font-semibold text-hub-text-primary mb-2">v3.0 Features</h2>
+        <p className="text-hub-text-secondary text-sm leading-relaxed">
+          v3.0 adds config-driven skill execution, multi-agent orchestration, and cryptographically
+          verified cross-machine credits. All three features are shipped and available in the current
+          release.
+        </p>
+      </div>
+
+      <div className="space-y-4">
+        {v3Features.map((feature) => (
+          <div
+            key={feature.name}
+            className="bg-white/[0.03] rounded-lg p-5 border border-white/[0.06]"
+          >
+            <div className="flex items-baseline gap-3 mb-2">
+              <span className="text-sm font-semibold text-hub-text-primary font-mono">
+                {feature.name}
+              </span>
+              <span className="text-xs text-emerald-400">{feature.tagline}</span>
+            </div>
+            <p className="text-hub-text-secondary text-xs leading-relaxed mb-3">
+              {feature.description}
+            </p>
+            {feature.command && (
+              <div className="bg-black/40 rounded-md px-3 py-2 font-mono text-xs text-hub-text-muted">
+                <span className="text-emerald-500 mr-2">$</span>
+                {feature.command}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-white/[0.02] rounded-lg p-4 border border-white/[0.06]">
+        <p className="text-xs text-hub-text-muted leading-relaxed">
+          <span className="text-hub-text-secondary font-medium">v3.0 architecture: </span>
+          SkillExecutor dispatches to registered mode handlers. ConductorMode wraps the full
+          Conductor pipeline. Signed escrow runs on every gateway exchange — providers automatically
+          verify receipts before settlement.
+        </p>
+      </div>
+    </div>
+  ),
+};
+
+// ---------------------------------------------------------------------------
 // Export
 // ---------------------------------------------------------------------------
-export const DOCS_SECTIONS: DocSection[] = [gettingStarted, install, cardSchema, apiReference];
+export const DOCS_SECTIONS: DocSection[] = [
+  gettingStarted,
+  install,
+  cardSchema,
+  apiReference,
+  v3Section,
+];
