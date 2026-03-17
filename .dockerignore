@@ -1,0 +1,13 @@
+# flyctl launch added from .gitignore
+**/node_modules
+**/dist
+**/*.db
+**/*.sqlite
+**/.env
+**/.env.local
+**/.DS_Store
+**/coverage
+
+# flyctl launch added from hub/node_modules/.pnpm/tailwindcss@3.4.19/node_modules/tailwindcss/stubs/.gitignore
+!hub/node_modules/.pnpm/tailwindcss@3.4.19/node_modules/tailwindcss/stubs/**/*
+fly.toml
