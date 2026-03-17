@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v3.0
 milestone_name: Production-Ready Launch
 status: executing
-stopped_at: Completed 19-03-PLAN.md
-last_updated: "2026-03-17T10:21:52.267Z"
-last_activity: 2026-03-17 — Completed 20-01 (Conductor types, TaskDecomposer, Card registration)
+stopped_at: Completed 20-02-PLAN.md
+last_updated: "2026-03-17T10:21:33Z"
+last_activity: 2026-03-17 — Completed 20-02 (CapabilityMatcher + BudgetController)
 progress:
   total_phases: 5
   completed_phases: 0
   total_plans: 8
-  completed_plans: 6
-  percent: 10
+  completed_plans: 7
+  percent: 15
 ---
 
 # AgentBnB — Project State
@@ -25,17 +25,17 @@ See: .planning/PROJECT.md (updated 2026-03-17)
 
 ## Current Position
 
-Phase: Phase 20 — Conductor Core (Plan 1/? complete)
-Plan: 20-01 complete
+Phase: Phase 20 — Conductor Core (Plan 2/? complete)
+Plan: 20-02 complete
 Status: Phase 20 in progress
-Last activity: 2026-03-17 — Completed 20-01 (Conductor types, TaskDecomposer, Card registration)
+Last activity: 2026-03-17 — Completed 20-02 (CapabilityMatcher + BudgetController)
 
-Progress: [█---------] 10%
+Progress: [██--------] 15%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 60 (v1.1: 24, v2.0: 12, v2.1: 10, v2.2: 11, v2.3: 2, v3.0: 1)
+- Total plans completed: 61 (v1.1: 24, v2.0: 12, v2.1: 10, v2.2: 11, v2.3: 2, v3.0: 2)
 - Average duration: unknown
 - Total execution time: unknown
 
@@ -101,6 +101,9 @@ Progress: [█---------] 10%
 - [Phase 20-01]: Deterministic UUID for Conductor card (singleton agent, fixed ID 00000000-0000-4000-8000-000000000001)
 - [Phase 20-01]: Template steps use depends_on_indices resolved to UUIDs at decomposition time for DAG correctness
 - [Phase 20-01]: Check-then-insert/update for idempotent card registration (works with FTS triggers)
+- [Phase 20-02]: matchSubTasks reuses AutoRequestor's v1/v2 candidate extraction pattern for consistency
+- [Phase 20-02]: BudgetController composes BudgetManager (not extends) — reserve logic stays in one place
+- [Phase 20-02]: V2 cards in tests inserted via direct SQL to bypass v1-only insertCard Zod validation
 - [Phase 19-02]: output_mapping empty returns full response body; response. prefix stripped in output paths; pre-existing TS errors in task-decomposer/command-executor deferred
 - [Phase 19-04]: Base URL configurable via OPENCLAW_BASE_URL env var — supports non-standard OpenClaw ports without code changes
 - [Phase 19-04]: vi.mock('node:child_process') required at module level for ESM test compatibility — vi.spyOn alone fails for built-in ESM exports
@@ -123,8 +126,8 @@ Progress: [█---------] 10%
 
 ## Session Continuity
 
-Last session: 2026-03-17T10:21:52.265Z
-Stopped at: Completed 19-03-PLAN.md
+Last session: 2026-03-17T10:21:33Z
+Stopped at: Completed 20-02-PLAN.md
 Resume file: None
 
 ---
