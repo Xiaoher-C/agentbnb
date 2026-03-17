@@ -1,17 +1,17 @@
 ---
 gsd_state_version: 1.0
-milestone: v2.3
-milestone_name: Launch Ready
-status: completed
-stopped_at: Completed 18-02-PLAN.md
-last_updated: "2026-03-17T07:50:09.236Z"
-last_activity: 2026-03-17 — Completed 18-02 (README visual overhaul with hero banner, Hub screenshot, badges)
+milestone: v3.0
+milestone_name: Production-Ready Launch
+status: executing
+stopped_at: Completed 19-01-PLAN.md
+last_updated: "2026-03-17T10:15:03.564Z"
+last_activity: 2026-03-17 — Completed 20-01 (Conductor types, TaskDecomposer, Card registration)
 progress:
-  total_phases: 4
-  completed_phases: 3
-  total_plans: 5
-  completed_plans: 5
-  percent: 100
+  total_phases: 5
+  completed_phases: 0
+  total_plans: 8
+  completed_plans: 2
+  percent: 10
 ---
 
 # AgentBnB — Project State
@@ -21,21 +21,21 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-17)
 
 **Core value:** Fill the market gap for agent-to-agent capability exchange — launch AgentBnB publicly.
-**Current focus:** v2.3 Launch Ready
+**Current focus:** v3.0 Conductor Core
 
 ## Current Position
 
-Phase: Phase 18 — README Visual Overhaul (Plan 2/2 complete)
-Plan: 18-02 complete, Phase 18 done
-Status: Phase 18 complete, Phase 19 next
-Last activity: 2026-03-17 — Completed 18-02 (README visual overhaul with hero banner, Hub screenshot, badges)
+Phase: Phase 20 — Conductor Core (Plan 1/? complete)
+Plan: 20-01 complete
+Status: Phase 20 in progress
+Last activity: 2026-03-17 — Completed 20-01 (Conductor types, TaskDecomposer, Card registration)
 
-Progress: [██████████] 100%
+Progress: [█---------] 10%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 59 (v1.1: 24, v2.0: 12, v2.1: 10, v2.2: 11, v2.3: 2)
+- Total plans completed: 60 (v1.1: 24, v2.0: 12, v2.1: 10, v2.2: 11, v2.3: 2, v3.0: 1)
 - Average duration: unknown
 - Total execution time: unknown
 
@@ -55,6 +55,7 @@ Progress: [██████████] 100%
 | Phase 17 P01 | ~5min | 2 tasks | 7 files |
 | Phase 18-01 | 3min | 2 tasks | 3 files |
 | Phase 18-02 | ~10min | 2 tasks | 1 file |
+| Phase 19-skillexecutor P01 | 3m14s | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -92,6 +93,10 @@ Progress: [██████████] 100%
 - [Phase 18-02]: README structure: badges → hero banner → tagline → What Is This → Agent Hub (screenshot) → Install → Quick Start → Key Features → Architecture → Development → Contributing → License
 - [Phase 18-02]: Static shields.io tests-passing badge used (not CI-linked) — CI setup deferred to Phase 19
 - [Phase 18-02]: Verbose technical sections (JSON schema, Autonomy Tiers table, Commands Reference) condensed to bullet points — detail lives in CLAUDE.md
+- [Phase 19-01]: js-yaml used for YAML parsing; expandEnvVarsDeep walks object/array leaves before Zod validation; SkillExecutor.execute() always returns ExecutionResult with latency_ms even on error; dispatcher Map injected by callers so modes are registered by 19-02..05
+- [Phase 20-01]: Deterministic UUID for Conductor card (singleton agent, fixed ID 00000000-0000-4000-8000-000000000001)
+- [Phase 20-01]: Template steps use depends_on_indices resolved to UUIDs at decomposition time for DAG correctness
+- [Phase 20-01]: Check-then-insert/update for idempotent card registration (works with FTS triggers)
 
 ### Pending Todos
 
@@ -105,8 +110,8 @@ Progress: [██████████] 100%
 
 ## Session Continuity
 
-Last session: 2026-03-17T07:45:03Z
-Stopped at: Completed 18-02-PLAN.md
+Last session: 2026-03-17T10:15:03.562Z
+Stopped at: Completed 19-01-PLAN.md
 Resume file: None
 
 ---
