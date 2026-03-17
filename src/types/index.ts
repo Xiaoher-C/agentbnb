@@ -153,6 +153,30 @@ export type CapabilityCardV2 = z.infer<typeof CapabilityCardV2Schema>;
 export type AnyCard = z.infer<typeof AnyCardSchema>;
 
 /**
+ * Signed escrow receipt — cryptographic proof that a requester has committed credits.
+ * Sent to the provider so they can verify the requester's credit commitment
+ * without needing access to the requester's local database.
+ */
+export interface EscrowReceipt {
+  /** Agent owner identifier of the requester. */
+  requester_owner: string;
+  /** Hex-encoded Ed25519 public key of the requester. */
+  requester_public_key: string;
+  /** Number of credits committed. */
+  amount: number;
+  /** Capability Card ID being requested. */
+  card_id: string;
+  /** Optional skill ID within the card. */
+  skill_id?: string;
+  /** ISO 8601 timestamp of receipt creation. */
+  timestamp: string;
+  /** UUID nonce — prevents replay attacks. */
+  nonce: string;
+  /** Base64url Ed25519 signature over all other fields. */
+  signature: string;
+}
+
+/**
  * Custom error base class
  */
 export class AgentBnBError extends Error {
