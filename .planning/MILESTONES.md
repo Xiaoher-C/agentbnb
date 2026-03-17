@@ -1,5 +1,46 @@
 # AgentBnB — Milestones
 
+## v3.0 Production-Ready Launch (Shipped: 2026-03-17)
+
+**Phases completed:** 5 phases, 16 plans, 5 tasks
+
+**Key accomplishments:**
+- (none recorded)
+
+---
+
+## v2.3 Launch Ready (Shipped: 2026-03-17)
+
+**Phases:** 3 (Phase 16-18) | **Plans:** 5
+**Git range:** Phase 16 → Phase 18
+
+### What Shipped
+
+- **Phase 16: SPA Routing Fix + Hub Enhancement** — Fix reply.sendFile 500 error for /hub/* sub-routes, extract 6 Magic UI components (NumberFlow, Marquee, FlickeringGrid, Accordion, LineChart, OrbitingCircles), add doodle creature mascot SVG
+- **Phase 17: Below-Fold Sections** — Compatible With marquee (tool/framework logos), FAQ accordion, value proposition section below Discover card grid
+- **Phase 18: README Visual Overhaul** — Hero banner SVG, real Hub screenshot, badges (npm, tests, license), structured README sections
+
+### Key Decisions
+
+- v2.3's originally planned Phase 19 (Deployment + Go Public) folded into v3.0 Phase 23
+- Magic UI components extracted as reusable hub/src/components/ui/ library
+- README designed for GitHub first impressions (badges, banner, screenshot)
+
+---
+
+## v2.2 Full Hub + Distribution (Shipped: 2026-03-16)
+
+**Phases:** 4 (Phase 12-15) | **Plans:** 11
+
+### What Shipped
+
+- **Phase 12: Foundation + Agent Directory** — SPA routing, 5-tab nav, credit badge, CTA, agent ranking list and individual profile pages
+- **Phase 13: Activity Feed + Docs Page** — Public exchange feed with 10s polling, 4-section embedded documentation
+- **Phase 14: Credit UI + Modal + Polish** — Credit dashboard with earning chart, modal enhancements, design token migration, mobile responsive
+- **Phase 15: Distribution + Discovery** — Claude Code plugin, cross-tool SKILL.md, GitHub topics
+
+---
+
 ## v2.1 Ship It (Shipped: 2026-03-16)
 
 **Phases:** 3 (Phase 9-11) | **Plans:** 10 | **Commits:** 31
