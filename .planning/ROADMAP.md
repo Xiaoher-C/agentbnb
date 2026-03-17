@@ -134,7 +134,7 @@ Plans:
   3. Provider verifies receipt signature with requester's public key
   4. Credits settle independently on both agents' local SQLite DBs
   5. Integration tests pass with TWO separate SQLite databases
-**Plans:** 4 plans
+**Plans:** 1/4 plans executed
 Plans:
 - [ ] 21-01-PLAN.md — Ed25519 keypair generation + EscrowReceipt type + signing functions
 - [ ] 21-02-PLAN.md — Gateway credit verification update + client receipt attachment
@@ -176,7 +176,7 @@ Plans:
 | 16-18 | v2.3 | 5/5 | Complete | 2026-03-17 |
 | 19. SkillExecutor | v3.0 | 6/6 | Complete | 2026-03-17 |
 | 20. Conductor Core | v3.0 | 2/2 | Complete | 2026-03-17 |
-| 21. Signed Escrow | v3.0 | 0/4 | Planned | — |
+| 21. Signed Escrow | 1/4 | In Progress|  | — |
 | 22. Conductor Integration | v3.0 | 0/4 | Not started | — |
 | 23. Ship | v3.0 | 0/3 | Not started | — |
 

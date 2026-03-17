@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v3.0
 milestone_name: Production-Ready Launch
 status: executing
-stopped_at: Completed 19-06-PLAN.md
-last_updated: "2026-03-17T10:44:07.761Z"
+stopped_at: Completed 21-01-PLAN.md
+last_updated: "2026-03-17T11:06:46.071Z"
 last_activity: 2026-03-17 — Completed 20-02 (CapabilityMatcher + BudgetController)
 progress:
   total_phases: 5
   completed_phases: 2
-  total_plans: 10
-  completed_plans: 8
+  total_plans: 12
+  completed_plans: 9
   percent: 15
 ---
 
@@ -61,6 +61,7 @@ Progress: [██--------] 15%
 | Phase 19-skillexecutor P05 | 4min | 1 tasks | 2 files |
 | Phase 19-skillexecutor P03 | 4m17s | 2 tasks | 4 files |
 | Phase 19-skillexecutor P06 | 468s | 2 tasks | 3 files |
+| Phase 21 P01 | 227s | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -116,6 +117,7 @@ Progress: [██--------] 15%
 - [Phase 19-03]: step undefined guard added for TypeScript strict-mode loop safety (TS18048)
 - [Phase 19-06]: Gateway targetSkillId resolves as resolvedSkillId ?? skillId ?? cardId for v1/v2 card compat
 - [Phase 19-06]: Mutable Map reference enables PipelineExecutor circular dep resolution without new SkillExecutor API
+- [Phase 21]: Ed25519 with DER encoding via Node.js crypto — zero external deps, canonical JSON for deterministic signatures
 
 ### Pending Todos
 
@@ -129,8 +131,8 @@ Progress: [██--------] 15%
 
 ## Session Continuity
 
-Last session: 2026-03-17T10:32:18.606Z
-Stopped at: Completed 19-06-PLAN.md
+Last session: 2026-03-17T11:06:46.069Z
+Stopped at: Completed 21-01-PLAN.md
 Resume file: None
 
 ---
