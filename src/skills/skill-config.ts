@@ -146,7 +146,7 @@ export type CommandSkillConfig = z.infer<typeof CommandSkillConfigSchema>;
  * @throws Error if a referenced env var is not defined.
  */
 export function expandEnvVars(value: string): string {
-  return value.replace(/\$\{([^}]+)\}/g, (match, varName: string) => {
+  return value.replace(/\$\{([^}]+)\}/g, (_match, varName: string) => {
     const envValue = process.env[varName];
     if (envValue === undefined) {
       throw new Error(`Environment variable "${varName}" is not defined`);
