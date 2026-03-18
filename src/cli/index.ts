@@ -130,18 +130,18 @@ program
     const port = parseInt(opts.port, 10);
     const ip = opts.host ?? getLanIp();
 
-    // Load existing config to preserve api_key on re-init (don't overwrite)
+    // Merge with existing config to preserve user-set values (registry, autonomy, budget, etc.)
     const existingConfig = loadConfig();
-    const api_key = existingConfig?.api_key ?? randomBytes(32).toString('hex');
 
     const config = {
+      ...existingConfig,               // Preserve all existing keys (registry, autonomy, budget, etc.)
       owner,
       gateway_url: `http://${ip}:${port}`,
       gateway_port: port,
       db_path: dbPath,
       credit_db_path: creditDbPath,
-      token,
-      api_key,
+      token: existingConfig?.token ?? token,       // Preserve existing token
+      api_key: existingConfig?.api_key ?? randomBytes(32).toString('hex'),
     };
 
     saveConfig(config);
@@ -804,7 +804,8 @@ program
     let gatewayUrl: string;
     let token: string;
     let isRemoteRequest = false;
-    let identityAuth: import('../gateway/client.js').IdentityAuth | undefined;
+    // Always load identity auth — used for remote requests, harmless for local
+    const identityAuth = loadIdentityAuth(config.owner);
 
     if (opts.peer) {
       const peer = findPeer(opts.peer);
@@ -816,8 +817,7 @@ program
       token = peer.token;
       isRemoteRequest = true;
 
-      // Load identity for peer requests (auto-generates if missing)
-      identityAuth = loadIdentityAuth(config.owner);
+      // Identity auth already loaded above
     } else {
       // Check if card exists locally
       const db = openDatabase(config.db_path);
@@ -866,8 +866,7 @@ program
         token = ''; // Not used — identity auth below
         isRemoteRequest = true;
 
-        // Load Ed25519 identity for remote auth (auto-generates if missing)
-        identityAuth = loadIdentityAuth(config.owner);
+        // Identity auth already loaded above
 
         if (!opts.json) {
           const displayName = (remoteCard.name ?? remoteCard.agent_name ?? cardId) as string;
