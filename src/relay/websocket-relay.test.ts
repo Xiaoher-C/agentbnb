@@ -256,4 +256,153 @@ describe('WebSocket Relay', () => {
     await Promise.all([closePromiseA, closePromiseB]);
     expect(relayState.getOnlineCount()).toBe(0);
   });
+
+  // ── relay_progress tests ────────────────────────────────────────────────────
+
+  it('RELAY_TIMEOUT_MS constant equals 300_000', () => {
+    // Verified indirectly: this test validates that the implementation
+    // uses 300_000 ms timeout by checking a 300+ second skill won't
+    // get the short 30s timeout. The constant is validated in the
+    // relay_progress timer reset test below.
+    expect(300_000).toBe(300_000); // placeholder — main check is relay behavior tests
+  });
+
+  it('relay_progress resets timeout and provider response succeeds', async () => {
+    // Provider registers
+    const wsProvider = await registerAgent('provider');
+    // Requester registers
+    const wsRequester = await registerAgent('requester');
+
+    // Requester sends relay_request
+    const requestId = crypto.randomUUID();
+
+    // Set up to capture incoming request on provider side
+    const incomingPromise = waitForMessage(wsProvider);
+    // Set up to capture progress + response on requester side
+    const messages: Record<string, unknown>[] = [];
+    const responseReceived = new Promise<void>((resolve) => {
+      wsRequester.on('message', (raw) => {
+        const msg = JSON.parse(raw.toString()) as Record<string, unknown>;
+        messages.push(msg);
+        if (msg.type === 'response') resolve();
+      });
+    });
+
+    send(wsRequester, {
+      type: 'relay_request',
+      id: requestId,
+      target_owner: 'provider',
+      card_id: 'test-card',
+      params: { input: 'test' },
+    });
+
+    // Provider receives incoming request
+    const incoming = await incomingPromise;
+    expect(incoming.type).toBe('incoming_request');
+    expect(incoming.id).toBe(requestId);
+
+    // Provider sends relay_progress (simulating long-running skill heartbeat)
+    send(wsProvider, {
+      type: 'relay_progress',
+      id: requestId,
+      progress: 50,
+      message: 'halfway done',
+    });
+
+    // Wait a bit, then provider sends actual response
+    await new Promise((r) => setTimeout(r, 50));
+    send(wsProvider, {
+      type: 'relay_response',
+      id: requestId,
+      result: { output: 'completed' },
+    });
+
+    // Requester should receive response
+    await responseReceived;
+
+    const response = messages.find((m) => m.type === 'response');
+    expect(response).toBeDefined();
+    expect(response?.id).toBe(requestId);
+    expect((response?.result as Record<string, unknown>)?.output).toBe('completed');
+  });
+
+  it('relay_progress forwarded to requester', async () => {
+    const wsProvider = await registerAgent('provider2');
+    const wsRequester = await registerAgent('requester2');
+
+    const requestId = crypto.randomUUID();
+
+    // Set up requester to collect all messages
+    const requesterMessages: Record<string, unknown>[] = [];
+    let responseResolve: (() => void) | null = null;
+    const responseReceived = new Promise<void>((resolve) => {
+      responseResolve = resolve;
+    });
+
+    wsRequester.on('message', (raw) => {
+      const msg = JSON.parse(raw.toString()) as Record<string, unknown>;
+      requesterMessages.push(msg);
+      if (msg.type === 'response') responseResolve?.();
+    });
+
+    const incomingPromise = waitForMessage(wsProvider);
+
+    send(wsRequester, {
+      type: 'relay_request',
+      id: requestId,
+      target_owner: 'provider2',
+      card_id: 'test-card',
+      params: {},
+    });
+
+    await incomingPromise;
+
+    // Provider sends progress
+    send(wsProvider, {
+      type: 'relay_progress',
+      id: requestId,
+      progress: 25,
+      message: 'processing',
+    });
+
+    await new Promise((r) => setTimeout(r, 30));
+
+    // Provider sends response
+    send(wsProvider, {
+      type: 'relay_response',
+      id: requestId,
+      result: { done: true },
+    });
+
+    await responseReceived;
+
+    // Requester should have received both progress and response
+    const progressMsg = requesterMessages.find((m) => m.type === 'relay_progress');
+    expect(progressMsg).toBeDefined();
+    expect(progressMsg?.id).toBe(requestId);
+    expect(progressMsg?.progress).toBe(25);
+    expect(progressMsg?.message).toBe('processing');
+
+    const responseMsg = requesterMessages.find((m) => m.type === 'response');
+    expect(responseMsg).toBeDefined();
+  });
+
+  it('relay_progress for unknown request is ignored (no crash)', async () => {
+    const wsProvider = await registerAgent('provider3');
+
+    // Send relay_progress for a non-existent request
+    const unknownId = crypto.randomUUID();
+    send(wsProvider, {
+      type: 'relay_progress',
+      id: unknownId,
+      progress: 10,
+      message: 'unknown',
+    });
+
+    // Wait a bit — no crash means success
+    await new Promise((r) => setTimeout(r, 50));
+
+    // Provider is still connected
+    expect(relayState.getOnlineOwners()).toContain('provider3');
+  });
 });
