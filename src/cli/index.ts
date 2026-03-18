@@ -395,11 +395,13 @@ program
     let remoteSuccess = false;
     if (registryUrl) {
       const url = `${registryUrl.replace(/\/$/, '')}/cards`;
+      // Inject gateway_url so remote agents know where to send requests
+      const remoteCard = { ...card, gateway_url: config.gateway_url };
       try {
         const response = await fetch(url, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(card),
+          body: JSON.stringify(remoteCard),
         });
         if (!response.ok) {
           const body = await response.text();
@@ -474,12 +476,14 @@ program
 
     for (const card of localCards) {
       const { _internal: _, ...publicCard } = card;
+      // Inject gateway_url so remote agents know where to send requests
+      const remoteCard = { ...publicCard, gateway_url: config.gateway_url };
       const displayName = card.name ?? (card as unknown as { agent_name?: string }).agent_name ?? card.id;
       try {
         const response = await fetch(url, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(publicCard),
+          body: JSON.stringify(remoteCard),
         });
         if (response.ok) {
           synced++;
@@ -769,10 +773,11 @@ program
       process.exit(1);
     }
 
-    // Resolve gateway URL and token: use --peer if provided, otherwise use config
+    // Resolve gateway URL and token
+    // Priority: --peer > remote card gateway_url > local config
     let gatewayUrl: string;
     let token: string;
-    const isPeerRequest = !!opts.peer;
+    let isRemoteRequest = false;
 
     if (opts.peer) {
       const peer = findPeer(opts.peer);
@@ -782,16 +787,67 @@ program
       }
       gatewayUrl = peer.url;
       token = peer.token;
+      isRemoteRequest = true;
     } else {
-      gatewayUrl = config.gateway_url;
-      token = config.token;
+      // Check if card exists locally
+      const db = openDatabase(config.db_path);
+      let localCard: CapabilityCard | undefined;
+      try {
+        localCard = db.prepare('SELECT data FROM capability_cards WHERE id = ?').get(cardId) as { data: string } | undefined
+          ? JSON.parse((db.prepare('SELECT data FROM capability_cards WHERE id = ?').get(cardId) as { data: string }).data) as CapabilityCard
+          : undefined;
+      } finally {
+        db.close();
+      }
+
+      if (localCard) {
+        // Local card — use local gateway
+        gatewayUrl = config.gateway_url;
+        token = config.token;
+      } else {
+        // Card not local — try fetching from remote registry
+        const registryUrl = config.registry;
+        if (!registryUrl) {
+          console.error('Error: card not found locally and no remote registry configured.');
+          console.error('Set one with: agentbnb config set registry <url>');
+          process.exit(1);
+        }
+
+        const cardUrl = `${registryUrl.replace(/\/$/, '')}/cards/${cardId}`;
+        let remoteCard: Record<string, unknown>;
+        try {
+          const resp = await fetch(cardUrl);
+          if (!resp.ok) {
+            console.error(`Error: card ${cardId} not found on remote registry (${resp.status}).`);
+            process.exit(1);
+          }
+          remoteCard = await resp.json() as Record<string, unknown>;
+        } catch (err) {
+          console.error(`Error: cannot reach registry: ${(err as Error).message}`);
+          process.exit(1);
+        }
+
+        if (!remoteCard.gateway_url || typeof remoteCard.gateway_url !== 'string') {
+          console.error('Error: remote card has no gateway_url. The provider needs to re-publish with `agentbnb sync`.');
+          process.exit(1);
+        }
+
+        gatewayUrl = remoteCard.gateway_url;
+        token = ''; // Remote gateways accept escrow receipts for auth
+        isRemoteRequest = true;
+
+        if (!opts.json) {
+          const displayName = (remoteCard.name ?? remoteCard.agent_name ?? cardId) as string;
+          console.log(`Found remote card: ${displayName} @ ${gatewayUrl}`);
+        }
+      }
     }
 
-    // Cross-machine peer requests use signed escrow receipts
-    const useReceipt = isPeerRequest && opts.receipt !== false;
+    // Cross-machine requests use signed escrow receipts
+    const useReceipt = isRemoteRequest && opts.receipt !== false;
 
     if (useReceipt && !opts.cost) {
-      console.error('Error: --cost <credits> is required for peer requests. Specify the credits to commit.');
+      console.error('Error: --cost <credits> is required for remote requests. Specify the credits to commit.');
       process.exit(1);
     }
 

@@ -53,6 +53,8 @@ export const CapabilityCardSchema = z.object({
    * never transmitted beyond the local store.
    */
   _internal: z.record(z.unknown()).optional(),
+  /** Public gateway URL where this agent accepts requests. Populated on remote publish. */
+  gateway_url: z.string().url().optional(),
   metadata: z.object({
     apis_used: z.array(z.string()).optional(),
     avg_latency_ms: z.number().nonnegative().optional(),
@@ -135,6 +137,8 @@ export const CapabilityCardV2Schema = z.object({
    * never transmitted beyond the local store.
    */
   _internal: z.record(z.unknown()).optional(),
+  /** Public gateway URL where this agent accepts requests. Populated on remote publish. */
+  gateway_url: z.string().url().optional(),
   created_at: z.string().datetime().optional(),
   updated_at: z.string().datetime().optional(),
 });
