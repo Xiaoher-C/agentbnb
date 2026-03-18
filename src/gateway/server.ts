@@ -57,24 +57,36 @@ export function createGatewayServer(opts: GatewayOptions): FastifyInstance {
   const fastify = Fastify({ logger: !silent });
   const tokenSet = new Set(tokens);
 
-  // Auth hook — applied to all routes on this instance.
-  // GET /health is explicitly skipped.
-  // Accepts two auth methods:
-  //   1. Bearer token (legacy, local requests)
-  //   2. Ed25519 identity (X-Agent-Id + X-Agent-Public-Key + X-Agent-Signature)
-  fastify.addHook('onRequest', async (request, reply) => {
+  // Auth: two methods, checked in sequence.
+  //   1. Bearer token — checked in onRequest (before body parse)
+  //   2. Ed25519 identity — checked in preHandler (after body parse, since
+  //      signature verification needs the parsed JSON body)
+  //
+  // If Bearer token succeeds, we mark the request as authenticated and skip
+  // the preHandler check. If neither succeeds, preHandler rejects with 401.
+
+  // Phase 1: Bearer token check (onRequest — runs before body parsing)
+  fastify.addHook('onRequest', async (request) => {
     // Allow health check without auth
     if (request.method === 'GET' && request.url === '/health') return;
 
-    // Method 1: Bearer token (legacy)
     const auth = request.headers.authorization;
     if (auth && auth.startsWith('Bearer ')) {
       const token = auth.slice('Bearer '.length).trim();
-      if (tokenSet.has(token)) return; // Authorized via token
-      // Invalid token — fall through to check identity auth
+      if (tokenSet.has(token)) {
+        // Mark as authenticated so preHandler skips
+        (request as unknown as Record<string, unknown>)._authenticated = true;
+      }
     }
+  });
 
-    // Method 2: Ed25519 identity auth
+  // Phase 2: Ed25519 identity check (preHandler — runs after body parsing)
+  fastify.addHook('preHandler', async (request, reply) => {
+    // Skip if already authenticated via Bearer token
+    if ((request as unknown as Record<string, unknown>)._authenticated) return;
+    // Skip health check
+    if (request.method === 'GET' && request.url === '/health') return;
+
     const agentId = request.headers['x-agent-id'] as string | undefined;
     const publicKeyHex = request.headers['x-agent-public-key'] as string | undefined;
     const signature = request.headers['x-agent-signature'] as string | undefined;
@@ -83,8 +95,10 @@ export function createGatewayServer(opts: GatewayOptions): FastifyInstance {
       try {
         const publicKeyBuf = Buffer.from(publicKeyHex, 'hex');
         const body = request.body as Record<string, unknown>;
-        const valid = verifyEscrowReceipt(body, signature, publicKeyBuf);
-        if (valid) return; // Authorized via identity
+        if (body && typeof body === 'object') {
+          const valid = verifyEscrowReceipt(body, signature, publicKeyBuf);
+          if (valid) return; // Authorized via identity
+        }
       } catch {
         // Verification failed — fall through to unauthorized
       }
