@@ -11,8 +11,8 @@
 - [x] **RELAY-02**: Gateway client and execute default timeout increased to 300s
 - [x] **RELAY-03**: New `relay_progress` message type added to relay protocol
 - [x] **RELAY-04**: Provider agent can send progress updates that reset the relay timeout timer
-- [ ] **RELAY-05**: PipelineExecutor auto-sends progress between pipeline steps
-- [ ] **RELAY-06**: ConductorMode auto-sends progress between orchestrated sub-tasks
+- [x] **RELAY-05**: PipelineExecutor auto-sends progress between pipeline steps
+- [x] **RELAY-06**: ConductorMode auto-sends progress between orchestrated sub-tasks
 
 ### Credit Interface
 
@@ -97,8 +97,8 @@
 | RELAY-02 | Phase 25 | Complete |
 | RELAY-03 | Phase 25 | Complete |
 | RELAY-04 | Phase 25 | Complete |
-| RELAY-05 | Phase 25 | Pending |
-| RELAY-06 | Phase 25 | Pending |
+| RELAY-05 | Phase 25 | Complete |
+| RELAY-06 | Phase 25 | Complete |
 | CRED-01 | Phase 26 | Pending |
 | CRED-02 | Phase 26 | Pending |
 | CRED-03 | Phase 26 | Pending |

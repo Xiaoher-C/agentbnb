@@ -70,7 +70,7 @@
 
 **Milestone Goal:** Centralize credit operations on Registry for trustworthy multi-agent exchanges, and fix relay timeout to enable long-running skill execution.
 
-- [ ] **Phase 25: Relay Timeout** - Increase relay/client timeout to 300s and add relay_progress heartbeat protocol
+- [x] **Phase 25: Relay Timeout** - Increase relay/client timeout to 300s and add relay_progress heartbeat protocol (completed 2026-03-18)
 - [ ] **Phase 26: CreditLedger Interface** - Define CreditLedger abstraction with Local, Registry-server, and Registry-client adapters
 - [ ] **Phase 27: Registry Credit Endpoints** - Implement /api/credits/* endpoints on Registry server with Ed25519 auth
 - [ ] **Phase 28: Relay Credit Integration** - Wire credit hold/settle/release into WebSocket relay flow
@@ -88,7 +88,7 @@
   3. PipelineExecutor automatically emits a progress update between each step without manual instrumentation
   4. ConductorMode automatically emits a progress update between each orchestrated sub-task
   5. Gateway client and `agentbnb request` wait up to 300s before declaring timeout
-**Plans:** 1/2 plans executed
+**Plans:** 2/2 plans complete
 Plans:
 - [ ] 25-01-PLAN.md — Timeout constants 30s to 300s + relay_progress protocol message type
 - [ ] 25-02-PLAN.md — PipelineExecutor and ConductorMode auto-progress callbacks
@@ -155,7 +155,7 @@ Plans:
 | 16-18 | v2.3 | 5/5 | Complete | 2026-03-17 |
 | 19-23 | v3.0 | 16/16 | Complete | 2026-03-17 |
 | 24 | v3.1 | — | Superseded | — |
-| 25 | 1/2 | In Progress|  | — |
+| 25 | 2/2 | Complete   | 2026-03-18 | — |
 | 26 | v3.2 | 0/TBD | Not started | — |
 | 27 | v3.2 | 0/TBD | Not started | — |
 | 28 | v3.2 | 0/TBD | Not started | — |

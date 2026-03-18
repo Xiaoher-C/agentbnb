@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v3.2
 milestone_name: Registry Credit Ledger
 status: planning
-stopped_at: Completed 25-01-PLAN.md — relay timeout + relay_progress protocol
-last_updated: "2026-03-18T19:58:48.697Z"
+stopped_at: Completed 25-02-PLAN.md — progress callbacks wired through SkillExecutor dispatch
+last_updated: "2026-03-18T20:04:42.890Z"
 last_activity: 2026-03-19 — Roadmap created for v3.2 (Phases 25-29, 35 requirements)
 progress:
   total_phases: 5
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 2
-  completed_plans: 1
+  completed_plans: 2
   percent: 0
 ---
 
@@ -46,6 +46,8 @@ Progress: [░░░░░░░░░░] 0% (v3.2 milestone)
 - [v3.1 superseded]: Phase 24 Code Quality Polish deferred to v3.3+
 - [Phase 25]: relay_progress resets RELAY_TIMEOUT_MS window (not a separate progress window) — simpler and consistent with plan
 - [Phase 25]: PendingRequest stores timeoutMs field to allow clean timer reset in handleProgress without needing access to outer scope constants
+- [Phase 25-relay-timeout]: ProgressCallback as optional 3rd param on ExecutorMode.execute — minimal interface change, symmetric with existing (config, params) call sites
+- [Phase 25-relay-timeout]: PipelineExecutor emits N-1 callbacks for N-step pipeline (not after final step) — progress means forward movement, completion via return value
 
 ### Pending Todos
 
@@ -58,8 +60,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-18T19:58:48.695Z
-Stopped at: Completed 25-01-PLAN.md — relay timeout + relay_progress protocol
+Last session: 2026-03-18T20:04:42.889Z
+Stopped at: Completed 25-02-PLAN.md — progress callbacks wired through SkillExecutor dispatch
 Resume file: None
 
 ---
