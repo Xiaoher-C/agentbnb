@@ -11,7 +11,7 @@
 
 import type Database from 'better-sqlite3';
 import type { SkillConfig } from '../skills/skill-config.js';
-import type { ExecutionResult, ExecutorMode } from '../skills/executor.js';
+import type { ExecutionResult, ExecutorMode, ProgressCallback } from '../skills/executor.js';
 import { decompose } from './task-decomposer.js';
 import { matchSubTasks } from './capability-matcher.js';
 import { BudgetController } from './budget-controller.js';
@@ -73,6 +73,7 @@ export class ConductorMode implements ExecutorMode {
   async execute(
     config: SkillConfig,
     params: Record<string, unknown>,
+    onProgress?: ProgressCallback,
   ): Promise<Omit<ExecutionResult, 'latency_ms'>> {
     // Extract conductor_skill from config
     const conductorSkill = (config as { conductor_skill?: string }).conductor_skill;
@@ -100,6 +101,7 @@ export class ConductorMode implements ExecutorMode {
         error: 'No template matches task',
       };
     }
+    onProgress?.({ step: 1, total: 5, message: `Decomposed into ${subtasks.length} sub-tasks` });
 
     // Step 2: Match subtasks to agents
     const matchResults = matchSubTasks({
@@ -107,6 +109,7 @@ export class ConductorMode implements ExecutorMode {
       subtasks,
       conductorOwner: this.conductorOwner,
     });
+    onProgress?.({ step: 2, total: 5, message: `Matched ${matchResults.length} sub-tasks to agents` });
 
     // Step 3: Budget check
     const budgetManager = new BudgetManager(this.creditDb, this.conductorOwner);
@@ -119,6 +122,7 @@ export class ConductorMode implements ExecutorMode {
         error: `Budget exceeded: estimated ${executionBudget.estimated_total} cr, max ${this.maxBudget} cr`,
       };
     }
+    onProgress?.({ step: 3, total: 5, message: `Budget approved: ${executionBudget.estimated_total} cr` });
 
     // Step 4: Plan-only mode — return plan without executing
     if (conductorSkill === 'plan') {
@@ -144,6 +148,7 @@ export class ConductorMode implements ExecutorMode {
       resolveAgentUrl: this.resolveAgentUrl,
       maxBudget: this.maxBudget,
     });
+    onProgress?.({ step: 4, total: 5, message: 'Pipeline execution complete' });
 
     // Convert Map to plain object for JSON serialization
     const resultObj: Record<string, unknown> = {};
