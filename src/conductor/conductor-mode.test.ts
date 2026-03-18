@@ -199,6 +199,90 @@ describe('ConductorMode', () => {
     expect(result.error).toBeDefined();
   });
 
+  it('Test 7: emits progress through orchestration stages (orchestrate)', async () => {
+    const subtasks = [sub('A')];
+    const matches = [matchRes('A')];
+    const b = budget();
+
+    mockedDecompose.mockReturnValue(subtasks);
+    mockedMatch.mockReturnValue(matches);
+    const { calcBudget, canExecute } = getMockBudgetMethods();
+    calcBudget.mockReturnValue(b);
+    canExecute.mockReturnValue(true);
+
+    const orchResult: OrchestrationResult = {
+      success: true,
+      results: new Map([['A', { data: 'hello' }]]),
+      total_credits: 10,
+      latency_ms: 50,
+    };
+    mockedOrchestrate.mockResolvedValue(orchResult);
+
+    const mode = createMode();
+    const config = { id: 'orchestrate', type: 'conductor' as const, name: 'Orchestrate', conductor_skill: 'orchestrate' as const, pricing: { credits_per_call: 5 } };
+    const onProgress = vi.fn();
+    const result = await mode.execute(config as any, { task: 'write a blog post' }, onProgress);
+
+    expect(result.success).toBe(true);
+    // Should emit at decompose, match, budget, and after orchestration (steps 1-4)
+    expect(onProgress).toHaveBeenCalledTimes(4);
+    expect(onProgress).toHaveBeenNthCalledWith(1, expect.objectContaining({ step: 1, total: 5 }));
+    expect(onProgress).toHaveBeenNthCalledWith(2, expect.objectContaining({ step: 2, total: 5 }));
+    expect(onProgress).toHaveBeenNthCalledWith(3, expect.objectContaining({ step: 3, total: 5 }));
+    expect(onProgress).toHaveBeenNthCalledWith(4, expect.objectContaining({ step: 4, total: 5 }));
+  });
+
+  it('Test 8: works without onProgress callback (backward compatibility)', async () => {
+    const subtasks = [sub('A')];
+    const matches = [matchRes('A')];
+    const b = budget();
+
+    mockedDecompose.mockReturnValue(subtasks);
+    mockedMatch.mockReturnValue(matches);
+    const { calcBudget, canExecute } = getMockBudgetMethods();
+    calcBudget.mockReturnValue(b);
+    canExecute.mockReturnValue(true);
+
+    const orchResult: OrchestrationResult = {
+      success: true,
+      results: new Map([['A', { data: 'result' }]]),
+      total_credits: 5,
+      latency_ms: 10,
+    };
+    mockedOrchestrate.mockResolvedValue(orchResult);
+
+    const mode = createMode();
+    const config = { id: 'orchestrate', type: 'conductor' as const, name: 'Orchestrate', conductor_skill: 'orchestrate' as const, pricing: { credits_per_call: 5 } };
+    // Should not throw when no callback provided
+    const result = await mode.execute(config as any, { task: 'write a blog post' });
+    expect(result.success).toBe(true);
+  });
+
+  it('Test 9: plan mode emits exactly 3 progress steps', async () => {
+    const subtasks = [sub('A')];
+    const matches = [matchRes('A')];
+    const b = budget();
+
+    mockedDecompose.mockReturnValue(subtasks);
+    mockedMatch.mockReturnValue(matches);
+    const { calcBudget, canExecute } = getMockBudgetMethods();
+    calcBudget.mockReturnValue(b);
+    canExecute.mockReturnValue(true);
+
+    const mode = createMode();
+    const config = { id: 'plan', type: 'conductor' as const, name: 'Plan', conductor_skill: 'plan' as const, pricing: { credits_per_call: 1 } };
+    const onProgress = vi.fn();
+    const result = await mode.execute(config as any, { task: 'write a blog post' }, onProgress);
+
+    expect(result.success).toBe(true);
+    // plan mode emits decompose, match, budget (3 steps — no execution step 4)
+    expect(onProgress).toHaveBeenCalledTimes(3);
+    expect(onProgress).toHaveBeenNthCalledWith(1, expect.objectContaining({ step: 1, total: 5 }));
+    expect(onProgress).toHaveBeenNthCalledWith(2, expect.objectContaining({ step: 2, total: 5 }));
+    expect(onProgress).toHaveBeenNthCalledWith(3, expect.objectContaining({ step: 3, total: 5 }));
+    expect(mockedOrchestrate).not.toHaveBeenCalled();
+  });
+
   it('Test 6: SkillConfigSchema.parse validates conductor type', () => {
     const config = {
       id: 'orchestrate',
