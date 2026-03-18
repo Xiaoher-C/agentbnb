@@ -1,4 +1,4 @@
-# AgentBnB Autonomy Rules — HEARTBEAT.md Template
+# AgentBnB Autonomy Rules — HEARTBEAT.md Template (v3.0)
 
 This file contains the autonomy rules block for the AgentBnB OpenClaw skill.
 
@@ -9,6 +9,9 @@ This file contains the autonomy rules block for the AgentBnB OpenClaw skill.
 **Note:** The values shown below are example defaults (Tier 1: 10 credits, Tier 2: 50 credits,
 reserve: 20 credits). The `agentbnb openclaw rules` command outputs rules using the owner's
 real configured thresholds from `~/.agentbnb/config.json`.
+
+**Identity:** On activation, the agent's Ed25519 identity is verified via `~/.agentbnb/identity.json`.
+This identity is used for escrow receipt signing and P2P verification.
 
 ---
 

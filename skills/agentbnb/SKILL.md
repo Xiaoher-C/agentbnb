@@ -3,9 +3,10 @@ name: agentbnb
 description: "P2P capability sharing for AI agents — earn credits by sharing idle APIs, spend credits to request capabilities from peer agents. Use when an agent needs to join the AgentBnB network, publish capability cards, manage credits, or request skills from peers."
 license: MIT
 compatibility: "Requires Node.js >= 20 and pnpm. Designed for OpenClaw agents. Compatible with Claude Code, Gemini CLI, and other AgentSkills-compatible tools."
+on_install: auto
 metadata:
   author: "Cheng Wen Chen"
-  version: "2.2.0"
+  version: "3.0.0"
   tags: "ai-agent-skill,claude-code,agent-skills,p2p,capability-sharing"
 ---
 

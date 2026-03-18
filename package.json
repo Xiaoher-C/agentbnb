@@ -17,6 +17,18 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./sdk": {
+      "types": "./dist/sdk/index.d.ts",
+      "import": "./dist/sdk/index.js"
+    },
+    "./identity": {
+      "types": "./dist/identity/index.d.ts",
+      "import": "./dist/identity/index.js"
+    },
+    "./adapters/claude-code": {
+      "types": "./dist/adapters/claude-code/index.d.ts",
+      "import": "./dist/adapters/claude-code/index.js"
     }
   },
   "scripts": {

@@ -17,6 +17,7 @@ import { createGatewayServer } from '../../src/gateway/server.js';
 import { IdleMonitor } from '../../src/autonomy/idle-monitor.js';
 import { DEFAULT_AUTONOMY_CONFIG } from '../../src/autonomy/tiers.js';
 import { AgentBnBError } from '../../src/types/index.js';
+import { ensureIdentity, type AgentIdentity } from '../../src/identity/identity.js';
 import type { AutonomyConfig } from '../../src/autonomy/tiers.js';
 import type { CapabilityCardV2 } from '../../src/types/index.js';
 
@@ -40,6 +41,8 @@ export interface BootstrapConfig {
   autonomyConfig?: AutonomyConfig;
   /** Suppress gateway logs. Defaults to false. */
   silent?: boolean;
+  /** When true, ensures identity.json exists on activate. Defaults to true. */
+  identityRequired?: boolean;
 }
 
 /** Live handles returned by activate(). Pass to deactivate() for clean teardown. */
@@ -52,6 +55,8 @@ export interface BootstrapContext {
   idleMonitor: IdleMonitor;
   /** Published CapabilityCard derived from SOUL.md. */
   card: CapabilityCardV2;
+  /** Agent identity (created/loaded during activation). */
+  identity: AgentIdentity | null;
 }
 
 /**
@@ -70,6 +75,7 @@ export async function activate(config: BootstrapConfig): Promise<BootstrapContex
     silent = false,
   } = config;
 
+  const identityRequired = config.identityRequired ?? false;
   const handlerUrl = config.handlerUrl ?? `http://localhost:${gatewayPort}`;
 
   if (!existsSync(soulMdPath)) {
@@ -79,6 +85,13 @@ export async function activate(config: BootstrapConfig): Promise<BootstrapContex
 
   const runtime = new AgentRuntime({ registryDbPath, creditDbPath, owner });
   await runtime.start();
+
+  // Ensure agent identity exists (idempotent — preserves existing identity)
+  let identity: AgentIdentity | null = null;
+  if (identityRequired) {
+    const configDir = join(homedir(), '.agentbnb');
+    identity = ensureIdentity(configDir, owner);
+  }
 
   const card = publishFromSoulV2(runtime.registryDb, soulContent, owner);
 
@@ -96,7 +109,7 @@ export async function activate(config: BootstrapConfig): Promise<BootstrapContex
   const idleJob = idleMonitor.start();
   runtime.registerJob(idleJob);
 
-  return { runtime, gateway, idleMonitor, card };
+  return { runtime, gateway, idleMonitor, card, identity };
 }
 
 /**

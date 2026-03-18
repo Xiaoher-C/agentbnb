@@ -108,6 +108,13 @@ export interface CreditTransaction {
   created_at: string;
 }
 
+/** Agent identity display info for verified badges and profile sections */
+export interface AgentIdentityDisplay {
+  agent_id: string;
+  verified: boolean;
+  guarantor?: string;
+}
+
 /** Activity event for the public feed (GET /api/activity) */
 export interface ActivityEvent {
   id: string;

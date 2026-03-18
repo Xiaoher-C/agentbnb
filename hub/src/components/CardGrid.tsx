@@ -15,7 +15,7 @@ interface CardGridProps {
  */
 export default function CardGrid({ children }: CardGridProps) {
   return (
-    <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-4 items-start">
+    <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-4">
       {children}
     </div>
   );

@@ -178,14 +178,14 @@ export function useCards(): UseCardsResult {
   }, [allCards]);
 
   // Stats — fetch from /api/stats for accurate counts
-  const [stats, setStats] = useState({ agents_online: 0, total_exchanges: 0 });
+  const [stats, setStats] = useState({ agents_online: 0, total_capabilities: 0, total_exchanges: 0 });
   useEffect(() => {
     const fetchStats = async () => {
       try {
         const res = await fetch('/api/stats');
         if (res.ok) {
           const data = await res.json() as { agents_online: number; total_capabilities: number; total_exchanges: number };
-          setStats({ agents_online: data.agents_online, total_exchanges: data.total_exchanges });
+          setStats({ agents_online: data.agents_online, total_capabilities: data.total_capabilities, total_exchanges: data.total_exchanges });
         }
       } catch { /* graceful degradation */ }
     };
@@ -198,7 +198,7 @@ export function useCards(): UseCardsResult {
   const agentsOnline = stats.agents_online || new Set(
     allCards.filter((c) => c.availability.online).map((c) => c.owner),
   ).size;
-  const totalCapabilities = total;
+  const totalCapabilities = stats.total_capabilities || total;
   const totalExchanges = stats.total_exchanges;
 
   const retry = useCallback(() => {

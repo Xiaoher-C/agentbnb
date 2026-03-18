@@ -215,8 +215,28 @@ export default function CardModal({ card, onClose }: CardModalProps) {
           </div>
         </div>
 
+        {/* Pricing badge — prominent display */}
+        <div className="mt-5 flex items-center gap-3">
+          <div className="inline-flex items-center gap-2 bg-emerald-500/15 border border-emerald-500/25 rounded-lg px-4 py-2">
+            <span className="text-lg font-bold font-mono text-emerald-400">
+              {card.pricing.credits_per_call}
+            </span>
+            <span className="text-xs text-emerald-400/80">
+              credits/call
+            </span>
+          </div>
+          {card.pricing.free_tier !== undefined && card.pricing.free_tier > 0 && (
+            <div className="inline-flex items-center gap-1.5 bg-blue-500/10 border border-blue-500/20 rounded-lg px-3 py-2">
+              <span className="text-sm font-semibold font-mono text-blue-400">
+                {card.pricing.free_tier}
+              </span>
+              <span className="text-xs text-blue-400/80">free/mo</span>
+            </div>
+          )}
+        </div>
+
         {/* Description */}
-        <p className="text-[14px] text-hub-text-secondary mt-5 leading-relaxed">
+        <p className="text-[14px] text-hub-text-secondary mt-4 leading-relaxed">
           {card.description}
         </p>
 

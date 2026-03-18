@@ -9,13 +9,14 @@
  */
 
 import { describe, it, expect, afterEach } from 'vitest';
-import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, rmSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { activate, deactivate } from './bootstrap.js';
 import type { BootstrapContext } from './bootstrap.js';
 import { IdleMonitor } from '../../src/autonomy/idle-monitor.js';
+import { loadIdentity } from '../../src/identity/identity.js';
 
 // ---------------------------------------------------------------------------
 // Test fixture: minimal SOUL.md with 2 skills
@@ -259,5 +260,64 @@ describe('bootstrap activate/deactivate lifecycle', () => {
         silent: true,
       }),
     ).rejects.toThrow();
+  });
+
+  // ---------------------------------------------------------------------------
+  // Test 9: activate() with identityRequired creates identity.json
+  // ---------------------------------------------------------------------------
+  it('activate() with identityRequired creates identity.json', async () => {
+    const soulMdPath = setupSoulMd();
+    const identityDir = mkdtempSync(join(tmpdir(), 'agentbnb-identity-'));
+
+    // Temporarily override HOME so identity writes to temp dir
+    const origHome = process.env['HOME'];
+    process.env['HOME'] = identityDir;
+
+    try {
+      ctx = await activate({
+        owner: 'identity-agent',
+        soulMdPath,
+        registryDbPath: ':memory:',
+        creditDbPath: ':memory:',
+        gatewayPort: 0,
+        silent: true,
+        identityRequired: true,
+      });
+
+      // identity should be populated
+      expect(ctx.identity).not.toBeNull();
+      expect(ctx.identity!.owner).toBe('identity-agent');
+      expect(ctx.identity!.agent_id).toBeTruthy();
+
+      // identity.json should exist on disk
+      const identityPath = join(identityDir, '.agentbnb', 'identity.json');
+      expect(existsSync(identityPath)).toBe(true);
+
+      const loaded = loadIdentity(join(identityDir, '.agentbnb'));
+      expect(loaded).not.toBeNull();
+      expect(loaded!.agent_id).toBe(ctx.identity!.agent_id);
+    } finally {
+      process.env['HOME'] = origHome;
+      rmSync(identityDir, { recursive: true, force: true });
+    }
+  });
+
+  // ---------------------------------------------------------------------------
+  // Test 10: activate() without identityRequired skips identity creation
+  // ---------------------------------------------------------------------------
+  it('activate() without identityRequired skips identity creation', async () => {
+    const soulMdPath = setupSoulMd();
+
+    ctx = await activate({
+      owner: 'test-agent',
+      soulMdPath,
+      registryDbPath: ':memory:',
+      creditDbPath: ':memory:',
+      gatewayPort: 0,
+      silent: true,
+      identityRequired: false,
+    });
+
+    expect(ctx.identity).toBeNull();
   });
 });

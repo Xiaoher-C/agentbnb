@@ -170,6 +170,13 @@ ok "Config directory: ~/.agentbnb/"
 ok "Default autonomy tier: Tier 3 (ask before all transactions)"
 ok "Default credit reserve: 20 credits"
 
+# Verify identity.json was created (v4.0+ feature)
+if [ -f "$HOME/.agentbnb/identity.json" ]; then
+  ok "Agent identity: ~/.agentbnb/identity.json"
+else
+  warn "identity.json not found — will be created on next agentbnb init"
+fi
+
 if [ -n "$SOUL_PATH" ]; then
   ok "Capability card synced from SOUL.md"
 fi
