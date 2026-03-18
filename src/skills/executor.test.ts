@@ -114,7 +114,7 @@ describe('SkillExecutor.execute', () => {
 
     expect(result.success).toBe(true);
     expect(result.result).toBe('tts-result');
-    expect(apiMode.execute).toHaveBeenCalledWith(apiConfig, { text: 'hello' });
+    expect(apiMode.execute).toHaveBeenCalledWith(apiConfig, { text: 'hello' }, undefined);
   });
 
   it('dispatches to correct ExecutorMode by type (command)', async () => {
@@ -126,7 +126,7 @@ describe('SkillExecutor.execute', () => {
 
     expect(result.success).toBe(true);
     expect(result.result).toBe('cmd-output');
-    expect(cmdMode.execute).toHaveBeenCalledWith(commandConfig, {});
+    expect(cmdMode.execute).toHaveBeenCalledWith(commandConfig, {}, undefined);
   });
 
   it('dispatches to correct ExecutorMode by type (pipeline)', async () => {
