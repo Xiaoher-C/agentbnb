@@ -49,7 +49,7 @@ export function createGatewayServer(opts: GatewayOptions): FastifyInstance {
     creditDb,
     tokens,
     handlerUrl,
-    timeoutMs = 30_000,
+    timeoutMs = 300_000,
     silent = false,
     skillExecutor,
   } = opts;

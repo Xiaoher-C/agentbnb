@@ -73,6 +73,14 @@ export const ErrorMessageSchema = z.object({
   request_id: z.string().optional(),
 });
 
+/** Agent B → Registry: Progress heartbeat for a long-running relayed request */
+export const RelayProgressMessageSchema = z.object({
+  type: z.literal('relay_progress'),
+  id: z.string().uuid(),       // request ID this progress relates to
+  progress: z.number().min(0).max(100).optional(), // optional percentage
+  message: z.string().optional(), // optional status message
+});
+
 /** Discriminated union of all relay messages */
 export const RelayMessageSchema = z.discriminatedUnion('type', [
   RegisterMessageSchema,
@@ -82,6 +90,7 @@ export const RelayMessageSchema = z.discriminatedUnion('type', [
   RelayResponseMessageSchema,
   ResponseMessageSchema,
   ErrorMessageSchema,
+  RelayProgressMessageSchema,
 ]);
 
 // TypeScript types derived from Zod schemas
@@ -92,6 +101,7 @@ export type IncomingRequestMessage = z.infer<typeof IncomingRequestMessageSchema
 export type RelayResponseMessage = z.infer<typeof RelayResponseMessageSchema>;
 export type ResponseMessage = z.infer<typeof ResponseMessageSchema>;
 export type ErrorMessage = z.infer<typeof ErrorMessageSchema>;
+export type RelayProgressMessage = z.infer<typeof RelayProgressMessageSchema>;
 export type RelayMessage = z.infer<typeof RelayMessageSchema>;
 
 /** Rate limit state per agent */

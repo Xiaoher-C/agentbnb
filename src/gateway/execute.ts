@@ -52,7 +52,7 @@ export async function executeCapabilityRequest(opts: ExecuteRequestOptions): Pro
     escrowReceipt: receipt,
     skillExecutor,
     handlerUrl,
-    timeoutMs = 30_000,
+    timeoutMs = 300_000,
   } = opts;
 
   // Look up card in registry

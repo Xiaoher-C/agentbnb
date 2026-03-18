@@ -9,6 +9,7 @@ import {
   type RegisterMessage,
   type RelayRequestMessage,
   type RelayResponseMessage,
+  type RelayProgressMessage,
   type PendingRelayRequest,
   type RateLimitEntry,
   type RelayState,
@@ -18,8 +19,8 @@ import {
 const RATE_LIMIT_MAX = 60;
 /** Rate limit window in milliseconds (1 minute) */
 const RATE_LIMIT_WINDOW_MS = 60_000;
-/** Relay request timeout in milliseconds */
-const RELAY_TIMEOUT_MS = 30_000;
+/** Relay request timeout in milliseconds (5 minutes for long-running skills) */
+const RELAY_TIMEOUT_MS = 300_000;
 
 /**
  * Registers WebSocket relay on an existing Fastify instance.
@@ -234,6 +235,41 @@ export function registerWebSocketRelay(
   }
 
   /**
+   * Handle a relay progress message from Agent B.
+   * Resets the pending request timeout and forwards the progress to the origin requester.
+   */
+  function handleRelayProgress(msg: RelayProgressMessage): void {
+    const pending = pendingRequests.get(msg.id);
+    if (!pending) return; // Unknown request ID — ignore
+
+    // Reset the relay timeout so a slow but alive provider doesn't get cut off
+    clearTimeout(pending.timeout);
+    const newTimeout = setTimeout(() => {
+      pendingRequests.delete(msg.id);
+      const originWs = connections.get(pending.originOwner);
+      if (originWs && originWs.readyState === 1) {
+        sendMessage(originWs, {
+          type: 'response',
+          id: msg.id,
+          error: { code: -32603, message: 'Relay request timeout' },
+        });
+      }
+    }, RELAY_TIMEOUT_MS);
+    pending.timeout = newTimeout;
+
+    // Forward progress to the origin requester
+    const originWs = connections.get(pending.originOwner);
+    if (originWs && originWs.readyState === 1) {
+      sendMessage(originWs, {
+        type: 'relay_progress',
+        id: msg.id,
+        progress: msg.progress,
+        message: msg.message,
+      });
+    }
+  }
+
+  /**
    * Handle a relay response from Agent B back to Agent A.
    */
   function handleRelayResponse(msg: RelayResponseMessage): void {
@@ -325,6 +361,10 @@ export function registerWebSocketRelay(
 
         case 'relay_response':
           handleRelayResponse(msg);
+          break;
+
+        case 'relay_progress':
+          handleRelayProgress(msg);
           break;
 
         default:

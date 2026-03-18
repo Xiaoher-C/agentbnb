@@ -84,7 +84,7 @@ function computeWaves(subtasks: SubTask[]): string[][] {
  * @returns Aggregated orchestration result.
  */
 export async function orchestrate(opts: OrchestrateOptions): Promise<OrchestrationResult> {
-  const { subtasks, matches, gatewayToken, resolveAgentUrl, timeoutMs = 30_000, maxBudget } = opts;
+  const { subtasks, matches, gatewayToken, resolveAgentUrl, timeoutMs = 300_000, maxBudget } = opts;
   const startTime = Date.now();
 
   // Edge case: empty subtask list

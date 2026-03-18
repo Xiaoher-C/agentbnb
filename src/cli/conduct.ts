@@ -141,7 +141,7 @@ export async function conductAction(
     matches: matchMap,
     gatewayToken: config.token ?? '',
     resolveAgentUrl,
-    timeoutMs: 30_000,
+    timeoutMs: 300_000,
     maxBudget,
   });
 

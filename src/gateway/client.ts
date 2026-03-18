@@ -47,7 +47,7 @@ export interface RequestOptions {
  * @throws {AgentBnBError} on JSON-RPC error, network failure, or timeout.
  */
 export async function requestCapability(opts: RequestOptions): Promise<unknown> {
-  const { gatewayUrl, token, cardId, params = {}, timeoutMs = 30_000, escrowReceipt, identity } = opts;
+  const { gatewayUrl, token, cardId, params = {}, timeoutMs = 300_000, escrowReceipt, identity } = opts;
 
   const id = randomUUID();
   const payload = {

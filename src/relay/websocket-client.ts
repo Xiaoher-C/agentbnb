@@ -38,6 +38,8 @@ export interface RelayRequestOptions {
   requester?: string;
   escrowReceipt?: Record<string, unknown>;
   timeoutMs?: number;
+  /** Optional callback invoked when the provider sends relay_progress heartbeats. */
+  onProgress?: (progress: { id: string; progress?: number; message?: string }) => void;
 }
 
 /** Pending outbound request tracking */
@@ -45,6 +47,8 @@ interface PendingRequest {
   resolve: (result: unknown) => void;
   reject: (err: Error) => void;
   timeout: ReturnType<typeof setTimeout>;
+  timeoutMs: number;
+  onProgress?: (progress: { id: string; progress?: number; message?: string }) => void;
 }
 
 /**
@@ -160,7 +164,7 @@ export class RelayClient {
     }
 
     const id = randomUUID();
-    const timeoutMs = opts.timeoutMs ?? 30_000;
+    const timeoutMs = opts.timeoutMs ?? 300_000;
 
     return new Promise((resolve, reject) => {
       const timeout = setTimeout(() => {
@@ -168,7 +172,7 @@ export class RelayClient {
         reject(new Error('Relay request timeout'));
       }, timeoutMs);
 
-      this.pendingRequests.set(id, { resolve, reject, timeout });
+      this.pendingRequests.set(id, { resolve, reject, timeout, timeoutMs, onProgress: opts.onProgress });
 
       this.send({
         type: 'relay_request',
@@ -244,6 +248,10 @@ export class RelayClient {
         this.handleError(msg as ErrorMessage);
         break;
 
+      case 'relay_progress':
+        this.handleProgress(msg as import('./types.js').RelayProgressMessage);
+        break;
+
       default:
         break;
     }
@@ -292,6 +300,24 @@ export class RelayClient {
         this.pendingRequests.delete(msg.request_id);
         pending.reject(new Error(`${msg.code}: ${msg.message}`));
       }
+    }
+  }
+
+  private handleProgress(msg: import('./types.js').RelayProgressMessage): void {
+    const pending = this.pendingRequests.get(msg.id);
+    if (!pending) return; // Unknown request ID — ignore
+
+    // Reset the outbound request timeout so a slow but alive provider doesn't get cut off
+    clearTimeout(pending.timeout);
+    const newTimeout = setTimeout(() => {
+      this.pendingRequests.delete(msg.id);
+      pending.reject(new Error('Relay request timeout'));
+    }, pending.timeoutMs);
+    pending.timeout = newTimeout;
+
+    // Invoke the caller's onProgress callback if provided
+    if (pending.onProgress) {
+      pending.onProgress({ id: msg.id, progress: msg.progress, message: msg.message });
     }
   }
 
