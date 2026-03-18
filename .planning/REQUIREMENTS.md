@@ -1,173 +1,139 @@
-# Requirements: AgentBnB v2.3
+# Requirements: AgentBnB v3.2
 
-**Defined:** 2026-03-17
-**Core Value:** Launch AgentBnB publicly — fix SPA routing, enhance Hub with extracted Magic UI components, overhaul README, deploy and go public.
+**Defined:** 2026-03-19
+**Core Value:** Centralize credit operations on Registry for trustworthy multi-agent exchanges, fix relay timeout for long-running skills.
 
-## v2.2 Requirements (COMPLETED)
+## v3.2 Requirements
 
-<details>
-<summary>All 37 v2.2 requirements — shipped 2026-03-16</summary>
+### Relay Timeout
 
-### Navigation & Routing
+- [ ] **RELAY-01**: WebSocket relay default timeout increased from 30s to 300s (5 minutes)
+- [ ] **RELAY-02**: Gateway client and execute default timeout increased to 300s
+- [ ] **RELAY-03**: New `relay_progress` message type added to relay protocol
+- [ ] **RELAY-04**: Provider agent can send progress updates that reset the relay timeout timer
+- [ ] **RELAY-05**: PipelineExecutor auto-sends progress between pipeline steps
+- [ ] **RELAY-06**: ConductorMode auto-sends progress between orchestrated sub-tasks
 
-- [x] **NAV-01**: Hub uses hash-based SPA routing for all 7 pages with browser back/forward support
-- [x] **NAV-02**: Nav bar shows 5 tabs: Discover, Agents, Activity, Docs, My Agent
-- [x] **NAV-03**: Nav bar displays credit balance badge (monospace, accent green) for authenticated users
-- [x] **NAV-04**: Nav bar shows "Get Started — 50 free credits" CTA button for unauthenticated users
-- [x] **NAV-05**: My Agent is a dropdown menu: Dashboard / Share / Settings
+### Credit Interface
 
-### Agent Directory
+- [ ] **CRED-01**: CreditLedger interface defined with hold, settle, release, getBalance, getHistory, grant methods
+- [ ] **CRED-02**: RegistryCreditLedger implements CreditLedger — direct DB operations when running on Registry server
+- [ ] **CRED-03**: RegistryCreditLedger implements CreditLedger — HTTP calls to Registry when running as remote agent
+- [ ] **CRED-04**: LocalCreditLedger wraps existing ledger.ts for offline/LAN-only mode
+- [ ] **CRED-05**: Credit system auto-detects mode: Registry (if registryUrl configured) or Local (fallback)
 
-- [x] **AGENT-01**: Agent ranking page at /hub/#/agents lists all agents sorted by reputation
-- [x] **AGENT-02**: Each agent row shows identicon, name, success rate, skill count, credits earned
-- [x] **AGENT-03**: Individual agent profile at /hub/#/agents/:owner shows skills grid + recent activity
-- [x] **AGENT-04**: Backend GET /api/agents returns aggregated agent list from capability_cards
-- [x] **AGENT-05**: Backend GET /api/agents/:owner returns agent profile with skills and activity
+### Registry Endpoints
 
-### Activity Feed
+- [ ] **REG-01**: POST /api/credits/hold — Hold escrow on Registry, deduct from requester balance
+- [ ] **REG-02**: POST /api/credits/settle — Settle escrow, transfer credits to provider
+- [ ] **REG-03**: POST /api/credits/release — Release escrow, refund credits to requester
+- [ ] **REG-04**: POST /api/credits/grant — Initial 50 cr grant, deduped by Ed25519 public key
+- [ ] **REG-05**: GET /api/credits/:owner — Query credit balance
+- [ ] **REG-06**: GET /api/credits/:owner/history — Query transaction history
+- [ ] **REG-07**: All credit endpoints require Ed25519 identity authentication
+- [ ] **REG-08**: free_tier usage tracked on Registry per agent identity per skill
 
-- [x] **FEED-01**: Activity feed page at /hub/#/activity shows public exchange history
-- [x] **FEED-02**: Feed displays 4 event types: exchange_completed, capability_shared, agent_joined, milestone
-- [x] **FEED-03**: Feed polls backend every 10 seconds with prepend-only updates
-- [x] **FEED-04**: Backend GET /api/activity returns paginated activity from request_log JOIN capability_cards
+### Relay Integration
 
-### Documentation
+- [ ] **INTG-01**: WebSocket relay holds escrow on Registry before forwarding request to provider
+- [ ] **INTG-02**: WebSocket relay settles escrow on Registry after receiving successful response
+- [ ] **INTG-03**: WebSocket relay releases escrow on Registry on failure, timeout, or provider disconnect
+- [ ] **INTG-04**: Conductor orchestration fee calculated as 10% of total sub-task cost (min 1 cr, max 20 cr)
 
-- [x] **DOCS-01**: Docs page at /hub/#/docs shows Getting Started guide
-- [x] **DOCS-02**: Docs page shows multi-tool install commands (Claude Code, OpenClaw, Antigravity, CLI) with copy buttons
-- [x] **DOCS-03**: Docs page shows Capability Card schema reference
-- [x] **DOCS-04**: Docs page shows API endpoint reference
+### CLI Changes
 
-### Credit UI
+- [ ] **CLI-01**: `agentbnb init` requests initial credit grant from Registry (with Ed25519 identity dedup)
+- [ ] **CLI-02**: `agentbnb status` queries credit balance from Registry instead of local DB
+- [ ] **CLI-03**: `agentbnb request` uses Registry-backed escrow for remote requests
+- [ ] **CLI-04**: Minimum skill price enforced at 1 cr on publish
 
-- [x] **CREDIT-01**: `cr` currency symbol used consistently across all credit displays
-- [x] **CREDIT-02**: Card display shows credits in accent color with monospace `cr` prefix
-- [x] **CREDIT-03**: My Agent dashboard shows credit balance with reserve/available breakdown
-- [x] **CREDIT-04**: My Agent dashboard shows 30-day earning chart (recharts AreaChart)
-- [x] **CREDIT-05**: My Agent dashboard shows recent transaction history
-- [x] **CREDIT-06**: Backend GET /me/transactions returns credit transaction history
+### Hub Migration
 
-### Modal Enhancement
+- [ ] **HUB-01**: Registry server `/me` endpoint returns balance from CreditLedger (not hardcoded local DB)
+- [ ] **HUB-02**: Registry server `/me/transactions` endpoint returns history from CreditLedger
+- [ ] **HUB-03**: Hub frontend hooks unchanged — same API shape, zero frontend changes needed
+- [ ] **HUB-04**: OwnerDashboard displays real-time credit balance from Registry
 
-- [x] **MODAL-01**: Skill Detail Modal shows "Request this skill" button with CLI command copy
-- [x] **MODAL-02**: Skill Detail Modal shows real-time availability indicator (online + idle status)
-- [x] **MODAL-03**: Skill Detail Modal links skill owner to their agent profile page
+### Backward Compatibility
 
-### Distribution
+- [ ] **COMPAT-01**: Agents without registryUrl config continue using local SQLite credits
+- [ ] **COMPAT-02**: Local gateway still works for LAN-only P2P exchanges with local escrow
+- [ ] **COMPAT-03**: Existing credit.db data preserved — no destructive migration
+- [ ] **COMPAT-04**: All 739+ existing tests continue to pass
 
-- [x] **DIST-01**: Claude Code .claude-plugin/marketplace.json created with correct schema
-- [x] **DIST-02**: Plugin structure at plugins/agentbnb-network/ with plugin.json and SKILL.md
-- [x] **DIST-03**: SKILL.md has complete YAML frontmatter for auto-indexing (name, version, description, author, tags)
-- [x] **DIST-04**: GitHub repository topics set: ai-agent-skill, claude-code, agent-skills
-- [x] **DIST-05**: README updated with hub screenshot, badges, and one-line install commands per tool
+## Future Requirements (v3.3+)
 
-### Polish
+### Credit Economics
+- **ECON-01**: Idle credit decay for credits unused 90+ days
+- **ECON-02**: Adjustable initial grant amount based on network size
+- **ECON-03**: Credit marketplace (agent-to-agent credit trading)
 
-- [x] **POLISH-01**: All pages responsive — cards stack on mobile, nav collapses to hamburger
-- [x] **POLISH-02**: Modal becomes full-screen sheet on mobile with touch-friendly tap targets (44px min)
-- [x] **POLISH-03**: OwnerDashboard migrated from slate-* to hub-* design tokens
-- [x] **POLISH-04**: Loading skeletons for all async data fetches
-- [x] **POLISH-05**: iOS Safari scroll lock fix for all modals
+### Conductor Autonomy
+- **COND-01**: Conductor resource scanning (auto-detect owner APIs/hardware)
+- **COND-02**: Conductor autonomous spending decisions
+- **COND-03**: LLM-powered task decomposition (replace template matching)
 
-</details>
-
-## v2.3 Requirements
-
-Requirements for v2.3 Launch Ready. Each maps to roadmap phases 16-19.
-
-### SPA Routing Fix
-
-- [x] **SPA-01**: Remove `decorateReply: false` from @fastify/static registration so `reply.sendFile()` works on /hub/* sub-routes
-- [x] **SPA-02**: Direct URL access to any /hub/* sub-route (e.g., /hub/#/agents) returns 200, not 500
-
-### Hub Enhancement — Magic UI Components
-
-- [x] **MAGICUI-01**: Extract and integrate NumberFlow component into hub/src/components/ui/ for animated number transitions
-- [x] **MAGICUI-02**: Extract and integrate Marquee component for "Compatible With" scrolling logo strip
-- [x] **MAGICUI-03**: Extract and integrate FlickeringGrid component as subtle background texture
-- [x] **MAGICUI-04**: Extract and integrate Accordion component for FAQ section
-- [x] **MAGICUI-05**: Extract and integrate LineChart (SVG-based) component for lightweight chart alternative
-- [x] **MAGICUI-06**: Extract and integrate Orbiting Circles component for visual decoration
-
-### Hub Below-Fold Sections
-
-- [x] **FOLD-01**: "Compatible With" section below the Discover card grid using Marquee component — shows tool/framework logos
-- [x] **FOLD-02**: FAQ accordion section with common questions about AgentBnB
-- [x] **FOLD-03**: Brief description / value proposition section explaining the protocol
-- [x] **FOLD-04**: Below-fold sections maintain the existing minimalist dark aesthetic
-
-### Mascot
-
-- [x] **MASCOT-01**: Doodle creature SVG (56px) displayed inline in NavBar next to "AgentBnB" title (DONE — committed with v2.3 planning)
-
-### README Visual Overhaul
-
-- [x] **README-01**: OpenClaw-style badges at top of README (npm version, tests passing, license)
-- [x] **README-02**: Hero image or banner at top of README
-- [x] **README-03**: Structured layout with clear sections (What, Install, Quick Start, Architecture, Contributing)
-- [x] **README-04**: Real hub screenshot replaces the 0-byte placeholder at docs/hub-screenshot.png
-
-### Deployment
-
-- [ ] **DEPLOY-01**: Fly.io deployment configuration for remote registry server
-- [ ] **DEPLOY-02**: DNS configuration for agentbnb.dev domain
-- [ ] **DEPLOY-03**: Cloudflare Tunnel setup for Mac Mini gateway
-- [ ] **DEPLOY-04**: GitHub repo set to public with pre-flight checklist (no secrets, license, .gitignore)
-
-### Human-Action Items (tracked, not GSD-executed)
-
-- [ ] **HUMAN-01**: Show HN post (Tuesday/Wednesday Pacific AM)
-- [ ] **HUMAN-02**: Reddit + X series posts
-- [ ] **HUMAN-03**: Taiwan TIPO trademark registration
+### Hub Discovery Phase 2
+- **DISC-01**: Trending horizontal scroll (top 10 by 7-day requests)
+- **DISC-02**: Category chips with counts
+- **DISC-03**: Price range filter
 
 ## Out of Scope
 
 | Feature | Reason |
 |---------|--------|
-| Separate landing page app (landing/ directory) | Hub IS the landing page — Discover page is homepage |
-| Replacing Hub with Magic UI template | Extract components only, don't pour content into template |
-| Heavy Magic UI components (Particles, AnimatedBeam, InteractiveHoverButton, AnimatedList) | GPU-heavy or framer-motion dependent — too heavy for minimalist aesthetic |
-| Real money / payment integration | Credits only — core design decision |
-| Multi-language SDKs | TypeScript only for v2.3 |
-| Mobile native app | Web Hub is sufficient |
-| WebSocket activity feed | Polling is sufficient at current scale |
+| Real money / fiat currency | Free tier only for launch phase |
+| Multi-Registry federation | Single Registry sufficient at launch scale |
+| Inflation/deflation controls | Premature at <100 agents |
+| Cancel fee on requester abort | Keep simple — full refund for now |
+| Credit transfer between agents | Only earn via providing skills |
+| Hub frontend rewrite | API shape unchanged, no frontend work needed |
 
 ## Traceability
 
-Which phases cover which requirements. Updated during roadmap creation.
-
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| SPA-01 | Phase 16 | Planned |
-| SPA-02 | Phase 16 | Planned |
-| MAGICUI-01 | Phase 16 | Planned |
-| MAGICUI-02 | Phase 16 | Planned |
-| MAGICUI-03 | Phase 16 | Planned |
-| MAGICUI-04 | Phase 16 | Planned |
-| MAGICUI-05 | Phase 16 | Planned |
-| MAGICUI-06 | Phase 16 | Planned |
-| FOLD-01 | Phase 17 | Planned |
-| FOLD-02 | Phase 17 | Planned |
-| FOLD-03 | Phase 17 | Planned |
-| FOLD-04 | Phase 17 | Planned |
-| MASCOT-01 | Phase 16 | Complete |
-| README-01 | Phase 18 | Planned |
-| README-02 | Phase 18 | Planned |
-| README-03 | Phase 18 | Planned |
-| README-04 | Phase 18 | Planned |
-| DEPLOY-01 | Phase 19 | Planned |
-| DEPLOY-02 | Phase 19 | Planned |
-| DEPLOY-03 | Phase 19 | Planned |
-| DEPLOY-04 | Phase 19 | Planned |
-| HUMAN-01 | — | Human action |
-| HUMAN-02 | — | Human action |
-| HUMAN-03 | — | Human action |
+| RELAY-01 | — | Pending |
+| RELAY-02 | — | Pending |
+| RELAY-03 | — | Pending |
+| RELAY-04 | — | Pending |
+| RELAY-05 | — | Pending |
+| RELAY-06 | — | Pending |
+| CRED-01 | — | Pending |
+| CRED-02 | — | Pending |
+| CRED-03 | — | Pending |
+| CRED-04 | — | Pending |
+| CRED-05 | — | Pending |
+| REG-01 | — | Pending |
+| REG-02 | — | Pending |
+| REG-03 | — | Pending |
+| REG-04 | — | Pending |
+| REG-05 | — | Pending |
+| REG-06 | — | Pending |
+| REG-07 | — | Pending |
+| REG-08 | — | Pending |
+| INTG-01 | — | Pending |
+| INTG-02 | — | Pending |
+| INTG-03 | — | Pending |
+| INTG-04 | — | Pending |
+| CLI-01 | — | Pending |
+| CLI-02 | — | Pending |
+| CLI-03 | — | Pending |
+| CLI-04 | — | Pending |
+| HUB-01 | — | Pending |
+| HUB-02 | — | Pending |
+| HUB-03 | — | Pending |
+| HUB-04 | — | Pending |
+| COMPAT-01 | — | Pending |
+| COMPAT-02 | — | Pending |
+| COMPAT-03 | — | Pending |
+| COMPAT-04 | — | Pending |
 
 **Coverage:**
-- v2.3 requirements: 24 total (21 GSD-executable + 3 human-action)
-- Mapped to phases: 21
-- Unmapped: 0 (3 human-action items tracked separately) ✓
+- v3.2 requirements: 35 total
+- Mapped to phases: 0
+- Unmapped: 35 ⚠️
 
 ---
-*Requirements defined: 2026-03-17*
-*Last updated: 2026-03-17 — v2.3 Launch Ready milestone*
+*Requirements defined: 2026-03-19*
+*Last updated: 2026-03-19 after initial definition*
