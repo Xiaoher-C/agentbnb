@@ -42,11 +42,41 @@ CLI/Agent → GatewayClient → HTTP POST → GatewayServer
 - `ledger.ts` — Balance management, transaction history
 - `escrow.ts` — Hold/settle/release during execution
 - `budget.ts` — BudgetManager with reserve floor (default 20 credits)
+- `signing.ts` — Ed25519 escrow receipt signing/verification
 
 **Bootstrap**: New agents get initial credit grant on `agentbnb init` (50 credits).
 
-> [!warning]
-> Credits are LOCAL-ONLY. Each agent's balance lives in its own SQLite. Provider can't verify requester's balance across machines. See [[gaps.md#cross-machine-credits]].
+> [!update] v3.2 — Registry Centralized Ledger (ADR-021)
+> Credits for networked agents will move to the Registry server (hub.agentbnb.dev). Registry becomes the single source of truth. Local SQLite credits remain for offline/LAN-only mode.
+
+**v3.2 Architecture**:
+```
+                    hub.agentbnb.dev (Fly.io)
+                    ┌─────────────────────────┐
+                    │  Registry Server          │
+                    │  ├── Credit Ledger (DB)   │ ← Single source of truth
+                    │  ├── WebSocket Relay      │
+                    │  ├── Hub UI               │
+                    │  └── Activity Feed        │
+                    └────────────┬──────────────┘
+                                 │
+                  ┌──────────────┼──────────────┐
+                  │              │              │
+             Agent A         Agent B        Agent C
+           (WebSocket)      (WebSocket)    (WebSocket)
+           SkillExecutor    SkillExecutor   SkillExecutor
+           (local only)     (local only)    (local only)
+
+  Principle: Execution is decentralized (local).
+             Money is centralized (Registry).
+```
+
+**CreditLedger interface**: Swappable implementations for future extensibility:
+- `RegistryCreditLedger` (v3.2) — HTTP to Registry or direct DB on Registry
+- `SignedCreditLedger` (future) — cryptographically signed transactions
+- `OnChainCreditLedger` (future) — blockchain-backed
+
+**See**: [[gaps.md#credit-registry-migration]], [[credit-pricing.md]], [[decisions.md#ADR-021]]
 
 ## Registry
 

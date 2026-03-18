@@ -116,14 +116,15 @@ app.listen({ port: 8080 });
 
 ```
 ✅ SkillExecutor — RESOLVED in v3.0
-✅ Cross-Machine Credits — RESOLVED in v3.0 (signed escrow receipts)
+✅ Cross-Machine Credits — RESOLVED in v3.0 (signed escrow receipts, local mode)
 ✅ Handler Implementation — RESOLVED in v3.0 (SkillExecutor replaces handlers)
 ✅ Remote Registry Sync — RESOLVED in v3.1 (WebSocket relay auto-publishes)
 ✅ Deployment — RESOLVED in v3.1 (fly.toml + Dockerfile ready)
-1. 🟡 parseSoulMdV2 metadata — card quality gap (v3.2)
-2. 🟡 Relay long-task support — 30s timeout blocks 5+ min skills (v3.2)
-3. 🟡 My Agent Route — quick fix, broken page
-4. 🟢 CI/CD — nice to have
+1. 🔴 Credit System → Registry — blocks trustworthy multi-agent exchanges (v3.2)
+2. 🟡 Relay long-task support — C+B Hybrid: 5min timeout + optional progress (v3.2)
+3. 🟡 parseSoulMdV2 metadata — card quality gap (v3.2)
+4. 🟡 My Agent Route — quick fix, broken page
+5. 🟢 CI/CD — nice to have
 ```
 
 ## SkillExecutor — Agent Self-Execution Engine {#skill-executor}
@@ -210,28 +211,59 @@ AgentRuntime
 **Severity**: 🟡 MEDIUM — Blocks long-running skills via relay
 **Target**: v3.2
 
-**Problem**: The WebSocket relay in `src/relay/websocket-relay.ts` has a 30-second timeout per `relay_request`. Skills like `stock-analyst` (full deep analysis mode) need 5+ minutes to execute. These requests timeout and fail through the relay path.
+**Problem**: The WebSocket relay in `src/relay/websocket-relay.ts` has a 30-second timeout per `relay_request`. Skills like `stock-analyst` (full deep analysis mode) need 5+ minutes to execute. These requests timeout and fail through the relay path. This also makes Conductor relay mode unusable for multi-agent pipelines (commonly 60-120s).
 
-**Possible solutions**:
+**Decision**: C+B Hybrid approach (see [[decisions.md#ADR-020]])
 
-| Solution | Pros | Cons |
-|----------|------|------|
-| A. Streaming progress | Real-time feedback, natural WS fit | Complex state management on both sides |
-| B. Job-based async (submit → poll → result) | Simple, resilient to reconnects | Requires job store on registry, polling overhead |
-| C. Configurable per-skill timeout | Minimal change | Still blocks the WS connection, no progress feedback |
+**Phase 1** (minimal change):
+- Increase `RELAY_TIMEOUT_MS` from 30s to 300s (5 minutes)
+- Skill developers need zero changes
+- Provider WebSocket disconnect → all pending requests immediately fail (already implemented)
 
-**Recommended**: Option B (job-based async) with Option A (streaming) as enhancement.
+**Phase 2** (progressive enhancement):
+- Add `relay_progress` message type to relay protocol
+- Provider can optionally send progress updates that reset the timeout timer
+- PipelineExecutor and ConductorMode auto-send progress between steps
+- ApiExecutor (single slow API call) — doesn't send progress, relies on 5min timeout
 
-Flow:
-```
-Agent A → relay_request { long_running: true }
-Registry → incoming_request to Agent B
-Agent B → relay_ack { job_id: "..." }          // immediate ack
-Registry → response { job_id: "..." }          // A gets job_id
-... Agent B works for 5 min ...
-Agent B → relay_job_complete { job_id, result }
-Registry → forwards to Agent A (if connected) or stores for poll
-Agent A → relay_poll { job_id }                // if reconnected
-```
+**Files to modify**:
+- `src/relay/websocket-relay.ts` — `RELAY_TIMEOUT_MS` constant, add progress handler
+- `src/relay/websocket-client.ts` — default timeout, add progress sending
+- `src/relay/types.ts` — add `relay_progress` message type
+- `src/gateway/execute.ts` — default timeout
+- `src/gateway/client.ts` — default timeout
+
+**Status**: Not started. Planned for v3.2.
+
+## Credit System → Registry Migration {#credit-registry-migration}
+
+**Severity**: 🔴 CRITICAL — Blocks trustworthy multi-agent credit exchanges
+**Target**: v3.2
+
+**Problem**: Each agent stores credits in local SQLite (`~/.agentbnb/credit.db`). This worked for 2-person E2E testing but fails at scale:
+- Agent can modify local credit.db → fake balance → free-ride
+- Network disconnect during settle → two agents' ledgers permanently out of sync
+- Agent runs two instances → double-spends the same credits
+- Hub cannot show real credit balances (each agent's balance is local-only)
+
+**Decision**: Registry Centralized Ledger (see [[decisions.md#ADR-021]])
+
+All credit operations move to the Registry server (hub.agentbnb.dev). Agents have no local write access to credits. Registry is the single source of truth.
+
+**Implementation priority**:
+1. `CreditLedger` interface + `RegistryCreditLedger` class
+2. Registry `/api/credits/*` endpoints (hold, settle, release, grant, balance, history)
+3. Integrate into WebSocket relay flow (hold before relay, settle after)
+4. CLI changes (`init` grants via Registry, `status` queries Registry)
+5. Hub shows real credit balances from Registry
+6. Keep local-only mode backward compatible (offline/LAN)
+
+**Pricing rules** (see [[credit-pricing.md]]):
+- Provider free pricing (no fixed exchange rate)
+- Minimum 1 cr per call
+- Initial grant: 50 cr per identity (Ed25519 key dedup)
+- Conductor fee: 10% (min 1 cr, max 20 cr)
+
+**Hub impact**: Frontend hooks unchanged (same API shape). Backend switches from local SQLite to CreditLedger interface.
 
 **Status**: Not started. Planned for v3.2.
