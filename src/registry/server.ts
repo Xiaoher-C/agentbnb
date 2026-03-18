@@ -6,17 +6,23 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { existsSync } from 'node:fs';
 import type Database from 'better-sqlite3';
-import { getCard, updateCard, listCards } from './store.js';
+import { getCard, insertCard, updateCard, listCards } from './store.js';
 import { listPendingRequests, resolvePendingRequest } from '../autonomy/pending-requests.js';
 import { searchCards, filterCards } from './matcher.js';
 import { getRequestLog, getActivityFeed } from './request-log.js';
 import type { SincePeriod } from './request-log.js';
 import { getBalance, getTransactions } from '../credit/ledger.js';
 import { detectApiKeys, buildDraftCard, KNOWN_API_KEYS } from '../cli/onboarding.js';
-import { AgentBnBError } from '../types/index.js';
+import { AgentBnBError, AnyCardSchema } from '../types/index.js';
 import type { CapabilityCard, CapabilityCardV2 } from '../types/index.js';
 import { registerWebSocketRelay } from '../relay/websocket-relay.js';
 import type { RelayState } from '../relay/types.js';
+import {
+  registerGuarantor,
+  linkAgentToGuarantor,
+  getAgentGuarantor,
+  initiateGithubAuth,
+} from '../identity/guarantor.js';
 
 /**
  * Options for creating the public registry server.
@@ -316,6 +322,78 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
   });
 
   /**
+   * POST /cards — Publish a capability card to the registry.
+   *
+   * Accepts both v1.0 and v2.0 card JSON. Validates via AnyCardSchema (Zod).
+   * For v2.0 cards, uses INSERT OR REPLACE (raw SQL) since insertCard() only handles v1.0.
+   * Returns 201 on success, 400 on validation failure.
+   */
+  server.post('/cards', async (request, reply) => {
+    const body = request.body as Record<string, unknown>;
+    // Default spec_version to '1.0' if missing (AnyCardSchema requires discriminator)
+    if (!body.spec_version) {
+      body.spec_version = '1.0';
+    }
+    const result = AnyCardSchema.safeParse(body);
+
+    if (!result.success) {
+      return reply.code(400).send({
+        error: 'Card validation failed',
+        issues: result.error.issues,
+      });
+    }
+
+    const card = result.data;
+    const now = new Date().toISOString();
+
+    if (card.spec_version === '2.0') {
+      // v2.0 card — raw SQL INSERT OR REPLACE (insertCard only supports v1.0)
+      const cardWithTimestamps = {
+        ...card,
+        created_at: card.created_at ?? now,
+        updated_at: now,
+      };
+      db.prepare(
+        `INSERT OR REPLACE INTO capability_cards (id, owner, data, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?)`
+      ).run(
+        cardWithTimestamps.id,
+        cardWithTimestamps.owner,
+        JSON.stringify(cardWithTimestamps),
+        cardWithTimestamps.created_at,
+        cardWithTimestamps.updated_at,
+      );
+    } else {
+      // v1.0 card — use existing insertCard with Zod validation
+      try {
+        insertCard(db, card);
+      } catch (err) {
+        if (err instanceof AgentBnBError && err.code === 'VALIDATION_ERROR') {
+          return reply.code(400).send({ error: err.message });
+        }
+        throw err;
+      }
+    }
+
+    return reply.code(201).send({ ok: true, id: card.id });
+  });
+
+  /**
+   * DELETE /cards/:id — Remove a capability card from the registry.
+   *
+   * Returns 200 on success, 404 if card not found.
+   */
+  server.delete('/cards/:id', async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const card = getCard(db, id);
+    if (!card) {
+      return reply.code(404).send({ error: 'Not found' });
+    }
+    db.prepare('DELETE FROM capability_cards WHERE id = ?').run(id);
+    return reply.send({ ok: true, id });
+  });
+
+  /**
    * GET /api/agents — Returns a reputation-sorted list of all agent profiles.
    *
    * Each agent profile is aggregated from their capability cards and request log.
@@ -503,9 +581,90 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
 
     return reply.send({
       agents_online: onlineOwners.size,
-      total_capabilities: allCards.length,
+      total_capabilities: allCards.reduce((sum, card) => {
+        const v2 = card as unknown as CapabilityCardV2;
+        return sum + (v2.skills?.length ?? 1);
+      }, 0),
       total_exchanges: exchangeRow.count,
     });
+  });
+
+  // ---------------------------------------------------------------------------
+  // Identity endpoints — public agent identity and guarantor registration
+  // ---------------------------------------------------------------------------
+
+  /**
+   * POST /api/identity/register — Register a human guarantor via GitHub login.
+   *
+   * Body: { github_login: string }
+   * Returns the created GuarantorRecord. GitHub OAuth verification is stubbed.
+   */
+  server.post('/api/identity/register', async (request, reply) => {
+    if (!opts.creditDb) {
+      return reply.code(503).send({ error: 'Credit database not configured' });
+    }
+    const body = request.body as Record<string, unknown>;
+    const githubLogin = typeof body.github_login === 'string' ? body.github_login.trim() : '';
+    if (!githubLogin) {
+      return reply.code(400).send({ error: 'github_login is required' });
+    }
+    try {
+      const record = registerGuarantor(opts.creditDb, githubLogin);
+      const auth = initiateGithubAuth();
+      return reply.code(201).send({ guarantor: record, oauth: auth });
+    } catch (err) {
+      if (err instanceof AgentBnBError && err.code === 'GUARANTOR_EXISTS') {
+        return reply.code(409).send({ error: err.message });
+      }
+      throw err;
+    }
+  });
+
+  /**
+   * POST /api/identity/link — Link an agent to a human guarantor.
+   *
+   * Body: { agent_id: string, github_login: string }
+   * Enforces max 10 agents per guarantor.
+   */
+  server.post('/api/identity/link', async (request, reply) => {
+    if (!opts.creditDb) {
+      return reply.code(503).send({ error: 'Credit database not configured' });
+    }
+    const body = request.body as Record<string, unknown>;
+    const agentId = typeof body.agent_id === 'string' ? body.agent_id.trim() : '';
+    const githubLogin = typeof body.github_login === 'string' ? body.github_login.trim() : '';
+    if (!agentId || !githubLogin) {
+      return reply.code(400).send({ error: 'agent_id and github_login are required' });
+    }
+    try {
+      const record = linkAgentToGuarantor(opts.creditDb, agentId, githubLogin);
+      return reply.send({ guarantor: record });
+    } catch (err) {
+      if (err instanceof AgentBnBError) {
+        const statusMap: Record<string, number> = {
+          GUARANTOR_NOT_FOUND: 404,
+          MAX_AGENTS_EXCEEDED: 409,
+          AGENT_ALREADY_LINKED: 409,
+        };
+        const status = statusMap[err.code] ?? 400;
+        return reply.code(status).send({ error: err.message });
+      }
+      throw err;
+    }
+  });
+
+  /**
+   * GET /api/identity/:agent_id — Returns the guarantor info for an agent.
+   *
+   * Returns { guarantor: GuarantorRecord } or { guarantor: null } if not linked.
+   */
+  server.get('/api/identity/:agent_id', async (request, reply) => {
+    if (!opts.creditDb) {
+      return reply.code(503).send({ error: 'Credit database not configured' });
+    }
+    const { agent_id } = request.params as { agent_id: string };
+    const guarantor = getAgentGuarantor(opts.creditDb, agent_id);
+    return reply.send({ agent_id, guarantor });
   });
 
   // Register owner routes as a scoped plugin (NOT fastify-plugin) so the auth hook
