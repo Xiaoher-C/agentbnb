@@ -17,9 +17,26 @@ describe('detectCapabilities', () => {
   });
 
   it('returns source=none when no docs or env vars found', () => {
-    const result = detectCapabilities({ cwd: tmpDir });
-    expect(result.source).toBe('none');
-    expect(result.capabilities).toEqual([]);
+    // Clear known API key env vars so env detection doesn't fire
+    const keysToClean = [
+      'OPENAI_API_KEY', 'ANTHROPIC_API_KEY', 'ELEVENLABS_API_KEY',
+      'KLING_API_KEY', 'STABILITY_API_KEY', 'REPLICATE_API_TOKEN',
+      'GOOGLE_API_KEY', 'AZURE_OPENAI_API_KEY', 'COHERE_API_KEY', 'MISTRAL_API_KEY',
+    ];
+    const saved: Record<string, string | undefined> = {};
+    for (const k of keysToClean) {
+      saved[k] = process.env[k];
+      delete process.env[k];
+    }
+    try {
+      const result = detectCapabilities({ cwd: tmpDir });
+      expect(result.source).toBe('none');
+      expect(result.capabilities).toEqual([]);
+    } finally {
+      for (const k of keysToClean) {
+        if (saved[k] !== undefined) process.env[k] = saved[k];
+      }
+    }
   });
 
   it('detects SOUL.md and returns source=soul with content', () => {
