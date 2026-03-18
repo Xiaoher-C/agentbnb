@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import type { ExecutorMode, ExecutionResult } from './executor.js';
+import type { ExecutorMode, ExecutionResult, ProgressCallback } from './executor.js';
 import { SkillExecutor } from './executor.js';
 import type { SkillConfig } from './skill-config.js';
 import type { PipelineSkillConfig } from './skill-config.js';
@@ -95,6 +95,7 @@ export class PipelineExecutor implements ExecutorMode {
   async execute(
     config: SkillConfig,
     params: Record<string, unknown>,
+    onProgress?: ProgressCallback,
   ): Promise<Omit<ExecutionResult, 'latency_ms'>> {
     const pipelineConfig = config as PipelineSkillConfig;
     const steps = pipelineConfig.steps ?? [];
@@ -167,6 +168,15 @@ export class PipelineExecutor implements ExecutorMode {
       // Update context for subsequent steps
       context.steps.push({ result: stepResult });
       context.prev = { result: stepResult };
+
+      // Emit progress between steps (not after the final step)
+      if (onProgress && i < steps.length - 1) {
+        onProgress({
+          step: i + 1,
+          total: steps.length,
+          message: `Completed step ${i + 1}/${steps.length}`,
+        });
+      }
     }
 
     // Return the last step's result as the pipeline output

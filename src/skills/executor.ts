@@ -1,6 +1,12 @@
 import type { SkillConfig } from './skill-config.js';
 
 /**
+ * Progress callback for long-running skill executions.
+ * Called between steps/sub-tasks to indicate forward progress.
+ */
+export type ProgressCallback = (info: { step: number; total: number; message: string }) => void;
+
+/**
  * Result returned by SkillExecutor.execute() for every invocation.
  * Always includes timing data regardless of success or failure.
  */
@@ -30,6 +36,7 @@ export interface ExecutorMode {
   execute(
     config: SkillConfig,
     params: Record<string, unknown>,
+    onProgress?: ProgressCallback,
   ): Promise<Omit<ExecutionResult, 'latency_ms'>>;
 }
 
@@ -69,7 +76,11 @@ export class SkillExecutor {
    * @param params - Input parameters for the skill.
    * @returns ExecutionResult including success, result/error, and latency_ms.
    */
-  async execute(skillId: string, params: Record<string, unknown>): Promise<ExecutionResult> {
+  async execute(
+    skillId: string,
+    params: Record<string, unknown>,
+    onProgress?: ProgressCallback,
+  ): Promise<ExecutionResult> {
     const startTime = Date.now();
 
     const config = this.skillMap.get(skillId);
@@ -91,7 +102,7 @@ export class SkillExecutor {
     }
 
     try {
-      const modeResult = await mode.execute(config, params);
+      const modeResult = await mode.execute(config, params, onProgress);
       return {
         ...modeResult,
         latency_ms: Date.now() - startTime,
