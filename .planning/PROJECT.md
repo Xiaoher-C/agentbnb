@@ -8,23 +8,30 @@ A P2P agent capability sharing protocol with a complete execution engine. Agent 
 
 No good protocol exists for agent-to-agent capability exchange. AgentBnB fills that gap — making it easy for any agent to discover, execute, and orchestrate another agent's skills, creating a marketplace where agent capabilities become composable building blocks.
 
-## Current State: v3.0 Production-Ready Launch (shipped 2026-03-17)
+## Current Milestone: v3.2 Registry Credit Ledger
 
-**What shipped in v3.0:**
-- **SkillExecutor** — Config-driven execution engine with 4 modes (API/Pipeline/OpenClaw/Command)
-- **Conductor** — Multi-agent task orchestration (decompose → match → budget → orchestrate)
-- **Signed Escrow** — Ed25519 cross-machine credit verification
-- **Deployment** — Dockerfile, fly.toml, GitHub Actions CI
-- **Security hardening** — Shell injection prevention, header CRLF filtering, FTS5 sanitization
+**Goal:** Centralize credit operations on the Registry server for trustworthy multi-agent exchanges, and fix relay timeout to enable long-running skill execution.
 
-**Stats:** 9,244 LOC TypeScript, 643 tests, 78+ plans across 24 phases and 6 milestones.
+**Target features:**
+- Relay timeout C+B Hybrid (30s → 300s + optional relay_progress)
+- CreditLedger interface with swappable implementations
+- Registry `/api/credits/*` endpoints (hold, settle, release, grant, balance, history)
+- Credit verification integrated into WebSocket relay flow
+- CLI init/status use Registry for credits
+- Hub credit data seamlessly switches to Registry backend
+- Local-only mode preserved for offline/LAN usage
 
-**Previously shipped:**
-- **v1.1 Upgrade** — 24 plans. Core protocol, CLI, Hub, registry, onboarding.
-- **v2.0 Agent Autonomy** — 12 plans. Multi-skill cards, autonomy tiers, auto-share, auto-request.
-- **v2.1 Ship It** — 10 plans. Premium Hub UI, ClaWHub skill, repo docs.
-- **v2.2 Full Hub + Distribution** — 11 plans. Agent profiles, activity feed, credit UI, distribution.
-- **v2.3 Launch Ready** — 5 plans. SPA routing, below-fold sections, README overhaul.
+## Previously Shipped
+
+- **v3.0 Production-Ready Launch** (2026-03-17) — SkillExecutor (5 modes), Conductor, Signed Escrow, Deployment, Security
+- **v3.1 Public Network** (2026-03-18) — WebSocket relay, remote registry sync, Ed25519 identity auth, Fly.io persistent volume
+- **v2.3 Launch Ready** — SPA routing, below-fold sections, README overhaul
+- **v2.2 Full Hub + Distribution** — Agent profiles, activity feed, credit UI, distribution
+- **v2.1 Ship It** — Premium Hub UI, ClaWHub skill, repo docs
+- **v2.0 Agent Autonomy** — Multi-skill cards, autonomy tiers, auto-share, auto-request
+- **v1.1 Upgrade** — Core protocol, CLI, Hub, registry, onboarding
+
+**Stats:** 9,244+ LOC TypeScript, 739 tests, 78+ plans across 24 phases and 7 milestones.
 
 ## Requirements
 
@@ -48,17 +55,26 @@ No good protocol exists for agent-to-agent capability exchange. AgentBnB fills t
 
 ### Active
 
-- [ ] Clean up `as unknown as` type casts (27 → under 5) — v3.1
-- [ ] Consolidate v1/v2 card shape detection into shared type guard — v3.1
+- [ ] Relay timeout C+B Hybrid (30s → 300s + optional relay_progress) — v3.2
+- [ ] CreditLedger interface + RegistryCreditLedger class — v3.2
+- [ ] Registry /api/credits/* endpoints — v3.2
+- [ ] Credit verification in WebSocket relay flow — v3.2
+- [ ] CLI init/status use Registry credits — v3.2
+- [ ] Hub credit data from Registry — v3.2
+- [ ] Local-only mode backward compatible — v3.2
 
 ### Out of Scope
 
 - Separate landing page app — Hub IS the landing page
-- Real money / payment integration — credits only
+- Real money / payment integration — credits only (free tier)
 - Multi-language SDKs — TypeScript only
 - Mobile native app — web Hub is sufficient
 - Agent training / fine-tuning — capability exchange only
 - LLM-powered TaskDecomposer — v4.0 (hardcoded templates for now)
+- Autonomous Conductor (resource scanning, self-initiated earning) — v4.0
+- Inflation/deflation controls — premature at <100 agents
+- Hub Discovery Phase 2 (trending scroll, category chips, price filter) — wait for 20+ agents
+- Clean up `as unknown as` type casts — deferred from v3.1, cosmetic
 
 ## Context
 
@@ -93,6 +109,11 @@ No good protocol exists for agent-to-agent capability exchange. AgentBnB fills t
 | Shell escaping for command execution | Prevents injection in P2P network | ✓ Good |
 | Hub IS the landing page | Discover page is homepage | ✓ Good |
 | Premium dark UI (#08080C + #10B981) | Screenshot-worthy aesthetic | ✓ Good |
+| WebSocket relay for zero-config networking | No port forwarding needed | ✓ Good |
+| Credit System → Registry (ADR-021) | Single source of truth for balances | — Pending |
+| Relay Timeout C+B Hybrid (ADR-020) | 5min default + optional progress | — Pending |
+| Provider free pricing (ADR-018) | Market-driven, 1 cr minimum | — Pending |
+| Conductor fee 10% min 1 max 20 (ADR-019) | Scales with task complexity | — Pending |
 
 ---
-*Last updated: 2026-03-17 after v3.0 Production-Ready Launch milestone*
+*Last updated: 2026-03-19 after v3.2 Registry Credit Ledger milestone start*
