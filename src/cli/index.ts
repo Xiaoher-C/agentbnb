@@ -370,9 +370,31 @@ program
       ? (card as import('../types/index.js').CapabilityCardV2).agent_name
       : card.name;
 
-    if (opts.registry) {
-      // POST to remote registry
-      const url = `${opts.registry.replace(/\/$/, '')}/cards`;
+    // Always publish to local DB
+    const db = openDatabase(config.db_path);
+    try {
+      if (card.spec_version === '2.0') {
+        const now = new Date().toISOString();
+        const cardWithTimestamps = { ...card, created_at: card.created_at ?? now, updated_at: now };
+        db.prepare(
+          'INSERT OR REPLACE INTO capability_cards (id, owner, data, created_at, updated_at) VALUES (?, ?, ?, ?, ?)'
+        ).run(cardWithTimestamps.id, cardWithTimestamps.owner, JSON.stringify(cardWithTimestamps), cardWithTimestamps.created_at, cardWithTimestamps.updated_at);
+      } else {
+        insertCard(db, card);
+      }
+    } finally {
+      db.close();
+    }
+
+    if (!opts.json) {
+      console.log(`Published locally: ${cardName} (${card.id})`);
+    }
+
+    // Also POST to remote registry if configured (explicit --registry or config.registry)
+    const registryUrl = opts.registry ?? config.registry;
+    let remoteSuccess = false;
+    if (registryUrl) {
+      const url = `${registryUrl.replace(/\/$/, '')}/cards`;
       try {
         const response = await fetch(url, {
           method: 'POST',
@@ -381,40 +403,27 @@ program
         });
         if (!response.ok) {
           const body = await response.text();
-          console.error(`Error: remote registry returned ${response.status}: ${body}`);
-          process.exit(1);
-        }
-        if (opts.json) {
-          console.log(JSON.stringify({ success: true, id: card.id, name: cardName, registry: url }, null, 2));
+          console.error(`Warning: remote registry returned ${response.status}: ${body}`);
         } else {
-          console.log(`Published to ${url}: ${cardName} (${card.id})`);
+          remoteSuccess = true;
+          if (!opts.json) {
+            console.log(`Published to registry: ${url}`);
+          }
         }
       } catch (err) {
-        console.error(`Error: cannot reach registry at ${url}: ${(err as Error).message}`);
-        process.exit(1);
+        console.error(`Warning: cannot reach registry at ${url}: ${(err as Error).message}`);
       }
-    } else {
-      // Local DB publish
-      const db = openDatabase(config.db_path);
-      try {
-        if (card.spec_version === '2.0') {
-          const now = new Date().toISOString();
-          const cardWithTimestamps = { ...card, created_at: card.created_at ?? now, updated_at: now };
-          db.prepare(
-            'INSERT OR REPLACE INTO capability_cards (id, owner, data, created_at, updated_at) VALUES (?, ?, ?, ?, ?)'
-          ).run(cardWithTimestamps.id, cardWithTimestamps.owner, JSON.stringify(cardWithTimestamps), cardWithTimestamps.created_at, cardWithTimestamps.updated_at);
-        } else {
-          insertCard(db, card);
-        }
-      } finally {
-        db.close();
-      }
+    }
 
-      if (opts.json) {
-        console.log(JSON.stringify({ success: true, id: card.id, name: cardName }, null, 2));
-      } else {
-        console.log(`Published: ${cardName} (${card.id})`);
-      }
+    if (opts.json) {
+      console.log(JSON.stringify({
+        success: true,
+        id: card.id,
+        name: cardName,
+        ...(registryUrl ? { registry: registryUrl, remote_published: remoteSuccess } : {}),
+      }, null, 2));
+    } else if (!registryUrl) {
+      // No remote configured — hint about it
     }
   });
 
@@ -454,7 +463,7 @@ program
         return;
       }
 
-      const col = (s: string, w: number) => s.slice(0, w).padEnd(w);
+      const col = (s: string | undefined, w: number) => (s ?? '').slice(0, w).padEnd(w);
       console.log(col('Name', 24) + '  ' + col('URL', 32) + '  ' + col('Owner', 20));
       console.log('-'.repeat(80));
       for (const agent of discovered) {
@@ -545,7 +554,7 @@ program
     }
 
     // Table output
-    const col = (s: string, w: number) => s.slice(0, w).padEnd(w);
+    const col = (s: string | undefined, w: number) => (s ?? '').slice(0, w).padEnd(w);
 
     if (hasRemote) {
       // Extended table with Source column
@@ -560,14 +569,15 @@ program
       console.log('-'.repeat(80));
       for (const card of outputCards as TaggedCard[]) {
         const shortId = card.id.slice(0, 8) + '...';
+        const displayName = card.name ?? (card as unknown as { agent_name?: string }).agent_name ?? '';
         const source = 'source' in card ? (card as TaggedCard).source : 'local';
         const sourceTag = source === 'remote' ? '[remote]' : '[local]';
         console.log(
           col(shortId, 16) + '  ' +
-          col(card.name, 28) + '  ' +
-          col(String(card.level), 3) + '  ' +
-          col(String(card.pricing.credits_per_call), 7) + '  ' +
-          col(card.availability.online ? 'yes' : 'no', 6) + '  ' +
+          col(displayName, 28) + '  ' +
+          col(String(card.level ?? ''), 3) + '  ' +
+          col(String(card.pricing?.credits_per_call ?? ''), 7) + '  ' +
+          col(card.availability?.online ? 'yes' : 'no', 6) + '  ' +
           col(sourceTag, 8)
         );
       }
@@ -583,12 +593,13 @@ program
       console.log('-'.repeat(72));
       for (const card of outputCards) {
         const shortId = card.id.slice(0, 8) + '...';
+        const displayName = card.name ?? (card as unknown as { agent_name?: string }).agent_name ?? '';
         console.log(
           col(shortId, 16) + '  ' +
-          col(card.name, 32) + '  ' +
-          col(String(card.level), 3) + '  ' +
-          col(String(card.pricing.credits_per_call), 7) + '  ' +
-          col(card.availability.online ? 'yes' : 'no', 6)
+          col(displayName, 32) + '  ' +
+          col(String(card.level ?? ''), 3) + '  ' +
+          col(String(card.pricing?.credits_per_call ?? ''), 7) + '  ' +
+          col(card.availability?.online ? 'yes' : 'no', 6)
         );
       }
     }
@@ -1074,7 +1085,7 @@ peersCommand
       return;
     }
 
-    const col = (s: string, w: number) => s.slice(0, w).padEnd(w);
+    const col = (s: string | undefined, w: number) => (s ?? '').slice(0, w).padEnd(w);
     console.log(col('Name', 20) + '  ' + col('URL', 36) + '  ' + col('Added', 20));
     console.log('-'.repeat(80));
     for (const peer of peers) {

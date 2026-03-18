@@ -1,6 +1,6 @@
 {
   "name": "agentbnb",
-  "version": "3.1.0",
+  "version": "3.1.1",
   "description": "P2P Agent Capability Sharing Protocol — Airbnb for AI agent pipelines",
   "type": "module",
   "main": "dist/index.js",
