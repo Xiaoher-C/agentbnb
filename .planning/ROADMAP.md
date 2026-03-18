@@ -88,7 +88,7 @@
   3. PipelineExecutor automatically emits a progress update between each step without manual instrumentation
   4. ConductorMode automatically emits a progress update between each orchestrated sub-task
   5. Gateway client and `agentbnb request` wait up to 300s before declaring timeout
-**Plans:** 2 plans
+**Plans:** 1/2 plans executed
 Plans:
 - [ ] 25-01-PLAN.md — Timeout constants 30s to 300s + relay_progress protocol message type
 - [ ] 25-02-PLAN.md — PipelineExecutor and ConductorMode auto-progress callbacks
@@ -155,7 +155,7 @@ Plans:
 | 16-18 | v2.3 | 5/5 | Complete | 2026-03-17 |
 | 19-23 | v3.0 | 16/16 | Complete | 2026-03-17 |
 | 24 | v3.1 | — | Superseded | — |
-| 25 | v3.2 | 0/2 | In progress | — |
+| 25 | 1/2 | In Progress|  | — |
 | 26 | v3.2 | 0/TBD | Not started | — |
 | 27 | v3.2 | 0/TBD | Not started | — |
 | 28 | v3.2 | 0/TBD | Not started | — |

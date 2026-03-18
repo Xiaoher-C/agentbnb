@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v3.2
 milestone_name: Registry Credit Ledger
-status: ready_to_plan
-stopped_at: Roadmap created — Phases 25-29 defined, ready to plan Phase 25
-last_updated: "2026-03-19"
-last_activity: 2026-03-19 — v3.2 roadmap created (5 phases, 35 requirements mapped)
+status: planning
+stopped_at: Completed 25-01-PLAN.md — relay timeout + relay_progress protocol
+last_updated: "2026-03-18T19:58:48.697Z"
+last_activity: 2026-03-19 — Roadmap created for v3.2 (Phases 25-29, 35 requirements)
 progress:
   total_phases: 5
   completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
+  total_plans: 2
+  completed_plans: 1
   percent: 0
 ---
 
@@ -44,6 +44,8 @@ Progress: [░░░░░░░░░░] 0% (v3.2 milestone)
 - [v3.2 init]: Failure/timeout = full refund, no cancel fee
 - [v3.2 init]: Hub frontend hooks unchanged — same API shape, backend switches data source
 - [v3.1 superseded]: Phase 24 Code Quality Polish deferred to v3.3+
+- [Phase 25]: relay_progress resets RELAY_TIMEOUT_MS window (not a separate progress window) — simpler and consistent with plan
+- [Phase 25]: PendingRequest stores timeoutMs field to allow clean timer reset in handleProgress without needing access to outer scope constants
 
 ### Pending Todos
 
@@ -56,8 +58,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-19
-Stopped at: v3.2 roadmap created, ready to plan Phase 25 (Relay Timeout)
+Last session: 2026-03-18T19:58:48.695Z
+Stopped at: Completed 25-01-PLAN.md — relay timeout + relay_progress protocol
 Resume file: None
 
 ---

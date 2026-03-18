@@ -7,10 +7,10 @@
 
 ### Relay Timeout
 
-- [ ] **RELAY-01**: WebSocket relay default timeout increased from 30s to 300s (5 minutes)
-- [ ] **RELAY-02**: Gateway client and execute default timeout increased to 300s
-- [ ] **RELAY-03**: New `relay_progress` message type added to relay protocol
-- [ ] **RELAY-04**: Provider agent can send progress updates that reset the relay timeout timer
+- [x] **RELAY-01**: WebSocket relay default timeout increased from 30s to 300s (5 minutes)
+- [x] **RELAY-02**: Gateway client and execute default timeout increased to 300s
+- [x] **RELAY-03**: New `relay_progress` message type added to relay protocol
+- [x] **RELAY-04**: Provider agent can send progress updates that reset the relay timeout timer
 - [ ] **RELAY-05**: PipelineExecutor auto-sends progress between pipeline steps
 - [ ] **RELAY-06**: ConductorMode auto-sends progress between orchestrated sub-tasks
 
@@ -93,10 +93,10 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| RELAY-01 | Phase 25 | Pending |
-| RELAY-02 | Phase 25 | Pending |
-| RELAY-03 | Phase 25 | Pending |
-| RELAY-04 | Phase 25 | Pending |
+| RELAY-01 | Phase 25 | Complete |
+| RELAY-02 | Phase 25 | Complete |
+| RELAY-03 | Phase 25 | Complete |
+| RELAY-04 | Phase 25 | Complete |
 | RELAY-05 | Phase 25 | Pending |
 | RELAY-06 | Phase 25 | Pending |
 | CRED-01 | Phase 26 | Pending |
