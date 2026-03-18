@@ -804,6 +804,7 @@ program
     let gatewayUrl: string;
     let token: string;
     let isRemoteRequest = false;
+    let targetOwner: string | undefined; // For relay routing
     // Always load identity auth — used for remote requests, harmless for local
     const identityAuth = loadIdentityAuth(config.owner);
 
@@ -816,6 +817,7 @@ program
       gatewayUrl = peer.url;
       token = peer.token;
       isRemoteRequest = true;
+      targetOwner = opts.peer;
 
       // Identity auth already loaded above
     } else {
@@ -857,12 +859,18 @@ program
           process.exit(1);
         }
 
-        if (!remoteCard.gateway_url || typeof remoteCard.gateway_url !== 'string') {
-          console.error('Error: remote card has no gateway_url. The provider needs to re-publish with `agentbnb sync`.');
+        targetOwner = (remoteCard.owner ?? remoteCard.agent_name) as string | undefined;
+
+        if (remoteCard.gateway_url && typeof remoteCard.gateway_url === 'string') {
+          gatewayUrl = remoteCard.gateway_url;
+        } else if (targetOwner && config.registry) {
+          // No gateway_url but we can try relay routing
+          gatewayUrl = ''; // Will go straight to relay fallback
+        } else {
+          console.error('Error: remote card has no gateway_url and no relay available. The provider needs to re-publish with `agentbnb sync`.');
           process.exit(1);
         }
 
-        gatewayUrl = remoteCard.gateway_url;
         token = ''; // Not used — identity auth below
         isRemoteRequest = true;
 
@@ -870,7 +878,11 @@ program
 
         if (!opts.json) {
           const displayName = (remoteCard.name ?? remoteCard.agent_name ?? cardId) as string;
-          console.log(`Found remote card: ${displayName} @ ${gatewayUrl}`);
+          if (gatewayUrl) {
+            console.log(`Found remote card: ${displayName} @ ${gatewayUrl}`);
+          } else {
+            console.log(`Found remote card: ${displayName} (relay-only)`);
+          }
         }
       }
     }
@@ -923,52 +935,105 @@ program
       }
     }
 
-    try {
-      const result = await requestCapability({
-        gatewayUrl,
-        token,
-        cardId,
-        params: { ...params, ...(opts.skill ? { skill_id: opts.skill } : {}) },
-        escrowReceipt,
-        identity: identityAuth,
-      });
-
-      // On success: settle escrow (make debit permanent)
+    // Helpers to settle/release escrow and print result
+    const settleEscrow = () => {
       if (useReceipt && escrowId) {
         const configDir = getConfigDir();
         const creditDb = openCreditDb(join(configDir, 'credit.db'));
         creditDb.pragma('busy_timeout = 5000');
         try {
           settleRequesterEscrow(creditDb, escrowId);
-          if (!opts.json) {
-            console.log(`Escrow settled: ${opts.cost} credits deducted.`);
-          }
-        } finally {
-          creditDb.close();
-        }
+          if (!opts.json) console.log(`Escrow settled: ${opts.cost} credits deducted.`);
+        } finally { creditDb.close(); }
       }
-
-      if (opts.json) {
-        console.log(JSON.stringify({ success: true, result }, null, 2));
-      } else {
-        console.log('Result:');
-        console.log(typeof result === 'string' ? result : JSON.stringify(result, null, 2));
-      }
-    } catch (err) {
-      // On failure: release escrow (refund credits)
+    };
+    const releaseEscrow = () => {
       if (useReceipt && escrowId) {
         const configDir = getConfigDir();
         const creditDb = openCreditDb(join(configDir, 'credit.db'));
         creditDb.pragma('busy_timeout = 5000');
         try {
           releaseRequesterEscrow(creditDb, escrowId);
-          if (!opts.json) {
-            console.log('Escrow released: credits refunded.');
+          if (!opts.json) console.log('Escrow released: credits refunded.');
+        } finally { creditDb.close(); }
+      }
+    };
+    const printResult = (result: unknown) => {
+      if (opts.json) {
+        console.log(JSON.stringify({ success: true, result }, null, 2));
+      } else {
+        console.log('Result:');
+        console.log(typeof result === 'string' ? result : JSON.stringify(result, null, 2));
+      }
+    };
+    const isNetworkError = (err: unknown): boolean => {
+      const msg = err instanceof Error ? err.message : String(err);
+      return msg.includes('NETWORK_ERROR') || msg.includes('ECONNREFUSED')
+        || msg.includes('fetch failed') || msg.includes('Network error');
+    };
+
+    // Relay fallback: try via WebSocket relay when direct connection fails
+    const tryViaRelay = async (): Promise<unknown> => {
+      const { RelayClient } = await import('../relay/websocket-client.js');
+      const { requestViaRelay } = await import('../gateway/client.js');
+
+      const tempRelay = new RelayClient({
+        registryUrl: config.registry!,
+        owner: config.owner,
+        token: config.token,
+        card: { id: config.owner, owner: config.owner },
+        onRequest: async () => ({ error: { code: -32601, message: 'Not serving' } }),
+        silent: true,
+      });
+
+      try {
+        await tempRelay.connect();
+        const result = await requestViaRelay(tempRelay, {
+          targetOwner: targetOwner!,
+          cardId,
+          skillId: opts.skill,
+          params: { ...params, ...(opts.skill ? { skill_id: opts.skill } : {}) },
+          escrowReceipt,
+        });
+        return result;
+      } finally {
+        tempRelay.disconnect();
+      }
+    };
+
+    try {
+      let result: unknown;
+
+      // If no gateway_url, go straight to relay
+      if (!gatewayUrl && isRemoteRequest && config.registry && targetOwner) {
+        if (!opts.json) console.log('No gateway URL, requesting via relay...');
+        result = await tryViaRelay();
+      } else {
+        // Try direct connection first
+        try {
+          result = await requestCapability({
+            gatewayUrl,
+            token,
+            cardId,
+            params: { ...params, ...(opts.skill ? { skill_id: opts.skill } : {}) },
+            escrowReceipt,
+            identity: identityAuth,
+          });
+        } catch (directErr) {
+          // Fallback to relay on network error for remote requests
+          if (isNetworkError(directErr) && isRemoteRequest && config.registry && targetOwner) {
+            if (!opts.json) console.log('Direct connection failed, trying relay...');
+            result = await tryViaRelay();
+          } else {
+            throw directErr;
           }
-        } finally {
-          creditDb.close();
         }
       }
+
+      settleEscrow();
+      printResult(result);
+    } catch (err) {
+      releaseEscrow();
 
       const msg = err instanceof Error ? err.message : String(err);
       if (opts.json) {
@@ -1050,7 +1115,8 @@ program
   .option('--registry <url>', 'Connect to remote registry via WebSocket relay (e.g., hub.agentbnb.dev)')
   .option('--conductor', 'Enable Conductor orchestration mode')
   .option('--announce', 'Announce this gateway on the local network via mDNS')
-  .action(async (opts: { port?: string; handlerUrl: string; skillsYaml?: string; registryPort: string; registry?: string; conductor?: boolean; announce?: boolean }) => {
+  .option('--no-relay', 'Do not auto-connect to remote registry relay')
+  .action(async (opts: { port?: string; handlerUrl: string; skillsYaml?: string; registryPort: string; registry?: string; conductor?: boolean; announce?: boolean; relay?: boolean }) => {
     const config = loadConfig();
     if (!config) {
       console.error('Error: not initialized. Run `agentbnb init` first.');
@@ -1144,8 +1210,9 @@ program
         }
       }
 
-      // Connect to remote registry via WebSocket relay
-      if (opts.registry) {
+      // Connect to remote registry via WebSocket relay (auto from config, or explicit --registry)
+      const relayUrl = opts.registry ?? config.registry;
+      if (relayUrl && opts.relay !== false) {
         const { RelayClient } = await import('../relay/websocket-client.js');
         const { executeCapabilityRequest } = await import('../gateway/execute.js');
 
@@ -1165,7 +1232,7 @@ program
         };
 
         relayClient = new RelayClient({
-          registryUrl: opts.registry,
+          registryUrl: relayUrl,
           owner: config.owner,
           token: config.token,
           card: card as Record<string, unknown>,
@@ -1190,9 +1257,9 @@ program
 
         try {
           await relayClient.connect();
-          console.log(`Connected to registry: ${opts.registry}`);
+          console.log(`Connected to registry: ${relayUrl}${opts.registry ? '' : ' (auto)'}`);
         } catch (err) {
-          console.warn(`Warning: could not connect to registry ${opts.registry}: ${err instanceof Error ? err.message : err}`);
+          console.warn(`Warning: could not connect to registry ${relayUrl}: ${err instanceof Error ? err.message : err}`);
           console.warn('Will auto-reconnect in background...');
         }
       }
