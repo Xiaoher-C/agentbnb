@@ -428,6 +428,91 @@ program
   });
 
 // ---------------------------------------------------------------------------
+// sync
+// ---------------------------------------------------------------------------
+
+program
+  .command('sync')
+  .description('Push all local capability cards to the configured remote registry')
+  .option('--registry <url>', 'Remote registry URL (overrides config.registry)')
+  .option('--json', 'Output as JSON')
+  .action(async (opts: { registry?: string; json?: boolean }) => {
+    const config = loadConfig();
+    if (!config) {
+      console.error('Error: not initialized. Run `agentbnb init` first.');
+      process.exit(1);
+    }
+
+    const registryUrl = opts.registry ?? config.registry;
+    if (!registryUrl) {
+      console.error('Error: no remote registry configured.');
+      console.error('Set one with: agentbnb config set registry <url>');
+      process.exit(1);
+    }
+
+    const db = openDatabase(config.db_path);
+    let localCards: CapabilityCard[];
+    try {
+      localCards = listCards(db);
+    } finally {
+      db.close();
+    }
+
+    if (localCards.length === 0) {
+      if (opts.json) {
+        console.log(JSON.stringify({ synced: 0, failed: 0, registry: registryUrl }));
+      } else {
+        console.log('No local cards to sync.');
+      }
+      return;
+    }
+
+    const url = `${registryUrl.replace(/\/$/, '')}/cards`;
+    let synced = 0;
+    let failed = 0;
+    const results: Array<{ id: string; name: string; ok: boolean; error?: string }> = [];
+
+    for (const card of localCards) {
+      const { _internal: _, ...publicCard } = card;
+      const displayName = card.name ?? (card as unknown as { agent_name?: string }).agent_name ?? card.id;
+      try {
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(publicCard),
+        });
+        if (response.ok) {
+          synced++;
+          results.push({ id: card.id, name: displayName, ok: true });
+          if (!opts.json) {
+            console.log(`  Synced: ${displayName} (${card.id.slice(0, 8)}...)`);
+          }
+        } else {
+          const body = await response.text();
+          failed++;
+          results.push({ id: card.id, name: displayName, ok: false, error: `${response.status}: ${body}` });
+          if (!opts.json) {
+            console.error(`  Failed: ${displayName} — ${response.status}`);
+          }
+        }
+      } catch (err) {
+        failed++;
+        const msg = err instanceof Error ? err.message : String(err);
+        results.push({ id: card.id, name: displayName, ok: false, error: msg });
+        if (!opts.json) {
+          console.error(`  Failed: ${displayName} — ${msg}`);
+        }
+      }
+    }
+
+    if (opts.json) {
+      console.log(JSON.stringify({ synced, failed, registry: registryUrl, results }, null, 2));
+    } else {
+      console.log(`\nSynced ${synced}/${localCards.length} cards to ${registryUrl}${failed > 0 ? ` (${failed} failed)` : ''}`);
+    }
+  });
+
+// ---------------------------------------------------------------------------
 // discover
 // ---------------------------------------------------------------------------
 
