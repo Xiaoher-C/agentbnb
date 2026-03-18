@@ -93,47 +93,47 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| RELAY-01 | — | Pending |
-| RELAY-02 | — | Pending |
-| RELAY-03 | — | Pending |
-| RELAY-04 | — | Pending |
-| RELAY-05 | — | Pending |
-| RELAY-06 | — | Pending |
-| CRED-01 | — | Pending |
-| CRED-02 | — | Pending |
-| CRED-03 | — | Pending |
-| CRED-04 | — | Pending |
-| CRED-05 | — | Pending |
-| REG-01 | — | Pending |
-| REG-02 | — | Pending |
-| REG-03 | — | Pending |
-| REG-04 | — | Pending |
-| REG-05 | — | Pending |
-| REG-06 | — | Pending |
-| REG-07 | — | Pending |
-| REG-08 | — | Pending |
-| INTG-01 | — | Pending |
-| INTG-02 | — | Pending |
-| INTG-03 | — | Pending |
-| INTG-04 | — | Pending |
-| CLI-01 | — | Pending |
-| CLI-02 | — | Pending |
-| CLI-03 | — | Pending |
-| CLI-04 | — | Pending |
-| HUB-01 | — | Pending |
-| HUB-02 | — | Pending |
-| HUB-03 | — | Pending |
-| HUB-04 | — | Pending |
-| COMPAT-01 | — | Pending |
-| COMPAT-02 | — | Pending |
-| COMPAT-03 | — | Pending |
-| COMPAT-04 | — | Pending |
+| RELAY-01 | Phase 25 | Pending |
+| RELAY-02 | Phase 25 | Pending |
+| RELAY-03 | Phase 25 | Pending |
+| RELAY-04 | Phase 25 | Pending |
+| RELAY-05 | Phase 25 | Pending |
+| RELAY-06 | Phase 25 | Pending |
+| CRED-01 | Phase 26 | Pending |
+| CRED-02 | Phase 26 | Pending |
+| CRED-03 | Phase 26 | Pending |
+| CRED-04 | Phase 26 | Pending |
+| CRED-05 | Phase 26 | Pending |
+| REG-01 | Phase 27 | Pending |
+| REG-02 | Phase 27 | Pending |
+| REG-03 | Phase 27 | Pending |
+| REG-04 | Phase 27 | Pending |
+| REG-05 | Phase 27 | Pending |
+| REG-06 | Phase 27 | Pending |
+| REG-07 | Phase 27 | Pending |
+| REG-08 | Phase 27 | Pending |
+| INTG-01 | Phase 28 | Pending |
+| INTG-02 | Phase 28 | Pending |
+| INTG-03 | Phase 28 | Pending |
+| INTG-04 | Phase 28 | Pending |
+| CLI-01 | Phase 29 | Pending |
+| CLI-02 | Phase 29 | Pending |
+| CLI-03 | Phase 29 | Pending |
+| CLI-04 | Phase 29 | Pending |
+| HUB-01 | Phase 29 | Pending |
+| HUB-02 | Phase 29 | Pending |
+| HUB-03 | Phase 29 | Pending |
+| HUB-04 | Phase 29 | Pending |
+| COMPAT-01 | Phase 29 | Pending |
+| COMPAT-02 | Phase 29 | Pending |
+| COMPAT-03 | Phase 29 | Pending |
+| COMPAT-04 | Phase 29 | Pending |
 
 **Coverage:**
 - v3.2 requirements: 35 total
-- Mapped to phases: 0
-- Unmapped: 35 ⚠️
+- Mapped to phases: 35
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-03-19*
-*Last updated: 2026-03-19 after initial definition*
+*Last updated: 2026-03-19 — traceability mapped to Phases 25-29*
