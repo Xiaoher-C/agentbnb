@@ -362,6 +362,7 @@ describe('CLI: init onboarding', () => {
         env: { ...process.env, AGENTBNB_DIR: tmpDir, OPENAI_API_KEY: 'test-key-value' },
         encoding: 'utf-8',
         timeout: 15000,
+        cwd: tmpDir,  // Run in tmpDir so no CLAUDE.md is found — falls through to env detection
       },
     ) as unknown as string;
     expect(result).toContain('OpenAI');
@@ -373,7 +374,7 @@ describe('CLI: init onboarding', () => {
     expect(cards.some((c) => c.name.includes('OpenAI'))).toBe(true);
   });
 
-  it('--yes without any known env vars publishes zero cards, stdout says "No API keys detected"', () => {
+  it('--yes without any known env vars or docs publishes zero cards, stdout says "No capabilities detected"', () => {
     // Strip all known API keys from env
     const cleanEnv = { ...process.env, AGENTBNB_DIR: tmpDir };
     const knownKeys = [
@@ -388,9 +389,9 @@ describe('CLI: init onboarding', () => {
     const cliPath = join(import.meta.dirname ?? __dirname, 'index.ts');
     const result = execSync(
       `npx tsx ${cliPath} init --owner test --yes`,
-      { env: cleanEnv, encoding: 'utf-8', timeout: 15000 },
+      { env: cleanEnv, encoding: 'utf-8', timeout: 15000, cwd: tmpDir },
     ) as unknown as string;
-    expect(result).toContain('No API keys detected');
+    expect(result).toContain('No capabilities detected');
   });
 
   it('--no-detect --json does NOT contain "detected" or "draft" keys', () => {
@@ -428,6 +429,7 @@ describe('CLI: init onboarding', () => {
         env: { ...process.env, AGENTBNB_DIR: tmpDir, OPENAI_API_KEY: 'test-key-value' },
         encoding: 'utf-8',
         timeout: 15000,
+        cwd: tmpDir,  // Run in tmpDir so no CLAUDE.md is found — falls through to env detection
       },
     ) as unknown as string;
 

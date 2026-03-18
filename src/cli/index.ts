@@ -10,6 +10,7 @@ import { networkInterfaces, homedir } from 'node:os';
 import { createInterface } from 'node:readline';
 
 import { loadConfig, saveConfig, getConfigDir } from './config.js';
+import { ensureIdentity } from '../identity/identity.js';
 import { generateKeyPair, saveKeyPair, loadKeyPair } from '../credit/signing.js';
 import { createSignedEscrowReceipt } from '../credit/escrow-receipt.js';
 import { settleRequesterEscrow, releaseRequesterEscrow } from '../credit/settlement.js';
@@ -20,8 +21,9 @@ import { AutoRequestor } from '../autonomy/auto-request.js';
 import { fetchRemoteCards, mergeResults } from './remote-registry.js';
 import type { TaggedCard } from './remote-registry.js';
 import { loadPeers, savePeer, removePeer, findPeer } from './peers.js';
-import { detectApiKeys, detectOpenPorts, buildDraftCard, KNOWN_API_KEYS } from './onboarding.js';
-import { CapabilityCardSchema } from '../types/index.js';
+import { detectOpenPorts, buildDraftCard } from './onboarding.js';
+import { detectCapabilities, capabilitiesToV2Card, interactiveTemplateMenu } from '../onboarding/index.js';
+import { AnyCardSchema } from '../types/index.js';
 import { openDatabase, insertCard, listCards } from '../registry/store.js';
 import { searchCards, filterCards } from '../registry/matcher.js';
 import { openCreditDb, getBalance, bootstrapAgent, getTransactions } from '../credit/ledger.js';
@@ -91,8 +93,9 @@ program
   .option('--host <ip>', 'Override gateway host IP (default: auto-detected LAN IP)')
   .option('--yes', 'Auto-confirm all draft cards (non-interactive)')
   .option('--no-detect', 'Skip API key detection')
+  .option('--from <file>', 'Parse a specific file for capability detection')
   .option('--json', 'Output as JSON')
-  .action(async (opts: { owner?: string; port: string; host?: string; yes?: boolean; detect?: boolean; json?: boolean }) => {
+  .action(async (opts: { owner?: string; port: string; host?: string; yes?: boolean; detect?: boolean; from?: string; json?: boolean }) => {
     const owner = opts.owner ?? `agent-${randomBytes(4).toString('hex')}`;
     const token = randomBytes(32).toString('hex');
     const configDir = getConfigDir();
@@ -127,52 +130,120 @@ program
       keypairStatus = 'generated';
     }
 
+    // Create or load agent identity (idempotent — preserves existing identity)
+    const identity = ensureIdentity(configDir, owner);
+
     // Bootstrap credit ledger with 100 credits
     const creditDb = openCreditDb(creditDbPath);
     bootstrapAgent(creditDb, owner, 100);
     creditDb.close();
 
-    // --- Onboarding detection flow ---
+    // --- Smart onboarding detection flow ---
     // Commander negates --no-detect into opts.detect (false when --no-detect is passed)
     const skipDetect = opts.detect === false;
-    let detectedKeys: string[] = [];
-    let detectedPorts: number[] = [];
     const publishedCards: Array<{ id: string; name: string }> = [];
+    let detectedSource = 'none';
 
     if (!skipDetect) {
-      detectedKeys = detectApiKeys(KNOWN_API_KEYS);
-      detectedPorts = await detectOpenPorts([7700, 7701, 8080, 3000, 8000, 11434]);
+      if (!opts.json) {
+        console.log('\nDetecting capabilities...');
+      }
 
-      if (detectedKeys.length > 0) {
+      const result = detectCapabilities({ fromFile: opts.from, cwd: process.cwd() });
+      detectedSource = result.source;
+
+      if (result.source === 'soul') {
+        // SOUL.md — use existing publishFromSoulV2 flow
         if (!opts.json) {
-          console.log(`\nDetected ${detectedKeys.length} API key${detectedKeys.length > 1 ? 's' : ''}: ${detectedKeys.join(', ')}`);
+          console.log(`  Found SOUL.md — extracting capabilities...`);
+        }
+        const db = openDatabase(dbPath);
+        try {
+          const card = publishFromSoulV2(db, result.soulContent!, owner);
+          publishedCards.push({ id: card.id, name: card.agent_name });
+          if (!opts.json) {
+            console.log(`  Published v2.0 card: ${card.agent_name} (${card.skills.length} skills)`);
+          }
+        } finally {
+          db.close();
+        }
+      } else if (result.source === 'docs') {
+        // Doc file (CLAUDE.md, AGENTS.md, README.md, or --from) — build v2.0 card
+        if (!opts.json) {
+          console.log(`  Found ${result.sourceFile ?? 'docs'} — detected ${result.capabilities.length} capabilities:`);
+          for (const cap of result.capabilities) {
+            console.log(`    ${cap.name} (${cap.category}, cr ${cap.credits_per_call}/call)`);
+          }
         }
 
+        const card = capabilitiesToV2Card(result.capabilities, owner);
+
+        if (opts.yes) {
+          const db = openDatabase(dbPath);
+          try {
+            db.prepare(
+              `INSERT OR REPLACE INTO capability_cards (id, owner, data, created_at, updated_at)
+               VALUES (?, ?, ?, ?, ?)`
+            ).run(card.id, card.owner, JSON.stringify(card), card.created_at, card.updated_at);
+            publishedCards.push({ id: card.id, name: card.agent_name });
+            if (!opts.json) {
+              console.log(`  Published v2.0 card: ${card.agent_name} (${card.skills.length} skills)`);
+            }
+          } finally {
+            db.close();
+          }
+        } else if (process.stdout.isTTY) {
+          const yes = await confirm(`\nPublish these ${card.skills.length} capabilities? [y/N] `);
+          if (yes) {
+            const db = openDatabase(dbPath);
+            try {
+              db.prepare(
+                `INSERT OR REPLACE INTO capability_cards (id, owner, data, created_at, updated_at)
+                 VALUES (?, ?, ?, ?, ?)`
+              ).run(card.id, card.owner, JSON.stringify(card), card.created_at, card.updated_at);
+              publishedCards.push({ id: card.id, name: card.agent_name });
+              console.log(`  Published v2.0 card: ${card.agent_name} (${card.skills.length} skills)`);
+            } finally {
+              db.close();
+            }
+          } else {
+            console.log('  Skipped publishing.');
+          }
+        } else {
+          if (!opts.json) {
+            console.log('  Non-interactive environment. Re-run with --yes to auto-publish.');
+          }
+        }
+      } else if (result.source === 'env') {
+        // Environment variables — use existing v1.0 buildDraftCard flow
+        const detectedKeys = result.envKeys ?? [];
+        if (!opts.json) {
+          console.log(`  Detected ${detectedKeys.length} API key${detectedKeys.length > 1 ? 's' : ''}: ${detectedKeys.join(', ')}`);
+        }
+
+        const detectedPorts = await detectOpenPorts([7700, 7701, 8080, 3000, 8000, 11434]);
         if (detectedPorts.length > 0 && !opts.json) {
-          console.log(`Found services on ports: ${detectedPorts.join(', ')}`);
+          console.log(`  Found services on ports: ${detectedPorts.join(', ')}`);
         }
 
-        // Build draft cards
         const drafts = detectedKeys
           .map((key) => buildDraftCard(key, owner))
           .filter((card): card is CapabilityCard => card !== null);
 
         if (opts.yes) {
-          // Auto-publish all draft cards
           const db = openDatabase(dbPath);
           try {
             for (const card of drafts) {
               insertCard(db, card);
               publishedCards.push({ id: card.id, name: card.name });
               if (!opts.json) {
-                console.log(`Published: ${card.name} (${card.id})`);
+                console.log(`  Published: ${card.name} (${card.id})`);
               }
             }
           } finally {
             db.close();
           }
         } else if (process.stdout.isTTY) {
-          // Interactive confirmation for each draft card
           const db = openDatabase(dbPath);
           try {
             for (const card of drafts) {
@@ -180,23 +251,39 @@ program
               if (yes) {
                 insertCard(db, card);
                 publishedCards.push({ id: card.id, name: card.name });
-                console.log(`Published: ${card.name} (${card.id})`);
+                console.log(`  Published: ${card.name} (${card.id})`);
               } else {
-                console.log(`Skipped: ${card.name}`);
+                console.log(`  Skipped: ${card.name}`);
               }
             }
           } finally {
             db.close();
           }
         } else {
-          // Non-TTY without --yes: skip publishing with notice
           if (!opts.json) {
-            console.log('Non-interactive environment detected. Re-run with --yes to auto-publish draft cards.');
+            console.log('  Non-interactive environment. Re-run with --yes to auto-publish.');
           }
         }
       } else {
-        if (!opts.json) {
-          console.log('\nNo API keys detected. You can manually publish cards with `agentbnb publish`.');
+        // Nothing auto-detected — try interactive fallback
+        if (process.stdout.isTTY && !opts.yes && !opts.json) {
+          const selected = await interactiveTemplateMenu();
+          if (selected.length > 0) {
+            const card = capabilitiesToV2Card(selected, owner);
+            const db = openDatabase(dbPath);
+            try {
+              db.prepare(
+                `INSERT OR REPLACE INTO capability_cards (id, owner, data, created_at, updated_at)
+                 VALUES (?, ?, ?, ?, ?)`
+              ).run(card.id, card.owner, JSON.stringify(card), card.created_at, card.updated_at);
+              publishedCards.push({ id: card.id, name: card.agent_name });
+              console.log(`\n  Published v2.0 card: ${card.agent_name} (${card.skills.length} skills)`);
+            } finally {
+              db.close();
+            }
+          }
+        } else if (!opts.json) {
+          console.log('  No capabilities detected. You can manually publish with `agentbnb publish`.');
         }
       }
     }
@@ -209,9 +296,10 @@ program
         token,
         gateway_url: config.gateway_url,
         keypair: keypairStatus,
+        agent_id: identity.agent_id,
       };
       if (!skipDetect) {
-        jsonOutput.detected_keys = detectedKeys;
+        jsonOutput.detected_source = detectedSource;
         jsonOutput.published_cards = publishedCards;
       }
       console.log(JSON.stringify(jsonOutput, null, 2));
@@ -222,6 +310,7 @@ program
       console.log(`  Config:  ${configDir}/config.json`);
       console.log(`  Credits: 100 (starter grant)`);
       console.log(`  Keypair: ${keypairStatus === 'generated' ? 'generated (Ed25519)' : 'preserved (existing)'}`);
+      console.log(`  Agent ID: ${identity.agent_id}`);
       console.log(`  Gateway: http://${ip}:${port}`);
     }
   });
@@ -232,9 +321,10 @@ program
 
 program
   .command('publish <card.json>')
-  .description('Publish a Capability Card to the registry')
+  .description('Publish a Capability Card to the registry (v1.0 or v2.0)')
   .option('--json', 'Output as JSON')
-  .action(async (cardPath: string, opts: { json?: boolean }) => {
+  .option('--registry <url>', 'POST card to a remote registry URL instead of local DB')
+  .action(async (cardPath: string, opts: { json?: boolean; registry?: string }) => {
     const config = loadConfig();
     if (!config) {
       console.error('Error: not initialized. Run `agentbnb init` first.');
@@ -257,7 +347,12 @@ program
       process.exit(1);
     }
 
-    const result = CapabilityCardSchema.safeParse(parsed);
+    // Default spec_version to '1.0' if missing (AnyCardSchema requires discriminator)
+    if (typeof parsed === 'object' && parsed !== null && !('spec_version' in parsed)) {
+      (parsed as Record<string, unknown>).spec_version = '1.0';
+    }
+
+    const result = AnyCardSchema.safeParse(parsed);
     if (!result.success) {
       if (opts.json) {
         console.log(JSON.stringify({ success: false, errors: result.error.issues }, null, 2));
@@ -270,17 +365,56 @@ program
       process.exit(1);
     }
 
-    const db = openDatabase(config.db_path);
-    try {
-      insertCard(db, result.data);
-    } finally {
-      db.close();
-    }
+    const card = result.data;
+    const cardName = card.spec_version === '2.0'
+      ? (card as import('../types/index.js').CapabilityCardV2).agent_name
+      : card.name;
 
-    if (opts.json) {
-      console.log(JSON.stringify({ success: true, id: result.data.id, name: result.data.name }, null, 2));
+    if (opts.registry) {
+      // POST to remote registry
+      const url = `${opts.registry.replace(/\/$/, '')}/cards`;
+      try {
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(card),
+        });
+        if (!response.ok) {
+          const body = await response.text();
+          console.error(`Error: remote registry returned ${response.status}: ${body}`);
+          process.exit(1);
+        }
+        if (opts.json) {
+          console.log(JSON.stringify({ success: true, id: card.id, name: cardName, registry: url }, null, 2));
+        } else {
+          console.log(`Published to ${url}: ${cardName} (${card.id})`);
+        }
+      } catch (err) {
+        console.error(`Error: cannot reach registry at ${url}: ${(err as Error).message}`);
+        process.exit(1);
+      }
     } else {
-      console.log(`Published: ${result.data.name} (${result.data.id})`);
+      // Local DB publish
+      const db = openDatabase(config.db_path);
+      try {
+        if (card.spec_version === '2.0') {
+          const now = new Date().toISOString();
+          const cardWithTimestamps = { ...card, created_at: card.created_at ?? now, updated_at: now };
+          db.prepare(
+            'INSERT OR REPLACE INTO capability_cards (id, owner, data, created_at, updated_at) VALUES (?, ?, ?, ?, ?)'
+          ).run(cardWithTimestamps.id, cardWithTimestamps.owner, JSON.stringify(cardWithTimestamps), cardWithTimestamps.created_at, cardWithTimestamps.updated_at);
+        } else {
+          insertCard(db, card);
+        }
+      } finally {
+        db.close();
+      }
+
+      if (opts.json) {
+        console.log(JSON.stringify({ success: true, id: card.id, name: cardName }, null, 2));
+      } else {
+        console.log(`Published: ${cardName} (${card.id})`);
+      }
     }
   });
 

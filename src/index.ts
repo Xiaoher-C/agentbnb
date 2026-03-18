@@ -95,6 +95,36 @@ export {
 } from './credit/settlement.js';
 export { type EscrowReceipt } from './types/index.js';
 
+// v4.0 — SDK (Consumer / Provider)
+export { AgentBnBConsumer, type ConsumerOptions, type ConsumerRequestOptions } from './sdk/consumer.js';
+export { AgentBnBProvider, type ProviderOptions, type StartSharingOptions, type SharingContext } from './sdk/provider.js';
+
+// v4.0 — Agent Identity
+export {
+  AgentIdentitySchema,
+  AgentCertificateSchema,
+  type AgentIdentity,
+  type AgentCertificate,
+  deriveAgentId,
+  createIdentity,
+  loadIdentity,
+  saveIdentity,
+  ensureIdentity,
+  issueAgentCertificate,
+  verifyAgentCertificate,
+} from './identity/identity.js';
+export {
+  GuarantorRecordSchema,
+  type GuarantorRecord,
+  MAX_AGENTS_PER_GUARANTOR,
+  GUARANTOR_CREDIT_POOL,
+  registerGuarantor,
+  linkAgentToGuarantor,
+  getGuarantor,
+  getAgentGuarantor,
+  initiateGithubAuth,
+} from './identity/guarantor.js';
+
 // v3.1 — WebSocket Relay
 export {
   RelayMessageSchema,
@@ -112,3 +142,15 @@ export { registerWebSocketRelay } from './relay/websocket-relay.js';
 export { RelayClient, type RelayClientOptions, type RelayHandlerResult } from './relay/websocket-client.js';
 export { executeCapabilityRequest, type ExecuteRequestOptions, type ExecuteResult } from './gateway/execute.js';
 export { requestViaRelay, type RelayRequestOptions } from './gateway/client.js';
+
+// Smart Onboarding
+export {
+  detectCapabilities,
+  detectFromDocs,
+  capabilitiesToV2Card,
+  API_PATTERNS,
+  INTERACTIVE_TEMPLATES,
+  type DetectedCapability,
+  type DetectionResult,
+  type DetectOptions,
+} from './onboarding/index.js';
