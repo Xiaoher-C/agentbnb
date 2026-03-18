@@ -1,6 +1,20 @@
 import { randomUUID } from 'node:crypto';
 import { AgentBnBError } from '../types/index.js';
 import type { EscrowReceipt } from '../types/index.js';
+import { signEscrowReceipt } from '../credit/signing.js';
+
+/**
+ * Identity credentials for Ed25519-based authentication.
+ * Used for cross-machine requests where static tokens aren't available.
+ */
+export interface IdentityAuth {
+  /** Agent ID (sha256-derived from public key). */
+  agentId: string;
+  /** Hex-encoded Ed25519 public key. */
+  publicKey: string;
+  /** DER-encoded Ed25519 private key (for signing). */
+  privateKey: Buffer;
+}
 
 /**
  * Options for requesting a capability from a remote gateway.
@@ -8,7 +22,7 @@ import type { EscrowReceipt } from '../types/index.js';
 export interface RequestOptions {
   /** Base URL of the remote gateway (e.g. http://localhost:7700). */
   gatewayUrl: string;
-  /** Bearer token for authentication. */
+  /** Bearer token for authentication (used for local requests). */
   token: string;
   /** Capability Card ID to execute. */
   cardId: string;
@@ -18,17 +32,22 @@ export interface RequestOptions {
   timeoutMs?: number;
   /** Signed escrow receipt for cross-machine credit verification. */
   escrowReceipt?: EscrowReceipt;
+  /** Identity credentials for Ed25519-based auth (replaces token for remote). */
+  identity?: IdentityAuth;
 }
 
 /**
  * Sends a capability.execute JSON-RPC request to a remote gateway.
+ *
+ * Authentication: uses Bearer token if provided, otherwise signs
+ * the request payload with Ed25519 identity credentials.
  *
  * @param opts - Request options.
  * @returns The result from the capability execution.
  * @throws {AgentBnBError} on JSON-RPC error, network failure, or timeout.
  */
 export async function requestCapability(opts: RequestOptions): Promise<unknown> {
-  const { gatewayUrl, token, cardId, params = {}, timeoutMs = 30_000, escrowReceipt } = opts;
+  const { gatewayUrl, token, cardId, params = {}, timeoutMs = 30_000, escrowReceipt, identity } = opts;
 
   const id = randomUUID();
   const payload = {
@@ -42,6 +61,20 @@ export async function requestCapability(opts: RequestOptions): Promise<unknown> 
     },
   };
 
+  // Build auth headers
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+
+  if (identity) {
+    // Ed25519 identity auth: sign the payload, include agent_id + public_key + signature
+    const signature = signEscrowReceipt(payload as unknown as Record<string, unknown>, identity.privateKey);
+    headers['X-Agent-Id'] = identity.agentId;
+    headers['X-Agent-Public-Key'] = identity.publicKey;
+    headers['X-Agent-Signature'] = signature;
+  } else if (token) {
+    // Legacy Bearer token auth
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
@@ -49,10 +82,7 @@ export async function requestCapability(opts: RequestOptions): Promise<unknown> 
   try {
     response = await fetch(`${gatewayUrl}/rpc`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
+      headers,
       body: JSON.stringify(payload),
       signal: controller.signal,
     });

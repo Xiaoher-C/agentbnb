@@ -10,7 +10,7 @@ import { networkInterfaces, homedir } from 'node:os';
 import { createInterface } from 'node:readline';
 
 import { loadConfig, saveConfig, getConfigDir } from './config.js';
-import { ensureIdentity } from '../identity/identity.js';
+import { ensureIdentity, loadIdentity } from '../identity/identity.js';
 import { generateKeyPair, saveKeyPair, loadKeyPair } from '../credit/signing.js';
 import { createSignedEscrowReceipt } from '../credit/escrow-receipt.js';
 import { settleRequesterEscrow, releaseRequesterEscrow } from '../credit/settlement.js';
@@ -773,11 +773,12 @@ program
       process.exit(1);
     }
 
-    // Resolve gateway URL and token
+    // Resolve gateway URL and auth
     // Priority: --peer > remote card gateway_url > local config
     let gatewayUrl: string;
     let token: string;
     let isRemoteRequest = false;
+    let identityAuth: import('../gateway/client.js').IdentityAuth | undefined;
 
     if (opts.peer) {
       const peer = findPeer(opts.peer);
@@ -788,6 +789,18 @@ program
       gatewayUrl = peer.url;
       token = peer.token;
       isRemoteRequest = true;
+
+      // Load identity for peer requests too
+      const configDir = getConfigDir();
+      const agentIdentity = loadIdentity(configDir);
+      if (agentIdentity) {
+        const keys = loadKeyPair(configDir);
+        identityAuth = {
+          agentId: agentIdentity.agent_id,
+          publicKey: agentIdentity.public_key,
+          privateKey: keys.privateKey,
+        };
+      }
     } else {
       // Check if card exists locally
       const db = openDatabase(config.db_path);
@@ -833,8 +846,22 @@ program
         }
 
         gatewayUrl = remoteCard.gateway_url;
-        token = ''; // Remote gateways accept escrow receipts for auth
+        token = ''; // Not used — identity auth below
         isRemoteRequest = true;
+
+        // Load Ed25519 identity for remote auth
+        const configDir = getConfigDir();
+        const agentIdentity = loadIdentity(configDir);
+        if (!agentIdentity) {
+          console.error('Error: no agent identity found. Run `agentbnb init` first.');
+          process.exit(1);
+        }
+        const keys = loadKeyPair(configDir);
+        identityAuth = {
+          agentId: agentIdentity.agent_id,
+          publicKey: agentIdentity.public_key,
+          privateKey: keys.privateKey,
+        };
 
         if (!opts.json) {
           const displayName = (remoteCard.name ?? remoteCard.agent_name ?? cardId) as string;
@@ -898,6 +925,7 @@ program
         cardId,
         params: { ...params, ...(opts.skill ? { skill_id: opts.skill } : {}) },
         escrowReceipt,
+        identity: identityAuth,
       });
 
       // On success: settle escrow (make debit permanent)

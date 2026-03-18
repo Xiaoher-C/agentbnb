@@ -3,6 +3,7 @@ import type Database from 'better-sqlite3';
 import type { SkillExecutor } from '../skills/executor.js';
 import { executeCapabilityRequest } from './execute.js';
 import type { EscrowReceipt } from '../types/index.js';
+import { verifyEscrowReceipt } from '../credit/signing.js';
 
 /**
  * Options for creating a gateway server.
@@ -58,28 +59,43 @@ export function createGatewayServer(opts: GatewayOptions): FastifyInstance {
 
   // Auth hook — applied to all routes on this instance.
   // GET /health is explicitly skipped.
+  // Accepts two auth methods:
+  //   1. Bearer token (legacy, local requests)
+  //   2. Ed25519 identity (X-Agent-Id + X-Agent-Public-Key + X-Agent-Signature)
   fastify.addHook('onRequest', async (request, reply) => {
     // Allow health check without auth
     if (request.method === 'GET' && request.url === '/health') return;
 
+    // Method 1: Bearer token (legacy)
     const auth = request.headers.authorization;
-    if (!auth || !auth.startsWith('Bearer ')) {
-      await reply.status(401).send({
-        jsonrpc: '2.0',
-        id: null,
-        error: { code: -32000, message: 'Unauthorized: missing token' },
-      });
-      return;
+    if (auth && auth.startsWith('Bearer ')) {
+      const token = auth.slice('Bearer '.length).trim();
+      if (tokenSet.has(token)) return; // Authorized via token
+      // Invalid token — fall through to check identity auth
     }
 
-    const token = auth.slice('Bearer '.length).trim();
-    if (!tokenSet.has(token)) {
-      await reply.status(401).send({
-        jsonrpc: '2.0',
-        id: null,
-        error: { code: -32000, message: 'Unauthorized: invalid token' },
-      });
+    // Method 2: Ed25519 identity auth
+    const agentId = request.headers['x-agent-id'] as string | undefined;
+    const publicKeyHex = request.headers['x-agent-public-key'] as string | undefined;
+    const signature = request.headers['x-agent-signature'] as string | undefined;
+
+    if (agentId && publicKeyHex && signature) {
+      try {
+        const publicKeyBuf = Buffer.from(publicKeyHex, 'hex');
+        const body = request.body as Record<string, unknown>;
+        const valid = verifyEscrowReceipt(body, signature, publicKeyBuf);
+        if (valid) return; // Authorized via identity
+      } catch {
+        // Verification failed — fall through to unauthorized
+      }
     }
+
+    // Neither method succeeded
+    await reply.status(401).send({
+      jsonrpc: '2.0',
+      id: null,
+      error: { code: -32000, message: 'Unauthorized: provide Bearer token or X-Agent-Id/Signature headers' },
+    });
   });
 
   // GET /health — returns server status
