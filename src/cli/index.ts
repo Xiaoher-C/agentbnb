@@ -10,7 +10,7 @@ import { networkInterfaces, homedir } from 'node:os';
 import { createInterface } from 'node:readline';
 
 import { loadConfig, saveConfig, getConfigDir } from './config.js';
-import { ensureIdentity, loadIdentity } from '../identity/identity.js';
+import { ensureIdentity } from '../identity/identity.js';
 import { generateKeyPair, saveKeyPair, loadKeyPair } from '../credit/signing.js';
 import { createSignedEscrowReceipt } from '../credit/escrow-receipt.js';
 import { settleRequesterEscrow, releaseRequesterEscrow } from '../credit/settlement.js';
@@ -58,6 +58,32 @@ async function confirm(question: string): Promise<boolean> {
   } finally {
     rl.close();
   }
+}
+
+/**
+ * Loads Ed25519 identity auth credentials, auto-generating keypair/identity if missing.
+ * Returns IdentityAuth for use with remote gateway requests.
+ */
+function loadIdentityAuth(owner: string): import('../gateway/client.js').IdentityAuth {
+  const configDir = getConfigDir();
+
+  // Ensure keypair exists (may be missing on machines initialized with older versions)
+  let keys: import('../credit/signing.js').KeyPair;
+  try {
+    keys = loadKeyPair(configDir);
+  } catch {
+    keys = generateKeyPair();
+    saveKeyPair(configDir, keys);
+  }
+
+  // Ensure identity exists
+  const identity = ensureIdentity(configDir, owner);
+
+  return {
+    agentId: identity.agent_id,
+    publicKey: identity.public_key,
+    privateKey: keys.privateKey,
+  };
 }
 
 /**
@@ -790,17 +816,8 @@ program
       token = peer.token;
       isRemoteRequest = true;
 
-      // Load identity for peer requests too
-      const configDir = getConfigDir();
-      const agentIdentity = loadIdentity(configDir);
-      if (agentIdentity) {
-        const keys = loadKeyPair(configDir);
-        identityAuth = {
-          agentId: agentIdentity.agent_id,
-          publicKey: agentIdentity.public_key,
-          privateKey: keys.privateKey,
-        };
-      }
+      // Load identity for peer requests (auto-generates if missing)
+      identityAuth = loadIdentityAuth(config.owner);
     } else {
       // Check if card exists locally
       const db = openDatabase(config.db_path);
@@ -849,19 +866,8 @@ program
         token = ''; // Not used — identity auth below
         isRemoteRequest = true;
 
-        // Load Ed25519 identity for remote auth
-        const configDir = getConfigDir();
-        const agentIdentity = loadIdentity(configDir);
-        if (!agentIdentity) {
-          console.error('Error: no agent identity found. Run `agentbnb init` first.');
-          process.exit(1);
-        }
-        const keys = loadKeyPair(configDir);
-        identityAuth = {
-          agentId: agentIdentity.agent_id,
-          publicKey: agentIdentity.public_key,
-          privateKey: keys.privateKey,
-        };
+        // Load Ed25519 identity for remote auth (auto-generates if missing)
+        identityAuth = loadIdentityAuth(config.owner);
 
         if (!opts.json) {
           const displayName = (remoteCard.name ?? remoteCard.agent_name ?? cardId) as string;
