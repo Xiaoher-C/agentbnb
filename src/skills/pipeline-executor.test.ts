@@ -141,6 +141,47 @@ describe('PipelineExecutor', () => {
     });
   });
 
+  describe('onProgress callback', () => {
+    it('emits progress between pipeline steps (3-step → 2 callbacks)', async () => {
+      const config = makePipeline([
+        { skill_id: 'skill-a', input_mapping: {} },
+        { skill_id: 'skill-b', input_mapping: {} },
+        { skill_id: 'skill-c', input_mapping: {} },
+      ]);
+      const onProgress = vi.fn();
+      await pipeline.execute(config, {}, onProgress);
+      // Should emit after step 0 and step 1, but NOT after the final step (step 2)
+      expect(onProgress).toHaveBeenCalledTimes(2);
+      expect(onProgress).toHaveBeenNthCalledWith(1, {
+        step: 1,
+        total: 3,
+        message: 'Completed step 1/3',
+      });
+      expect(onProgress).toHaveBeenNthCalledWith(2, {
+        step: 2,
+        total: 3,
+        message: 'Completed step 2/3',
+      });
+    });
+
+    it('works without onProgress callback (backward compatibility)', async () => {
+      const config = makePipeline([
+        { skill_id: 'skill-a', input_mapping: {} },
+        { skill_id: 'skill-b', input_mapping: {} },
+      ]);
+      // Should not throw when no callback provided
+      const result = await pipeline.execute(config, {});
+      expect(result.success).toBe(true);
+    });
+
+    it('no progress emitted for single-step pipeline', async () => {
+      const config = makePipeline([{ skill_id: 'skill-a', input_mapping: {} }]);
+      const onProgress = vi.fn();
+      await pipeline.execute(config, {}, onProgress);
+      expect(onProgress).toHaveBeenCalledTimes(0);
+    });
+  });
+
   describe('command steps', () => {
     it('executes echo command and captures stdout', async () => {
       const config = makePipeline([
