@@ -22,6 +22,10 @@ primary_region = 'nrt'
   method = 'get'
   path = '/health'
 
+[mounts]
+  source = 'agentbnb_data'
+  destination = '/data'
+
 [[vm]]
   memory = '512mb'
   cpu_kind = 'shared'
