@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import type Database from 'better-sqlite3';
 import { holdEscrow, settleEscrow, releaseEscrow } from '../credit/escrow.js';
-import { bootstrapAgent, getBalance, getTransactions } from '../credit/ledger.js';
+import { bootstrapAgent, getBalance, getTransactions, migrateOwner } from '../credit/ledger.js';
 import { AgentBnBError } from '../types/index.js';
 import { identityAuthPlugin } from './identity-auth.js';
 import { initFreeTierTable } from './free-tier.js';
@@ -286,6 +286,50 @@ export async function creditRoutesPlugin(
 
       const transactions = getTransactions(creditDb, owner, limit);
       return reply.send({ transactions, limit });
+    });
+
+    /**
+     * POST /api/credits/rename
+     * Body: { oldOwner: string, newOwner: string }
+     * Returns: { ok: true, migrated: true } or { ok: true, migrated: false }
+     *
+     * Migrates credit balance, transactions, and escrows from oldOwner to newOwner.
+     * Auth: Ed25519 identity (caller must be the key owner).
+     */
+    scope.post('/api/credits/rename', {
+      schema: {
+        tags: ['credits'],
+        summary: 'Rename owner — migrate credits from old owner to new owner',
+        security: [{ ed25519Auth: [] }],
+        body: {
+          type: 'object',
+          properties: {
+            oldOwner: { type: 'string' },
+            newOwner: { type: 'string' },
+          },
+          required: ['oldOwner', 'newOwner'],
+        },
+        response: {
+          200: { type: 'object', properties: { ok: { type: 'boolean' }, migrated: { type: 'boolean' } } },
+          400: { type: 'object', properties: { error: { type: 'string' } } },
+        },
+      },
+    }, async (request: FastifyRequest, reply: FastifyReply) => {
+      const body = request.body as Record<string, unknown>;
+      const oldOwner = typeof body.oldOwner === 'string' ? body.oldOwner.trim() : '';
+      const newOwner = typeof body.newOwner === 'string' ? body.newOwner.trim() : '';
+
+      if (!oldOwner || !newOwner || oldOwner === newOwner) {
+        return reply.code(400).send({ error: 'oldOwner and newOwner must be different non-empty strings' });
+      }
+
+      const oldBalance = getBalance(creditDb, oldOwner);
+      if (oldBalance === 0) {
+        return reply.send({ ok: true, migrated: false });
+      }
+
+      migrateOwner(creditDb, oldOwner, newOwner);
+      return reply.send({ ok: true, migrated: true });
     });
   });
 }

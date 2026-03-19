@@ -1,5 +1,5 @@
 import Database from 'better-sqlite3';
-import { bootstrapAgent, getBalance, getTransactions } from './ledger.js';
+import { bootstrapAgent, getBalance, getTransactions, migrateOwner } from './ledger.js';
 import { holdEscrow, settleEscrow, releaseEscrow } from './escrow.js';
 import type { CreditLedger, EscrowResult } from './credit-ledger.js';
 import type { CreditTransaction } from './ledger.js';
@@ -85,5 +85,9 @@ export class LocalCreditLedger implements CreditLedger {
    */
   async grant(owner: string, amount?: number): Promise<void> {
     bootstrapAgent(this.db, owner, amount);
+  }
+
+  async rename(oldOwner: string, newOwner: string): Promise<void> {
+    migrateOwner(this.db, oldOwner, newOwner);
   }
 }

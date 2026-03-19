@@ -79,4 +79,12 @@ export interface CreditLedger {
    * @param amount - Number of credits to grant. Defaults to 100.
    */
   grant(owner: string, amount?: number): Promise<void>;
+
+  /**
+   * Renames an owner — migrates balance, transactions, and escrows.
+   *
+   * @param oldOwner - Previous owner identifier.
+   * @param newOwner - New owner identifier.
+   */
+  rename(oldOwner: string, newOwner: string): Promise<void>;
 }

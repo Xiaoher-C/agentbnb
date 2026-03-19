@@ -1,5 +1,5 @@
 import Database from 'better-sqlite3';
-import { bootstrapAgent, getBalance, getTransactions } from './ledger.js';
+import { bootstrapAgent, getBalance, getTransactions, migrateOwner } from './ledger.js';
 import { holdEscrow, settleEscrow, releaseEscrow } from './escrow.js';
 import type { CreditLedger, EscrowResult } from './credit-ledger.js';
 import type { CreditTransaction } from './ledger.js';
@@ -148,6 +148,18 @@ export class RegistryCreditLedger implements CreditLedger {
       return;
     }
     await this.post('/api/credits/grant', owner, { owner, amount });
+  }
+
+  /**
+   * Renames an owner — migrates balance, transactions, and escrows.
+   */
+  async rename(oldOwner: string, newOwner: string): Promise<void> {
+    if (oldOwner === newOwner) return;
+    if (this.config.mode === 'direct') {
+      migrateOwner(this.config.db, oldOwner, newOwner);
+      return;
+    }
+    await this.post('/api/credits/rename', null, { oldOwner, newOwner });
   }
 
   // ─── Private HTTP helpers ─────────────────────────────────────────────────

@@ -190,8 +190,28 @@ program
         migrateOwner(creditDb, oldOwner, owner);
       }
 
+      // Migrate credits on remote Registry too
+      if (existingConfig.registry) {
+        try {
+          const renameAuth = loadIdentityAuth(owner);
+          const renameLedger = createLedger({
+            registryUrl: existingConfig.registry,
+            ownerPublicKey: renameAuth.publicKey,
+            privateKey: renameAuth.privateKey,
+          });
+          await renameLedger.rename(existingConfig.owner, owner);
+          if (!opts.json) {
+            console.log(`Migrated Registry credits: ${existingConfig.owner} → ${owner}`);
+          }
+        } catch (err) {
+          if (!opts.json) {
+            console.warn(`Warning: could not migrate Registry credits: ${(err as Error).message}`);
+          }
+        }
+      }
+
       if (!opts.json) {
-        console.log(`Migrated credits: ${existingConfig.owner} → ${owner}`);
+        console.log(`Migrated local credits: ${existingConfig.owner} → ${owner}`);
       }
     }
 
