@@ -1267,7 +1267,6 @@ program
     // Register conductor card locally when conductor.public is enabled
     if (opts.conductor && config.conductor?.public) {
       const { buildConductorCard } = await import('../conductor/card.js');
-      const { AnyCardSchema: AnyCard } = await import('../types/index.js');
       const conductorCard = buildConductorCard(config.owner);
       // Use raw SQL to insert (same pattern as relay upsertCard)
       const now = new Date().toISOString();
