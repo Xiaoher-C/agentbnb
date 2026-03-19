@@ -27,6 +27,7 @@ import { AnyCardSchema } from '../types/index.js';
 import { openDatabase, insertCard, listCards } from '../registry/store.js';
 import { searchCards, filterCards } from '../registry/matcher.js';
 import { openCreditDb, getBalance, bootstrapAgent, getTransactions } from '../credit/ledger.js';
+import { createLedger } from '../credit/create-ledger.js';
 import { AgentRuntime } from '../runtime/agent-runtime.js';
 import { requestCapability } from '../gateway/client.js';
 import { createGatewayServer } from '../gateway/server.js';
@@ -159,10 +160,27 @@ program
     // Create or load agent identity (idempotent — preserves existing identity)
     const identity = ensureIdentity(configDir, owner);
 
-    // Bootstrap credit ledger with 100 credits
+    // Bootstrap credit ledger with 100 credits (local always)
     const creditDb = openCreditDb(creditDbPath);
     bootstrapAgent(creditDb, owner, 100);
     creditDb.close();
+
+    // If a Registry is configured, also grant 50 credits on Registry
+    let registryBalance: number | undefined;
+    if (existingConfig?.registry) {
+      try {
+        const identityAuth = loadIdentityAuth(owner);
+        const ledger = createLedger({
+          registryUrl: existingConfig.registry,
+          ownerPublicKey: identityAuth.publicKey,
+          privateKey: identityAuth.privateKey,
+        });
+        await ledger.grant(owner, 50);
+        registryBalance = await ledger.getBalance(owner);
+      } catch (err) {
+        console.warn(`Warning: could not connect to Registry for credit grant: ${(err as Error).message}`);
+      }
+    }
 
     // --- Smart onboarding detection flow ---
     // Commander negates --no-detect into opts.detect (false when --no-detect is passed)
@@ -324,6 +342,9 @@ program
         keypair: keypairStatus,
         agent_id: identity.agent_id,
       };
+      if (registryBalance !== undefined) {
+        jsonOutput.registry_balance = registryBalance;
+      }
       if (!skipDetect) {
         jsonOutput.detected_source = detectedSource;
         jsonOutput.published_cards = publishedCards;
@@ -334,7 +355,11 @@ program
       console.log(`  Owner:   ${owner}`);
       console.log(`  Token:   ${token}`);
       console.log(`  Config:  ${configDir}/config.json`);
-      console.log(`  Credits: 100 (starter grant)`);
+      if (registryBalance !== undefined) {
+        console.log(`  Registry balance: ${registryBalance} credits`);
+      } else {
+        console.log(`  Credits: 100 (starter grant)`);
+      }
       console.log(`  Keypair: ${keypairStatus === 'generated' ? 'generated (Ed25519)' : 'preserved (existing)'}`);
       console.log(`  Agent ID: ${identity.agent_id}`);
       console.log(`  Gateway: http://${ip}:${port}`);
@@ -395,6 +420,29 @@ program
     const cardName = card.spec_version === '2.0'
       ? (card as import('../types/index.js').CapabilityCardV2).agent_name
       : card.name;
+
+    // Enforce minimum price: credits_per_call must be >= 1
+    if (card.spec_version === '2.0') {
+      const v2card = card as import('../types/index.js').CapabilityCardV2;
+      const invalidSkill = v2card.skills?.find((s) => s.pricing.credits_per_call < 1);
+      if (invalidSkill) {
+        if (opts.json) {
+          console.log(JSON.stringify({ success: false, error: 'Minimum price is 1 credit per call', skill_id: invalidSkill.id }, null, 2));
+        } else {
+          console.error(`Error: Minimum price is 1 credit per call (skill "${invalidSkill.id}" has credits_per_call=${invalidSkill.pricing.credits_per_call})`);
+        }
+        process.exit(1);
+      }
+    } else {
+      if (card.pricing.credits_per_call < 1) {
+        if (opts.json) {
+          console.log(JSON.stringify({ success: false, error: 'Minimum price is 1 credit per call' }, null, 2));
+        } else {
+          console.error(`Error: Minimum price is 1 credit per call (card has credits_per_call=${card.pricing.credits_per_call})`);
+        }
+        process.exit(1);
+      }
+    }
 
     // Always publish to local DB
     const db = openDatabase(config.db_path);
@@ -890,6 +938,10 @@ program
     // Cross-machine requests use signed escrow receipts
     const useReceipt = isRemoteRequest && opts.receipt !== false;
 
+    // When Registry is configured, use CreditLedger for direct HTTP requests;
+    // relay-only requests (no gatewayUrl) skip CLI-side escrow — relay handles credits.
+    const useRegistryLedger = isRemoteRequest && !!config.registry && !!gatewayUrl;
+
     if (useReceipt && !opts.cost) {
       console.error('Error: --cost <credits> is required for remote requests. Specify the credits to commit.');
       process.exit(1);
@@ -897,65 +949,110 @@ program
 
     let escrowId: string | undefined;
     let escrowReceipt: import('../types/index.js').EscrowReceipt | undefined;
+    // Track which ledger was used so settle/release use the same ledger
+    let requestLedger: import('../credit/create-ledger.js').CreditLedger | undefined;
 
     if (useReceipt) {
-      const configDir = getConfigDir();
-      const creditDb = openCreditDb(join(configDir, 'credit.db'));
-      creditDb.pragma('busy_timeout = 5000');
-
-      try {
-        const keys = loadKeyPair(configDir);
-        const amount = Number(opts.cost);
-        if (isNaN(amount) || amount <= 0) {
-          console.error('Error: --cost must be a positive number.');
-          process.exit(1);
-        }
-
-        const receiptResult = createSignedEscrowReceipt(creditDb, keys.privateKey, keys.publicKey, {
-          owner: config.owner,
-          amount,
-          cardId,
-          skillId: opts.skill,
-        });
-        escrowId = receiptResult.escrowId;
-        escrowReceipt = receiptResult.receipt;
-
-        if (!opts.json) {
-          console.log(`Escrow: ${amount} credits held (ID: ${escrowId.slice(0, 8)}...)`);
-        }
-      } catch (err) {
-        creditDb.close();
-        const msg = err instanceof Error ? err.message : String(err);
-        if (opts.json) {
-          console.log(JSON.stringify({ success: false, error: msg }, null, 2));
-        } else {
-          console.error(`Error creating escrow receipt: ${msg}`);
-        }
+      const amount = Number(opts.cost);
+      if (isNaN(amount) || amount <= 0) {
+        console.error('Error: --cost must be a positive number.');
         process.exit(1);
       }
+
+      if (useRegistryLedger) {
+        // Use CreditLedger (Registry HTTP mode) for direct remote requests
+        const reqIdentityAuth = loadIdentityAuth(config.owner);
+        requestLedger = createLedger({
+          registryUrl: config.registry!,
+          ownerPublicKey: reqIdentityAuth.publicKey,
+          privateKey: reqIdentityAuth.privateKey,
+        });
+        try {
+          const { escrowId: heldId } = await requestLedger.hold(config.owner, amount, cardId);
+          escrowId = heldId;
+          if (!opts.json) {
+            console.log(`Escrow: ${amount} credits held via Registry (ID: ${escrowId.slice(0, 8)}...)`);
+          }
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          if (opts.json) {
+            console.log(JSON.stringify({ success: false, error: msg }, null, 2));
+          } else {
+            console.error(`Error creating escrow via Registry: ${msg}`);
+          }
+          process.exit(1);
+        }
+      } else if (gatewayUrl) {
+        // Local SQLite escrow for non-Registry direct requests
+        const configDir = getConfigDir();
+        const creditDb = openCreditDb(join(configDir, 'credit.db'));
+        creditDb.pragma('busy_timeout = 5000');
+
+        try {
+          const keys = loadKeyPair(configDir);
+          const receiptResult = createSignedEscrowReceipt(creditDb, keys.privateKey, keys.publicKey, {
+            owner: config.owner,
+            amount,
+            cardId,
+            skillId: opts.skill,
+          });
+          escrowId = receiptResult.escrowId;
+          escrowReceipt = receiptResult.receipt;
+
+          if (!opts.json) {
+            console.log(`Escrow: ${amount} credits held (ID: ${escrowId.slice(0, 8)}...)`);
+          }
+        } catch (err) {
+          creditDb.close();
+          const msg = err instanceof Error ? err.message : String(err);
+          if (opts.json) {
+            console.log(JSON.stringify({ success: false, error: msg }, null, 2));
+          } else {
+            console.error(`Error creating escrow receipt: ${msg}`);
+          }
+          process.exit(1);
+        }
+        // Note: creditDb intentionally not closed here — used by settle/release helpers below
+        creditDb.close();
+      }
+      // else: relay-only path (no gatewayUrl) — relay handles escrow, skip CLI-side hold
     }
 
     // Helpers to settle/release escrow and print result
-    const settleEscrow = () => {
+    const settleEscrow = async () => {
       if (useReceipt && escrowId) {
-        const configDir = getConfigDir();
-        const creditDb = openCreditDb(join(configDir, 'credit.db'));
-        creditDb.pragma('busy_timeout = 5000');
-        try {
-          settleRequesterEscrow(creditDb, escrowId);
+        if (requestLedger) {
+          // Registry CreditLedger path
+          await requestLedger.settle(escrowId, targetOwner ?? config.owner);
           if (!opts.json) console.log(`Escrow settled: ${opts.cost} credits deducted.`);
-        } finally { creditDb.close(); }
+        } else if (escrowReceipt) {
+          // Local SQLite path
+          const configDir = getConfigDir();
+          const creditDb = openCreditDb(join(configDir, 'credit.db'));
+          creditDb.pragma('busy_timeout = 5000');
+          try {
+            settleRequesterEscrow(creditDb, escrowId);
+            if (!opts.json) console.log(`Escrow settled: ${opts.cost} credits deducted.`);
+          } finally { creditDb.close(); }
+        }
       }
     };
-    const releaseEscrow = () => {
+    const releaseEscrow = async () => {
       if (useReceipt && escrowId) {
-        const configDir = getConfigDir();
-        const creditDb = openCreditDb(join(configDir, 'credit.db'));
-        creditDb.pragma('busy_timeout = 5000');
-        try {
-          releaseRequesterEscrow(creditDb, escrowId);
+        if (requestLedger) {
+          // Registry CreditLedger path
+          await requestLedger.release(escrowId);
           if (!opts.json) console.log('Escrow released: credits refunded.');
-        } finally { creditDb.close(); }
+        } else if (escrowReceipt) {
+          // Local SQLite path
+          const configDir = getConfigDir();
+          const creditDb = openCreditDb(join(configDir, 'credit.db'));
+          creditDb.pragma('busy_timeout = 5000');
+          try {
+            releaseRequesterEscrow(creditDb, escrowId);
+            if (!opts.json) console.log('Escrow released: credits refunded.');
+          } finally { creditDb.close(); }
+        }
       }
     };
     const printResult = (result: unknown) => {
@@ -1030,10 +1127,10 @@ program
         }
       }
 
-      settleEscrow();
+      await settleEscrow();
       printResult(result);
     } catch (err) {
-      releaseEscrow();
+      await releaseEscrow();
 
       const msg = err instanceof Error ? err.message : String(err);
       if (opts.json) {
@@ -1062,17 +1159,38 @@ program
 
     const creditDb = openCreditDb(config.credit_db_path);
     let balance: number;
-    let transactions: ReturnType<typeof getTransactions>;
+    let transactions: import('../credit/ledger.js').CreditTransaction[];
     let heldEscrows: Array<{ id: string; amount: number; card_id: string; created_at: string }>;
 
-    try {
-      balance = getBalance(creditDb, config.owner);
-      transactions = getTransactions(creditDb, config.owner, 5);
-      heldEscrows = creditDb
-        .prepare('SELECT id, amount, card_id, created_at FROM credit_escrow WHERE owner = ? AND status = ?')
-        .all(config.owner, 'held') as Array<{ id: string; amount: number; card_id: string; created_at: string }>;
-    } finally {
-      creditDb.close();
+    if (config.registry) {
+      // Registry mode: use CreditLedger for balance and history
+      const statusIdentityAuth = loadIdentityAuth(config.owner);
+      const statusLedger = createLedger({
+        registryUrl: config.registry,
+        ownerPublicKey: statusIdentityAuth.publicKey,
+        privateKey: statusIdentityAuth.privateKey,
+      });
+      try {
+        balance = await statusLedger.getBalance(config.owner);
+        transactions = await statusLedger.getHistory(config.owner, 5);
+        // Held escrows are still tracked locally in Registry mode for display
+        heldEscrows = creditDb
+          .prepare('SELECT id, amount, card_id, created_at FROM credit_escrow WHERE owner = ? AND status = ?')
+          .all(config.owner, 'held') as Array<{ id: string; amount: number; card_id: string; created_at: string }>;
+      } finally {
+        creditDb.close();
+      }
+    } else {
+      // Local mode: use SQLite directly
+      try {
+        balance = getBalance(creditDb, config.owner);
+        transactions = getTransactions(creditDb, config.owner, 5);
+        heldEscrows = creditDb
+          .prepare('SELECT id, amount, card_id, created_at FROM credit_escrow WHERE owner = ? AND status = ?')
+          .all(config.owner, 'held') as Array<{ id: string; amount: number; card_id: string; created_at: string }>;
+      } finally {
+        creditDb.close();
+      }
     }
 
     if (opts.json) {
