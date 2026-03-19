@@ -1,6 +1,5 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import type Database from 'better-sqlite3';
-import { randomUUID } from 'node:crypto';
 import { AgentBnBError, AnyCardSchema } from '../types/index.js';
 import { bootstrapAgent } from '../credit/ledger.js';
 import {
@@ -11,6 +10,7 @@ import {
   updateHubAgent,
   deleteHubAgent,
 } from './store.js';
+import { HubAgentExecutor } from './executor.js';
 import { CreateAgentRequestSchema } from './types.js';
 import type { SkillRoute } from './types.js';
 
@@ -362,5 +362,54 @@ export async function hubAgentRoutesPlugin(
     } catch { /* non-fatal */ }
 
     return reply.send({ ok: true });
+  });
+
+  /**
+   * POST /api/hub-agents/:id/execute — Execute a skill on a Hub Agent
+   */
+  fastify.post('/api/hub-agents/:id/execute', {
+    schema: {
+      tags: ['hub-agents'],
+      summary: 'Execute a skill on a Hub Agent',
+      params: {
+        type: 'object',
+        properties: { id: { type: 'string' } },
+        required: ['id'],
+      },
+      body: {
+        type: 'object',
+        required: ['skill_id'],
+        properties: {
+          skill_id: { type: 'string' },
+          params: { type: 'object' },
+          requester_owner: { type: 'string' },
+        },
+      },
+    },
+  }, async (request: FastifyRequest, reply: FastifyReply) => {
+    const { id } = request.params as { id: string };
+    const body = request.body as {
+      skill_id: string;
+      params?: Record<string, unknown>;
+      requester_owner?: string;
+    };
+
+    const executor = new HubAgentExecutor(registryDb, creditDb);
+    const result = await executor.execute(
+      id,
+      body.skill_id,
+      body.params ?? {},
+      body.requester_owner,
+    );
+
+    if (!result.success && result.error === 'Hub Agent not found') {
+      return reply.code(404).send(result);
+    }
+
+    if (!result.success) {
+      return reply.code(400).send(result);
+    }
+
+    return reply.send(result);
   });
 }

@@ -1,8 +1,8 @@
-import { describe, it, expect, beforeEach, afterEach, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, beforeAll, afterAll, vi } from 'vitest';
 import Fastify, { type FastifyInstance } from 'fastify';
 import { randomBytes } from 'node:crypto';
 import { openDatabase } from '../registry/store.js';
-import { openCreditDb, getBalance } from '../credit/ledger.js';
+import { openCreditDb, getBalance, bootstrapAgent } from '../credit/ledger.js';
 import { hubAgentRoutesPlugin } from './routes.js';
 import type Database from 'better-sqlite3';
 
@@ -279,6 +279,159 @@ describe('hub-agent/routes', () => {
       });
 
       expect(response.statusCode).toBe(404);
+    });
+  });
+
+  describe('POST /api/hub-agents/:id/execute', () => {
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it('executes a direct_api skill and returns result', async () => {
+      // Mock fetch for external API call
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({ audio_url: 'https://cdn.example.com/audio.mp3' }),
+      });
+      vi.stubGlobal('fetch', mockFetch);
+
+      // Create agent with a direct_api skill route
+      const createResp = await server.inject({
+        method: 'POST',
+        url: '/api/hub-agents',
+        headers: { 'Content-Type': 'application/json' },
+        payload: JSON.stringify({
+          name: 'Execute Test Agent',
+          skill_routes: [{
+            skill_id: 'tts-skill',
+            mode: 'direct_api',
+            config: {
+              id: 'tts-skill',
+              type: 'api',
+              name: 'TTS Skill',
+              endpoint: 'https://api.example.com/tts',
+              method: 'POST',
+              input_mapping: { text: 'body.text' },
+              output_mapping: { audio: 'response.audio_url' },
+              pricing: { credits_per_call: 3 },
+            },
+          }],
+        }),
+      });
+
+      expect(createResp.statusCode).toBe(201);
+      const agentId = createResp.json().agent_id;
+
+      const execResp = await server.inject({
+        method: 'POST',
+        url: `/api/hub-agents/${agentId}/execute`,
+        headers: { 'Content-Type': 'application/json' },
+        payload: JSON.stringify({
+          skill_id: 'tts-skill',
+          params: { text: 'hello world' },
+        }),
+      });
+
+      expect(execResp.statusCode).toBe(200);
+      const data = execResp.json();
+      expect(data.success).toBe(true);
+      expect(data.result).toEqual({ audio: 'https://cdn.example.com/audio.mp3' });
+      expect(data.latency_ms).toBeGreaterThanOrEqual(0);
+    });
+
+    it('returns 404 for nonexistent agent', async () => {
+      const response = await server.inject({
+        method: 'POST',
+        url: '/api/hub-agents/nonexistent-id/execute',
+        headers: { 'Content-Type': 'application/json' },
+        payload: JSON.stringify({
+          skill_id: 'some-skill',
+          params: {},
+        }),
+      });
+
+      expect(response.statusCode).toBe(404);
+      expect(response.json().error).toBe('Hub Agent not found');
+    });
+
+    it('returns 400 for nonexistent skill', async () => {
+      const createResp = await server.inject({
+        method: 'POST',
+        url: '/api/hub-agents',
+        headers: { 'Content-Type': 'application/json' },
+        payload: JSON.stringify({
+          name: 'Skill Error Agent',
+          skill_routes: [TEST_SKILL_ROUTE],
+        }),
+      });
+      const agentId = createResp.json().agent_id;
+
+      const response = await server.inject({
+        method: 'POST',
+        url: `/api/hub-agents/${agentId}/execute`,
+        headers: { 'Content-Type': 'application/json' },
+        payload: JSON.stringify({
+          skill_id: 'nonexistent-skill',
+          params: {},
+        }),
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(response.json().error).toBe('Skill not found in routing table');
+    });
+
+    it('enforces credit escrow on paid execution', async () => {
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({ result: 'ok' }),
+      });
+      vi.stubGlobal('fetch', mockFetch);
+
+      const createResp = await server.inject({
+        method: 'POST',
+        url: '/api/hub-agents',
+        headers: { 'Content-Type': 'application/json' },
+        payload: JSON.stringify({
+          name: 'Credit Agent',
+          skill_routes: [{
+            skill_id: 'paid-skill',
+            mode: 'direct_api',
+            config: {
+              id: 'paid-skill',
+              type: 'api',
+              name: 'Paid API',
+              endpoint: 'https://api.example.com/paid',
+              method: 'POST',
+              output_mapping: {},
+              pricing: { credits_per_call: 10 },
+            },
+          }],
+        }),
+      });
+      const agentId = createResp.json().agent_id;
+
+      // Bootstrap a requester with credits
+      bootstrapAgent(creditDb, 'test-requester', 100);
+
+      const execResp = await server.inject({
+        method: 'POST',
+        url: `/api/hub-agents/${agentId}/execute`,
+        headers: { 'Content-Type': 'application/json' },
+        payload: JSON.stringify({
+          skill_id: 'paid-skill',
+          params: {},
+          requester_owner: 'test-requester',
+        }),
+      });
+
+      expect(execResp.statusCode).toBe(200);
+      expect(execResp.json().success).toBe(true);
+
+      // Requester should have been charged 10 credits
+      const balance = getBalance(creditDb, 'test-requester');
+      expect(balance).toBe(90);
     });
   });
 });
