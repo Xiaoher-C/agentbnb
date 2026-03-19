@@ -1,4 +1,5 @@
 import type Database from 'better-sqlite3';
+import { createHash } from 'node:crypto';
 import { CapabilityCardV2Schema } from '../types/index.js';
 import type { CapabilityCardV2 } from '../types/index.js';
 
@@ -12,21 +13,39 @@ export const CONDUCTOR_OWNER = 'agentbnb-conductor';
 const CONDUCTOR_CARD_ID = '00000000-0000-4000-8000-000000000001';
 
 /**
+ * Generate a deterministic UUID-v4-shaped ID from an owner string.
+ * Uses SHA-256 hash of the owner, sliced to fit UUID format.
+ */
+function ownerToCardId(owner: string): string {
+  const hash = createHash('sha256').update(owner).digest('hex').slice(0, 32);
+  // Format as UUID v4 shape: 8-4-4-4-12
+  return `${hash.slice(0, 8)}-${hash.slice(8, 12)}-4${hash.slice(13, 16)}-8${hash.slice(17, 20)}-${hash.slice(20, 32)}`;
+}
+
+/**
  * Builds the Conductor's CapabilityCardV2.
  *
  * The Conductor exposes two skills:
  * - `orchestrate` (5 cr): Decomposes and executes multi-agent tasks
  * - `plan` (1 cr): Returns an execution plan with cost estimate only
  *
+ * When `owner` is provided, the card is attributed to that agent owner
+ * with a deterministic owner-specific ID. When omitted, uses the default
+ * singleton CONDUCTOR_OWNER and fixed UUID.
+ *
  * The returned card is validated against CapabilityCardV2Schema before return.
  *
+ * @param owner - Optional agent owner. When provided, card is owner-specific.
  * @returns A valid CapabilityCardV2 for the Conductor.
  */
-export function buildConductorCard(): CapabilityCardV2 {
+export function buildConductorCard(owner?: string): CapabilityCardV2 {
+  const cardOwner = owner ?? CONDUCTOR_OWNER;
+  const cardId = owner ? ownerToCardId(owner) : CONDUCTOR_CARD_ID;
+
   const card = {
     spec_version: '2.0' as const,
-    id: CONDUCTOR_CARD_ID,
-    owner: CONDUCTOR_OWNER,
+    id: cardId,
+    owner: cardOwner,
     agent_name: 'AgentBnB Conductor',
     skills: [
       {

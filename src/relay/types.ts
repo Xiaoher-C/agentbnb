@@ -11,6 +11,7 @@ export const RegisterMessageSchema = z.object({
   owner: z.string().min(1),
   token: z.string().min(1),
   card: z.record(z.unknown()), // CapabilityCard (validated separately)
+  cards: z.array(z.record(z.unknown())).optional(), // Additional cards (e.g., conductor card)
 });
 
 /** Registry → Agent: Acknowledge registration */

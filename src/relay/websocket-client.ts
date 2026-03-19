@@ -23,6 +23,8 @@ export interface RelayClientOptions {
   token: string;
   /** Capability card data to register */
   card: Record<string, unknown>;
+  /** Additional cards to register alongside the primary card (e.g., conductor card) */
+  cards?: Record<string, unknown>[];
   /** Handler for incoming relay requests from other agents */
   onRequest: (req: IncomingRequestMessage) => Promise<RelayHandlerResult>;
   /** Suppress logging. Default false. */
@@ -88,12 +90,13 @@ export class RelayClient {
         this.reconnectAttempts = 0;
         this.startPingInterval();
 
-        // Send registration
+        // Send registration with optional additional cards
         this.send({
           type: 'register',
           owner: this.opts.owner,
           token: this.opts.token,
           card: this.opts.card,
+          ...(this.opts.cards && this.opts.cards.length > 0 ? { cards: this.opts.cards } : {}),
         });
       });
 

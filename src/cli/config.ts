@@ -43,6 +43,12 @@ export interface AgentBnBConfig {
   budget?: BudgetConfig;
   /** Hex-encoded Ed25519 public key for convenience (canonical source is public.key file). */
   public_key?: string;
+  /**
+   * Conductor configuration. When `conductor.public` is true, the agent's
+   * built-in Conductor is published as a paid capability card on the relay.
+   * Defaults to undefined (treated as `{ public: false }`).
+   */
+  conductor?: { public: boolean };
 }
 
 /**

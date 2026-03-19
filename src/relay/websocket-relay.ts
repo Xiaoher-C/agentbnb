@@ -171,6 +171,8 @@ export function registerWebSocketRelay(
 
   /**
    * Handle an agent registration message.
+   * Upserts the primary card, then any additional cards from the `cards` array.
+   * Only logs agent_joined once (for the primary card).
    */
   function handleRegister(ws: WebSocket, msg: RegisterMessage): void {
     const { owner, card } = msg;
@@ -184,14 +186,23 @@ export function registerWebSocketRelay(
     // Store connection
     connections.set(owner, ws);
 
-    // Upsert card into registry
+    // Upsert primary card into registry
     const cardId = upsertCard(card, owner);
 
     // Get card name for activity log
     const cardName = (card.name as string) ?? (card.agent_name as string) ?? owner;
 
-    // Log agent joined
+    // Log agent joined (only once, for the primary card)
     logAgentJoined(owner, cardName, cardId);
+
+    // Upsert additional cards (e.g., conductor card)
+    if (msg.cards && msg.cards.length > 0) {
+      for (const extraCard of msg.cards) {
+        try {
+          upsertCard(extraCard, owner);
+        } catch { /* non-fatal: skip invalid additional cards */ }
+      }
+    }
 
     // Mark all owner's cards online
     markOwnerOnline(owner);
