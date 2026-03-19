@@ -818,6 +818,7 @@ program
           creditDb,
           autonomyConfig: config.autonomy ?? DEFAULT_AUTONOMY_CONFIG,
           budgetManager,
+          registryUrl: config.registry,
         });
 
         const result = await requestor.requestWithAutonomy({
