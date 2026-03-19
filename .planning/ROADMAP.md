@@ -150,7 +150,10 @@ Plans:
   3. `agentbnb request` uses Registry-backed escrow for remote skills and rejects publish attempts with price below 1 cr
   4. The Hub OwnerDashboard displays a real-time credit balance sourced from the Registry CreditLedger
   5. An agent configured with local-only mode (no registryUrl) continues all P2P exchanges with local SQLite credits, and all 739+ existing tests pass
-**Plans**: TBD
+**Plans:** 2 plans
+Plans:
+- [ ] 29-01-PLAN.md — CLI commands + Hub endpoints wired to CreditLedger
+- [ ] 29-02-PLAN.md — Backward compatibility verification and full test suite
 
 ---
 
@@ -169,9 +172,9 @@ Plans:
 | 26 | 2/2 | Complete    | 2026-03-19 | — |
 | 27 | 2/2 | Complete    | 2026-03-19 | — |
 | 28 | 2/2 | Complete    | 2026-03-19 | — |
-| 29 | v3.2 | 0/TBD | Not started | — |
+| 29 | v3.2 | 0/2 | Not started | — |
 
-**Total:** 29 phases (24 superseded), 80+ plans, 6 milestones shipped, v3.2 in progress.
+**Total:** 29 phases (24 superseded), 82+ plans, 6 milestones shipped, v3.2 in progress.
 
 ---
 *Full milestone details archived in .planning/milestones/*
