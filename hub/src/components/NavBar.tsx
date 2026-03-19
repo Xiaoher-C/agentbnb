@@ -211,6 +211,12 @@ export default function NavBar({ apiKey, balance, onLogout }: NavBarProps): JSX.
           Agents
         </NavLink>
         <NavLink
+          to="/agents/hub"
+          className={({ isActive }) => navTabClass(isActive)}
+        >
+          Hub Agents
+        </NavLink>
+        <NavLink
           to="/activity"
           className={({ isActive }) => navTabClass(isActive)}
         >
@@ -245,6 +251,13 @@ export default function NavBar({ apiKey, balance, onLogout }: NavBarProps): JSX.
             className={({ isActive }) => `${navTabClass(isActive)} block`}
           >
             Agents
+          </NavLink>
+          <NavLink
+            to="/agents/hub"
+            onClick={() => setMenuOpen(false)}
+            className={({ isActive }) => `${navTabClass(isActive)} block`}
+          >
+            Hub Agents
           </NavLink>
           <NavLink
             to="/activity"

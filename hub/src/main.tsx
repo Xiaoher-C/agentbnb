@@ -28,6 +28,9 @@ import AgentList from './components/AgentList.js';
 import ProfilePage from './components/ProfilePage.js';
 import ActivityFeed from './components/ActivityFeed.js';
 import DocsPage from './components/DocsPage.js';
+import HubAgentListPage from './pages/HubAgentListPage.js';
+import CreateAgentPage from './pages/CreateAgentPage.js';
+import HubAgentDashboardPage from './pages/HubAgentDashboardPage.js';
 import type { AppOutletContext } from './types.js';
 
 /** Wrapper: reads apiKey from outlet context and passes it to SharePage */
@@ -55,6 +58,18 @@ const router = createHashRouter([
       {
         path: 'agents',
         element: <AgentList />,
+      },
+      {
+        path: 'agents/hub',
+        element: <HubAgentListPage />,
+      },
+      {
+        path: 'agents/hub/new',
+        element: <CreateAgentPage />,
+      },
+      {
+        path: 'agents/hub/:agentId',
+        element: <HubAgentDashboardPage />,
       },
       {
         path: 'agents/:owner',
