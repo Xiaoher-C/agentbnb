@@ -27,6 +27,7 @@ import {
   initiateGithubAuth,
 } from '../identity/guarantor.js';
 import { creditRoutesPlugin } from './credit-routes.js';
+import { convertToGptActions } from './openapi-gpt-actions.js';
 
 /**
  * Options for creating the public registry server.
@@ -179,10 +180,15 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
     });
   }
 
+  // ---- All API routes registered inside a plugin so @fastify/swagger captures them ----
+  // Routes registered directly on the server (outside a plugin) are invisible to swagger
+  // because swagger's onRoute hook is not yet active during synchronous registration.
+  void server.register(async (api) => {
+
   /**
    * GET /health — Liveness probe for the registry server.
    */
-  server.get('/health', {
+  api.get('/health', {
     schema: {
       tags: ['system'],
       summary: 'Liveness probe',
@@ -206,7 +212,7 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
    *   limit              — Max items per page (default 20, max 100)
    *   offset             — Pagination offset (default 0)
    */
-  server.get('/cards', {
+  api.get('/cards', {
     schema: {
       tags: ['cards'],
       summary: 'List and search capability cards',
@@ -366,7 +372,7 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
    * Each item includes the full card data plus `uses_this_week` count.
    * Only cards with at least 1 successful request in the window are included.
    */
-  server.get('/api/cards/trending', {
+  api.get('/api/cards/trending', {
     schema: {
       tags: ['cards'],
       summary: 'Top 10 trending skills by recent usage',
@@ -404,7 +410,7 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
    *
    * Returns { query, min, max, median, mean, count } or 400 if q is missing.
    */
-  server.get('/api/pricing', {
+  api.get('/api/pricing', {
     schema: {
       tags: ['pricing'],
       summary: 'Aggregate pricing statistics for skills matching a query',
@@ -443,7 +449,7 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
    *
    * Returns the card if found, or 404 with { error: 'Not found' }.
    */
-  server.get('/cards/:id', {
+  api.get('/cards/:id', {
     schema: {
       tags: ['cards'],
       summary: 'Get a capability card by ID',
@@ -471,7 +477,7 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
    * For v2.0 cards, uses INSERT OR REPLACE (raw SQL) since insertCard() only handles v1.0.
    * Returns 201 on success, 400 on validation failure.
    */
-  server.post('/cards', {
+  api.post('/cards', {
     schema: {
       tags: ['cards'],
       summary: 'Publish a capability card',
@@ -536,7 +542,7 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
    *
    * Returns 200 on success, 404 if card not found.
    */
-  server.delete('/cards/:id', {
+  api.delete('/cards/:id', {
     schema: {
       tags: ['cards'],
       summary: 'Delete a capability card',
@@ -563,7 +569,7 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
    * Sorted by success_rate DESC (nulls last), then total_earned DESC.
    * credits_earned is computed via GROUP BY aggregate SQL, never stored as a column.
    */
-  server.get('/api/agents', {
+  api.get('/api/agents', {
     schema: {
       tags: ['agents'],
       summary: 'List all agent profiles sorted by reputation',
@@ -639,7 +645,7 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
    * Returns 404 if the owner has no capability cards registered.
    * recent_activity contains up to 10 most recent request log entries for this owner's cards.
    */
-  server.get('/api/agents/:owner', {
+  api.get('/api/agents/:owner', {
     schema: {
       tags: ['agents'],
       summary: 'Get agent profile, skills, and recent activity',
@@ -732,7 +738,7 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
    *   limit  — Max items to return (default 20, max 100)
    *   since  — ISO 8601 timestamp; only entries newer than this are returned (for polling)
    */
-  server.get('/api/activity', {
+  api.get('/api/activity', {
     schema: {
       tags: ['system'],
       summary: 'Paginated public activity feed of exchange events',
@@ -770,7 +776,7 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
    * - total_capabilities: total number of registered capability cards
    * - total_exchanges: count of successful exchanges (excluding autonomy audits)
    */
-  server.get('/api/stats', {
+  api.get('/api/stats', {
     schema: {
       tags: ['system'],
       summary: 'Aggregate network statistics',
@@ -827,7 +833,7 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
    * Body: { github_login: string }
    * Returns the created GuarantorRecord. GitHub OAuth verification is stubbed.
    */
-  server.post('/api/identity/register', {
+  api.post('/api/identity/register', {
     schema: {
       tags: ['identity'],
       summary: 'Register a human guarantor via GitHub login',
@@ -869,7 +875,7 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
    * Body: { agent_id: string, github_login: string }
    * Enforces max 10 agents per guarantor.
    */
-  server.post('/api/identity/link', {
+  api.post('/api/identity/link', {
     schema: {
       tags: ['identity'],
       summary: 'Link an agent to a human guarantor',
@@ -920,7 +926,7 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
    *
    * Returns { guarantor: GuarantorRecord } or { guarantor: null } if not linked.
    */
-  server.get('/api/identity/:agent_id', {
+  api.get('/api/identity/:agent_id', {
     schema: {
       tags: ['identity'],
       summary: 'Get guarantor info for an agent',
@@ -944,13 +950,40 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
     return reply.send({ agent_id, guarantor });
   });
 
+  /**
+   * GET /api/openapi/gpt-actions — Returns a GPT Builder-importable OpenAPI spec.
+   *
+   * Filters the auto-generated spec to only public GET/POST endpoints,
+   * sets absolute server URL, and adds operationIds.
+   */
+  api.get('/api/openapi/gpt-actions', {
+    schema: {
+      tags: ['system'],
+      summary: 'GPT Actions-compatible OpenAPI schema',
+      description: 'Returns a GPT Builder-importable OpenAPI spec with only public GET/POST endpoints',
+      querystring: {
+        type: 'object',
+        properties: {
+          server_url: { type: 'string', description: 'Base URL for the server (required for absolute URLs in GPT Actions)' },
+        },
+      },
+      response: { 200: { type: 'object', additionalProperties: true } },
+    },
+  }, async (request, reply) => {
+    const query = request.query as Record<string, string | undefined>;
+    const serverUrl = query.server_url?.trim() || `${request.protocol}://${request.hostname}`;
+    const openapiSpec = server.swagger();
+    const gptActions = convertToGptActions(openapiSpec as Record<string, unknown>, serverUrl);
+    return reply.send(gptActions);
+  });
+
   // Register owner routes as a scoped plugin (NOT fastify-plugin) so the auth hook
   // only applies to these routes and does NOT affect public /cards and /health endpoints.
   if (opts.ownerApiKey && opts.ownerName) {
     const ownerApiKey = opts.ownerApiKey;
     const ownerName = opts.ownerName;
 
-    void server.register(async (ownerRoutes) => {
+    void api.register(async (ownerRoutes) => {
       /**
        * Auth hook: validates Bearer token against ownerApiKey.
        * Responds with 401 Unauthorized if missing or incorrect.
@@ -1228,6 +1261,8 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
       });
     });
   }
+
+  }); // end of API routes plugin
 
   return { server, relayState };
 }

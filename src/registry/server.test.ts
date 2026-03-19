@@ -1844,3 +1844,75 @@ describe('createRegistryServer — GET /me/transactions', () => {
     await server.close();
   });
 });
+
+describe('OpenAPI / Swagger', () => {
+  let db: Database.Database;
+
+  beforeEach(() => {
+    db = openDatabase(':memory:');
+  });
+
+  it('GET /docs/ returns Swagger UI HTML', async () => {
+    const { server } = createRegistryServer({ registryDb: db, silent: true });
+    await server.ready();
+
+    const res = await server.inject({ method: 'GET', url: '/docs/' });
+    expect(res.statusCode).toBe(200);
+    expect(res.headers['content-type']).toContain('text/html');
+    expect(res.payload.toLowerCase()).toContain('swagger');
+
+    await server.close();
+  });
+
+  it('GET /docs/json returns valid OpenAPI 3.0 spec', async () => {
+    const { server } = createRegistryServer({ registryDb: db, silent: true });
+    await server.ready();
+
+    const res = await server.inject({ method: 'GET', url: '/docs/json' });
+    expect(res.statusCode).toBe(200);
+    const spec = JSON.parse(res.payload);
+    expect(spec.openapi).toBe('3.0.3');
+    expect(spec.info.title).toBe('AgentBnB Registry API');
+    expect(spec.paths).toBeDefined();
+    // Verify key endpoints are documented
+    expect(spec.paths['/health']).toBeDefined();
+    expect(spec.paths['/cards']).toBeDefined();
+    expect(spec.paths['/cards/{id}']).toBeDefined();
+    expect(spec.paths['/api/pricing']).toBeDefined();
+    expect(spec.paths['/api/agents']).toBeDefined();
+
+    await server.close();
+  });
+
+  it('GET /api/openapi/gpt-actions returns GPT Actions format', async () => {
+    const { server } = createRegistryServer({ registryDb: db, silent: true });
+    await server.ready();
+
+    const res = await server.inject({
+      method: 'GET',
+      url: '/api/openapi/gpt-actions?server_url=https://registry.agentbnb.dev',
+    });
+    expect(res.statusCode).toBe(200);
+    const spec = JSON.parse(res.payload);
+    expect(spec.openapi).toBe('3.0.3');
+    expect(spec.servers[0].url).toBe('https://registry.agentbnb.dev');
+    // No owner-only paths
+    expect(spec.paths['/me']).toBeUndefined();
+    expect(spec.paths['/draft']).toBeUndefined();
+    // No credit paths (require Ed25519)
+    expect(spec.paths['/api/credits/hold']).toBeUndefined();
+    // Public paths present
+    expect(spec.paths['/cards']).toBeDefined();
+    expect(spec.paths['/api/pricing']).toBeDefined();
+    // All operations have operationId
+    for (const [, methods] of Object.entries(spec.paths)) {
+      for (const [method, op] of Object.entries(methods as Record<string, unknown>)) {
+        if (['get', 'post'].includes(method) && typeof op === 'object' && op !== null) {
+          expect((op as Record<string, unknown>).operationId).toBeTruthy();
+        }
+      }
+    }
+
+    await server.close();
+  });
+});
