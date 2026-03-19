@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v3.2
 milestone_name: Registry Credit Ledger
 status: planning
-stopped_at: Completed 26-02-PLAN.md — RegistryCreditLedger dual-mode + createLedger factory
-last_updated: "2026-03-19T04:25:07.785Z"
+stopped_at: Completed 27-01-PLAN.md — Registry credit endpoints with Ed25519 auth
+last_updated: "2026-03-19T04:40:08.767Z"
 last_activity: 2026-03-19 — Roadmap created for v3.2 (Phases 25-29, 35 requirements)
 progress:
   total_phases: 5
   completed_phases: 2
-  total_plans: 5
-  completed_plans: 5
+  total_plans: 7
+  completed_plans: 6
   percent: 0
 ---
 
@@ -55,6 +55,9 @@ Progress: [░░░░░░░░░░] 0% (v3.2 milestone)
 - [Phase 26-02]: RegistryCreditLedger uses single class with discriminated union config (direct|http) — simpler, less duplication
 - [Phase 26-02]: HTTP credit client: settle/release pass null for X-Agent-Owner header — escrowId is self-contained
 - [Phase 26-02]: REGISTRY_UNREACHABLE for network failures, REGISTRY_ERROR fallback for HTTP non-2xx with no code in body
+- [Phase 27-01]: identityAuthPlugin is a plain function (not async Fastify plugin) — avoids sub-scope hook isolation issue
+- [Phase 27-01]: Body excluded from Ed25519 signature payload — not available during onRequest hook, 5-min timestamp window sufficient
+- [Phase 27-01]: credit_grants table on creditDb — grants are a credit concern, not registry
 
 ### Pending Todos
 
@@ -67,8 +70,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-19T04:22:49.500Z
-Stopped at: Completed 26-02-PLAN.md — RegistryCreditLedger dual-mode + createLedger factory
+Last session: 2026-03-19T04:40:08.766Z
+Stopped at: Completed 27-01-PLAN.md — Registry credit endpoints with Ed25519 auth
 Resume file: None
 
 ---

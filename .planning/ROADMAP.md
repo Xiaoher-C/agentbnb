@@ -121,7 +121,7 @@ Plans:
   5. GET /api/credits/:owner returns the agent's current balance
   6. GET /api/credits/:owner/history returns paginated transaction history
   7. All six endpoints reject requests lacking a valid Ed25519 identity signature
-**Plans:** 2 plans
+**Plans:** 1/2 plans executed
 Plans:
 - [ ] 27-01-PLAN.md — Ed25519 identity auth + 6 credit endpoints on Registry server
 - [ ] 27-02-PLAN.md — Free-tier usage tracking + RegistryCreditLedger HTTP signing
@@ -164,7 +164,7 @@ Plans:
 | 24 | v3.1 | — | Superseded | — |
 | 25 | 3/3 | Complete    | 2026-03-19 | — |
 | 26 | 2/2 | Complete    | 2026-03-19 | — |
-| 27 | v3.2 | 0/2 | Planning | — |
+| 27 | 1/2 | In Progress|  | — |
 | 28 | v3.2 | 0/TBD | Not started | — |
 | 29 | v3.2 | 0/TBD | Not started | — |
 

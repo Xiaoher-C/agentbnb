@@ -24,13 +24,13 @@
 
 ### Registry Endpoints
 
-- [ ] **REG-01**: POST /api/credits/hold — Hold escrow on Registry, deduct from requester balance
-- [ ] **REG-02**: POST /api/credits/settle — Settle escrow, transfer credits to provider
-- [ ] **REG-03**: POST /api/credits/release — Release escrow, refund credits to requester
-- [ ] **REG-04**: POST /api/credits/grant — Initial 50 cr grant, deduped by Ed25519 public key
-- [ ] **REG-05**: GET /api/credits/:owner — Query credit balance
-- [ ] **REG-06**: GET /api/credits/:owner/history — Query transaction history
-- [ ] **REG-07**: All credit endpoints require Ed25519 identity authentication
+- [x] **REG-01**: POST /api/credits/hold — Hold escrow on Registry, deduct from requester balance
+- [x] **REG-02**: POST /api/credits/settle — Settle escrow, transfer credits to provider
+- [x] **REG-03**: POST /api/credits/release — Release escrow, refund credits to requester
+- [x] **REG-04**: POST /api/credits/grant — Initial 50 cr grant, deduped by Ed25519 public key
+- [x] **REG-05**: GET /api/credits/:owner — Query credit balance
+- [x] **REG-06**: GET /api/credits/:owner/history — Query transaction history
+- [x] **REG-07**: All credit endpoints require Ed25519 identity authentication
 - [ ] **REG-08**: free_tier usage tracked on Registry per agent identity per skill
 
 ### Relay Integration
@@ -104,13 +104,13 @@
 | CRED-03 | Phase 26 | Complete |
 | CRED-04 | Phase 26 | Complete |
 | CRED-05 | Phase 26 | Complete |
-| REG-01 | Phase 27 | Pending |
-| REG-02 | Phase 27 | Pending |
-| REG-03 | Phase 27 | Pending |
-| REG-04 | Phase 27 | Pending |
-| REG-05 | Phase 27 | Pending |
-| REG-06 | Phase 27 | Pending |
-| REG-07 | Phase 27 | Pending |
+| REG-01 | Phase 27 | Complete |
+| REG-02 | Phase 27 | Complete |
+| REG-03 | Phase 27 | Complete |
+| REG-04 | Phase 27 | Complete |
+| REG-05 | Phase 27 | Complete |
+| REG-06 | Phase 27 | Complete |
+| REG-07 | Phase 27 | Complete |
 | REG-08 | Phase 27 | Pending |
 | INTG-01 | Phase 28 | Pending |
 | INTG-02 | Phase 28 | Pending |
