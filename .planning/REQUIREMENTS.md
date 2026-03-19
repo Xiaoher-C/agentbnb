@@ -31,7 +31,7 @@
 - [x] **REG-05**: GET /api/credits/:owner — Query credit balance
 - [x] **REG-06**: GET /api/credits/:owner/history — Query transaction history
 - [x] **REG-07**: All credit endpoints require Ed25519 identity authentication
-- [ ] **REG-08**: free_tier usage tracked on Registry per agent identity per skill
+- [x] **REG-08**: free_tier usage tracked on Registry per agent identity per skill
 
 ### Relay Integration
 
@@ -111,7 +111,7 @@
 | REG-05 | Phase 27 | Complete |
 | REG-06 | Phase 27 | Complete |
 | REG-07 | Phase 27 | Complete |
-| REG-08 | Phase 27 | Pending |
+| REG-08 | Phase 27 | Complete |
 | INTG-01 | Phase 28 | Pending |
 | INTG-02 | Phase 28 | Pending |
 | INTG-03 | Phase 28 | Pending |

@@ -72,7 +72,7 @@
 
 - [x] **Phase 25: Relay Timeout** - Increase relay/client timeout to 300s and add relay_progress heartbeat protocol (gap closure in progress) (completed 2026-03-19)
 - [x] **Phase 26: CreditLedger Interface** - Define CreditLedger abstraction with Local, Registry-server, and Registry-client adapters (completed 2026-03-19)
-- [ ] **Phase 27: Registry Credit Endpoints** - Implement /api/credits/* endpoints on Registry server with Ed25519 auth
+- [x] **Phase 27: Registry Credit Endpoints** - Implement /api/credits/* endpoints on Registry server with Ed25519 auth (completed 2026-03-19)
 - [ ] **Phase 28: Relay Credit Integration** - Wire credit hold/settle/release into WebSocket relay flow
 - [ ] **Phase 29: CLI + Hub + Compatibility** - Update CLI commands, Hub endpoints, and preserve backward compatibility
 
@@ -121,7 +121,7 @@ Plans:
   5. GET /api/credits/:owner returns the agent's current balance
   6. GET /api/credits/:owner/history returns paginated transaction history
   7. All six endpoints reject requests lacking a valid Ed25519 identity signature
-**Plans:** 1/2 plans executed
+**Plans:** 2/2 plans complete
 Plans:
 - [ ] 27-01-PLAN.md — Ed25519 identity auth + 6 credit endpoints on Registry server
 - [ ] 27-02-PLAN.md — Free-tier usage tracking + RegistryCreditLedger HTTP signing
@@ -164,7 +164,7 @@ Plans:
 | 24 | v3.1 | — | Superseded | — |
 | 25 | 3/3 | Complete    | 2026-03-19 | — |
 | 26 | 2/2 | Complete    | 2026-03-19 | — |
-| 27 | 1/2 | In Progress|  | — |
+| 27 | 2/2 | Complete   | 2026-03-19 | — |
 | 28 | v3.2 | 0/TBD | Not started | — |
 | 29 | v3.2 | 0/TBD | Not started | — |
 

@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v3.2
 milestone_name: Registry Credit Ledger
 status: planning
-stopped_at: Completed 27-01-PLAN.md — Registry credit endpoints with Ed25519 auth
-last_updated: "2026-03-19T04:40:08.767Z"
+stopped_at: Completed 27-02-PLAN.md — Free-tier tracking + Ed25519 HTTP client signing
+last_updated: "2026-03-19T04:45:56.545Z"
 last_activity: 2026-03-19 — Roadmap created for v3.2 (Phases 25-29, 35 requirements)
 progress:
   total_phases: 5
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 7
-  completed_plans: 6
+  completed_plans: 7
   percent: 0
 ---
 
@@ -58,6 +58,8 @@ Progress: [░░░░░░░░░░] 0% (v3.2 milestone)
 - [Phase 27-01]: identityAuthPlugin is a plain function (not async Fastify plugin) — avoids sub-scope hook isolation issue
 - [Phase 27-01]: Body excluded from Ed25519 signature payload — not available during onRequest hook, 5-min timestamp window sufficient
 - [Phase 27-01]: credit_grants table on creditDb — grants are a credit concern, not registry
+- [Phase 27-02]: free-tier tracking uses creditDb (not registryDb) — consistent with credit_grants placement; free_tier is a credit concern
+- [Phase 27-02]: privateKey required (not optional) in HttpClientConfig and createLedger HTTP options — fail fast if misconfigured
 
 ### Pending Todos
 
@@ -70,8 +72,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-19T04:40:08.766Z
-Stopped at: Completed 27-01-PLAN.md — Registry credit endpoints with Ed25519 auth
+Last session: 2026-03-19T04:45:56.543Z
+Stopped at: Completed 27-02-PLAN.md — Free-tier tracking + Ed25519 HTTP client signing
 Resume file: None
 
 ---
