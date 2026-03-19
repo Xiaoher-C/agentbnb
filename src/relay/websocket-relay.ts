@@ -471,9 +471,10 @@ export function registerWebSocketRelay(
     }
   }
 
-  // Register WebSocket route
+  // Register WebSocket route — must be inside register() for @fastify/websocket to work correctly
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  server.get('/ws', { websocket: true } as any, (rawSocket: any, _request: any) => {
+  void server.register(async (app: any) => {
+  app.get('/ws', { websocket: true } as any, (rawSocket: any, _request: any) => {
     const socket = rawSocket as import('ws').WebSocket;
     let registeredOwner: string | undefined;
 
@@ -540,6 +541,7 @@ export function registerWebSocketRelay(
       handleDisconnect(registeredOwner);
     });
   });
+  }); // end server.register()
 
   return {
     getOnlineCount: () => connections.size,
