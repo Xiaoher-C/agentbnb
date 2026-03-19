@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v4.0
 milestone_name: Agent Economy Platform
 status: completed
-stopped_at: Completed 32-01-PLAN.md — Pricing Guidance
-last_updated: "2026-03-19T06:41:10.704Z"
+stopped_at: Completed 31-02-PLAN.md — CLI Commands + Relay Execution
+last_updated: "2026-03-19T06:46:37.458Z"
 last_activity: 2026-03-19 — Phase 32 Plan 01 complete (pricing endpoint + SOUL.md custom pricing)
 progress:
   total_phases: 10
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 4
-  completed_plans: 3
+  completed_plans: 4
   percent: 30
 ---
 
@@ -75,6 +75,9 @@ Progress: [###░░░░░░░] 30% (v4.0 milestone)
 - [Phase 31-fix-downstream]: matchSubTasks changed from sync to async — callers add await, per-subtask remote fallback via Promise.all
 - [Phase 32]: getPricingStats uses searchCards (FTS5) + per-skill query word matching — reuses existing search infrastructure
 - [Phase 32]: SOUL.md pricing: N directive parsed at parseSoulMd level so both v1/v2 paths benefit; invalid values silently default to 10
+- [Phase 31]: relay:// sentinel URL convention for remote agents — resolveAgentUrl returns relay://<owner> when no local peer
+- [Phase 31]: Temporary RelayClient with minimal conductor card — connect/disconnect lifecycle scoped to single CLI action
+- [Phase 31]: selected_card_id added to MatchResult for relay card ID resolution
 
 ### Pending Todos
 
@@ -87,8 +90,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-19T06:41:10.702Z
-Stopped at: Completed 32-01-PLAN.md — Pricing Guidance
+Last session: 2026-03-19T06:46:37.456Z
+Stopped at: Completed 31-02-PLAN.md — CLI Commands + Relay Execution
 Resume file: None
 
 ---
