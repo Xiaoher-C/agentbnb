@@ -73,7 +73,7 @@
 - [x] **Phase 25: Relay Timeout** - Increase relay/client timeout to 300s and add relay_progress heartbeat protocol (gap closure in progress) (completed 2026-03-19)
 - [x] **Phase 26: CreditLedger Interface** - Define CreditLedger abstraction with Local, Registry-server, and Registry-client adapters (completed 2026-03-19)
 - [x] **Phase 27: Registry Credit Endpoints** - Implement /api/credits/* endpoints on Registry server with Ed25519 auth (completed 2026-03-19)
-- [ ] **Phase 28: Relay Credit Integration** - Wire credit hold/settle/release into WebSocket relay flow
+- [x] **Phase 28: Relay Credit Integration** - Wire credit hold/settle/release into WebSocket relay flow (completed 2026-03-19)
 - [ ] **Phase 29: CLI + Hub + Compatibility** - Update CLI commands, Hub endpoints, and preserve backward compatibility
 
 ## Phase Details
@@ -135,7 +135,7 @@ Plans:
   2. A successful relay response triggers automatic credit settlement to the provider on the Registry
   3. A provider disconnect, relay timeout, or error triggers automatic credit release back to the requester
   4. A Conductor orchestration charges a fee of 10% of total sub-task cost (minimum 1 cr, maximum 20 cr) settled to the Conductor agent
-**Plans:** 1/2 plans executed
+**Plans:** 2/2 plans complete
 Plans:
 - [ ] 28-01-PLAN.md — Wire credit hold/settle/release into WebSocket relay flow
 - [ ] 28-02-PLAN.md — Conductor orchestration fee calculation and settlement
@@ -168,7 +168,7 @@ Plans:
 | 25 | 3/3 | Complete    | 2026-03-19 | — |
 | 26 | 2/2 | Complete    | 2026-03-19 | — |
 | 27 | 2/2 | Complete    | 2026-03-19 | — |
-| 28 | 1/2 | In Progress|  | — |
+| 28 | 2/2 | Complete   | 2026-03-19 | — |
 | 29 | v3.2 | 0/TBD | Not started | — |
 
 **Total:** 29 phases (24 superseded), 80+ plans, 6 milestones shipped, v3.2 in progress.

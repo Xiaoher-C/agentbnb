@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v3.2
 milestone_name: Registry Credit Ledger
 status: planning
-stopped_at: Completed 28-01-PLAN.md — Relay credit integration (hold/settle/release)
-last_updated: "2026-03-19T05:00:18.121Z"
+stopped_at: Completed 28-02-PLAN.md — Conductor fee calculation and relay integration
+last_updated: "2026-03-19T05:04:04.420Z"
 last_activity: 2026-03-19 — Roadmap created for v3.2 (Phases 25-29, 35 requirements)
 progress:
   total_phases: 5
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 9
-  completed_plans: 8
+  completed_plans: 9
   percent: 0
 ---
 
@@ -63,6 +63,8 @@ Progress: [░░░░░░░░░░] 0% (v3.2 milestone)
 - [Phase 28]: relay-credit.ts as thin wrapper layer over escrow.ts — keeps relay focused on routing, credit module owns escrow operations
 - [Phase 28]: handleRelayRequest made async — allows proper credit hold before forwarding, void-wrapped in message handler to avoid unhandled promise
 - [Phase 28]: handleDisconnect tracks both requester and provider disconnects — releases escrow immediately on provider disconnect (not waiting for timeout)
+- [Phase 28-02]: Conductor fee is best-effort — fee settlement failure logs but does not block the main capability response that was already settled
+- [Phase 28-02]: Conductor response detection uses duck-typing on total_credits field — no separate flag needed, aligns with ConductorMode.execute return shape
 
 ### Pending Todos
 
@@ -75,8 +77,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-19T05:00:18.119Z
-Stopped at: Completed 28-01-PLAN.md — Relay credit integration (hold/settle/release)
+Last session: 2026-03-19T05:04:04.419Z
+Stopped at: Completed 28-02-PLAN.md — Conductor fee calculation and relay integration
 Resume file: None
 
 ---
