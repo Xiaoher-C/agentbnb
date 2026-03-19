@@ -56,10 +56,10 @@
 
 ### Backward Compatibility
 
-- [ ] **COMPAT-01**: Agents without registryUrl config continue using local SQLite credits
-- [ ] **COMPAT-02**: Local gateway still works for LAN-only P2P exchanges with local escrow
-- [ ] **COMPAT-03**: Existing credit.db data preserved — no destructive migration
-- [ ] **COMPAT-04**: All 739+ existing tests continue to pass
+- [x] **COMPAT-01**: Agents without registryUrl config continue using local SQLite credits
+- [x] **COMPAT-02**: Local gateway still works for LAN-only P2P exchanges with local escrow
+- [x] **COMPAT-03**: Existing credit.db data preserved — no destructive migration
+- [x] **COMPAT-04**: All 739+ existing tests continue to pass
 
 ## Future Requirements (v3.3+)
 
@@ -124,10 +124,10 @@
 | HUB-02 | Phase 29 | Complete |
 | HUB-03 | Phase 29 | Complete |
 | HUB-04 | Phase 29 | Complete |
-| COMPAT-01 | Phase 29 | Pending |
-| COMPAT-02 | Phase 29 | Pending |
-| COMPAT-03 | Phase 29 | Pending |
-| COMPAT-04 | Phase 29 | Pending |
+| COMPAT-01 | Phase 29 | Complete |
+| COMPAT-02 | Phase 29 | Complete |
+| COMPAT-03 | Phase 29 | Complete |
+| COMPAT-04 | Phase 29 | Complete |
 
 **Coverage:**
 - v3.2 requirements: 35 total

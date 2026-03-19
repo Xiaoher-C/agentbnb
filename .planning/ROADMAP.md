@@ -74,7 +74,7 @@
 - [x] **Phase 26: CreditLedger Interface** - Define CreditLedger abstraction with Local, Registry-server, and Registry-client adapters (completed 2026-03-19)
 - [x] **Phase 27: Registry Credit Endpoints** - Implement /api/credits/* endpoints on Registry server with Ed25519 auth (completed 2026-03-19)
 - [x] **Phase 28: Relay Credit Integration** - Wire credit hold/settle/release into WebSocket relay flow (completed 2026-03-19)
-- [ ] **Phase 29: CLI + Hub + Compatibility** - Update CLI commands, Hub endpoints, and preserve backward compatibility
+- [x] **Phase 29: CLI + Hub + Compatibility** - Update CLI commands, Hub endpoints, and preserve backward compatibility (completed 2026-03-19)
 
 ## Phase Details
 
@@ -150,7 +150,7 @@ Plans:
   3. `agentbnb request` uses Registry-backed escrow for remote skills and rejects publish attempts with price below 1 cr
   4. The Hub OwnerDashboard displays a real-time credit balance sourced from the Registry CreditLedger
   5. An agent configured with local-only mode (no registryUrl) continues all P2P exchanges with local SQLite credits, and all 739+ existing tests pass
-**Plans:** 1/2 plans executed
+**Plans:** 2/2 plans complete
 Plans:
 - [ ] 29-01-PLAN.md — CLI commands + Hub endpoints wired to CreditLedger
 - [ ] 29-02-PLAN.md — Backward compatibility verification and full test suite
@@ -172,7 +172,7 @@ Plans:
 | 26 | 2/2 | Complete    | 2026-03-19 | — |
 | 27 | 2/2 | Complete    | 2026-03-19 | — |
 | 28 | 2/2 | Complete    | 2026-03-19 | — |
-| 29 | 1/2 | In Progress|  | — |
+| 29 | 2/2 | Complete   | 2026-03-19 | — |
 
 **Total:** 29 phases (24 superseded), 82+ plans, 6 milestones shipped, v3.2 in progress.
 
