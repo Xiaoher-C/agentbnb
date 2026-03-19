@@ -51,6 +51,16 @@ describe('HubAgentExecutor', () => {
     registryDb = new Database(':memory:');
     registryDb.pragma('journal_mode = WAL');
     initHubAgentTable(registryDb);
+    // Create capability_cards table (needed by executor for online check + price lookup)
+    registryDb.exec(`
+      CREATE TABLE IF NOT EXISTS capability_cards (
+        id TEXT PRIMARY KEY,
+        owner TEXT NOT NULL,
+        data TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      )
+    `);
 
     creditDb = openCreditDb(':memory:');
 
@@ -108,7 +118,7 @@ describe('HubAgentExecutor', () => {
   });
 
   describe('relay mode', () => {
-    it('returns error for relay mode', async () => {
+    it('queues job when relay target is offline', async () => {
       const agent = createHubAgent(registryDb, {
         name: 'Relay Agent',
         skill_routes: [{
@@ -118,30 +128,31 @@ describe('HubAgentExecutor', () => {
         }],
       }, 'hub-server');
 
+      // No card for other-agent -> offline -> queues
       const result = await executor.execute(agent.agent_id, 'relay-skill', {});
 
-      expect(result.success).toBe(false);
-      expect(result.error).toBe('relay mode requires connected session agent');
-      expect(result.latency_ms).toBe(0);
+      expect(result.success).toBe(true);
+      expect(result.result).toHaveProperty('queued', true);
+      expect(result.result).toHaveProperty('job_id');
     });
   });
 
   describe('queue mode', () => {
-    it('returns error for queue mode', async () => {
+    it('always queues and returns job_id', async () => {
       const agent = createHubAgent(registryDb, {
         name: 'Queue Agent',
         skill_routes: [{
           skill_id: 'queue-skill',
           mode: 'queue' as const,
-          config: {},
+          config: { relay_owner: 'target-owner' },
         }],
       }, 'hub-server');
 
       const result = await executor.execute(agent.agent_id, 'queue-skill', {});
 
-      expect(result.success).toBe(false);
-      expect(result.error).toBe('queue mode not yet implemented (Phase 37)');
-      expect(result.latency_ms).toBe(0);
+      expect(result.success).toBe(true);
+      expect(result.result).toHaveProperty('queued', true);
+      expect(result.result).toHaveProperty('job_id');
     });
   });
 

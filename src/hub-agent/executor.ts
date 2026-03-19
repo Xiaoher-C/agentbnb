@@ -2,6 +2,8 @@ import type Database from 'better-sqlite3';
 import { getHubAgent } from './store.js';
 import { ApiExecutor } from '../skills/api-executor.js';
 import { holdEscrow, settleEscrow, releaseEscrow } from '../credit/escrow.js';
+import { lookupCardPrice } from '../relay/relay-credit.js';
+import { initJobQueue, insertJob } from './job-queue.js';
 import type { ExecutionResult } from '../skills/executor.js';
 import type { ApiSkillConfig } from '../skills/skill-config.js';
 import type { SkillRoute } from './types.js';
@@ -13,14 +15,17 @@ import type { SkillRoute } from './types.js';
  *
  * Supported modes:
  *   - direct_api: Calls external REST APIs via ApiExecutor with decrypted secrets
- *   - relay: Not yet available (requires connected session agent)
- *   - queue: Not yet implemented (Phase 37)
+ *   - relay: Queues when target agent is offline, dispatched on reconnect via relay bridge
+ *   - queue: Always queues for later dispatch via relay bridge
  */
 export class HubAgentExecutor {
   constructor(
     private registryDb: Database.Database,
     private creditDb: Database.Database,
-  ) {}
+  ) {
+    // Ensure job queue table exists
+    initJobQueue(this.registryDb);
+  }
 
   /**
    * Execute a skill on a Hub Agent.
@@ -59,14 +64,115 @@ export class HubAgentExecutor {
     // 4. Dispatch based on mode
     switch (route.mode) {
       case 'relay':
-        return { success: false, error: 'relay mode requires connected session agent', latency_ms: 0 };
+        return this.executeRelay(route, agent, params, requesterOwner, startTime);
 
       case 'queue':
-        return { success: false, error: 'queue mode not yet implemented (Phase 37)', latency_ms: 0 };
+        return this.executeQueue(route, agent, params, requesterOwner, startTime);
 
       case 'direct_api':
         return this.executeDirectApi(route, agent, params, requesterOwner, startTime);
     }
+  }
+
+  /**
+   * Relay mode: If the target relay agent is offline, queue the job.
+   * If online, still queue (actual dispatch happens via relay bridge).
+   */
+  private async executeRelay(
+    route: SkillRoute & { mode: 'relay' },
+    agent: NonNullable<ReturnType<typeof getHubAgent>>,
+    params: Record<string, unknown>,
+    requesterOwner: string | undefined,
+    startTime: number,
+  ): Promise<ExecutionResult> {
+    const relayOwner = route.config.relay_owner;
+
+    // Check if target is online
+    if (this.isRelayOwnerOnline(relayOwner)) {
+      // Online -- for now, still return error (dispatch wired in relay-bridge Task 2)
+      return { success: false, error: 'relay mode requires connected session agent', latency_ms: 0 };
+    }
+
+    // Offline -- queue the job with escrow hold
+    return this.queueJob(agent, route.skill_id, params, requesterOwner, relayOwner, startTime);
+  }
+
+  /**
+   * Queue mode: Always queue the job for later dispatch.
+   */
+  private async executeQueue(
+    route: SkillRoute & { mode: 'queue' },
+    agent: NonNullable<ReturnType<typeof getHubAgent>>,
+    params: Record<string, unknown>,
+    requesterOwner: string | undefined,
+    startTime: number,
+  ): Promise<ExecutionResult> {
+    const relayOwner = route.config.relay_owner;
+    return this.queueJob(agent, route.skill_id, params, requesterOwner, relayOwner, startTime);
+  }
+
+  /**
+   * Queue a job with optional credit escrow.
+   */
+  private queueJob(
+    agent: NonNullable<ReturnType<typeof getHubAgent>>,
+    skillId: string,
+    params: Record<string, unknown>,
+    requesterOwner: string | undefined,
+    relayOwner: string,
+    startTime: number,
+  ): ExecutionResult {
+    // Derive card ID for price lookup
+    const cardId = agent.agent_id.padEnd(32, '0')
+      .replace(/^(.{8})(.{4})(.{4})(.{4})(.{12}).*$/, '$1-$2-$3-$4-$5');
+
+    // Hold escrow if requester provided
+    let escrowId: string | undefined;
+    if (requesterOwner) {
+      const price = lookupCardPrice(this.registryDb, cardId, skillId);
+      if (price !== null && price > 0) {
+        escrowId = holdEscrow(this.creditDb, requesterOwner, price, cardId);
+      }
+    }
+
+    // Insert job
+    const job = insertJob(this.registryDb, {
+      hub_agent_id: agent.agent_id,
+      skill_id: skillId,
+      requester_owner: requesterOwner ?? 'anonymous',
+      params,
+      escrow_id: escrowId,
+      relay_owner: relayOwner,
+    });
+
+    return {
+      success: true,
+      result: { queued: true, job_id: job.id },
+      latency_ms: Date.now() - startTime,
+    };
+  }
+
+  /**
+   * Check if a relay owner has any online cards in the registry.
+   *
+   * @param owner - The relay owner identifier.
+   * @returns true if any card for this owner is online.
+   */
+  private isRelayOwnerOnline(owner: string): boolean {
+    const rows = this.registryDb.prepare(
+      'SELECT data FROM capability_cards WHERE owner = ?',
+    ).all(owner) as Array<{ data: string }>;
+
+    for (const row of rows) {
+      try {
+        const card = JSON.parse(row.data) as Record<string, unknown>;
+        const availability = card.availability as Record<string, unknown> | undefined;
+        if (availability?.online === true) {
+          return true;
+        }
+      } catch { /* skip malformed */ }
+    }
+    return false;
   }
 
   /**

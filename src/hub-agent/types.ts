@@ -26,7 +26,7 @@ export const SkillRouteSchema = z.discriminatedUnion('mode', [
   z.object({
     skill_id: z.string().min(1),
     mode: z.literal('queue'),
-    config: z.object({}).passthrough(),
+    config: z.object({ relay_owner: z.string().min(1) }).passthrough(),
   }),
 ]);
 
