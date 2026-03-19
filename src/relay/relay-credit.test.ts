@@ -8,6 +8,7 @@ import {
   holdForRelay,
   settleForRelay,
   releaseForRelay,
+  calculateConductorFee,
 } from './relay-credit.js';
 import { randomUUID } from 'node:crypto';
 
@@ -195,6 +196,77 @@ describe('relay-credit module', () => {
 
     it('does not throw when escrowId is undefined (no-op guard)', () => {
       expect(() => releaseForRelay(creditDb, undefined)).not.toThrow();
+    });
+  });
+
+  // ── calculateConductorFee ────────────────────────────────────────────────────
+
+  describe('calculateConductorFee', () => {
+    it('returns 0 for zero cost (no fee on zero-cost orchestration)', () => {
+      expect(calculateConductorFee(0)).toBe(0);
+    });
+
+    it('returns 0 for negative cost (guard against invalid input)', () => {
+      expect(calculateConductorFee(-10)).toBe(0);
+    });
+
+    it('returns minimum fee of 1 when 10% would be less than 1 (cost=5)', () => {
+      expect(calculateConductorFee(5)).toBe(1);
+    });
+
+    it('returns 1 when 10% exactly equals minimum (cost=10)', () => {
+      expect(calculateConductorFee(10)).toBe(1);
+    });
+
+    it('returns ceil of 1.5 = 2 for cost=15', () => {
+      expect(calculateConductorFee(15)).toBe(2);
+    });
+
+    it('returns exact 10% for cost=100', () => {
+      expect(calculateConductorFee(100)).toBe(10);
+    });
+
+    it('returns maximum fee of 20 when 10% equals cap (cost=200)', () => {
+      expect(calculateConductorFee(200)).toBe(20);
+    });
+
+    it('returns maximum fee of 20 when 10% exceeds cap (cost=300)', () => {
+      expect(calculateConductorFee(300)).toBe(20);
+    });
+  });
+
+  // ── calculateConductorFee integration: hold + settle ────────────────────────
+
+  describe('calculateConductorFee integration', () => {
+    it('hold + settle conductor fee from requester to conductor agent', () => {
+      bootstrapAgent(creditDb, 'requester-cond', 100);
+      bootstrapAgent(creditDb, 'conductor-agent', 0);
+      const cardRef = randomUUID();
+
+      const totalSubTaskCost = 100;
+      const fee = calculateConductorFee(totalSubTaskCost);
+      expect(fee).toBe(10);
+
+      const feeEscrowId = holdForRelay(creditDb, 'requester-cond', fee, cardRef);
+      expect(getBalance(creditDb, 'requester-cond')).toBe(90);
+
+      settleForRelay(creditDb, feeEscrowId, 'conductor-agent');
+      expect(getBalance(creditDb, 'requester-cond')).toBe(90);
+      expect(getBalance(creditDb, 'conductor-agent')).toBe(10);
+    });
+
+    it('conductor fee release refunds requester when fee settlement fails', () => {
+      bootstrapAgent(creditDb, 'requester-cond2', 50);
+      const cardRef = randomUUID();
+
+      const fee = calculateConductorFee(50); // 10% of 50 = 5
+      expect(fee).toBe(5);
+
+      const feeEscrowId = holdForRelay(creditDb, 'requester-cond2', fee, cardRef);
+      expect(getBalance(creditDb, 'requester-cond2')).toBe(45);
+
+      releaseForRelay(creditDb, feeEscrowId);
+      expect(getBalance(creditDb, 'requester-cond2')).toBe(50);
     });
   });
 });

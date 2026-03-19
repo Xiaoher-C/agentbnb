@@ -14,7 +14,7 @@ import {
   type RateLimitEntry,
   type RelayState,
 } from './types.js';
-import { lookupCardPrice, holdForRelay, settleForRelay, releaseForRelay } from './relay-credit.js';
+import { lookupCardPrice, holdForRelay, settleForRelay, releaseForRelay, calculateConductorFee } from './relay-credit.js';
 import { AgentBnBError } from '../types/index.js';
 
 /** Maximum relay requests per agent per minute */
@@ -332,7 +332,35 @@ export function registerWebSocketRelay(
       }
     }
 
-    // Forward response to origin agent
+    // Conductor fee settlement — detect Conductor orchestration responses
+    // A Conductor result contains a `total_credits` field indicating the sub-task cost sum.
+    let conductorFee = 0;
+    if (
+      creditDb &&
+      msg.error === undefined &&
+      typeof msg.result === 'object' &&
+      msg.result !== null &&
+      'total_credits' in msg.result &&
+      typeof (msg.result as Record<string, unknown>).total_credits === 'number'
+    ) {
+      const totalCredits = (msg.result as Record<string, unknown>).total_credits as number;
+      conductorFee = calculateConductorFee(totalCredits);
+
+      if (conductorFee > 0) {
+        try {
+          // Hold the fee from the original requester, then immediately settle to conductor
+          const feeEscrowId = holdForRelay(creditDb, pending.originOwner, conductorFee, msg.id);
+          settleForRelay(creditDb, feeEscrowId, pending.targetOwner!);
+        } catch (e) {
+          // Fee settlement is best-effort: the main capability was already settled successfully.
+          // The requester may have spent their remaining credits on sub-tasks.
+          console.error('[relay] conductor fee settlement failed (non-fatal):', e);
+          conductorFee = 0; // Reset so we don't report a fee that wasn't charged
+        }
+      }
+    }
+
+    // Forward response to origin agent, including conductor_fee if charged
     const originWs = connections.get(pending.originOwner);
     if (originWs && originWs.readyState === 1) {
       sendMessage(originWs, {
@@ -340,6 +368,7 @@ export function registerWebSocketRelay(
         id: msg.id,
         result: msg.result,
         error: msg.error,
+        ...(conductorFee > 0 ? { conductor_fee: conductorFee } : {}),
       });
     }
   }

@@ -92,6 +92,22 @@ export function settleForRelay(
 }
 
 /**
+ * Calculates the Conductor orchestration fee (ADR-019).
+ *
+ * Fee = 10% of total sub-task cost, rounded up to the nearest integer.
+ * Clamped to a minimum of 1 credit and a maximum of 20 credits.
+ * Returns 0 for zero or negative cost (no fee on zero-cost orchestration).
+ *
+ * @param totalSubTaskCost - The total credits charged across all sub-tasks.
+ * @returns The conductor fee in credits.
+ */
+export function calculateConductorFee(totalSubTaskCost: number): number {
+  if (totalSubTaskCost <= 0) return 0;
+  const fee = Math.ceil(totalSubTaskCost * 0.1);
+  return Math.max(1, Math.min(20, fee));
+}
+
+/**
  * Releases a relay escrow, refunding credits back to the requester.
  * Called on relay timeout, provider error response, or provider disconnect.
  *
