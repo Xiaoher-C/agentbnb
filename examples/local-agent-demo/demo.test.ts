@@ -110,7 +110,7 @@ describe('Conductor Integration', () => {
     expect(capabilities.filter((c) => c === 'text_gen')).toHaveLength(3);
   });
 
-  it('CapabilityMatcher finds Text-Gen Studio for text_gen subtasks', () => {
+  it('CapabilityMatcher finds Text-Gen Studio for text_gen subtasks', async () => {
     const db = openDatabase();
 
     // Register both cards
@@ -121,7 +121,7 @@ describe('Conductor Integration', () => {
     const subtasks = decompose('analyze this research report');
 
     // Match subtasks to agents
-    const matches = matchSubTasks({
+    const matches = await matchSubTasks({
       db,
       subtasks,
       conductorOwner: CONDUCTOR_OWNER,
@@ -158,14 +158,14 @@ describe('Conductor Integration', () => {
     db.close();
   });
 
-  it('Conductor self-excludes from matches', () => {
+  it('Conductor self-excludes from matches', async () => {
     const db = openDatabase();
 
     registerDemoCard(db);
     registerConductorCard(db);
 
     const subtasks = decompose('analyze this research report');
-    const matches = matchSubTasks({
+    const matches = await matchSubTasks({
       db,
       subtasks,
       conductorOwner: CONDUCTOR_OWNER,
