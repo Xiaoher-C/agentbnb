@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v4.0
 milestone_name: Agent Economy Platform
 status: completed
-stopped_at: Completed 38-01-PLAN.md -- Framework Adapters (LangChain, CrewAI, AutoGen, OpenAI)
+stopped_at: Completed 36-02-PLAN.md -- HubAgentExecutor, execute endpoint, credit escrow
 last_updated: "2026-03-19T08:14:55.732Z"
-last_activity: 2026-03-19 — Phase 38 Plan 01 complete (Framework Adapters — LangChain, CrewAI, AutoGen, OpenAI)
+last_activity: 2026-03-19 — Phase 36 Plan 02 complete (HubAgentExecutor, execute endpoint, credit escrow)
 progress:
   total_phases: 10
   completed_phases: 8
   total_plans: 10
-  completed_plans: 9
+  completed_plans: 10
   percent: 60
 ---
 
@@ -26,9 +26,9 @@ See: .planning/PROJECT.md (updated 2026-03-19)
 ## Current Position
 
 Phase: 36 of 39 (Hub Agent Core)
-Plan: 1 of 2 in current phase
-Status: In Progress
-Last activity: 2026-03-19 — Phase 36 Plan 01 complete (Hub Agent types, crypto, store, CRUD API)
+Plan: 2 of 2 in current phase
+Status: Completed
+Last activity: 2026-03-19 — Phase 36 Plan 02 complete (HubAgentExecutor, execute endpoint, credit escrow)
 
 Progress: [######░░░░] 60% (v4.0 milestone)
 
@@ -91,6 +91,8 @@ Progress: [######░░░░] 60% (v4.0 milestone)
 - [Phase 36]: Hub Agent owner_public_key set to 'hub-server' placeholder — server-managed agents don't need external identity auth
 - [Phase 36]: Card ID derived deterministically from agent_id via padding + UUID formatting
 - [Phase 38]: Each Python adapter is fully self-contained with inline Ed25519 auth -- no shared module
+- [Phase 36-02]: Secret injection via deep clone + auth type switch -- secrets never stored decrypted, discarded after execution
+- [Phase 36-02]: Credit escrow skipped when no requester_owner -- self-execution free, escrow only for inter-agent calls
 
 ### Pending Todos
 
@@ -103,8 +105,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-19T08:19:59Z
-Stopped at: Completed 36-01-PLAN.md -- Hub Agent types, crypto, store, CRUD API
+Last session: 2026-03-19T08:27:03Z
+Stopped at: Completed 36-02-PLAN.md -- HubAgentExecutor, execute endpoint, credit escrow
 Resume file: None
 
 ---

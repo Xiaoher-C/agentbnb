@@ -104,7 +104,7 @@
 
 - [x] **Phase 34: MCP Server** — stdio MCP server with 6 tools (discover, request, publish, status, conduct, serve_skill) (completed 2026-03-19)
 - [x] **Phase 35: OpenAPI Spec + GPT Actions** — @fastify/swagger for Registry, Swagger UI, GPT Actions schema
-- [ ] **Phase 36: Hub Agent Core** — Platform-hosted persistent agents with skill routing table and direct API execution
+- [x] **Phase 36: Hub Agent Core** — Platform-hosted persistent agents with skill routing table and direct API execution (completed 2026-03-19)
 - [ ] **Phase 37: Job Queue + Relay Bridge** — SQLite job queue for offline requests, auto-dispatch on agent reconnect
 - [x] **Phase 38: Framework Adapters** — LangChain, CrewAI, AutoGen (Python), OpenAI function calling (JSON) (completed 2026-03-19)
 - [ ] **Phase 39: Hub Agent UI + Dashboard** — Create Agent wizard, operations dashboard, skill marketplace browse
@@ -186,7 +186,7 @@ Plans:
 **Goal**: 使用者能在 Hub 建立常駐 Agent，配置 skill routing，Agent 能直接呼叫外部 API
 **Depends on**: Phase 30 + 31 (relay and remote search must work)
 **Requirements**: HUB-AGENT-01, HUB-AGENT-02, HUB-AGENT-03, HUB-AGENT-04
-**Plans:** 2 plans
+**Plans:** 2/2 plans complete
 **Success Criteria** (what must be TRUE):
   1. `POST /api/agents` creates a persistent Hub Agent with identity and credit balance
   2. Hub Agent has a skill routing table mapping skills to execution paths (direct_api / relay / queue)
@@ -250,7 +250,7 @@ Plans:
 | 33 | v4.0 | 1/1 | Complete | 2026-03-19 |
 | 34 | v4.0 | 1/1 | Complete | 2026-03-19 |
 | 35 | v4.0 | 1/1 | Complete | 2026-03-19 |
-| 36 | v4.0 | 1/2 | **Wave 3** | — |
+| 36 | 2/2 | Complete   | 2026-03-19 | — |
 | 37 | v4.0 | 0/1 | Wave 4 | — |
 | 38 | 1/1 | Complete   | 2026-03-19 | — |
 | 39 | v4.0 | 0/1 | Wave 5 | — |
