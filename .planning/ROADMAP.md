@@ -164,7 +164,7 @@ Plans:
 | 24 | v3.1 | — | Superseded | — |
 | 25 | 3/3 | Complete    | 2026-03-19 | — |
 | 26 | 2/2 | Complete    | 2026-03-19 | — |
-| 27 | 2/2 | Complete   | 2026-03-19 | — |
+| 27 | 2/2 | Complete    | 2026-03-19 | — |
 | 28 | v3.2 | 0/TBD | Not started | — |
 | 29 | v3.2 | 0/TBD | Not started | — |
 

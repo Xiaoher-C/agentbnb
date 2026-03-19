@@ -4,7 +4,7 @@ milestone: v3.2
 milestone_name: Registry Credit Ledger
 status: planning
 stopped_at: Completed 27-02-PLAN.md — Free-tier tracking + Ed25519 HTTP client signing
-last_updated: "2026-03-19T04:45:56.545Z"
+last_updated: "2026-03-19T04:48:31.097Z"
 last_activity: 2026-03-19 — Roadmap created for v3.2 (Phases 25-29, 35 requirements)
 progress:
   total_phases: 5
