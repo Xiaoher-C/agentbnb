@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v4.0
 milestone_name: Agent Economy Platform
 status: completed
-stopped_at: Completed 33-01-PLAN.md — Conductor dual role
-last_updated: "2026-03-19T07:13:33.876Z"
-last_activity: 2026-03-19 — Phase 32 Plan 01 complete (pricing endpoint + SOUL.md custom pricing)
+stopped_at: Completed 35-01-PLAN.md — OpenAPI 3.0 auto-generation
+last_updated: "2026-03-19T07:17:00Z"
+last_activity: 2026-03-19 — Phase 35 Plan 01 complete (OpenAPI spec + Swagger UI + GPT Actions export)
 progress:
   total_phases: 10
-  completed_phases: 4
-  total_plans: 7
-  completed_plans: 5
-  percent: 30
+  completed_phases: 5
+  total_plans: 8
+  completed_plans: 6
+  percent: 40
 ---
 
 # AgentBnB — Project State
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-19)
 
 **Core value:** Fill the market gap for agent-to-agent capability exchange.
-**Current focus:** Phase 32 — Pricing Guidance (complete)
+**Current focus:** Phase 35 — OpenAPI Spec (complete)
 
 ## Current Position
 
-Phase: 32 of 39 (Pricing Guidance)
+Phase: 35 of 39 (OpenAPI Spec)
 Plan: 1 of 1 in current phase
 Status: Complete
-Last activity: 2026-03-19 — Phase 32 Plan 01 complete (pricing endpoint + SOUL.md custom pricing)
+Last activity: 2026-03-19 — Phase 35 Plan 01 complete (OpenAPI spec + Swagger UI + GPT Actions export)
 
-Progress: [###░░░░░░░] 30% (v4.0 milestone)
+Progress: [####░░░░░░] 40% (v4.0 milestone)
 
 ## Accumulated Context
 
@@ -81,6 +81,8 @@ Progress: [###░░░░░░░] 30% (v4.0 milestone)
 - [Phase 33]: buildConductorCard(owner) uses SHA-256 of owner for deterministic UUID-shaped card ID
 - [Phase 33]: cards array in RegisterMessage is optional for backward compat; card field stays required
 - [Phase 33]: handleRegister upserts primary card first, then additional cards; logs agent_joined once
+- [Phase 35]: Wrap API routes in Fastify plugin for @fastify/swagger schema capture — routes registered directly on server are invisible to swagger's onRoute hook
+- [Phase 35]: GPT Actions export filters to public GET/POST only — excludes /me, /draft, /docs, /ws, /api/credits paths
 
 ### Pending Todos
 
@@ -93,8 +95,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-19T07:13:33.874Z
-Stopped at: Completed 33-01-PLAN.md — Conductor dual role
+Last session: 2026-03-19T07:17:00Z
+Stopped at: Completed 35-01-PLAN.md — OpenAPI 3.0 auto-generation
 Resume file: None
 
 ---

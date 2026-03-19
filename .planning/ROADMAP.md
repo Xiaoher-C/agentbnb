@@ -103,7 +103,7 @@
 #### 軌道 B：平台擴展
 
 - [ ] **Phase 34: MCP Server** — stdio MCP server with 6 tools (discover, request, publish, status, conduct, serve_skill)
-- [ ] **Phase 35: OpenAPI Spec + GPT Actions** — @fastify/swagger for Registry, Swagger UI, GPT Actions schema
+- [x] **Phase 35: OpenAPI Spec + GPT Actions** — @fastify/swagger for Registry, Swagger UI, GPT Actions schema
 - [ ] **Phase 36: Hub Agent Core** — Platform-hosted persistent agents with skill routing table and direct API execution
 - [ ] **Phase 37: Job Queue + Relay Bridge** — SQLite job queue for offline requests, auto-dispatch on agent reconnect
 - [ ] **Phase 38: Framework Adapters** — LangChain, CrewAI, AutoGen (Python), OpenAI function calling (JSON)
@@ -180,7 +180,7 @@ Plans:
   2. OpenAPI 3.0 spec is auto-generated from Fastify route schemas
   3. GPT Actions JSON schema is exported and importable in GPT Builder
 Plans:
-- [ ] 35-01-PLAN.md — @fastify/swagger integration + GPT Actions export
+- [x] 35-01-PLAN.md — @fastify/swagger integration + GPT Actions export (SUMMARY: 2/2 tasks)
 
 ### Phase 36: Hub Agent Core
 **Goal**: 使用者能在 Hub 建立常駐 Agent，配置 skill routing，Agent 能直接呼叫外部 API
