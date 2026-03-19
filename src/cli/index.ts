@@ -3,7 +3,7 @@
 import { Command } from 'commander';
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import { randomBytes } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import { join } from 'node:path';
 import { networkInterfaces, homedir } from 'node:os';
 
@@ -1354,7 +1354,7 @@ program
         // Build card data for registration
         const cards = listCards(runtime.registryDb, config.owner);
         const card = cards[0] ?? {
-          id: config.owner,
+          id: randomUUID(),
           owner: config.owner,
           name: config.owner,
           description: 'Agent registered via CLI',
@@ -1362,7 +1362,7 @@ program
           level: 1,
           inputs: [],
           outputs: [],
-          pricing: { credits_per_call: 0 },
+          pricing: { credits_per_call: 1 },
           availability: { online: true },
         };
 

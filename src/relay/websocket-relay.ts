@@ -189,8 +189,14 @@ export function registerWebSocketRelay(
     // Store connection
     connections.set(owner, ws);
 
-    // Upsert primary card into registry
-    const cardId = upsertCard(card, owner);
+    // Upsert primary card into registry (non-fatal — agent stays connected even if card is invalid)
+    let cardId: string;
+    try {
+      cardId = upsertCard(card, owner);
+    } catch (err) {
+      console.error(`[relay] card validation failed for ${owner}:`, err instanceof Error ? err.message : err);
+      cardId = (card.id as string) ?? owner;
+    }
 
     // Get card name for activity log
     const cardName = (card.name as string) ?? (card.agent_name as string) ?? owner;
