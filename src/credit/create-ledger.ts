@@ -12,13 +12,13 @@ export { RegistryCreditLedger };
 /**
  * Options for createLedger factory. Three mutually exclusive shapes:
  * 1. Local mode: provide `creditDbPath` with no `registryUrl` → LocalCreditLedger
- * 2. HTTP mode: provide `registryUrl` + `ownerPublicKey` → RegistryCreditLedger (HTTP)
+ * 2. HTTP mode: provide `registryUrl` + `ownerPublicKey` + `privateKey` → RegistryCreditLedger (HTTP)
  * 3. Direct DB mode: provide `db` directly → RegistryCreditLedger (direct, for Registry server)
  */
 export type CreateLedgerOptions =
-  | { creditDbPath: string; registryUrl?: undefined; ownerPublicKey?: string; db?: undefined }
-  | { creditDbPath?: string; registryUrl: string; ownerPublicKey: string; db?: undefined }
-  | { db: Database.Database; creditDbPath?: undefined; registryUrl?: undefined };
+  | { creditDbPath: string; registryUrl?: undefined; ownerPublicKey?: string; privateKey?: Buffer; db?: undefined }
+  | { creditDbPath?: string; registryUrl: string; ownerPublicKey: string; privateKey: Buffer; db?: undefined }
+  | { db: Database.Database; creditDbPath?: undefined; registryUrl?: undefined; privateKey?: undefined };
 
 /**
  * createLedger — factory that auto-detects the correct CreditLedger implementation.
@@ -38,6 +38,7 @@ export function createLedger(opts: CreateLedgerOptions): CreditLedger {
       mode: 'http',
       registryUrl: opts.registryUrl,
       ownerPublicKey: opts.ownerPublicKey as string,
+      privateKey: opts.privateKey as Buffer,
     });
   }
 

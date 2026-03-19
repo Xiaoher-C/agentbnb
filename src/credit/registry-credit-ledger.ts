@@ -4,6 +4,7 @@ import { holdEscrow, settleEscrow, releaseEscrow } from './escrow.js';
 import type { CreditLedger, EscrowResult } from './credit-ledger.js';
 import type { CreditTransaction } from './ledger.js';
 import { AgentBnBError } from '../types/index.js';
+import { signRequest } from '../registry/identity-auth.js';
 
 /** Direct DB mode — used by the Registry server process to avoid HTTP round-trips to itself. */
 interface DirectDbConfig {
@@ -16,6 +17,7 @@ interface HttpClientConfig {
   mode: 'http';
   registryUrl: string;
   ownerPublicKey: string;
+  privateKey: Buffer;  // Ed25519 private key for signing requests
 }
 
 /**
@@ -166,13 +168,14 @@ export class RegistryCreditLedger implements CreditLedger {
     const timeoutId = setTimeout(() => controller.abort(), HTTP_TIMEOUT_MS);
 
     try {
+      const authHeaders = signRequest('POST', path, body, cfg.privateKey, cfg.ownerPublicKey);
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
-        'X-Agent-PublicKey': cfg.ownerPublicKey,
+        ...authHeaders,
       };
-      if (ownerForHeader !== null) {
-        headers['X-Agent-Owner'] = ownerForHeader;
-      }
+
+      // ownerForHeader param kept for API compatibility but not used in headers
+      void ownerForHeader;
 
       const res = await fetch(`${cfg.registryUrl}${path}`, {
         method: 'POST',
@@ -208,12 +211,16 @@ export class RegistryCreditLedger implements CreditLedger {
     const timeoutId = setTimeout(() => controller.abort(), HTTP_TIMEOUT_MS);
 
     try {
+      const authHeaders = signRequest('GET', path, null, cfg.privateKey, cfg.ownerPublicKey);
+
+      // owner param kept for API compatibility
+      void owner;
+
       const res = await fetch(`${cfg.registryUrl}${path}`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
-          'X-Agent-Owner': owner,
-          'X-Agent-PublicKey': cfg.ownerPublicKey,
+          ...authHeaders,
         },
         signal: controller.signal,
       });

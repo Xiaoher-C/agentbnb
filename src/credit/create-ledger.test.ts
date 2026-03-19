@@ -7,6 +7,7 @@ import { LocalCreditLedger } from './local-credit-ledger.js';
 import { RegistryCreditLedger } from './registry-credit-ledger.js';
 import type { CreditLedger } from './credit-ledger.js';
 import { openCreditDb } from './ledger.js';
+import { generateKeyPair } from './signing.js';
 
 describe('createLedger factory', () => {
   let tmpDir: string | undefined;
@@ -29,10 +30,12 @@ describe('createLedger factory', () => {
     expect(ledger).toBeInstanceOf(LocalCreditLedger);
   });
 
-  it('returns RegistryCreditLedger in HTTP mode when registryUrl + ownerPublicKey provided', () => {
+  it('returns RegistryCreditLedger in HTTP mode when registryUrl + ownerPublicKey + privateKey provided', () => {
+    const { publicKey, privateKey } = generateKeyPair();
     const ledger = createLedger({
       registryUrl: 'https://registry.agentbnb.dev',
-      ownerPublicKey: 'pk-test-123',
+      ownerPublicKey: publicKey.toString('hex'),
+      privateKey,
     });
     expect(ledger).toBeInstanceOf(RegistryCreditLedger);
   });
@@ -56,9 +59,11 @@ describe('createLedger factory', () => {
   });
 
   it('returned RegistryCreditLedger (HTTP mode) has all 6 CreditLedger methods', () => {
+    const { publicKey, privateKey } = generateKeyPair();
     const ledger = createLedger({
       registryUrl: 'https://registry.agentbnb.dev',
-      ownerPublicKey: 'pk-test-456',
+      ownerPublicKey: publicKey.toString('hex'),
+      privateKey,
     });
     expect(typeof ledger.hold).toBe('function');
     expect(typeof ledger.settle).toBe('function');

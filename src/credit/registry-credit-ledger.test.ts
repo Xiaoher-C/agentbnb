@@ -4,6 +4,7 @@ import { RegistryCreditLedger } from './registry-credit-ledger.js';
 import type { CreditLedger } from './credit-ledger.js';
 import { AgentBnBError } from '../types/index.js';
 import Database from 'better-sqlite3';
+import { generateKeyPair } from './signing.js';
 
 // ─── Direct DB Mode Tests ────────────────────────────────────────────────────
 
@@ -154,17 +155,24 @@ describe('RegistryCreditLedger (direct DB mode)', () => {
 
 describe('RegistryCreditLedger (HTTP client mode)', () => {
   const REGISTRY_URL = 'https://registry.agentbnb.dev';
-  const OWNER_PUBLIC_KEY = 'pk-test-abc123';
   let ledger: RegistryCreditLedger;
   let mockFetch: ReturnType<typeof vi.fn>;
+  let ownerPublicKey: string;
+  let privateKey: Buffer;
 
   beforeEach(() => {
+    // Generate a real Ed25519 keypair for signing tests
+    const keyPair = generateKeyPair();
+    privateKey = keyPair.privateKey;
+    ownerPublicKey = keyPair.publicKey.toString('hex');
+
     mockFetch = vi.fn();
     globalThis.fetch = mockFetch;
     ledger = new RegistryCreditLedger({
       mode: 'http',
       registryUrl: REGISTRY_URL,
-      ownerPublicKey: OWNER_PUBLIC_KEY,
+      ownerPublicKey,
+      privateKey,
     });
   });
 
@@ -184,7 +192,7 @@ describe('RegistryCreditLedger (HTTP client mode)', () => {
   }
 
   describe('hold()', () => {
-    it('sends POST to /api/credits/hold with correct body and headers', async () => {
+    it('sends POST to /api/credits/hold with correct body and Ed25519 auth headers', async () => {
       mockFetch.mockResolvedValueOnce(mockResponse({ escrowId: 'escrow-xyz' }));
 
       const result = await ledger.hold('agent-alice', 30, 'card-123');
@@ -196,8 +204,10 @@ describe('RegistryCreditLedger (HTTP client mode)', () => {
       const body = JSON.parse(opts.body as string);
       expect(body).toEqual({ owner: 'agent-alice', amount: 30, cardId: 'card-123' });
       expect((opts.headers as Record<string, string>)['Content-Type']).toBe('application/json');
-      expect((opts.headers as Record<string, string>)['X-Agent-Owner']).toBe('agent-alice');
-      expect((opts.headers as Record<string, string>)['X-Agent-PublicKey']).toBe(OWNER_PUBLIC_KEY);
+      // Ed25519 auth headers
+      expect((opts.headers as Record<string, string>)['X-Agent-PublicKey']).toBe(ownerPublicKey);
+      expect((opts.headers as Record<string, string>)['X-Agent-Signature']).toBeDefined();
+      expect((opts.headers as Record<string, string>)['X-Agent-Timestamp']).toBeDefined();
       expect(result).toEqual({ escrowId: 'escrow-xyz' });
     });
   });
@@ -322,16 +332,33 @@ describe('RegistryCreditLedger (HTTP client mode)', () => {
     });
   });
 
-  describe('request headers', () => {
-    it('includes X-Agent-Owner and X-Agent-PublicKey on GET requests', async () => {
+  describe('request headers (Ed25519 auth)', () => {
+    it('includes X-Agent-PublicKey, X-Agent-Signature, X-Agent-Timestamp on GET requests', async () => {
       mockFetch.mockResolvedValueOnce(mockResponse({ balance: 0 }));
 
       await ledger.getBalance('agent-auth-test');
 
       const [, opts] = mockFetch.mock.calls[0] as [string, RequestInit];
       const headers = opts.headers as Record<string, string>;
-      expect(headers['X-Agent-Owner']).toBe('agent-auth-test');
-      expect(headers['X-Agent-PublicKey']).toBe(OWNER_PUBLIC_KEY);
+      expect(headers['X-Agent-PublicKey']).toBe(ownerPublicKey);
+      expect(headers['X-Agent-Signature']).toBeDefined();
+      expect(headers['X-Agent-Timestamp']).toBeDefined();
+      // Old X-Agent-Owner header is no longer sent
+      expect(headers['X-Agent-Owner']).toBeUndefined();
+    });
+
+    it('includes X-Agent-PublicKey, X-Agent-Signature, X-Agent-Timestamp on POST requests', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse({ escrowId: 'test-id' }));
+
+      await ledger.hold('agent-auth-test', 10, 'card-test');
+
+      const [, opts] = mockFetch.mock.calls[0] as [string, RequestInit];
+      const headers = opts.headers as Record<string, string>;
+      expect(headers['X-Agent-PublicKey']).toBe(ownerPublicKey);
+      expect(headers['X-Agent-Signature']).toBeDefined();
+      expect(headers['X-Agent-Timestamp']).toBeDefined();
+      // Old X-Agent-Owner header is no longer sent
+      expect(headers['X-Agent-Owner']).toBeUndefined();
     });
   });
 });
