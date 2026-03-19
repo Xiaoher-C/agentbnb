@@ -104,7 +104,7 @@ export class ConductorMode implements ExecutorMode {
     onProgress?.({ step: 1, total: 5, message: `Decomposed into ${subtasks.length} sub-tasks` });
 
     // Step 2: Match subtasks to agents
-    const matchResults = matchSubTasks({
+    const matchResults = await matchSubTasks({
       db: this.db,
       subtasks,
       conductorOwner: this.conductorOwner,

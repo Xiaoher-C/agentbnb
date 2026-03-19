@@ -68,7 +68,7 @@ export async function conductAction(
   const db = openDatabase(config.db_path);
   let matchResults: MatchResult[];
   try {
-    matchResults = matchSubTasks({
+    matchResults = await matchSubTasks({
       db,
       subtasks,
       conductorOwner: config.owner,

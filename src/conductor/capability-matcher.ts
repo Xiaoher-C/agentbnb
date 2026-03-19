@@ -10,6 +10,7 @@ import { searchCards } from '../registry/matcher.js';
 import { scorePeers, type Candidate } from '../autonomy/auto-request.js';
 import type { SubTask, MatchResult } from './types.js';
 import type { CapabilityCard } from '../types/index.js';
+import { fetchRemoteCards } from '../cli/remote-registry.js';
 
 /** Maximum number of alternative agents to return per sub-task. */
 const MAX_ALTERNATIVES = 2;
@@ -24,6 +25,8 @@ export interface MatchOptions {
   subtasks: SubTask[];
   /** Owner ID of the conductor agent — excluded from matches (self-exclusion). */
   conductorOwner: string;
+  /** Optional remote registry URL for fallback when local search returns no results. */
+  registryUrl?: string;
 }
 
 /**
@@ -40,12 +43,22 @@ export interface MatchOptions {
  * @param opts - Match configuration including database, subtasks, and conductor owner ID.
  * @returns MatchResult[] in the same order as the input subtasks.
  */
-export function matchSubTasks(opts: MatchOptions): MatchResult[] {
-  const { db, subtasks, conductorOwner } = opts;
+export async function matchSubTasks(opts: MatchOptions): Promise<MatchResult[]> {
+  const { db, subtasks, conductorOwner, registryUrl } = opts;
 
-  return subtasks.map((subtask) => {
-    // Step 1: Search for matching cards (online only)
-    const cards = searchCards(db, subtask.required_capability, { online: true });
+  return Promise.all(subtasks.map(async (subtask) => {
+    // Step 1: Search for matching cards (local first, remote fallback)
+    let cards = searchCards(db, subtask.required_capability, { online: true });
+
+    // Remote fallback: when local returns zero and registryUrl is configured
+    if (cards.length === 0 && registryUrl) {
+      try {
+        cards = await fetchRemoteCards(registryUrl, { q: subtask.required_capability, online: true });
+      } catch {
+        // Graceful degradation — network errors result in empty cards
+        cards = [];
+      }
+    }
 
     // Step 2: Build candidates from both v1.0 and v2.0 cards
     const candidates: Candidate[] = [];
@@ -106,5 +119,5 @@ export function matchSubTasks(opts: MatchOptions): MatchResult[] {
       credits: top.cost,
       alternatives,
     };
-  });
+  }));
 }
