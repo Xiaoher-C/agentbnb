@@ -1,17 +1,17 @@
 ---
 gsd_state_version: 1.0
-milestone: v3.2
-milestone_name: Registry Credit Ledger
-status: planning
-stopped_at: Completed 30-01-PLAN.md — Fix v2.0 Card Relay Registration
-last_updated: "2026-03-19T06:37:39Z"
-last_activity: 2026-03-19 — Phase 30 Plan 01 complete (v2.0 card relay fix)
+milestone: v4.0
+milestone_name: Agent Economy Platform
+status: completed
+stopped_at: Completed 32-01-PLAN.md — Pricing Guidance
+last_updated: "2026-03-19T06:41:10.704Z"
+last_activity: 2026-03-19 — Phase 32 Plan 01 complete (pricing endpoint + SOUL.md custom pricing)
 progress:
-  total_phases: 5
-  completed_phases: 5
-  total_plans: 11
-  completed_plans: 11
-  percent: 0
+  total_phases: 10
+  completed_phases: 2
+  total_plans: 4
+  completed_plans: 3
+  percent: 30
 ---
 
 # AgentBnB — Project State
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-19)
 
 **Core value:** Fill the market gap for agent-to-agent capability exchange.
-**Current focus:** Phase 30 — Fix Upstream (v2.0 card relay)
+**Current focus:** Phase 32 — Pricing Guidance (complete)
 
 ## Current Position
 
-Phase: 30 of 30 (Fix Upstream)
+Phase: 32 of 39 (Pricing Guidance)
 Plan: 1 of 1 in current phase
 Status: Complete
-Last activity: 2026-03-19 — Phase 30 Plan 01 complete (v2.0 card relay fix)
+Last activity: 2026-03-19 — Phase 32 Plan 01 complete (pricing endpoint + SOUL.md custom pricing)
 
-Progress: [░░░░░░░░░░] 0% (v3.2 milestone)
+Progress: [###░░░░░░░] 30% (v4.0 milestone)
 
 ## Accumulated Context
 
@@ -71,6 +71,10 @@ Progress: [░░░░░░░░░░] 0% (v3.2 milestone)
 - [Phase 29-02]: No source code changes needed — Plan 01 wiring complete; 865 tests pass without modification
 - [Phase 30-01]: Replaced insertCard/updateCard/getCard with AnyCardSchema + raw SQL in relay upsertCard() — store.ts functions locked to v1.0 schema
 - [Phase 30-01]: Used same raw SQL pattern as soul-sync.ts for v2.0 card persistence consistency
+- [Phase 31-fix-downstream]: Fallback-only design: remote search only when local returns zero results (not merge)
+- [Phase 31-fix-downstream]: matchSubTasks changed from sync to async — callers add await, per-subtask remote fallback via Promise.all
+- [Phase 32]: getPricingStats uses searchCards (FTS5) + per-skill query word matching — reuses existing search infrastructure
+- [Phase 32]: SOUL.md pricing: N directive parsed at parseSoulMd level so both v1/v2 paths benefit; invalid values silently default to 10
 
 ### Pending Todos
 
@@ -83,8 +87,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-19T06:37:39Z
-Stopped at: Completed 30-01-PLAN.md — Fix v2.0 Card Relay Registration
+Last session: 2026-03-19T06:41:10.702Z
+Stopped at: Completed 32-01-PLAN.md — Pricing Guidance
 Resume file: None
 
 ---
