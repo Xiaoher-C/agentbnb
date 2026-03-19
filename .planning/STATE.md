@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v3.2
 milestone_name: Registry Credit Ledger
 status: planning
-stopped_at: Completed 25-03-PLAN.md — relay-to-executor progress bridge fully wired
-last_updated: "2026-03-19T04:10:09.610Z"
+stopped_at: Completed 26-01-PLAN.md — CreditLedger interface + LocalCreditLedger wrapper
+last_updated: "2026-03-19T04:18:22.392Z"
 last_activity: 2026-03-19 — Roadmap created for v3.2 (Phases 25-29, 35 requirements)
 progress:
   total_phases: 5
   completed_phases: 1
-  total_plans: 3
-  completed_plans: 3
+  total_plans: 5
+  completed_plans: 4
   percent: 0
 ---
 
@@ -50,6 +50,8 @@ Progress: [░░░░░░░░░░] 0% (v3.2 milestone)
 - [Phase 25-relay-timeout]: PipelineExecutor emits N-1 callbacks for N-step pipeline (not after final step) — progress means forward movement, completion via return value
 - [Phase 25-03]: CLI onRequest uses relayClient! non-null assertion inside onProgress — safe because callback only fires when relay is connected
 - [Phase 25-03]: handlerUrl path intentionally does not receive onProgress — HTTP fetch has no step-level progress
+- [Phase 26-01]: LocalCreditLedger uses async keyword (not Promise.resolve()) so sync errors auto-become rejected Promises — zero try/catch needed
+- [Phase 26-01]: CreditLedger interface defined with 6 async methods; LocalCreditLedger is delegation-only wrapper with zero business logic
 
 ### Pending Todos
 
@@ -62,8 +64,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-19T04:07:42.222Z
-Stopped at: Completed 25-03-PLAN.md — relay-to-executor progress bridge fully wired
+Last session: 2026-03-19T04:18:22.390Z
+Stopped at: Completed 26-01-PLAN.md — CreditLedger interface + LocalCreditLedger wrapper
 Resume file: None
 
 ---

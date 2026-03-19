@@ -16,10 +16,10 @@
 
 ### Credit Interface
 
-- [ ] **CRED-01**: CreditLedger interface defined with hold, settle, release, getBalance, getHistory, grant methods
+- [x] **CRED-01**: CreditLedger interface defined with hold, settle, release, getBalance, getHistory, grant methods
 - [ ] **CRED-02**: RegistryCreditLedger implements CreditLedger — direct DB operations when running on Registry server
 - [ ] **CRED-03**: RegistryCreditLedger implements CreditLedger — HTTP calls to Registry when running as remote agent
-- [ ] **CRED-04**: LocalCreditLedger wraps existing ledger.ts for offline/LAN-only mode
+- [x] **CRED-04**: LocalCreditLedger wraps existing ledger.ts for offline/LAN-only mode
 - [ ] **CRED-05**: Credit system auto-detects mode: Registry (if registryUrl configured) or Local (fallback)
 
 ### Registry Endpoints
@@ -99,10 +99,10 @@
 | RELAY-04 | Phase 25 | Complete |
 | RELAY-05 | Phase 25 | Complete |
 | RELAY-06 | Phase 25 | Complete |
-| CRED-01 | Phase 26 | Pending |
+| CRED-01 | Phase 26 | Complete |
 | CRED-02 | Phase 26 | Pending |
 | CRED-03 | Phase 26 | Pending |
-| CRED-04 | Phase 26 | Pending |
+| CRED-04 | Phase 26 | Complete |
 | CRED-05 | Phase 26 | Pending |
 | REG-01 | Phase 27 | Pending |
 | REG-02 | Phase 27 | Pending |
