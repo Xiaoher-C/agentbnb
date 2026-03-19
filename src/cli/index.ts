@@ -1264,6 +1264,22 @@ program
       console.log('Conductor mode enabled — orchestrate/plan skills available via gateway');
     }
 
+    // Register conductor card locally when conductor.public is enabled
+    if (opts.conductor && config.conductor?.public) {
+      const { buildConductorCard } = await import('../conductor/card.js');
+      const { AnyCardSchema: AnyCard } = await import('../types/index.js');
+      const conductorCard = buildConductorCard(config.owner);
+      // Use raw SQL to insert (same pattern as relay upsertCard)
+      const now = new Date().toISOString();
+      const existing = runtime.registryDb.prepare('SELECT id FROM capability_cards WHERE id = ?').get(conductorCard.id) as { id: string } | undefined;
+      if (existing) {
+        runtime.registryDb.prepare('UPDATE capability_cards SET data = ?, updated_at = ? WHERE id = ?').run(JSON.stringify(conductorCard), now, conductorCard.id);
+      } else {
+        runtime.registryDb.prepare('INSERT INTO capability_cards (id, owner, data, created_at, updated_at) VALUES (?, ?, ?, ?, ?)').run(conductorCard.id, config.owner, JSON.stringify(conductorCard), now, now);
+      }
+      console.log('Conductor card registered locally (conductor.public: true)');
+    }
+
     // Start IdleMonitor background loop
     const autonomyConfig = config.autonomy ?? DEFAULT_AUTONOMY_CONFIG;
     const idleMonitor = new IdleMonitor({
@@ -1351,11 +1367,21 @@ program
           availability: { online: true },
         };
 
+        // Build conductor card for relay registration if conductor.public is enabled
+        const additionalCards: Record<string, unknown>[] = [];
+        if (config.conductor?.public) {
+          const { buildConductorCard } = await import('../conductor/card.js');
+          const conductorCard = buildConductorCard(config.owner);
+          additionalCards.push(conductorCard as unknown as Record<string, unknown>);
+          console.log('Conductor card will be published to registry (conductor.public: true)');
+        }
+
         relayClient = new RelayClient({
           registryUrl: relayUrl,
           owner: config.owner,
           token: config.token,
           card: card as Record<string, unknown>,
+          cards: additionalCards.length > 0 ? additionalCards : undefined,
           onRequest: async (req) => {
             const onProgress: import('../skills/executor.js').ProgressCallback = (info) => {
               relayClient!.sendProgress(req.id, info);
@@ -1484,7 +1510,7 @@ configCmd
   .command('set <key> <value>')
   .description('Set a configuration value')
   .action((key: string, value: string) => {
-    const allowedKeys = ['registry', 'tier1', 'tier2', 'reserve', 'idle-threshold'];
+    const allowedKeys = ['registry', 'tier1', 'tier2', 'reserve', 'idle-threshold', 'conductor-public'];
     if (!allowedKeys.includes(key)) {
       console.error(`Unknown config key: ${key}. Valid keys: ${allowedKeys.join(', ')}`);
       process.exit(1);
@@ -1562,6 +1588,18 @@ configCmd
       return;
     }
 
+    if (key === 'conductor-public') {
+      const boolVal = value === 'true';
+      if (value !== 'true' && value !== 'false') {
+        console.error('Error: conductor-public must be "true" or "false"');
+        process.exit(1);
+      }
+      config.conductor = { public: boolVal };
+      saveConfig(config);
+      console.log(`Set conductor-public = ${boolVal} (conductor card ${boolVal ? 'will be' : 'will NOT be'} published to registry)`);
+      return;
+    }
+
     (config as unknown as Record<string, unknown>)[key] = value;
     saveConfig(config);
     console.log(`Set ${key} = ${value}`);
@@ -1595,6 +1633,11 @@ configCmd
     if (key === 'idle-threshold') {
       const val = (config as unknown as Record<string, unknown>)['idle_threshold'];
       console.log(val !== undefined ? String(val) : '0.70');
+      return;
+    }
+
+    if (key === 'conductor-public') {
+      console.log(String(config.conductor?.public ?? false));
       return;
     }
 
