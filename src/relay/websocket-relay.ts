@@ -14,6 +14,7 @@ import {
   type RelayState,
 } from './types.js';
 import { lookupCardPrice, holdForRelay, settleForRelay, releaseForRelay, calculateConductorFee } from './relay-credit.js';
+import { handleJobRelayResponse } from '../hub-agent/relay-bridge.js';
 import { AgentBnBError, AnyCardSchema } from '../types/index.js';
 
 /** Maximum relay requests per agent per minute */
@@ -45,6 +46,8 @@ export function registerWebSocketRelay(
   const pendingRequests = new Map<string, PendingRelayRequest>();
   /** Rate limit state per owner */
   const rateLimits = new Map<string, RateLimitEntry>();
+  /** Optional callback invoked when an agent registers (comes online) */
+  let onAgentOnlineCallback: ((owner: string) => void) | undefined;
 
   /**
    * Check and increment rate limit for an owner.
@@ -207,6 +210,13 @@ export function registerWebSocketRelay(
     // Mark all owner's cards online
     markOwnerOnline(owner);
 
+    // Invoke onAgentOnline callback (e.g., relay bridge dispatches queued jobs)
+    if (onAgentOnlineCallback) {
+      try { onAgentOnlineCallback(owner); } catch (e) {
+        console.error('[relay] onAgentOnline callback error:', e);
+      }
+    }
+
     // Send acknowledgment
     sendMessage(ws, { type: 'registered', agent_id: cardId });
   }
@@ -339,6 +349,29 @@ export function registerWebSocketRelay(
     // Clear timeout
     clearTimeout(pending.timeout);
     pendingRequests.delete(msg.id);
+
+    // If this is a job-dispatched request, delegate to job relay response handler
+    if (pending.jobId && creditDb) {
+      try {
+        handleJobRelayResponse({
+          registryDb: db,
+          creditDb,
+          jobId: pending.jobId,
+          escrowId: pending.escrowId,
+          relayOwner: pending.targetOwner ?? '',
+          result: msg.error === undefined ? msg.result : undefined,
+          error: msg.error,
+        });
+      } catch (e) {
+        console.error('[relay] job relay response handling failed:', e);
+      }
+      // Still forward response to origin if connected
+      const originWs = connections.get(pending.originOwner);
+      if (originWs && originWs.readyState === 1) {
+        sendMessage(originWs, { type: 'response', id: msg.id, result: msg.result, error: msg.error });
+      }
+      return;
+    }
 
     // Settle or release escrow based on response outcome
     if (pending.escrowId && creditDb) {
@@ -521,6 +554,14 @@ export function registerWebSocketRelay(
       }
       pendingRequests.clear();
       rateLimits.clear();
+    },
+    setOnAgentOnline: (cb: (owner: string) => void) => {
+      onAgentOnlineCallback = cb;
+    },
+    getConnections: () => connections as Map<string, unknown>,
+    getPendingRequests: () => pendingRequests,
+    sendMessage: (ws: unknown, msg: Record<string, unknown>) => {
+      sendMessage(ws as WebSocket, msg);
     },
   };
 }

@@ -119,6 +119,8 @@ export interface PendingRelayRequest {
   escrowId?: string;
   /** The target provider owner, needed to release escrow on provider disconnect */
   targetOwner?: string;
+  /** Job ID if this request was dispatched from the job queue (relay bridge) */
+  jobId?: string;
 }
 
 /** Relay server state returned from registerWebSocketRelay */
@@ -127,6 +129,14 @@ export interface RelayState {
   getOnlineCount(): number;
   /** List of connected agent owners */
   getOnlineOwners(): string[];
-  /** Graceful shutdown — close all connections */
+  /** Graceful shutdown -- close all connections */
   shutdown(): void;
+  /** Set a callback invoked when an agent registers (comes online) */
+  setOnAgentOnline?(cb: (owner: string) => void): void;
+  /** Get the active connections map (owner -> WebSocket) */
+  getConnections?(): Map<string, unknown>;
+  /** Get the pending requests map */
+  getPendingRequests?(): Map<string, PendingRelayRequest>;
+  /** Send a JSON message over a WebSocket */
+  sendMessage?(ws: unknown, msg: Record<string, unknown>): void;
 }

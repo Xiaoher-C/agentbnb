@@ -10,9 +10,11 @@ import {
   updateHubAgent,
   deleteHubAgent,
 } from './store.js';
+import { initJobQueue, listJobs, getJob } from './job-queue.js';
 import { HubAgentExecutor } from './executor.js';
 import { CreateAgentRequestSchema } from './types.js';
 import type { SkillRoute } from './types.js';
+import type { JobStatus } from './job-queue.js';
 
 /** Options for hubAgentRoutesPlugin. */
 export interface HubAgentRoutesOptions {
@@ -129,8 +131,9 @@ export async function hubAgentRoutesPlugin(
 ): Promise<void> {
   const { registryDb, creditDb } = options;
 
-  // Initialize hub_agents table
+  // Initialize hub_agents table and job queue table
   initHubAgentTable(registryDb);
+  initJobQueue(registryDb);
 
   /**
    * POST /api/agents — Create a new Hub Agent
@@ -411,5 +414,82 @@ export async function hubAgentRoutesPlugin(
     }
 
     return reply.send(result);
+  });
+
+  /**
+   * GET /api/hub-agents/:id/jobs -- List jobs for a Hub Agent
+   */
+  fastify.get('/api/hub-agents/:id/jobs', {
+    schema: {
+      tags: ['hub-agents'],
+      summary: 'List jobs for a Hub Agent',
+      params: {
+        type: 'object',
+        properties: { id: { type: 'string' } },
+        required: ['id'],
+      },
+      querystring: {
+        type: 'object',
+        properties: {
+          status: { type: 'string', enum: ['queued', 'dispatched', 'completed', 'failed'] },
+        },
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            jobs: { type: 'array' },
+          },
+        },
+      },
+    },
+  }, async (request: FastifyRequest, reply: FastifyReply) => {
+    const { id } = request.params as { id: string };
+    const { status } = (request.query ?? {}) as { status?: string };
+
+    const jobs = listJobs(registryDb, id, status as JobStatus | undefined);
+    return reply.send({ jobs });
+  });
+
+  /**
+   * GET /api/hub-agents/:id/jobs/:jobId -- Get a single job
+   */
+  fastify.get('/api/hub-agents/:id/jobs/:jobId', {
+    schema: {
+      tags: ['hub-agents'],
+      summary: 'Get a single job by ID',
+      params: {
+        type: 'object',
+        properties: {
+          id: { type: 'string' },
+          jobId: { type: 'string' },
+        },
+        required: ['id', 'jobId'],
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            id: { type: 'string' },
+            hub_agent_id: { type: 'string' },
+            skill_id: { type: 'string' },
+            status: { type: 'string' },
+          },
+        },
+        404: {
+          type: 'object',
+          properties: { error: { type: 'string' } },
+        },
+      },
+    },
+  }, async (request: FastifyRequest, reply: FastifyReply) => {
+    const { jobId } = request.params as { id: string; jobId: string };
+
+    const job = getJob(registryDb, jobId);
+    if (!job) {
+      return reply.code(404).send({ error: 'Job not found' });
+    }
+
+    return reply.send(job);
   });
 }

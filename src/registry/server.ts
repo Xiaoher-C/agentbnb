@@ -28,6 +28,7 @@ import {
 } from '../identity/guarantor.js';
 import { creditRoutesPlugin } from './credit-routes.js';
 import { hubAgentRoutesPlugin } from '../hub-agent/routes.js';
+import { createRelayBridge } from '../hub-agent/relay-bridge.js';
 import { convertToGptActions } from './openapi-gpt-actions.js';
 
 /**
@@ -142,9 +143,21 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
     void server.register(creditRoutesPlugin, { creditDb: opts.creditDb });
   }
 
-  // Register Hub Agent CRUD endpoints — requires HUB_MASTER_KEY env var for secret encryption
+  // Register Hub Agent CRUD endpoints -- requires HUB_MASTER_KEY env var for secret encryption
   if (opts.creditDb) {
     void server.register(hubAgentRoutesPlugin, { registryDb: db, creditDb: opts.creditDb });
+
+    // Wire relay bridge: auto-dispatch queued jobs when agents reconnect
+    if (relayState?.setOnAgentOnline && relayState.getConnections && relayState.getPendingRequests && relayState.sendMessage) {
+      const bridge = createRelayBridge({
+        registryDb: db,
+        creditDb: opts.creditDb,
+        sendMessage: relayState.sendMessage,
+        pendingRequests: relayState.getPendingRequests(),
+        connections: relayState.getConnections(),
+      });
+      relayState.setOnAgentOnline(bridge.onAgentOnline);
+    }
   }
 
   // Register static file serving for the hub SPA (optional — skipped if hub not built)
