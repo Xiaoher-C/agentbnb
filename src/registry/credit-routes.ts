@@ -55,7 +55,26 @@ export async function creditRoutesPlugin(
      * Body: { owner: string, amount: number, cardId: string }
      * Returns: { escrowId: string }
      */
-    scope.post('/api/credits/hold', async (request: FastifyRequest, reply: FastifyReply) => {
+    scope.post('/api/credits/hold', {
+      schema: {
+        tags: ['credits'],
+        summary: 'Hold credits in escrow during capability execution',
+        security: [{ ed25519Auth: [] }],
+        body: {
+          type: 'object',
+          properties: {
+            owner: { type: 'string' },
+            amount: { type: 'number' },
+            cardId: { type: 'string' },
+          },
+          required: ['owner', 'amount', 'cardId'],
+        },
+        response: {
+          200: { type: 'object', properties: { escrowId: { type: 'string' } } },
+          400: { type: 'object', properties: { error: { type: 'string' }, code: { type: 'string' } } },
+        },
+      },
+    }, async (request: FastifyRequest, reply: FastifyReply) => {
       const body = request.body as Record<string, unknown>;
       const owner = typeof body.owner === 'string' ? body.owner.trim() : '';
       const amount = typeof body.amount === 'number' ? body.amount : NaN;
@@ -81,7 +100,25 @@ export async function creditRoutesPlugin(
      * Body: { escrowId: string, recipientOwner: string }
      * Returns: { ok: true }
      */
-    scope.post('/api/credits/settle', async (request: FastifyRequest, reply: FastifyReply) => {
+    scope.post('/api/credits/settle', {
+      schema: {
+        tags: ['credits'],
+        summary: 'Transfer held credits to provider on success',
+        security: [{ ed25519Auth: [] }],
+        body: {
+          type: 'object',
+          properties: {
+            escrowId: { type: 'string' },
+            recipientOwner: { type: 'string' },
+          },
+          required: ['escrowId', 'recipientOwner'],
+        },
+        response: {
+          200: { type: 'object', properties: { ok: { type: 'boolean' } } },
+          400: { type: 'object', properties: { error: { type: 'string' }, code: { type: 'string' } } },
+        },
+      },
+    }, async (request: FastifyRequest, reply: FastifyReply) => {
       const body = request.body as Record<string, unknown>;
       const escrowId = typeof body.escrowId === 'string' ? body.escrowId.trim() : '';
       const recipientOwner = typeof body.recipientOwner === 'string' ? body.recipientOwner.trim() : '';
@@ -106,7 +143,22 @@ export async function creditRoutesPlugin(
      * Body: { escrowId: string }
      * Returns: { ok: true }
      */
-    scope.post('/api/credits/release', async (request: FastifyRequest, reply: FastifyReply) => {
+    scope.post('/api/credits/release', {
+      schema: {
+        tags: ['credits'],
+        summary: 'Refund held credits to requester on failure',
+        security: [{ ed25519Auth: [] }],
+        body: {
+          type: 'object',
+          properties: { escrowId: { type: 'string' } },
+          required: ['escrowId'],
+        },
+        response: {
+          200: { type: 'object', properties: { ok: { type: 'boolean' } } },
+          400: { type: 'object', properties: { error: { type: 'string' }, code: { type: 'string' } } },
+        },
+      },
+    }, async (request: FastifyRequest, reply: FastifyReply) => {
       const body = request.body as Record<string, unknown>;
       const escrowId = typeof body.escrowId === 'string' ? body.escrowId.trim() : '';
 
@@ -132,7 +184,32 @@ export async function creditRoutesPlugin(
      *
      * Deduplication is by Ed25519 public key (request.agentPublicKey set by identityAuthPlugin).
      */
-    scope.post('/api/credits/grant', async (request: FastifyRequest, reply: FastifyReply) => {
+    scope.post('/api/credits/grant', {
+      schema: {
+        tags: ['credits'],
+        summary: 'Bootstrap grant of 50 credits (once per identity)',
+        security: [{ ed25519Auth: [] }],
+        body: {
+          type: 'object',
+          properties: {
+            owner: { type: 'string' },
+            amount: { type: 'number' },
+          },
+          required: ['owner'],
+        },
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              ok: { type: 'boolean' },
+              granted: { type: 'number' },
+              reason: { type: 'string' },
+            },
+          },
+          400: { type: 'object', properties: { error: { type: 'string' } } },
+        },
+      },
+    }, async (request: FastifyRequest, reply: FastifyReply) => {
       const body = request.body as Record<string, unknown>;
       const owner = typeof body.owner === 'string' ? body.owner.trim() : '';
       const amount = typeof body.amount === 'number' ? body.amount : 50;
@@ -165,7 +242,15 @@ export async function creditRoutesPlugin(
      * GET /api/credits/:owner
      * Returns: { balance: number }
      */
-    scope.get('/api/credits/:owner', async (request: FastifyRequest, reply: FastifyReply) => {
+    scope.get('/api/credits/:owner', {
+      schema: {
+        tags: ['credits'],
+        summary: 'Get current credit balance for an agent',
+        security: [{ ed25519Auth: [] }],
+        params: { type: 'object', properties: { owner: { type: 'string' } }, required: ['owner'] },
+        response: { 200: { type: 'object', properties: { balance: { type: 'number' } } } },
+      },
+    }, async (request: FastifyRequest, reply: FastifyReply) => {
       const { owner } = request.params as { owner: string };
       const balance = getBalance(creditDb, owner);
       return reply.send({ balance });
@@ -176,7 +261,24 @@ export async function creditRoutesPlugin(
      * Query: limit (default 20, max 100)
      * Returns: { transactions: CreditTransaction[], limit: number }
      */
-    scope.get('/api/credits/:owner/history', async (request: FastifyRequest, reply: FastifyReply) => {
+    scope.get('/api/credits/:owner/history', {
+      schema: {
+        tags: ['credits'],
+        summary: 'Get paginated transaction history',
+        security: [{ ed25519Auth: [] }],
+        params: { type: 'object', properties: { owner: { type: 'string' } }, required: ['owner'] },
+        querystring: {
+          type: 'object',
+          properties: { limit: { type: 'integer', description: 'Max entries (default 20, max 100)' } },
+        },
+        response: {
+          200: {
+            type: 'object',
+            properties: { transactions: { type: 'array' }, limit: { type: 'integer' } },
+          },
+        },
+      },
+    }, async (request: FastifyRequest, reply: FastifyReply) => {
       const { owner } = request.params as { owner: string };
       const query = request.query as Record<string, string | undefined>;
       const rawLimit = query.limit !== undefined ? parseInt(query.limit, 10) : 20;

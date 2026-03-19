@@ -1,5 +1,7 @@
 import Fastify, { type FastifyInstance } from 'fastify';
 import cors from '@fastify/cors';
+import swagger from '@fastify/swagger';
+import swaggerUi from '@fastify/swagger-ui';
 import fastifyStatic from '@fastify/static';
 import fastifyWebsocket from '@fastify/websocket';
 import { join, dirname } from 'node:path';
@@ -78,6 +80,44 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
 
   const server = Fastify({ logger: !silent });
 
+  // Register OpenAPI / Swagger — MUST be registered before any routes
+  void server.register(swagger, {
+    openapi: {
+      openapi: '3.0.3',
+      info: {
+        title: 'AgentBnB Registry API',
+        description: 'P2P Agent Capability Sharing Protocol — discover, publish, and exchange agent capabilities',
+        version: '3.1.6',
+      },
+      servers: [{ url: '/', description: 'Registry server' }],
+      tags: [
+        { name: 'cards', description: 'Capability card CRUD' },
+        { name: 'credits', description: 'Credit hold/settle/release (Ed25519 auth required)' },
+        { name: 'agents', description: 'Agent profiles and reputation' },
+        { name: 'identity', description: 'Agent identity and guarantor registration' },
+        { name: 'owner', description: 'Owner-only endpoints (Bearer auth required)' },
+        { name: 'system', description: 'Health and stats' },
+        { name: 'pricing', description: 'Market pricing statistics' },
+      ],
+      components: {
+        securitySchemes: {
+          bearerAuth: { type: 'http', scheme: 'bearer' },
+          ed25519Auth: {
+            type: 'apiKey',
+            in: 'header',
+            name: 'X-Agent-PublicKey',
+            description: 'Ed25519 public key (hex). Also requires X-Agent-Signature and X-Agent-Timestamp headers.',
+          },
+        },
+      },
+    },
+  });
+
+  void server.register(swaggerUi, {
+    routePrefix: '/docs',
+    uiConfig: { docExpansion: 'list', deepLinking: true },
+  });
+
   // Register CORS — allow all origins for public marketplace discovery, including preflight
   void server.register(cors, {
     origin: true,
@@ -142,7 +182,13 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
   /**
    * GET /health — Liveness probe for the registry server.
    */
-  server.get('/health', async (_request, reply) => {
+  server.get('/health', {
+    schema: {
+      tags: ['system'],
+      summary: 'Liveness probe',
+      response: { 200: { type: 'object', properties: { status: { type: 'string' } } } },
+    },
+  }, async (_request, reply) => {
     return reply.send({ status: 'ok' });
   });
 
@@ -160,7 +206,38 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
    *   limit              — Max items per page (default 20, max 100)
    *   offset             — Pagination offset (default 0)
    */
-  server.get('/cards', async (request, reply) => {
+  server.get('/cards', {
+    schema: {
+      tags: ['cards'],
+      summary: 'List and search capability cards',
+      querystring: {
+        type: 'object',
+        properties: {
+          q: { type: 'string', description: 'Full-text search query' },
+          level: { type: 'integer', enum: [1, 2, 3], description: 'Capability level filter' },
+          online: { type: 'string', enum: ['true', 'false'], description: 'Availability filter' },
+          tag: { type: 'string', description: 'Filter by metadata tag' },
+          min_success_rate: { type: 'number', description: 'Minimum success rate (0-1)' },
+          max_latency_ms: { type: 'number', description: 'Maximum average latency in ms' },
+          sort: { type: 'string', enum: ['popular', 'rated', 'success_rate', 'cheapest', 'newest', 'latency'], description: 'Sort order' },
+          limit: { type: 'integer', default: 20, description: 'Max items per page (max 100)' },
+          offset: { type: 'integer', default: 0, description: 'Pagination offset' },
+        },
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            total: { type: 'integer' },
+            limit: { type: 'integer' },
+            offset: { type: 'integer' },
+            items: { type: 'array' },
+            uses_this_week: { type: 'object', additionalProperties: { type: 'number' } },
+          },
+        },
+      },
+    },
+  }, async (request, reply) => {
     const query = request.query as Record<string, string | undefined>;
 
     // Parse query params
@@ -289,7 +366,13 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
    * Each item includes the full card data plus `uses_this_week` count.
    * Only cards with at least 1 successful request in the window are included.
    */
-  server.get('/api/cards/trending', async (_request, reply) => {
+  server.get('/api/cards/trending', {
+    schema: {
+      tags: ['cards'],
+      summary: 'Top 10 trending skills by recent usage',
+      response: { 200: { type: 'object', properties: { items: { type: 'array' } } } },
+    },
+  }, async (_request, reply) => {
     const trendingStmt = db.prepare(`
       SELECT rl.card_id, COUNT(*) as recent_requests
       FROM request_log rl
@@ -321,7 +404,31 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
    *
    * Returns { query, min, max, median, mean, count } or 400 if q is missing.
    */
-  server.get('/api/pricing', async (request, reply) => {
+  server.get('/api/pricing', {
+    schema: {
+      tags: ['pricing'],
+      summary: 'Aggregate pricing statistics for skills matching a query',
+      querystring: {
+        type: 'object',
+        properties: { q: { type: 'string', description: 'Search query (required)' } },
+        required: ['q'],
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            query: { type: 'string' },
+            min: { type: 'number' },
+            max: { type: 'number' },
+            median: { type: 'number' },
+            mean: { type: 'number' },
+            count: { type: 'integer' },
+          },
+        },
+        400: { type: 'object', properties: { error: { type: 'string' } } },
+      },
+    },
+  }, async (request, reply) => {
     const query = request.query as Record<string, string | undefined>;
     const q = query.q?.trim();
     if (!q) {
@@ -336,7 +443,17 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
    *
    * Returns the card if found, or 404 with { error: 'Not found' }.
    */
-  server.get('/cards/:id', async (request, reply) => {
+  server.get('/cards/:id', {
+    schema: {
+      tags: ['cards'],
+      summary: 'Get a capability card by ID',
+      params: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] },
+      response: {
+        200: { type: 'object', additionalProperties: true },
+        404: { type: 'object', properties: { error: { type: 'string' } } },
+      },
+    },
+  }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const card = getCard(db, id);
 
@@ -354,7 +471,17 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
    * For v2.0 cards, uses INSERT OR REPLACE (raw SQL) since insertCard() only handles v1.0.
    * Returns 201 on success, 400 on validation failure.
    */
-  server.post('/cards', async (request, reply) => {
+  server.post('/cards', {
+    schema: {
+      tags: ['cards'],
+      summary: 'Publish a capability card',
+      body: { type: 'object', additionalProperties: true, description: 'Capability card JSON (v1.0 or v2.0)' },
+      response: {
+        201: { type: 'object', properties: { ok: { type: 'boolean' }, id: { type: 'string' } } },
+        400: { type: 'object', properties: { error: { type: 'string' }, issues: { type: 'array' } } },
+      },
+    },
+  }, async (request, reply) => {
     const body = request.body as Record<string, unknown>;
     // Default spec_version to '1.0' if missing (AnyCardSchema requires discriminator)
     if (!body.spec_version) {
@@ -409,7 +536,17 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
    *
    * Returns 200 on success, 404 if card not found.
    */
-  server.delete('/cards/:id', async (request, reply) => {
+  server.delete('/cards/:id', {
+    schema: {
+      tags: ['cards'],
+      summary: 'Delete a capability card',
+      params: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] },
+      response: {
+        200: { type: 'object', properties: { ok: { type: 'boolean' }, id: { type: 'string' } } },
+        404: { type: 'object', properties: { error: { type: 'string' } } },
+      },
+    },
+  }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const card = getCard(db, id);
     if (!card) {
@@ -426,7 +563,18 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
    * Sorted by success_rate DESC (nulls last), then total_earned DESC.
    * credits_earned is computed via GROUP BY aggregate SQL, never stored as a column.
    */
-  server.get('/api/agents', async (_request, reply) => {
+  server.get('/api/agents', {
+    schema: {
+      tags: ['agents'],
+      summary: 'List all agent profiles sorted by reputation',
+      response: {
+        200: {
+          type: 'object',
+          properties: { items: { type: 'array' }, total: { type: 'integer' } },
+        },
+      },
+    },
+  }, async (_request, reply) => {
     const allCards = listCards(db);
 
     // Group cards by owner
@@ -491,7 +639,24 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
    * Returns 404 if the owner has no capability cards registered.
    * recent_activity contains up to 10 most recent request log entries for this owner's cards.
    */
-  server.get('/api/agents/:owner', async (request, reply) => {
+  server.get('/api/agents/:owner', {
+    schema: {
+      tags: ['agents'],
+      summary: 'Get agent profile, skills, and recent activity',
+      params: { type: 'object', properties: { owner: { type: 'string' } }, required: ['owner'] },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            profile: { type: 'object', additionalProperties: true },
+            skills: { type: 'array' },
+            recent_activity: { type: 'array' },
+          },
+        },
+        404: { type: 'object', properties: { error: { type: 'string' } } },
+      },
+    },
+  }, async (request, reply) => {
     const { owner } = request.params as { owner: string };
     const ownerCards = listCards(db, owner);
 
@@ -567,7 +732,29 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
    *   limit  — Max items to return (default 20, max 100)
    *   since  — ISO 8601 timestamp; only entries newer than this are returned (for polling)
    */
-  server.get('/api/activity', async (request, reply) => {
+  server.get('/api/activity', {
+    schema: {
+      tags: ['system'],
+      summary: 'Paginated public activity feed of exchange events',
+      querystring: {
+        type: 'object',
+        properties: {
+          limit: { type: 'integer', default: 20, description: 'Max items (max 100)' },
+          since: { type: 'string', description: 'ISO 8601 timestamp for polling' },
+        },
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            items: { type: 'array' },
+            total: { type: 'integer' },
+            limit: { type: 'integer' },
+          },
+        },
+      },
+    },
+  }, async (request, reply) => {
     const query = request.query as Record<string, string | undefined>;
     const rawLimit = query.limit !== undefined ? parseInt(query.limit, 10) : 20;
     const limit = Math.min(isNaN(rawLimit) || rawLimit < 1 ? 20 : rawLimit, 100);
@@ -583,7 +770,22 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
    * - total_capabilities: total number of registered capability cards
    * - total_exchanges: count of successful exchanges (excluding autonomy audits)
    */
-  server.get('/api/stats', async (_request, reply) => {
+  server.get('/api/stats', {
+    schema: {
+      tags: ['system'],
+      summary: 'Aggregate network statistics',
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            agents_online: { type: 'integer' },
+            total_capabilities: { type: 'integer' },
+            total_exchanges: { type: 'integer' },
+          },
+        },
+      },
+    },
+  }, async (_request, reply) => {
     const allCards = listCards(db);
 
     // Online agents: relay connections + cards marked online (deduplicated by owner)
@@ -625,7 +827,22 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
    * Body: { github_login: string }
    * Returns the created GuarantorRecord. GitHub OAuth verification is stubbed.
    */
-  server.post('/api/identity/register', async (request, reply) => {
+  server.post('/api/identity/register', {
+    schema: {
+      tags: ['identity'],
+      summary: 'Register a human guarantor via GitHub login',
+      body: {
+        type: 'object',
+        properties: { github_login: { type: 'string' } },
+        required: ['github_login'],
+      },
+      response: {
+        201: { type: 'object', additionalProperties: true },
+        400: { type: 'object', properties: { error: { type: 'string' } } },
+        409: { type: 'object', properties: { error: { type: 'string' } } },
+      },
+    },
+  }, async (request, reply) => {
     if (!opts.creditDb) {
       return reply.code(503).send({ error: 'Credit database not configured' });
     }
@@ -652,7 +869,26 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
    * Body: { agent_id: string, github_login: string }
    * Enforces max 10 agents per guarantor.
    */
-  server.post('/api/identity/link', async (request, reply) => {
+  server.post('/api/identity/link', {
+    schema: {
+      tags: ['identity'],
+      summary: 'Link an agent to a human guarantor',
+      body: {
+        type: 'object',
+        properties: {
+          agent_id: { type: 'string' },
+          github_login: { type: 'string' },
+        },
+        required: ['agent_id', 'github_login'],
+      },
+      response: {
+        200: { type: 'object', additionalProperties: true },
+        400: { type: 'object', properties: { error: { type: 'string' } } },
+        404: { type: 'object', properties: { error: { type: 'string' } } },
+        409: { type: 'object', properties: { error: { type: 'string' } } },
+      },
+    },
+  }, async (request, reply) => {
     if (!opts.creditDb) {
       return reply.code(503).send({ error: 'Credit database not configured' });
     }
@@ -684,7 +920,22 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
    *
    * Returns { guarantor: GuarantorRecord } or { guarantor: null } if not linked.
    */
-  server.get('/api/identity/:agent_id', async (request, reply) => {
+  server.get('/api/identity/:agent_id', {
+    schema: {
+      tags: ['identity'],
+      summary: 'Get guarantor info for an agent',
+      params: { type: 'object', properties: { agent_id: { type: 'string' } }, required: ['agent_id'] },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            agent_id: { type: 'string' },
+            guarantor: { oneOf: [{ type: 'object', additionalProperties: true }, { type: 'null' }] },
+          },
+        },
+      },
+    },
+  }, async (request, reply) => {
     if (!opts.creditDb) {
       return reply.code(503).send({ error: 'Credit database not configured' });
     }
@@ -716,7 +967,16 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
        * GET /me — Returns owner identity and current credit balance.
        * Uses CreditLedger (direct DB mode) when creditDb is available.
        */
-      ownerRoutes.get('/me', async (_request, reply) => {
+      ownerRoutes.get('/me', {
+        schema: {
+          tags: ['owner'],
+          summary: 'Get owner identity and credit balance',
+          security: [{ bearerAuth: [] }],
+          response: {
+            200: { type: 'object', properties: { owner: { type: 'string' }, balance: { type: 'number' } } },
+          },
+        },
+      }, async (_request, reply) => {
         let balance = 0;
         if (opts.creditDb) {
           const ledger = createLedger({ db: opts.creditDb });
@@ -732,7 +992,21 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
        *   limit  — Max entries (default 10, max 100)
        *   since  — Time window: '24h', '7d', or '30d'
        */
-      ownerRoutes.get('/requests', async (request, reply) => {
+      ownerRoutes.get('/requests', {
+        schema: {
+          tags: ['owner'],
+          summary: 'Paginated request log entries',
+          security: [{ bearerAuth: [] }],
+          querystring: {
+            type: 'object',
+            properties: {
+              limit: { type: 'integer', description: 'Max entries (default 10, max 100)' },
+              since: { type: 'string', enum: ['24h', '7d', '30d'], description: 'Time window' },
+            },
+          },
+          response: { 200: { type: 'object', properties: { items: { type: 'array' }, limit: { type: 'integer' } } } },
+        },
+      }, async (request, reply) => {
         const query = request.query as Record<string, string | undefined>;
         const rawLimit = query.limit !== undefined ? parseInt(query.limit, 10) : 10;
         const limit = Math.min(isNaN(rawLimit) || rawLimit < 1 ? 10 : rawLimit, 100);
@@ -748,7 +1022,14 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
       /**
        * GET /draft — Returns draft Capability Cards built from auto-detected API keys.
        */
-      ownerRoutes.get('/draft', async (_request, reply) => {
+      ownerRoutes.get('/draft', {
+        schema: {
+          tags: ['owner'],
+          summary: 'Draft capability cards from auto-detected API keys',
+          security: [{ bearerAuth: [] }],
+          response: { 200: { type: 'object', properties: { cards: { type: 'array' } } } },
+        },
+      }, async (_request, reply) => {
         const detectedKeys = detectApiKeys(KNOWN_API_KEYS);
         const cards = detectedKeys
           .map((key) => buildDraftCard(key, ownerName))
@@ -761,7 +1042,18 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
        *
        * Returns 404 if card not found, 403 if card belongs to different owner.
        */
-      ownerRoutes.post('/cards/:id/toggle-online', async (request, reply) => {
+      ownerRoutes.post('/cards/:id/toggle-online', {
+        schema: {
+          tags: ['owner'],
+          summary: 'Toggle card online/offline status',
+          security: [{ bearerAuth: [] }],
+          params: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] },
+          response: {
+            200: { type: 'object', properties: { ok: { type: 'boolean' }, online: { type: 'boolean' } } },
+            404: { type: 'object', properties: { error: { type: 'string' } } },
+          },
+        },
+      }, async (request, reply) => {
         const { id } = request.params as { id: string };
         const card = getCard(db, id);
         if (!card) {
@@ -786,7 +1078,27 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
        *
        * Returns 403 if card belongs to different owner, 404 if not found.
        */
-      ownerRoutes.patch('/cards/:id', async (request, reply) => {
+      ownerRoutes.patch('/cards/:id', {
+        schema: {
+          tags: ['owner'],
+          summary: 'Update card description or pricing',
+          security: [{ bearerAuth: [] }],
+          params: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] },
+          body: {
+            type: 'object',
+            properties: {
+              description: { type: 'string' },
+              pricing: { type: 'object', additionalProperties: true },
+            },
+            additionalProperties: true,
+          },
+          response: {
+            200: { type: 'object', properties: { ok: { type: 'boolean' } } },
+            403: { type: 'object', properties: { error: { type: 'string' } } },
+            404: { type: 'object', properties: { error: { type: 'string' } } },
+          },
+        },
+      }, async (request, reply) => {
         const { id } = request.params as { id: string };
         const body = request.body as Partial<Pick<CapabilityCard, 'description' | 'pricing'>>;
         const updates: Partial<CapabilityCard> = {};
@@ -813,7 +1125,14 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
        *
        * Returns an array of PendingRequest objects with status='pending', newest first.
        */
-      ownerRoutes.get('/me/pending-requests', async (_request, reply) => {
+      ownerRoutes.get('/me/pending-requests', {
+        schema: {
+          tags: ['owner'],
+          summary: 'List pending Tier 3 approval queue entries',
+          security: [{ bearerAuth: [] }],
+          response: { 200: { type: 'array' } },
+        },
+      }, async (_request, reply) => {
         const rows = listPendingRequests(db);
         return reply.send(rows);
       });
@@ -824,7 +1143,18 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
        * Returns 200 with { status: 'approved', id } on success.
        * Returns 404 if the request id does not exist.
        */
-      ownerRoutes.post('/me/pending-requests/:id/approve', async (request, reply) => {
+      ownerRoutes.post('/me/pending-requests/:id/approve', {
+        schema: {
+          tags: ['owner'],
+          summary: 'Approve a pending Tier 3 request',
+          security: [{ bearerAuth: [] }],
+          params: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] },
+          response: {
+            200: { type: 'object', properties: { status: { type: 'string' }, id: { type: 'string' } } },
+            404: { type: 'object', properties: { error: { type: 'string' } } },
+          },
+        },
+      }, async (request, reply) => {
         const { id } = request.params as { id: string };
         try {
           resolvePendingRequest(db, id, 'approved');
@@ -841,7 +1171,18 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
        * Returns 200 with { status: 'rejected', id } on success.
        * Returns 404 if the request id does not exist.
        */
-      ownerRoutes.post('/me/pending-requests/:id/reject', async (request, reply) => {
+      ownerRoutes.post('/me/pending-requests/:id/reject', {
+        schema: {
+          tags: ['owner'],
+          summary: 'Reject a pending Tier 3 request',
+          security: [{ bearerAuth: [] }],
+          params: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] },
+          response: {
+            200: { type: 'object', properties: { status: { type: 'string' }, id: { type: 'string' } } },
+            404: { type: 'object', properties: { error: { type: 'string' } } },
+          },
+        },
+      }, async (request, reply) => {
         const { id } = request.params as { id: string };
         try {
           resolvePendingRequest(db, id, 'rejected');
@@ -861,7 +1202,20 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
        * Returns { items: CreditTransaction[], limit: number }
        * Returns { items: [], limit: 20 } when no creditDb is configured.
        */
-      ownerRoutes.get('/me/transactions', async (request, reply) => {
+      ownerRoutes.get('/me/transactions', {
+        schema: {
+          tags: ['owner'],
+          summary: 'Paginated credit transaction history',
+          security: [{ bearerAuth: [] }],
+          querystring: {
+            type: 'object',
+            properties: { limit: { type: 'integer', description: 'Max entries (default 20, max 100)' } },
+          },
+          response: {
+            200: { type: 'object', properties: { items: { type: 'array' }, limit: { type: 'integer' } } },
+          },
+        },
+      }, async (request, reply) => {
         const query = request.query as Record<string, string | undefined>;
         const rawLimit = query.limit !== undefined ? parseInt(query.limit, 10) : 20;
         const limit = Math.min(isNaN(rawLimit) || rawLimit < 1 ? 20 : rawLimit, 100);
