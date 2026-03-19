@@ -11,7 +11,7 @@ import { listPendingRequests, resolvePendingRequest } from '../autonomy/pending-
 import { searchCards, filterCards } from './matcher.js';
 import { getRequestLog, getActivityFeed } from './request-log.js';
 import type { SincePeriod } from './request-log.js';
-import { getBalance, getTransactions } from '../credit/ledger.js';
+import { createLedger } from '../credit/create-ledger.js';
 import { detectApiKeys, buildDraftCard, KNOWN_API_KEYS } from '../cli/onboarding.js';
 import { AgentBnBError, AnyCardSchema } from '../types/index.js';
 import type { CapabilityCard, CapabilityCardV2 } from '../types/index.js';
@@ -695,11 +695,14 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
 
       /**
        * GET /me — Returns owner identity and current credit balance.
+       * Uses CreditLedger (direct DB mode) when creditDb is available.
        */
       ownerRoutes.get('/me', async (_request, reply) => {
-        const balance = opts.creditDb
-          ? getBalance(opts.creditDb, ownerName)
-          : 0;
+        let balance = 0;
+        if (opts.creditDb) {
+          const ledger = createLedger({ db: opts.creditDb });
+          balance = await ledger.getBalance(ownerName);
+        }
         return reply.send({ owner: ownerName, balance });
       });
 
@@ -846,7 +849,8 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
         if (!opts.creditDb) {
           return reply.send({ items: [], limit });
         }
-        const items = getTransactions(opts.creditDb, ownerName, limit);
+        const ledger = createLedger({ db: opts.creditDb });
+        const items = await ledger.getHistory(ownerName, limit);
         return reply.send({ items, limit });
       });
     });
