@@ -209,6 +209,13 @@ export function verifyAgentCertificate(cert: AgentCertificate): boolean {
  */
 export function ensureIdentity(configDir: string, owner: string): AgentIdentity {
   const existing = loadIdentity(configDir);
-  if (existing) return existing;
+  if (existing) {
+    // Sync owner if it changed (e.g. re-init with different --owner)
+    if (existing.owner !== owner) {
+      existing.owner = owner;
+      saveIdentity(configDir, existing);
+    }
+    return existing;
+  }
   return createIdentity(configDir, owner);
 }

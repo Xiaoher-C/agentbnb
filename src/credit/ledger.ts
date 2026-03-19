@@ -169,5 +169,53 @@ export function recordEarning(
   })();
 }
 
+/**
+ * Migrates credit data from one owner to another.
+ * Merges balances and updates all transaction/escrow records.
+ *
+ * @param db - The credit database instance.
+ * @param oldOwner - Previous owner identifier.
+ * @param newOwner - New owner identifier.
+ */
+export function migrateOwner(
+  db: Database.Database,
+  oldOwner: string,
+  newOwner: string,
+): void {
+  if (oldOwner === newOwner) return;
+
+  const now = new Date().toISOString();
+
+  db.transaction(() => {
+    // Get old balance
+    const oldRow = db.prepare('SELECT balance FROM credit_balances WHERE owner = ?').get(oldOwner) as { balance: number } | undefined;
+    if (!oldRow) return; // nothing to migrate
+
+    // Check if new owner already has a balance row
+    const newRow = db.prepare('SELECT balance FROM credit_balances WHERE owner = ?').get(newOwner) as { balance: number } | undefined;
+
+    if (newRow) {
+      // Merge: add old balance to new
+      db.prepare('UPDATE credit_balances SET balance = balance + ?, updated_at = ? WHERE owner = ?')
+        .run(oldRow.balance, now, newOwner);
+    } else {
+      // Rename: update owner in place
+      db.prepare('UPDATE credit_balances SET owner = ?, updated_at = ? WHERE owner = ?')
+        .run(newOwner, now, oldOwner);
+    }
+
+    // Delete old row if merge happened (new row existed)
+    if (newRow) {
+      db.prepare('DELETE FROM credit_balances WHERE owner = ?').run(oldOwner);
+    }
+
+    // Migrate transactions
+    db.prepare('UPDATE credit_transactions SET owner = ? WHERE owner = ?').run(newOwner, oldOwner);
+
+    // Migrate escrows
+    db.prepare('UPDATE credit_escrow SET owner = ? WHERE owner = ?').run(newOwner, oldOwner);
+  })();
+}
+
 // Re-export error for use in escrow module
 export { AgentBnBError };

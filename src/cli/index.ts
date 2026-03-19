@@ -27,7 +27,7 @@ import { AnyCardSchema } from '../types/index.js';
 import { openDatabase, insertCard, listCards } from '../registry/store.js';
 import { searchCards, filterCards } from '../registry/matcher.js';
 import { getPricingStats } from '../registry/pricing.js';
-import { openCreditDb, getBalance, bootstrapAgent, getTransactions } from '../credit/ledger.js';
+import { openCreditDb, getBalance, bootstrapAgent, getTransactions, migrateOwner } from '../credit/ledger.js';
 import { createLedger } from '../credit/create-ledger.js';
 import { AgentRuntime } from '../runtime/agent-runtime.js';
 import { requestCapability } from '../gateway/client.js';
@@ -161,8 +161,41 @@ program
     // Create or load agent identity (idempotent — preserves existing identity)
     const identity = ensureIdentity(configDir, owner);
 
-    // Bootstrap credit ledger with 100 credits (local always)
+    // Migrate data if owner changed
     const creditDb = openCreditDb(creditDbPath);
+    if (existingConfig?.owner && existingConfig.owner !== owner) {
+      migrateOwner(creditDb, existingConfig.owner, owner);
+
+      // Migrate card ownership in registry DB (all non-matching owners)
+      const regDb = openDatabase(dbPath);
+      try {
+        const rows = regDb.prepare('SELECT id, owner, data FROM capability_cards WHERE owner != ?').all(owner) as Array<{ id: string; owner: string; data: string }>;
+        for (const row of rows) {
+          try {
+            const card = JSON.parse(row.data);
+            card.owner = owner;
+            regDb.prepare('UPDATE capability_cards SET owner = ?, data = ? WHERE id = ?').run(owner, JSON.stringify(card), row.id);
+          } catch { /* skip malformed cards */ }
+        }
+        if (!opts.json && rows.length > 0) {
+          console.log(`Migrated ${rows.length} card(s) → ${owner}`);
+        }
+      } finally {
+        regDb.close();
+      }
+
+      // Also consolidate credits from all other owners in credit DB
+      const allOwners = creditDb.prepare('SELECT owner FROM credit_balances WHERE owner != ?').all(owner) as Array<{ owner: string }>;
+      for (const { owner: oldOwner } of allOwners) {
+        migrateOwner(creditDb, oldOwner, owner);
+      }
+
+      if (!opts.json) {
+        console.log(`Migrated credits: ${existingConfig.owner} → ${owner}`);
+      }
+    }
+
+    // Bootstrap credit ledger with 100 credits (local always)
     bootstrapAgent(creditDb, owner, 100);
     creditDb.close();
 

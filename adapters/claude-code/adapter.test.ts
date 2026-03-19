@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { ClaudeCodeAdapter } from './adapter.js';
@@ -14,6 +14,15 @@ describe('ClaudeCodeAdapter', () => {
 
   beforeEach(() => {
     tempDir = mkdtempSync(join(tmpdir(), 'agentbnb-claude-adapter-'));
+    // Write minimal config so SDK authenticate() uses correct owner
+    writeFileSync(join(tempDir, 'config.json'), JSON.stringify({
+      owner: OWNER,
+      db_path: join(tempDir, 'registry.db'),
+      credit_db_path: join(tempDir, 'credit.db'),
+      gateway_url: 'http://localhost:7700',
+      gateway_port: 7700,
+      token: 'test-token',
+    }));
     process.env['AGENTBNB_DIR'] = tempDir;
   });
 

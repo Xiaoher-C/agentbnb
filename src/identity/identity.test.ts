@@ -96,12 +96,22 @@ describe('identity', () => {
       expect(existsSync(join(tempDir, 'identity.json'))).toBe(true);
     });
 
-    it('returns existing identity without overwriting', () => {
+    it('returns existing identity and syncs owner if changed', () => {
       const first = createIdentity(tempDir, 'first-owner');
       const second = ensureIdentity(tempDir, 'second-owner');
-      // Should return first identity, not create new one
+      // Should keep same agent_id/keypair but update owner
       expect(second.agent_id).toBe(first.agent_id);
-      expect(second.owner).toBe('first-owner');
+      expect(second.public_key).toBe(first.public_key);
+      expect(second.owner).toBe('second-owner');
+      // Verify persisted to disk
+      const loaded = loadIdentity(tempDir);
+      expect(loaded!.owner).toBe('second-owner');
+    });
+
+    it('does not overwrite owner when unchanged', () => {
+      createIdentity(tempDir, 'same-owner');
+      const second = ensureIdentity(tempDir, 'same-owner');
+      expect(second.owner).toBe('same-owner');
     });
   });
 

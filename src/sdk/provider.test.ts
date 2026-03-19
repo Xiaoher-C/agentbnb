@@ -9,6 +9,7 @@ import { openCreditDb, bootstrapAgent } from '../credit/ledger.js';
 import { openDatabase, insertCard } from '../registry/store.js';
 import { AgentBnBError } from '../types/index.js';
 import { randomUUID } from 'node:crypto';
+import { writeFileSync } from 'node:fs';
 
 describe('AgentBnBProvider', () => {
   let tempDir: string;
@@ -39,6 +40,16 @@ describe('AgentBnBProvider', () => {
       availability: { online: true },
     });
     registryDb.close();
+
+    // Write minimal config so authenticate() uses correct owner
+    writeFileSync(join(tempDir, 'config.json'), JSON.stringify({
+      owner: OWNER,
+      db_path: join(tempDir, 'registry.db'),
+      credit_db_path: join(tempDir, 'credit.db'),
+      gateway_url: 'http://localhost:7700',
+      gateway_port: 7700,
+      token: 'test-token',
+    }));
 
     process.env['AGENTBNB_DIR'] = tempDir;
   });
