@@ -11,6 +11,7 @@
 
 import { requestCapability } from '../gateway/client.js';
 import { interpolateObject } from '../utils/interpolation.js';
+import type { RelayClient } from '../relay/websocket-client.js';
 import type { SubTask, MatchResult, OrchestrationResult } from './types.js';
 
 /**
@@ -29,6 +30,10 @@ export interface OrchestrateOptions {
   timeoutMs?: number;
   /** Maximum budget in credits. If set, aborts remaining tasks when exceeded. */
   maxBudget?: number;
+  /** Optional relay client for executing tasks on remote agents (relay:// URLs). */
+  relayClient?: RelayClient;
+  /** Owner identifier of the requester agent. Used for relay requests. */
+  requesterOwner?: string;
 }
 
 /**
@@ -84,7 +89,7 @@ function computeWaves(subtasks: SubTask[]): string[][] {
  * @returns Aggregated orchestration result.
  */
 export async function orchestrate(opts: OrchestrateOptions): Promise<OrchestrationResult> {
-  const { subtasks, matches, gatewayToken, resolveAgentUrl, timeoutMs = 300_000, maxBudget } = opts;
+  const { subtasks, matches, gatewayToken, resolveAgentUrl, timeoutMs = 300_000, maxBudget, relayClient, requesterOwner } = opts;
   const startTime = Date.now();
 
   // Edge case: empty subtask list
@@ -152,13 +157,25 @@ export async function orchestrate(opts: OrchestrateOptions): Promise<Orchestrati
         // Try primary agent
         const primary = resolveAgentUrl(m.selected_agent);
         try {
-          const res = await requestCapability({
-            gatewayUrl: primary.url,
-            token: gatewayToken,
-            cardId: primary.cardId,
-            params: interpolatedParams,
-            timeoutMs,
-          });
+          let res: unknown;
+          if (primary.url.startsWith('relay://') && relayClient) {
+            const targetOwner = primary.url.replace('relay://', '');
+            res = await relayClient.request({
+              targetOwner,
+              cardId: primary.cardId,
+              params: interpolatedParams,
+              requester: requesterOwner,
+              timeoutMs,
+            });
+          } else {
+            res = await requestCapability({
+              gatewayUrl: primary.url,
+              token: gatewayToken,
+              cardId: primary.cardId,
+              params: interpolatedParams,
+              timeoutMs,
+            });
+          }
           return { taskId, result: res, credits: m.credits };
         } catch (primaryErr) {
           // Retry with first alternative if available
@@ -166,13 +183,25 @@ export async function orchestrate(opts: OrchestrateOptions): Promise<Orchestrati
             const alt = m.alternatives[0]!;
             const altAgent = resolveAgentUrl(alt.agent);
             try {
-              const altRes = await requestCapability({
-                gatewayUrl: altAgent.url,
-                token: gatewayToken,
-                cardId: altAgent.cardId,
-                params: interpolatedParams,
-                timeoutMs,
-              });
+              let altRes: unknown;
+              if (altAgent.url.startsWith('relay://') && relayClient) {
+                const targetOwner = altAgent.url.replace('relay://', '');
+                altRes = await relayClient.request({
+                  targetOwner,
+                  cardId: altAgent.cardId,
+                  params: interpolatedParams,
+                  requester: requesterOwner,
+                  timeoutMs,
+                });
+              } else {
+                altRes = await requestCapability({
+                  gatewayUrl: altAgent.url,
+                  token: gatewayToken,
+                  cardId: altAgent.cardId,
+                  params: interpolatedParams,
+                  timeoutMs,
+                });
+              }
               return { taskId, result: altRes, credits: alt.credits };
             } catch (altErr) {
               throw new Error(

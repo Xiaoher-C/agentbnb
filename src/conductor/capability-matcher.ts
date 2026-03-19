@@ -115,6 +115,7 @@ export async function matchSubTasks(opts: MatchOptions): Promise<MatchResult[]> 
       subtask_id: subtask.id,
       selected_agent: top.card.owner,
       selected_skill: top.skillId ?? '',
+      selected_card_id: top.card.id,
       score: top.rawScore,
       credits: top.cost,
       alternatives,

@@ -153,7 +153,7 @@ describe('Conductor 3-agent integration', () => {
     expect(subtasks[1]!.required_capability).toBe('text_gen');
 
     // Step 2: Match subtasks to providers
-    const matchResults = matchSubTasks({
+    const matchResults = await matchSubTasks({
       db: conductorDb,
       subtasks,
       conductorOwner: CONDUCTOR_OWNER,
@@ -185,13 +185,13 @@ describe('Conductor 3-agent integration', () => {
     expect(result.errors).toBeUndefined();
   });
 
-  it('plan-only mode returns execution plan without calling requestCapability', () => {
+  it('plan-only mode returns execution plan without calling requestCapability', async () => {
     // Decompose
     const subtasks = decompose('Analyze recent AI trends');
     expect(subtasks.length).toBe(4);
 
     // Match
-    const matchResults = matchSubTasks({
+    const matchResults = await matchSubTasks({
       db: conductorDb,
       subtasks,
       conductorOwner: CONDUCTOR_OWNER,
@@ -217,7 +217,7 @@ describe('Conductor 3-agent integration', () => {
     expect(subtasks.length).toBe(4);
 
     // Match — both provider-a and provider-b have text_gen
-    const matchResults = matchSubTasks({
+    const matchResults = await matchSubTasks({
       db: conductorDb,
       subtasks,
       conductorOwner: CONDUCTOR_OWNER,

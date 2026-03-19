@@ -10,6 +10,7 @@ import { matchSubTasks } from '../conductor/capability-matcher.js';
 import { BudgetController, ORCHESTRATION_FEE } from '../conductor/budget-controller.js';
 import { orchestrate } from '../conductor/pipeline-orchestrator.js';
 import { BudgetManager } from '../credit/budget.js';
+import { RelayClient } from '../relay/websocket-client.js';
 import { loadPeers } from './peers.js';
 import { loadConfig } from './config.js';
 import { openDatabase } from '../registry/store.js';
@@ -72,6 +73,7 @@ export async function conductAction(
       db,
       subtasks,
       conductorOwner: config.owner,
+      registryUrl: config.registry,
     });
   } finally {
     db.close();
@@ -115,35 +117,76 @@ export async function conductAction(
 
   // Step 5: Execute via orchestrator
   const peers = loadPeers();
-  const resolveAgentUrl = (owner: string): { url: string; cardId: string } => {
-    const peer = peers.find(p => p.name.toLowerCase() === owner.toLowerCase());
-    if (!peer) {
-      throw new Error(
-        `Unknown peer "${owner}". Add with: agentbnb peers add ${owner} <url> <token>`,
-      );
-    }
-    const execDb = openDatabase(config.db_path);
-    try {
-      const stmt = execDb.prepare('SELECT id FROM capability_cards WHERE owner = ? LIMIT 1');
-      const row = stmt.get(owner) as { id: string } | undefined;
-      return { url: peer.url, cardId: row?.id ?? owner };
-    } finally {
-      execDb.close();
-    }
-  };
-
   const matchMap = new Map<string, MatchResult>(
     matchResults.map(m => [m.subtask_id, m]),
   );
 
-  const orchResult = await orchestrate({
-    subtasks,
-    matches: matchMap,
-    gatewayToken: config.token ?? '',
-    resolveAgentUrl,
-    timeoutMs: 300_000,
-    maxBudget,
-  });
+  const resolveAgentUrl = (owner: string): { url: string; cardId: string } => {
+    // Try local peers first
+    const peer = peers.find(p => p.name.toLowerCase() === owner.toLowerCase());
+    if (peer) {
+      const execDb = openDatabase(config.db_path);
+      try {
+        const stmt = execDb.prepare('SELECT id FROM capability_cards WHERE owner = ? LIMIT 1');
+        const row = stmt.get(owner) as { id: string } | undefined;
+        return { url: peer.url, cardId: row?.id ?? owner };
+      } finally {
+        execDb.close();
+      }
+    }
+
+    // Remote fallback: use relay:// sentinel URL when registry is configured
+    if (config.registry) {
+      // Find card ID from match results for this owner
+      let cardId = owner;
+      for (const m of matchMap.values()) {
+        if (m.selected_agent === owner && m.selected_card_id) {
+          cardId = m.selected_card_id;
+          break;
+        }
+      }
+      return { url: `relay://${owner}`, cardId };
+    }
+
+    throw new Error(
+      `Unknown peer "${owner}". Add with: agentbnb peers add ${owner} <url> <token>`,
+    );
+  };
+
+  // Create relay client for remote agent execution when registry is configured
+  let relay: RelayClient | undefined;
+  if (config.registry) {
+    relay = new RelayClient({
+      registryUrl: config.registry,
+      owner: config.owner,
+      token: config.token ?? '',
+      card: { id: config.owner, owner: config.owner, name: 'conductor' },
+      onRequest: async () => ({ error: { code: -32601, message: 'Conductor does not accept requests' } }),
+      silent: true,
+    });
+    try {
+      await relay.connect();
+    } catch {
+      // Relay connect failure is not fatal — local peers can still be used
+      relay = undefined;
+    }
+  }
+
+  let orchResult;
+  try {
+    orchResult = await orchestrate({
+      subtasks,
+      matches: matchMap,
+      gatewayToken: config.token ?? '',
+      resolveAgentUrl,
+      timeoutMs: 300_000,
+      maxBudget,
+      relayClient: relay,
+      requesterOwner: config.owner,
+    });
+  } finally {
+    relay?.disconnect();
+  }
 
   // Convert Map to plain object for JSON serialization
   const resultObj: Record<string, unknown> = {};

@@ -31,6 +31,8 @@ export interface MatchResult {
   selected_agent: string;
   /** Skill ID on the selected agent's card. */
   selected_skill: string;
+  /** Capability card ID of the selected agent. Used for relay execution of remote agents. */
+  selected_card_id?: string;
   /** Match quality score (0-1). */
   score: number;
   /** Negotiated credit cost. */
