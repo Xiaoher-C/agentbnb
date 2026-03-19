@@ -193,7 +193,7 @@ Plans:
   3. Hub Agent can execute direct API skills (reusing ApiExecutor) without a session agent
   4. Hub Agent publishes a Capability Card discoverable by other agents
 Plans:
-- [ ] 36-01-PLAN.md — Hub Agent types, crypto, SQLite store, and CRUD API routes
+- [x] 36-01-PLAN.md — Hub Agent types, crypto, SQLite store, and CRUD API routes (SUMMARY: 2/2 tasks)
 - [ ] 36-02-PLAN.md — Hub Agent skill execution (ApiExecutor routing) and credit escrow
 
 ### Phase 37: Job Queue + Relay Bridge
@@ -250,7 +250,7 @@ Plans:
 | 33 | v4.0 | 1/1 | Complete | 2026-03-19 |
 | 34 | v4.0 | 1/1 | Complete | 2026-03-19 |
 | 35 | v4.0 | 1/1 | Complete | 2026-03-19 |
-| 36 | v4.0 | 0/2 | **Wave 3** | — |
+| 36 | v4.0 | 1/2 | **Wave 3** | — |
 | 37 | v4.0 | 0/1 | Wave 4 | — |
 | 38 | 1/1 | Complete   | 2026-03-19 | — |
 | 39 | v4.0 | 0/1 | Wave 5 | — |

@@ -25,10 +25,10 @@ See: .planning/PROJECT.md (updated 2026-03-19)
 
 ## Current Position
 
-Phase: 38 of 39 (Framework Adapters)
-Plan: 1 of 1 in current phase
-Status: Complete
-Last activity: 2026-03-19 — Phase 38 Plan 01 complete (Framework Adapters — LangChain, CrewAI, AutoGen, OpenAI)
+Phase: 36 of 39 (Hub Agent Core)
+Plan: 1 of 2 in current phase
+Status: In Progress
+Last activity: 2026-03-19 — Phase 36 Plan 01 complete (Hub Agent types, crypto, store, CRUD API)
 
 Progress: [######░░░░] 60% (v4.0 milestone)
 
@@ -87,6 +87,9 @@ Progress: [######░░░░] 60% (v4.0 milestone)
 - [Phase 34]: All MCP server logging goes to stderr — stdout reserved for JSON-RPC protocol
 - [Phase 34]: Tool handlers exported as standalone handleXxx() functions for direct unit testing
 - [Phase 34]: serve_skill stores RelayClient on McpServerContext for graceful SIGINT/SIGTERM shutdown
+- [Phase 36]: Route prefix /api/hub-agents (not /api/agents) to avoid collision with existing agent profiles endpoint
+- [Phase 36]: Hub Agent owner_public_key set to 'hub-server' placeholder — server-managed agents don't need external identity auth
+- [Phase 36]: Card ID derived deterministically from agent_id via padding + UUID formatting
 - [Phase 38]: Each Python adapter is fully self-contained with inline Ed25519 auth -- no shared module
 
 ### Pending Todos
@@ -100,8 +103,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-19T08:14:55.730Z
-Stopped at: Completed 38-01-PLAN.md -- Framework Adapters (LangChain, CrewAI, AutoGen, OpenAI)
+Last session: 2026-03-19T08:19:59Z
+Stopped at: Completed 36-01-PLAN.md -- Hub Agent types, crypto, store, CRUD API
 Resume file: None
 
 ---
