@@ -71,7 +71,7 @@
 **Milestone Goal:** Centralize credit operations on Registry for trustworthy multi-agent exchanges, and fix relay timeout to enable long-running skill execution.
 
 - [x] **Phase 25: Relay Timeout** - Increase relay/client timeout to 300s and add relay_progress heartbeat protocol (gap closure in progress) (completed 2026-03-19)
-- [ ] **Phase 26: CreditLedger Interface** - Define CreditLedger abstraction with Local, Registry-server, and Registry-client adapters
+- [x] **Phase 26: CreditLedger Interface** - Define CreditLedger abstraction with Local, Registry-server, and Registry-client adapters (completed 2026-03-19)
 - [ ] **Phase 27: Registry Credit Endpoints** - Implement /api/credits/* endpoints on Registry server with Ed25519 auth
 - [ ] **Phase 28: Relay Credit Integration** - Wire credit hold/settle/release into WebSocket relay flow
 - [ ] **Phase 29: CLI + Hub + Compatibility** - Update CLI commands, Hub endpoints, and preserve backward compatibility
@@ -104,7 +104,7 @@ Plans:
   3. `RegistryCreditLedger` routes calls to the Registry HTTP API when `registryUrl` is configured
   4. `RegistryCreditLedger` performs DB operations directly when running inside the Registry server process
   5. An agent with no `registryUrl` config falls back to `LocalCreditLedger` automatically
-**Plans:** 1/2 plans executed
+**Plans:** 2/2 plans complete
 Plans:
 - [ ] 26-01-PLAN.md — CreditLedger interface + LocalCreditLedger wrapper
 - [ ] 26-02-PLAN.md — RegistryCreditLedger dual-mode + createLedger factory
@@ -160,7 +160,7 @@ Plans:
 | 19-23 | v3.0 | 16/16 | Complete | 2026-03-17 |
 | 24 | v3.1 | — | Superseded | — |
 | 25 | 3/3 | Complete    | 2026-03-19 | — |
-| 26 | 1/2 | In Progress|  | — |
+| 26 | 2/2 | Complete   | 2026-03-19 | — |
 | 27 | v3.2 | 0/TBD | Not started | — |
 | 28 | v3.2 | 0/TBD | Not started | — |
 | 29 | v3.2 | 0/TBD | Not started | — |

@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v3.2
 milestone_name: Registry Credit Ledger
 status: planning
-stopped_at: Completed 26-01-PLAN.md — CreditLedger interface + LocalCreditLedger wrapper
-last_updated: "2026-03-19T04:18:22.392Z"
+stopped_at: Completed 26-02-PLAN.md — RegistryCreditLedger dual-mode + createLedger factory
+last_updated: "2026-03-19T04:22:49.501Z"
 last_activity: 2026-03-19 — Roadmap created for v3.2 (Phases 25-29, 35 requirements)
 progress:
   total_phases: 5
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 5
-  completed_plans: 4
+  completed_plans: 5
   percent: 0
 ---
 
@@ -52,6 +52,9 @@ Progress: [░░░░░░░░░░] 0% (v3.2 milestone)
 - [Phase 25-03]: handlerUrl path intentionally does not receive onProgress — HTTP fetch has no step-level progress
 - [Phase 26-01]: LocalCreditLedger uses async keyword (not Promise.resolve()) so sync errors auto-become rejected Promises — zero try/catch needed
 - [Phase 26-01]: CreditLedger interface defined with 6 async methods; LocalCreditLedger is delegation-only wrapper with zero business logic
+- [Phase 26-02]: RegistryCreditLedger uses single class with discriminated union config (direct|http) — simpler, less duplication
+- [Phase 26-02]: HTTP credit client: settle/release pass null for X-Agent-Owner header — escrowId is self-contained
+- [Phase 26-02]: REGISTRY_UNREACHABLE for network failures, REGISTRY_ERROR fallback for HTTP non-2xx with no code in body
 
 ### Pending Todos
 
@@ -64,8 +67,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-19T04:18:22.390Z
-Stopped at: Completed 26-01-PLAN.md — CreditLedger interface + LocalCreditLedger wrapper
+Last session: 2026-03-19T04:22:49.500Z
+Stopped at: Completed 26-02-PLAN.md — RegistryCreditLedger dual-mode + createLedger factory
 Resume file: None
 
 ---
