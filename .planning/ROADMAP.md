@@ -172,7 +172,7 @@ Plans:
 | 26 | 2/2 | Complete    | 2026-03-19 | — |
 | 27 | 2/2 | Complete    | 2026-03-19 | — |
 | 28 | 2/2 | Complete    | 2026-03-19 | — |
-| 29 | 2/2 | Complete   | 2026-03-19 | — |
+| 29 | 2/2 | Complete    | 2026-03-19 | — |
 
 **Total:** 29 phases (24 superseded), 82+ plans, 6 milestones shipped, v3.2 in progress.
 
