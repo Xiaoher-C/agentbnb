@@ -186,13 +186,15 @@ Plans:
 **Goal**: 使用者能在 Hub 建立常駐 Agent，配置 skill routing，Agent 能直接呼叫外部 API
 **Depends on**: Phase 30 + 31 (relay and remote search must work)
 **Requirements**: HUB-AGENT-01, HUB-AGENT-02, HUB-AGENT-03, HUB-AGENT-04
+**Plans:** 2 plans
 **Success Criteria** (what must be TRUE):
   1. `POST /api/agents` creates a persistent Hub Agent with identity and credit balance
   2. Hub Agent has a skill routing table mapping skills to execution paths (direct_api / relay / queue)
   3. Hub Agent can execute direct API skills (reusing ApiExecutor) without a session agent
   4. Hub Agent publishes a Capability Card discoverable by other agents
 Plans:
-- [ ] 36-01-PLAN.md — Agent persistence + routing table + direct API execution
+- [ ] 36-01-PLAN.md — Hub Agent types, crypto, SQLite store, and CRUD API routes
+- [ ] 36-02-PLAN.md — Hub Agent skill execution (ApiExecutor routing) and credit escrow
 
 ### Phase 37: Job Queue + Relay Bridge
 **Goal**: Hub Agent 能排隊離線請求，session-based agents 上線時自動 dispatch
@@ -245,15 +247,15 @@ Plans:
 | 30 | v4.0 | 1/1 | Complete | 2026-03-19 |
 | 31 | v4.0 | 2/2 | Complete | 2026-03-19 |
 | 32 | v4.0 | 1/1 | Complete | 2026-03-19 |
-| 33 | 1/1 | Complete   | 2026-03-19 | — |
+| 33 | v4.0 | 1/1 | Complete | 2026-03-19 |
 | 34 | v4.0 | 1/1 | Complete | 2026-03-19 |
-| 35 | v4.0 | 0/1 | **Wave 2** | — |
-| 36 | v4.0 | 0/1 | Wave 3 | — |
+| 35 | v4.0 | 1/1 | Complete | 2026-03-19 |
+| 36 | v4.0 | 0/2 | **Wave 3** | — |
 | 37 | v4.0 | 0/1 | Wave 4 | — |
-| 38 | v4.0 | 0/1 | Wave 3 | — |
+| 38 | v4.0 | 0/1 | **Wave 3** | — |
 | 39 | v4.0 | 0/1 | Wave 5 | — |
 
-**Total:** 39 phases, 92+ plans, 8 milestones (7 shipped), v4.0 in progress.
+**Total:** 39 phases, 93+ plans, 8 milestones (7 shipped), v4.0 in progress.
 
 ---
 *Full milestone details archived in .planning/milestones/*
