@@ -653,6 +653,41 @@ describe('CLI: discover --registry (integration)', () => {
     expect(status).not.toBe(0);
     expect(stderr).toContain('Unknown config key');
   });
+
+  it('config set conductor-public true persists the setting', () => {
+    const { status, stdout } = runCli('config set conductor-public true', tmpDir);
+    expect(status).toBe(0);
+    expect(stdout).toContain('conductor-public');
+    expect(stdout).toContain('true');
+
+    // Verify persisted in config.json
+    const configPath = join(tmpDir, 'config.json');
+    const config = JSON.parse(readFileSync(configPath, 'utf-8')) as { conductor?: { public: boolean } };
+    expect(config.conductor?.public).toBe(true);
+  });
+
+  it('config set conductor-public false persists the setting', () => {
+    runCli('config set conductor-public true', tmpDir);
+    const { status } = runCli('config set conductor-public false', tmpDir);
+    expect(status).toBe(0);
+
+    const configPath = join(tmpDir, 'config.json');
+    const config = JSON.parse(readFileSync(configPath, 'utf-8')) as { conductor?: { public: boolean } };
+    expect(config.conductor?.public).toBe(false);
+  });
+
+  it('config get conductor-public returns current value', () => {
+    runCli('config set conductor-public true', tmpDir);
+    const { status, stdout } = runCli('config get conductor-public', tmpDir);
+    expect(status).toBe(0);
+    expect(stdout.trim()).toBe('true');
+  });
+
+  it('config get conductor-public returns false by default', () => {
+    const { status, stdout } = runCli('config get conductor-public', tmpDir);
+    expect(status).toBe(0);
+    expect(stdout.trim()).toBe('false');
+  });
 });
 
 describe('CLI: serve — registry server with API key', () => {
