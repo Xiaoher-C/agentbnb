@@ -156,7 +156,7 @@ Plans:
 | 16-18 | v2.3 | 5/5 | Complete | 2026-03-17 |
 | 19-23 | v3.0 | 16/16 | Complete | 2026-03-17 |
 | 24 | v3.1 | — | Superseded | — |
-| 25 | 3/3 | Complete   | 2026-03-19 | — |
+| 25 | 3/3 | Complete    | 2026-03-19 | — |
 | 26 | v3.2 | 0/TBD | Not started | — |
 | 27 | v3.2 | 0/TBD | Not started | — |
 | 28 | v3.2 | 0/TBD | Not started | — |

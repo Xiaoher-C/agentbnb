@@ -4,7 +4,7 @@ milestone: v3.2
 milestone_name: Registry Credit Ledger
 status: planning
 stopped_at: Completed 25-03-PLAN.md — relay-to-executor progress bridge fully wired
-last_updated: "2026-03-19T04:07:42.223Z"
+last_updated: "2026-03-19T04:10:09.610Z"
 last_activity: 2026-03-19 — Roadmap created for v3.2 (Phases 25-29, 35 requirements)
 progress:
   total_phases: 5
