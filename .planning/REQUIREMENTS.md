@@ -42,17 +42,17 @@
 
 ### CLI Changes
 
-- [ ] **CLI-01**: `agentbnb init` requests initial credit grant from Registry (with Ed25519 identity dedup)
-- [ ] **CLI-02**: `agentbnb status` queries credit balance from Registry instead of local DB
-- [ ] **CLI-03**: `agentbnb request` uses Registry-backed escrow for remote requests
-- [ ] **CLI-04**: Minimum skill price enforced at 1 cr on publish
+- [x] **CLI-01**: `agentbnb init` requests initial credit grant from Registry (with Ed25519 identity dedup)
+- [x] **CLI-02**: `agentbnb status` queries credit balance from Registry instead of local DB
+- [x] **CLI-03**: `agentbnb request` uses Registry-backed escrow for remote requests
+- [x] **CLI-04**: Minimum skill price enforced at 1 cr on publish
 
 ### Hub Migration
 
-- [ ] **HUB-01**: Registry server `/me` endpoint returns balance from CreditLedger (not hardcoded local DB)
-- [ ] **HUB-02**: Registry server `/me/transactions` endpoint returns history from CreditLedger
-- [ ] **HUB-03**: Hub frontend hooks unchanged — same API shape, zero frontend changes needed
-- [ ] **HUB-04**: OwnerDashboard displays real-time credit balance from Registry
+- [x] **HUB-01**: Registry server `/me` endpoint returns balance from CreditLedger (not hardcoded local DB)
+- [x] **HUB-02**: Registry server `/me/transactions` endpoint returns history from CreditLedger
+- [x] **HUB-03**: Hub frontend hooks unchanged — same API shape, zero frontend changes needed
+- [x] **HUB-04**: OwnerDashboard displays real-time credit balance from Registry
 
 ### Backward Compatibility
 
@@ -116,14 +116,14 @@
 | INTG-02 | Phase 28 | Complete |
 | INTG-03 | Phase 28 | Complete |
 | INTG-04 | Phase 28 | Complete |
-| CLI-01 | Phase 29 | Pending |
-| CLI-02 | Phase 29 | Pending |
-| CLI-03 | Phase 29 | Pending |
-| CLI-04 | Phase 29 | Pending |
-| HUB-01 | Phase 29 | Pending |
-| HUB-02 | Phase 29 | Pending |
-| HUB-03 | Phase 29 | Pending |
-| HUB-04 | Phase 29 | Pending |
+| CLI-01 | Phase 29 | Complete |
+| CLI-02 | Phase 29 | Complete |
+| CLI-03 | Phase 29 | Complete |
+| CLI-04 | Phase 29 | Complete |
+| HUB-01 | Phase 29 | Complete |
+| HUB-02 | Phase 29 | Complete |
+| HUB-03 | Phase 29 | Complete |
+| HUB-04 | Phase 29 | Complete |
 | COMPAT-01 | Phase 29 | Pending |
 | COMPAT-02 | Phase 29 | Pending |
 | COMPAT-03 | Phase 29 | Pending |

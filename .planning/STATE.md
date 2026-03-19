@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v3.2
 milestone_name: Registry Credit Ledger
 status: planning
-stopped_at: Completed 28-02-PLAN.md — Conductor fee calculation and relay integration
-last_updated: "2026-03-19T05:07:02.755Z"
+stopped_at: Completed 29-01-PLAN.md — CLI + Hub CreditLedger wiring (FINAL phase of v3.2)
+last_updated: "2026-03-19T05:21:13.733Z"
 last_activity: 2026-03-19 — Roadmap created for v3.2 (Phases 25-29, 35 requirements)
 progress:
   total_phases: 5
   completed_phases: 4
-  total_plans: 9
-  completed_plans: 9
+  total_plans: 11
+  completed_plans: 10
   percent: 0
 ---
 
@@ -65,6 +65,9 @@ Progress: [░░░░░░░░░░] 0% (v3.2 milestone)
 - [Phase 28]: handleDisconnect tracks both requester and provider disconnects — releases escrow immediately on provider disconnect (not waiting for timeout)
 - [Phase 28-02]: Conductor fee is best-effort — fee settlement failure logs but does not block the main capability response that was already settled
 - [Phase 28-02]: Conductor response detection uses duck-typing on total_credits field — no separate flag needed, aligns with ConductorMode.execute return shape
+- [Phase 29-cli-hub-compatibility]: CLI init: local 100cr bootstrap always runs; Registry grant (50cr) runs additionally when registryUrl configured — keeps offline agents at 100cr, networked agents show Registry balance
+- [Phase 29-cli-hub-compatibility]: CLI request: CreditLedger for direct HTTP path only; relay-only path skips CLI escrow — relay does server-side hold/settle/release to avoid double-holding
+- [Phase 29-cli-hub-compatibility]: Registry server uses direct DB mode createLedger({ db }) for /me and /me/transactions — avoids HTTP round-trip to itself; per-request construction is cheap
 
 ### Pending Todos
 
@@ -77,8 +80,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-19T05:04:04.419Z
-Stopped at: Completed 28-02-PLAN.md — Conductor fee calculation and relay integration
+Last session: 2026-03-19T05:21:13.731Z
+Stopped at: Completed 29-01-PLAN.md — CLI + Hub CreditLedger wiring (FINAL phase of v3.2)
 Resume file: None
 
 ---
