@@ -387,6 +387,87 @@ describe('WebSocket Relay', () => {
     expect(responseMsg).toBeDefined();
   });
 
+  // ── v2.0 multi-skill card tests ─────────────────────────────────────────────
+
+  function makeV2Card(owner: string): Record<string, unknown> {
+    return {
+      spec_version: '2.0',
+      id: crypto.randomUUID(),
+      owner,
+      agent_name: `${owner}'s agent`,
+      skills: [{
+        id: 'tts-elevenlabs',
+        name: 'Text to Speech',
+        description: 'ElevenLabs TTS',
+        level: 1,
+        inputs: [{ name: 'text', type: 'text' }],
+        outputs: [{ name: 'audio', type: 'audio' }],
+        pricing: { credits_per_call: 5 },
+      }],
+      availability: { online: true },
+    };
+  }
+
+  async function registerAgentV2(owner: string): Promise<WebSocket> {
+    const ws = connect();
+    await waitForOpen(ws);
+    const responsePromise = waitForMessage(ws);
+    send(ws, {
+      type: 'register',
+      owner,
+      token: 'test-token',
+      card: makeV2Card(owner),
+    });
+    const response = await responsePromise;
+    expect(response.type).toBe('registered');
+    return ws;
+  }
+
+  it('registers a v2.0 multi-skill card and returns registered message', async () => {
+    const ws = await registerAgentV2('agent-v2');
+    expect(relayState.getOnlineCount()).toBe(1);
+
+    // Verify card stored in DB with v2.0 shape
+    const row = db.prepare('SELECT data FROM capability_cards WHERE owner = ?').get('agent-v2') as { data: string } | undefined;
+    expect(row).toBeDefined();
+    const card = JSON.parse(row!.data);
+    expect(card.spec_version).toBe('2.0');
+    expect(card.skills).toHaveLength(1);
+    expect(card.skills[0].id).toBe('tts-elevenlabs');
+    expect(card.availability.online).toBe(true);
+
+    ws.close();
+  });
+
+  it('v2.0 card goes offline on disconnect', async () => {
+    const ws = await registerAgentV2('agent-v2-offline');
+    ws.close();
+    await new Promise((r) => setTimeout(r, 100));
+
+    const row = db.prepare('SELECT data FROM capability_cards WHERE owner = ?').get('agent-v2-offline') as { data: string } | undefined;
+    expect(row).toBeDefined();
+    const card = JSON.parse(row!.data);
+    expect(card.availability.online).toBe(false);
+  });
+
+  it('v2.0 card restored online on reconnect', async () => {
+    // Register, then disconnect
+    const ws1 = await registerAgentV2('agent-v2-reconnect');
+    ws1.close();
+    await new Promise((r) => setTimeout(r, 100));
+
+    // Verify offline
+    let row = db.prepare('SELECT data FROM capability_cards WHERE owner = ?').get('agent-v2-reconnect') as { data: string } | undefined;
+    expect(JSON.parse(row!.data).availability.online).toBe(false);
+
+    // Reconnect with same owner
+    const ws2 = await registerAgentV2('agent-v2-reconnect');
+    row = db.prepare('SELECT data FROM capability_cards WHERE owner = ?').get('agent-v2-reconnect') as { data: string } | undefined;
+    expect(JSON.parse(row!.data).availability.online).toBe(true);
+
+    ws2.close();
+  });
+
   it('relay_progress for unknown request is ignored (no crash)', async () => {
     const wsProvider = await registerAgent('provider3');
 
