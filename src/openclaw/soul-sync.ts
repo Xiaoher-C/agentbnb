@@ -50,7 +50,7 @@ export function parseSoulMdV2(content: string): {
           required: true,
         },
       ],
-      pricing: { credits_per_call: 10 },
+      pricing: { credits_per_call: cap.pricing !== undefined ? cap.pricing : 10 },
       availability: { online: true },
     };
   });

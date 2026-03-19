@@ -12,6 +12,8 @@ export interface ParsedCapability {
   name: string;
   /** Body text under the H2 heading — used as capability description. */
   description: string;
+  /** Optional custom pricing extracted from `pricing: N` line in the H2 body. */
+  pricing?: number;
 }
 
 /**
@@ -55,18 +57,24 @@ export function parseSoulMd(content: string): ParsedSoul {
   let currentSection: 'preamble' | 'capability' | null = null;
   let currentCapabilityName = '';
   let currentCapabilityLines: string[] = [];
+  let currentCapabilityPricing: number | undefined = undefined;
   let descriptionLines: string[] = [];
   let pastFirstH1 = false;
   let pastFirstH2 = false;
 
   const flushCapability = () => {
     if (currentCapabilityName) {
-      capabilities.push({
+      const cap: ParsedCapability = {
         name: currentCapabilityName,
         description: currentCapabilityLines.join(' ').trim(),
-      });
+      };
+      if (currentCapabilityPricing !== undefined) {
+        cap.pricing = currentCapabilityPricing;
+      }
+      capabilities.push(cap);
       currentCapabilityName = '';
       currentCapabilityLines = [];
+      currentCapabilityPricing = undefined;
     }
   };
 
@@ -110,7 +118,17 @@ export function parseSoulMd(content: string): ParsedSoul {
       // Collect description from preamble paragraphs
       descriptionLines.push(trimmed);
     } else if (currentSection === 'capability') {
-      currentCapabilityLines.push(trimmed);
+      // Check for pricing: N directive — extract and skip from description
+      const pricingMatch = trimmed.match(/^pricing:\s*(\d+(?:\.\d+)?)$/i);
+      if (pricingMatch) {
+        const val = parseFloat(pricingMatch[1]!);
+        if (!isNaN(val) && val >= 0) {
+          currentCapabilityPricing = val;
+        }
+        // Do not add pricing line to description text
+      } else {
+        currentCapabilityLines.push(trimmed);
+      }
     }
   }
 

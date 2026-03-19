@@ -26,6 +26,7 @@ import { detectCapabilities, capabilitiesToV2Card, interactiveTemplateMenu } fro
 import { AnyCardSchema } from '../types/index.js';
 import { openDatabase, insertCard, listCards } from '../registry/store.js';
 import { searchCards, filterCards } from '../registry/matcher.js';
+import { getPricingStats } from '../registry/pricing.js';
 import { openCreditDb, getBalance, bootstrapAgent, getTransactions } from '../credit/ledger.js';
 import { createLedger } from '../credit/create-ledger.js';
 import { AgentRuntime } from '../runtime/agent-runtime.js';
@@ -1633,6 +1634,16 @@ openclaw
     try {
       const card = publishFromSoulV2(db, content, config.owner);
       console.log(`Published card ${card.id} with ${card.skills.length} skill(s)`);
+
+      // Display market reference prices per skill
+      for (const skill of card.skills) {
+        const stats = getPricingStats(db, skill.name);
+        if (stats.count > 0) {
+          console.log(`  ${skill.name}: ${skill.pricing.credits_per_call} cr (market: ${stats.min}-${stats.max} cr, median ${stats.median}, ${stats.count} providers)`);
+        } else {
+          console.log(`  ${skill.name}: ${skill.pricing.credits_per_call} cr (no market data yet)`);
+        }
+      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       console.error(`Error: ${msg}`);

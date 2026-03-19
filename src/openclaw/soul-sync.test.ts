@@ -59,6 +59,50 @@ describe('parseSoulMdV2', () => {
     const result = parseSoulMdV2(content);
     expect(result.skills[0]!.description.length).toBeLessThanOrEqual(500);
   });
+
+  it('sets credits_per_call from pricing: N in skill body', () => {
+    const content = '# Agent\nDesc\n## TTS\nText to speech\npricing: 25';
+    const result = parseSoulMdV2(content);
+    expect(result.skills[0]!.pricing.credits_per_call).toBe(25);
+  });
+
+  it('keeps default 10 when no pricing line present', () => {
+    const content = '# Agent\nDesc\n## TTS\nText to speech';
+    const result = parseSoulMdV2(content);
+    expect(result.skills[0]!.pricing.credits_per_call).toBe(10);
+  });
+
+  it('sets credits_per_call to 0 for free skills', () => {
+    const content = '# Agent\nDesc\n## TTS\nText to speech\npricing: 0';
+    const result = parseSoulMdV2(content);
+    expect(result.skills[0]!.pricing.credits_per_call).toBe(0);
+  });
+
+  it('ignores invalid non-numeric pricing value', () => {
+    const content = '# Agent\nDesc\n## TTS\nText to speech\npricing: abc';
+    const result = parseSoulMdV2(content);
+    expect(result.skills[0]!.pricing.credits_per_call).toBe(10);
+  });
+
+  it('ignores negative pricing value', () => {
+    const content = '# Agent\nDesc\n## TTS\nText to speech\npricing: -5';
+    const result = parseSoulMdV2(content);
+    expect(result.skills[0]!.pricing.credits_per_call).toBe(10);
+  });
+
+  it('supports different pricing per skill in multi-skill SOUL.md', () => {
+    const content = '# Agent\nDesc\n## TTS\nText to speech\npricing: 25\n## OCR\nOCR service\npricing: 5';
+    const result = parseSoulMdV2(content);
+    expect(result.skills[0]!.pricing.credits_per_call).toBe(25);
+    expect(result.skills[1]!.pricing.credits_per_call).toBe(5);
+  });
+
+  it('does not include pricing line in skill description', () => {
+    const content = '# Agent\nDesc\n## TTS\nText to speech\npricing: 25';
+    const result = parseSoulMdV2(content);
+    expect(result.skills[0]!.description).not.toContain('pricing:');
+    expect(result.skills[0]!.description).toBe('Text to speech');
+  });
 });
 
 describe('publishFromSoulV2', () => {
