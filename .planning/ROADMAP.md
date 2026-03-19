@@ -102,7 +102,7 @@
 
 #### 軌道 B：平台擴展
 
-- [ ] **Phase 34: MCP Server** — stdio MCP server with 6 tools (discover, request, publish, status, conduct, serve_skill)
+- [x] **Phase 34: MCP Server** — stdio MCP server with 6 tools (discover, request, publish, status, conduct, serve_skill) (completed 2026-03-19)
 - [x] **Phase 35: OpenAPI Spec + GPT Actions** — @fastify/swagger for Registry, Swagger UI, GPT Actions schema
 - [ ] **Phase 36: Hub Agent Core** — Platform-hosted persistent agents with skill routing table and direct API execution
 - [ ] **Phase 37: Job Queue + Relay Bridge** — SQLite job queue for offline requests, auto-dispatch on agent reconnect
@@ -246,7 +246,7 @@ Plans:
 | 31 | v4.0 | 2/2 | Complete | 2026-03-19 |
 | 32 | v4.0 | 1/1 | Complete | 2026-03-19 |
 | 33 | 1/1 | Complete   | 2026-03-19 | — |
-| 34 | v4.0 | 0/1 | **Wave 2** | — |
+| 34 | v4.0 | 1/1 | Complete | 2026-03-19 |
 | 35 | v4.0 | 0/1 | **Wave 2** | — |
 | 36 | v4.0 | 0/1 | Wave 3 | — |
 | 37 | v4.0 | 0/1 | Wave 4 | — |

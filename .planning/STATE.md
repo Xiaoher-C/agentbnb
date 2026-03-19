@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v4.0
 milestone_name: Agent Economy Platform
 status: completed
-stopped_at: Completed 35-01-PLAN.md — OpenAPI 3.0 auto-generation
-last_updated: "2026-03-19T07:17:00Z"
-last_activity: 2026-03-19 — Phase 35 Plan 01 complete (OpenAPI spec + Swagger UI + GPT Actions export)
+stopped_at: Completed 34-01-PLAN.md — MCP Server with 6 tools
+last_updated: "2026-03-19T07:19:17Z"
+last_activity: 2026-03-19 — Phase 34 Plan 01 complete (MCP server + 6 tools + CLI command)
 progress:
   total_phases: 10
-  completed_phases: 5
+  completed_phases: 6
   total_plans: 8
-  completed_plans: 6
-  percent: 40
+  completed_plans: 7
+  percent: 50
 ---
 
 # AgentBnB — Project State
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-19)
 
 **Core value:** Fill the market gap for agent-to-agent capability exchange.
-**Current focus:** Phase 35 — OpenAPI Spec (complete)
+**Current focus:** Phase 34 — MCP Server (complete)
 
 ## Current Position
 
-Phase: 35 of 39 (OpenAPI Spec)
+Phase: 34 of 39 (MCP Server)
 Plan: 1 of 1 in current phase
 Status: Complete
-Last activity: 2026-03-19 — Phase 35 Plan 01 complete (OpenAPI spec + Swagger UI + GPT Actions export)
+Last activity: 2026-03-19 — Phase 34 Plan 01 complete (MCP server + 6 tools + CLI command)
 
-Progress: [####░░░░░░] 40% (v4.0 milestone)
+Progress: [#####░░░░░] 50% (v4.0 milestone)
 
 ## Accumulated Context
 
@@ -83,6 +83,10 @@ Progress: [####░░░░░░] 40% (v4.0 milestone)
 - [Phase 33]: handleRegister upserts primary card first, then additional cards; logs agent_joined once
 - [Phase 35]: Wrap API routes in Fastify plugin for @fastify/swagger schema capture — routes registered directly on server are invisible to swagger's onRoute hook
 - [Phase 35]: GPT Actions export filters to public GET/POST only — excludes /me, /draft, /docs, /ws, /api/credits paths
+- [Phase 34]: Used @modelcontextprotocol/sdk (not /server) — /server package does not exist on npm
+- [Phase 34]: All MCP server logging goes to stderr — stdout reserved for JSON-RPC protocol
+- [Phase 34]: Tool handlers exported as standalone handleXxx() functions for direct unit testing
+- [Phase 34]: serve_skill stores RelayClient on McpServerContext for graceful SIGINT/SIGTERM shutdown
 
 ### Pending Todos
 
@@ -95,8 +99,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-19T07:17:00Z
-Stopped at: Completed 35-01-PLAN.md — OpenAPI 3.0 auto-generation
+Last session: 2026-03-19T07:19:17Z
+Stopped at: Completed 34-01-PLAN.md — MCP Server with 6 tools
 Resume file: None
 
 ---
