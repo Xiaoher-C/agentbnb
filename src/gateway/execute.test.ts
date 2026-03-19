@@ -1,0 +1,179 @@
+/**
+ * Tests for executeCapabilityRequest — onProgress wiring to skillExecutor.execute.
+ * Verifies the relay-to-executor progress bridge is correctly threaded.
+ */
+
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import type { Database } from 'better-sqlite3';
+
+// ── Mocks ────────────────────────────────────────────────────────────────────
+
+vi.mock('better-sqlite3');
+
+vi.mock('../registry/store.js', () => ({
+  getCard: vi.fn(),
+  updateReputation: vi.fn(),
+}));
+
+vi.mock('../credit/ledger.js', () => ({
+  getBalance: vi.fn(),
+}));
+
+vi.mock('../credit/escrow.js', () => ({
+  holdEscrow: vi.fn(),
+  settleEscrow: vi.fn(),
+  releaseEscrow: vi.fn(),
+}));
+
+vi.mock('../registry/request-log.js', () => ({
+  insertRequestLog: vi.fn(),
+}));
+
+vi.mock('../credit/signing.js', () => ({
+  verifyEscrowReceipt: vi.fn(),
+}));
+
+vi.mock('../credit/settlement.js', () => ({
+  settleProviderEarning: vi.fn(),
+}));
+
+// ── Import after mocking ─────────────────────────────────────────────────────
+
+import { executeCapabilityRequest } from './execute.js';
+import { getCard, updateReputation } from '../registry/store.js';
+import { getBalance } from '../credit/ledger.js';
+import { holdEscrow, settleEscrow } from '../credit/escrow.js';
+import type { ProgressCallback } from '../skills/executor.js';
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+/** A minimal fake CapabilityCard (v2 with skills array) */
+const makeCard = () => ({
+  id: 'card-1',
+  owner: 'owner-alice',
+  name: 'Test Card',
+  description: 'Test',
+  spec_version: '1.0',
+  level: 1 as const,
+  skills: [
+    {
+      id: 'skill-1',
+      name: 'Test Skill',
+      description: 'Does a thing',
+      level: 1 as const,
+      inputs: [],
+      outputs: [],
+      pricing: { credits_per_call: 5 },
+    },
+  ],
+  inputs: [],
+  outputs: [],
+  pricing: { credits_per_call: 5 },
+  availability: { online: true },
+});
+
+/** Fake Database handle — no real SQLite needed */
+const fakeDb = {} as Database;
+
+/** A minimal mock SkillExecutor */
+function makeMockExecutor(overrides?: { execute?: ReturnType<typeof vi.fn> }) {
+  return {
+    execute: overrides?.execute ?? vi.fn().mockResolvedValue({
+      success: true,
+      result: { answer: 42 },
+      latency_ms: 10,
+    }),
+  };
+}
+
+// ── Tests ────────────────────────────────────────────────────────────────────
+
+describe('executeCapabilityRequest — onProgress wiring', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+
+    // Default: card exists, enough credits, escrow works
+    vi.mocked(getCard).mockReturnValue(makeCard() as ReturnType<typeof getCard>);
+    vi.mocked(getBalance).mockReturnValue(100);
+    vi.mocked(holdEscrow).mockReturnValue('escrow-uuid');
+    vi.mocked(settleEscrow).mockReturnValue(undefined);
+    vi.mocked(updateReputation).mockReturnValue(undefined);
+  });
+
+  it('passes onProgress to skillExecutor.execute when provided', async () => {
+    const executeSpy = vi.fn().mockResolvedValue({
+      success: true,
+      result: { answer: 42 },
+      latency_ms: 10,
+    });
+    const mockExecutor = makeMockExecutor({ execute: executeSpy });
+    const onProgress: ProgressCallback = vi.fn();
+
+    await executeCapabilityRequest({
+      registryDb: fakeDb,
+      creditDb: fakeDb,
+      cardId: 'card-1',
+      skillId: 'skill-1',
+      params: { input: 'hello' },
+      requester: 'requester-bob',
+      skillExecutor: mockExecutor as unknown as import('../skills/executor.js').SkillExecutor,
+      onProgress,
+    });
+
+    expect(executeSpy).toHaveBeenCalledOnce();
+    // Third argument must be the onProgress callback
+    const [calledSkillId, calledParams, calledOnProgress] = executeSpy.mock.calls[0] as [string, Record<string, unknown>, ProgressCallback | undefined];
+    expect(calledSkillId).toBe('skill-1');
+    expect(calledParams).toEqual({ input: 'hello' });
+    expect(calledOnProgress).toBe(onProgress);
+  });
+
+  it('works without onProgress — backward compatible', async () => {
+    const executeSpy = vi.fn().mockResolvedValue({
+      success: true,
+      result: { data: 'ok' },
+      latency_ms: 5,
+    });
+    const mockExecutor = makeMockExecutor({ execute: executeSpy });
+
+    const result = await executeCapabilityRequest({
+      registryDb: fakeDb,
+      creditDb: fakeDb,
+      cardId: 'card-1',
+      params: { input: 'world' },
+      requester: 'requester-bob',
+      skillExecutor: mockExecutor as unknown as import('../skills/executor.js').SkillExecutor,
+      // onProgress intentionally omitted
+    });
+
+    expect(result.success).toBe(true);
+    expect(executeSpy).toHaveBeenCalledOnce();
+    // Third argument must be undefined
+    const [, , calledOnProgress] = executeSpy.mock.calls[0] as [string, Record<string, unknown>, ProgressCallback | undefined];
+    expect(calledOnProgress).toBeUndefined();
+  });
+
+  it('does not crash on handlerUrl path when onProgress is provided', async () => {
+    // The handlerUrl path ignores onProgress — just making sure there's no explosion
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ result: 'done' }), { status: 200 }),
+    );
+    const onProgress: ProgressCallback = vi.fn();
+
+    const result = await executeCapabilityRequest({
+      registryDb: fakeDb,
+      creditDb: fakeDb,
+      cardId: 'card-1',
+      params: {},
+      requester: 'requester-bob',
+      handlerUrl: 'http://localhost:9999/handle',
+      onProgress,
+    });
+
+    expect(result.success).toBe(true);
+    // onProgress should NOT have been called on the handlerUrl path
+    expect(onProgress).not.toHaveBeenCalled();
+
+    fetchSpy.mockRestore();
+  });
+});

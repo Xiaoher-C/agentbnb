@@ -1237,6 +1237,9 @@ program
           token: config.token,
           card: card as Record<string, unknown>,
           onRequest: async (req) => {
+            const onProgress: import('../skills/executor.js').ProgressCallback = (info) => {
+              relayClient!.sendProgress(req.id, info);
+            };
             const result = await executeCapabilityRequest({
               registryDb: runtime.registryDb,
               creditDb: runtime.creditDb,
@@ -1247,6 +1250,7 @@ program
               escrowReceipt: req.escrow_receipt as import('../types/index.js').EscrowReceipt | undefined,
               skillExecutor: runtime.skillExecutor,
               handlerUrl: opts.handlerUrl,
+              onProgress,
             });
             if (result.success) {
               return { result: result.result };

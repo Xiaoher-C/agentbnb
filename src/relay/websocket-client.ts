@@ -187,6 +187,23 @@ export class RelayClient {
     });
   }
 
+  /**
+   * Send a relay_progress message to the relay server for a given request.
+   * Used by the onRequest handler to forward SkillExecutor progress updates
+   * to the requesting agent so it can reset its timeout window.
+   *
+   * @param requestId - The relay request ID to associate progress with.
+   * @param info - Progress details (step, total, message).
+   */
+  sendProgress(requestId: string, info: { step: number; total: number; message: string }): void {
+    this.send({
+      type: 'relay_progress',
+      id: requestId,
+      progress: Math.round((info.step / info.total) * 100),
+      message: info.message,
+    });
+  }
+
   /** Whether the client is connected and registered */
   get isConnected(): boolean {
     return this.ws !== null && this.ws.readyState === WebSocket.OPEN && this.registered;

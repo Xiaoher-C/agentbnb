@@ -8,7 +8,7 @@ import { verifyEscrowReceipt } from '../credit/signing.js';
 import { settleProviderEarning } from '../credit/settlement.js';
 import { AgentBnBError } from '../types/index.js';
 import type { CapabilityCardV2, EscrowReceipt } from '../types/index.js';
-import type { SkillExecutor } from '../skills/executor.js';
+import type { SkillExecutor, ProgressCallback } from '../skills/executor.js';
 
 /**
  * Options for executing a capability request.
@@ -25,6 +25,8 @@ export interface ExecuteRequestOptions {
   skillExecutor?: SkillExecutor;
   handlerUrl?: string;
   timeoutMs?: number;
+  /** Optional progress callback forwarded to SkillExecutor during execution. */
+  onProgress?: ProgressCallback;
 }
 
 /**
@@ -53,6 +55,7 @@ export async function executeCapabilityRequest(opts: ExecuteRequestOptions): Pro
     skillExecutor,
     handlerUrl,
     timeoutMs = 300_000,
+    onProgress,
   } = opts;
 
   // Look up card in registry
@@ -180,7 +183,7 @@ export async function executeCapabilityRequest(opts: ExecuteRequestOptions): Pro
     const targetSkillId = resolvedSkillId ?? skillId ?? cardId;
 
     try {
-      const execResult = await skillExecutor.execute(targetSkillId, params);
+      const execResult = await skillExecutor.execute(targetSkillId, params, onProgress);
       if (!execResult.success) {
         return handleFailure('failure', execResult.latency_ms, execResult.error ?? 'Execution failed');
       }
