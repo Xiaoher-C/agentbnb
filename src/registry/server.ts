@@ -88,9 +88,10 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
   void server.register(fastifyWebsocket);
 
   // Register WebSocket relay — agents connect via /ws for zero-config networking
+  // Pass creditDb so relay enforces credit hold/settle/release on every request
   let relayState: RelayState | null = null;
   if (opts.creditDb) {
-    relayState = registerWebSocketRelay(server, db);
+    relayState = registerWebSocketRelay(server, db, opts.creditDb);
   }
 
   // Register credit endpoints when creditDb is provided — agents can hold/settle/release/grant credits

@@ -14,6 +14,8 @@ import {
   type RateLimitEntry,
   type RelayState,
 } from './types.js';
+import { lookupCardPrice, holdForRelay, settleForRelay, releaseForRelay } from './relay-credit.js';
+import { AgentBnBError } from '../types/index.js';
 
 /** Maximum relay requests per agent per minute */
 const RATE_LIMIT_MAX = 60;
@@ -27,12 +29,16 @@ const RELAY_TIMEOUT_MS = 300_000;
  * Adds a `/ws` route that upgrades HTTP to WebSocket for agent relay.
  *
  * @param server - Fastify instance with @fastify/websocket already registered.
- * @param db - Registry database instance.
+ * @param db - Registry database instance (for card lookups and online status).
+ * @param creditDb - Optional credit database. When provided, credits are held
+ *   before forwarding requests, settled on success, and released on failure/timeout/disconnect.
+ *   When undefined, all credit operations are skipped (backward compat for tests).
  * @returns RelayState for monitoring and graceful shutdown.
  */
 export function registerWebSocketRelay(
   server: FastifyInstance,
   db: Database.Database,
+  creditDb?: Database.Database,
 ): RelayState {
   /** Active agent connections keyed by owner */
   const connections = new Map<string, WebSocket>();
@@ -185,7 +191,7 @@ export function registerWebSocketRelay(
   /**
    * Handle a relay request from Agent A to Agent B.
    */
-  function handleRelayRequest(ws: WebSocket, msg: RelayRequestMessage, fromOwner: string): void {
+  async function handleRelayRequest(ws: WebSocket, msg: RelayRequestMessage, fromOwner: string): Promise<void> {
     // Rate limit check
     if (!checkRateLimit(fromOwner)) {
       sendMessage(ws, {
@@ -208,9 +214,36 @@ export function registerWebSocketRelay(
       return;
     }
 
-    // Set up timeout
+    // Credit hold — if creditDb is provided, hold credits before forwarding
+    let escrowId: string | undefined;
+    if (creditDb) {
+      try {
+        const price = lookupCardPrice(db, msg.card_id, msg.skill_id);
+        if (price !== null && price > 0) {
+          escrowId = holdForRelay(creditDb, fromOwner, price, msg.card_id);
+        }
+      } catch (err) {
+        if (err instanceof AgentBnBError && err.code === 'INSUFFICIENT_CREDITS') {
+          // Hard reject — do not forward to provider
+          sendMessage(ws, {
+            type: 'response',
+            id: msg.id,
+            error: { code: -32603, message: 'Insufficient credits' },
+          });
+          return;
+        }
+        // Other credit DB errors are non-fatal — log and continue without escrow
+        console.error('[relay] credit hold error (non-fatal):', err);
+      }
+    }
+
+    // Set up timeout — release escrow on timeout
     const timeout = setTimeout(() => {
+      const pending = pendingRequests.get(msg.id);
       pendingRequests.delete(msg.id);
+      if (pending?.escrowId && creditDb) {
+        try { releaseForRelay(creditDb, pending.escrowId); } catch (e) { console.error('[relay] escrow release on timeout failed:', e); }
+      }
       sendMessage(ws, {
         type: 'response',
         id: msg.id,
@@ -218,8 +251,8 @@ export function registerWebSocketRelay(
       });
     }, RELAY_TIMEOUT_MS);
 
-    // Track pending request
-    pendingRequests.set(msg.id, { originOwner: fromOwner, timeout });
+    // Track pending request with escrowId and targetOwner
+    pendingRequests.set(msg.id, { originOwner: fromOwner, timeout, escrowId, targetOwner: msg.target_owner });
 
     // Forward to target agent
     sendMessage(targetWs, {
@@ -245,7 +278,11 @@ export function registerWebSocketRelay(
     // Reset the relay timeout so a slow but alive provider doesn't get cut off
     clearTimeout(pending.timeout);
     const newTimeout = setTimeout(() => {
+      const p = pendingRequests.get(msg.id);
       pendingRequests.delete(msg.id);
+      if (p?.escrowId && creditDb) {
+        try { releaseForRelay(creditDb, p.escrowId); } catch (e) { console.error('[relay] escrow release on progress timeout failed:', e); }
+      }
       const originWs = connections.get(pending.originOwner);
       if (originWs && originWs.readyState === 1) {
         sendMessage(originWs, {
@@ -280,6 +317,21 @@ export function registerWebSocketRelay(
     clearTimeout(pending.timeout);
     pendingRequests.delete(msg.id);
 
+    // Settle or release escrow based on response outcome
+    if (pending.escrowId && creditDb) {
+      try {
+        if (msg.error === undefined) {
+          // Provider succeeded — settle credits to provider
+          settleForRelay(creditDb, pending.escrowId, pending.targetOwner!);
+        } else {
+          // Provider returned an error — refund requester
+          releaseForRelay(creditDb, pending.escrowId);
+        }
+      } catch (e) {
+        console.error('[relay] escrow settle/release on response failed:', e);
+      }
+    }
+
     // Forward response to origin agent
     const originWs = connections.get(pending.originOwner);
     if (originWs && originWs.readyState === 1) {
@@ -302,14 +354,34 @@ export function registerWebSocketRelay(
     rateLimits.delete(owner);
     markOwnerOffline(owner);
 
-    // Fail any pending requests targeting this owner
+    // Fail any pending requests targeting this now-disconnected provider
+    // Also clean up requests that originated FROM this agent
     for (const [reqId, pending] of pendingRequests) {
-      // Check if any pending request was forwarded to this now-disconnected agent
-      // We can't easily determine the target from pendingRequests alone,
-      // but the timeout will handle those cases. Clean up requests FROM this agent.
-      if (pending.originOwner === owner) {
+      if (pending.targetOwner === owner) {
+        // This request was forwarded to the disconnected provider — release escrow and notify requester
         clearTimeout(pending.timeout);
         pendingRequests.delete(reqId);
+
+        if (pending.escrowId && creditDb) {
+          try { releaseForRelay(creditDb, pending.escrowId); } catch (e) { console.error('[relay] escrow release on disconnect failed:', e); }
+        }
+
+        const originWs = connections.get(pending.originOwner);
+        if (originWs && originWs.readyState === 1) {
+          sendMessage(originWs, {
+            type: 'response',
+            id: reqId,
+            error: { code: -32603, message: 'Provider disconnected' },
+          });
+        }
+      } else if (pending.originOwner === owner) {
+        // Request originated from this agent — clean up without notifying (requester is gone)
+        clearTimeout(pending.timeout);
+        pendingRequests.delete(reqId);
+        // Release escrow so provider doesn't wait for a settlement that won't come
+        if (pending.escrowId && creditDb) {
+          try { releaseForRelay(creditDb, pending.escrowId); } catch (e) { console.error('[relay] escrow release on requester disconnect failed:', e); }
+        }
       }
     }
   }
@@ -321,56 +393,58 @@ export function registerWebSocketRelay(
     let registeredOwner: string | undefined;
 
     socket.on('message', (raw: Buffer | string) => {
-      let data: unknown;
-      try {
-        data = JSON.parse(typeof raw === 'string' ? raw : raw.toString('utf-8'));
-      } catch {
-        sendMessage(socket, { type: 'error', code: 'invalid_json', message: 'Invalid JSON' });
-        return;
-      }
+      void (async () => {
+        let data: unknown;
+        try {
+          data = JSON.parse(typeof raw === 'string' ? raw : raw.toString('utf-8'));
+        } catch {
+          sendMessage(socket, { type: 'error', code: 'invalid_json', message: 'Invalid JSON' });
+          return;
+        }
 
-      const parsed = RelayMessageSchema.safeParse(data);
-      if (!parsed.success) {
-        sendMessage(socket, {
-          type: 'error',
-          code: 'invalid_message',
-          message: `Invalid message: ${parsed.error.issues[0]?.message ?? 'unknown error'}`,
-        });
-        return;
-      }
+        const parsed = RelayMessageSchema.safeParse(data);
+        if (!parsed.success) {
+          sendMessage(socket, {
+            type: 'error',
+            code: 'invalid_message',
+            message: `Invalid message: ${parsed.error.issues[0]?.message ?? 'unknown error'}`,
+          });
+          return;
+        }
 
-      const msg = parsed.data;
+        const msg = parsed.data;
 
-      switch (msg.type) {
-        case 'register':
-          registeredOwner = msg.owner;
-          handleRegister(socket, msg);
-          break;
+        switch (msg.type) {
+          case 'register':
+            registeredOwner = msg.owner;
+            handleRegister(socket, msg);
+            break;
 
-        case 'relay_request':
-          if (!registeredOwner) {
-            sendMessage(socket, {
-              type: 'error',
-              code: 'not_registered',
-              message: 'Must send register message before relay requests',
-            });
-            return;
-          }
-          handleRelayRequest(socket, msg, registeredOwner);
-          break;
+          case 'relay_request':
+            if (!registeredOwner) {
+              sendMessage(socket, {
+                type: 'error',
+                code: 'not_registered',
+                message: 'Must send register message before relay requests',
+              });
+              return;
+            }
+            await handleRelayRequest(socket, msg, registeredOwner);
+            break;
 
-        case 'relay_response':
-          handleRelayResponse(msg);
-          break;
+          case 'relay_response':
+            handleRelayResponse(msg);
+            break;
 
-        case 'relay_progress':
-          handleRelayProgress(msg);
-          break;
+          case 'relay_progress':
+            handleRelayProgress(msg);
+            break;
 
-        default:
-          // Ignore other message types from agents
-          break;
-      }
+          default:
+            // Ignore other message types from agents
+            break;
+        }
+      })();
     });
 
     socket.on('close', () => {
