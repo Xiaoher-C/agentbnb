@@ -107,7 +107,7 @@
 - [x] **Phase 36: Hub Agent Core** — Platform-hosted persistent agents with skill routing table and direct API execution (completed 2026-03-19)
 - [x] **Phase 37: Job Queue + Relay Bridge** — SQLite job queue for offline requests, auto-dispatch on agent reconnect (completed 2026-03-19)
 - [x] **Phase 38: Framework Adapters** — LangChain, CrewAI, AutoGen (Python), OpenAI function calling (JSON) (completed 2026-03-19)
-- [ ] **Phase 39: Hub Agent UI + Dashboard** — Create Agent wizard, operations dashboard, skill marketplace browse
+- [x] **Phase 39: Hub Agent UI + Dashboard** — Create Agent wizard, operations dashboard, skill marketplace browse (completed 2026-03-19)
 
 ## Phase Details
 
@@ -253,7 +253,7 @@ Plans:
 | 36 | v4.0 | 2/2 | Complete | 2026-03-19 |
 | 37 | 1/1 | Complete   | 2026-03-19 | — |
 | 38 | v4.0 | 1/1 | Complete | 2026-03-19 |
-| 39 | v4.0 | 0/1 | Wave 5 | — |
+| 39 | 1/1 | Complete   | 2026-03-19 | — |
 
 **Total:** 39 phases, 93+ plans, 8 milestones (7 shipped), v4.0 in progress.
 
