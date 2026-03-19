@@ -21,8 +21,13 @@ vi.mock('../cli/peers.js', () => ({
   findPeer: vi.fn(() => null),
 }));
 
+vi.mock('../cli/remote-registry.js', () => ({
+  fetchRemoteCards: vi.fn(),
+}));
+
 import { requestCapability } from '../gateway/client.js';
 import { findPeer } from '../cli/peers.js';
+import { fetchRemoteCards } from '../cli/remote-registry.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -366,6 +371,133 @@ describe('AutoRequestor.requestWithAutonomy', () => {
       .prepare("SELECT * FROM request_log WHERE action_type = 'auto_request_failed'")
       .all();
     expect(rows.length).toBeGreaterThan(0);
+  });
+
+  // -----------------------------------------------------------------------
+  // Remote fallback tests
+  // -----------------------------------------------------------------------
+
+  it('falls back to remote registry when local returns 0 cards and registryUrl is set', async () => {
+    const remoteCard = makePeerCard({
+      owner: 'remote-bob',
+      name: 'text-to-speech',
+      description: 'Remote TTS capability',
+      pricing: { credits_per_call: 10 },
+    });
+
+    vi.mocked(fetchRemoteCards).mockResolvedValue([remoteCard]);
+    vi.mocked(findPeer).mockReturnValue({
+      name: 'remote-bob',
+      url: 'http://localhost:7701',
+      token: 'token-bob',
+      added_at: new Date().toISOString(),
+    });
+    vi.mocked(requestCapability).mockResolvedValue({ audio_url: 'http://example.com/tts.mp3' });
+
+    const requestorWithRemote = new AutoRequestor({
+      owner: 'alice',
+      registryDb,
+      creditDb,
+      autonomyConfig: { tier1_max_credits: 100, tier2_max_credits: 200 },
+      budgetManager: new BudgetManager(creditDb, 'alice', DEFAULT_BUDGET_CONFIG),
+      registryUrl: 'http://registry.example.com',
+    });
+
+    const result = await requestorWithRemote.requestWithAutonomy({
+      query: 'text-to-speech',
+      maxCostCredits: 50,
+    });
+
+    expect(result.status).toBe('success');
+    expect(fetchRemoteCards).toHaveBeenCalledWith('http://registry.example.com', { q: 'text-to-speech', online: true });
+  });
+
+  it('does NOT call fetchRemoteCards when local returns 1+ cards', async () => {
+    const localCard = makePeerCard({
+      owner: 'bob',
+      name: 'text-to-speech',
+      description: 'TTS capability',
+      pricing: { credits_per_call: 10 },
+    });
+    insertCard(registryDb, localCard);
+
+    vi.mocked(findPeer).mockReturnValue({
+      name: 'bob',
+      url: 'http://localhost:7701',
+      token: 'token-bob',
+      added_at: new Date().toISOString(),
+    });
+    vi.mocked(requestCapability).mockResolvedValue({ audio_url: 'http://example.com/tts.mp3' });
+
+    const requestorWithRemote = new AutoRequestor({
+      owner: 'alice',
+      registryDb,
+      creditDb,
+      autonomyConfig: { tier1_max_credits: 100, tier2_max_credits: 200 },
+      budgetManager: new BudgetManager(creditDb, 'alice', DEFAULT_BUDGET_CONFIG),
+      registryUrl: 'http://registry.example.com',
+    });
+
+    const result = await requestorWithRemote.requestWithAutonomy({
+      query: 'text-to-speech',
+      maxCostCredits: 50,
+    });
+
+    expect(result.status).toBe('success');
+    expect(fetchRemoteCards).not.toHaveBeenCalled();
+  });
+
+  it('returns no_peer when registryUrl is undefined and local returns 0 cards (no remote fallback)', async () => {
+    // No registryUrl set, no cards in DB — should behave as before
+    const result = await requestor.requestWithAutonomy({
+      query: 'text-to-speech',
+      maxCostCredits: 50,
+    });
+
+    expect(result.status).toBe('no_peer');
+    expect(fetchRemoteCards).not.toHaveBeenCalled();
+  });
+
+  it('returns no_peer when registryUrl is set but remote also returns 0 cards', async () => {
+    vi.mocked(fetchRemoteCards).mockResolvedValue([]);
+
+    const requestorWithRemote = new AutoRequestor({
+      owner: 'alice',
+      registryDb,
+      creditDb,
+      autonomyConfig: { tier1_max_credits: 100, tier2_max_credits: 200 },
+      budgetManager: new BudgetManager(creditDb, 'alice', DEFAULT_BUDGET_CONFIG),
+      registryUrl: 'http://registry.example.com',
+    });
+
+    const result = await requestorWithRemote.requestWithAutonomy({
+      query: 'text-to-speech',
+      maxCostCredits: 50,
+    });
+
+    expect(result.status).toBe('no_peer');
+    expect(fetchRemoteCards).toHaveBeenCalled();
+  });
+
+  it('gracefully falls back to no_peer when fetchRemoteCards throws (network error)', async () => {
+    vi.mocked(fetchRemoteCards).mockRejectedValue(new Error('Network error'));
+
+    const requestorWithRemote = new AutoRequestor({
+      owner: 'alice',
+      registryDb,
+      creditDb,
+      autonomyConfig: { tier1_max_credits: 100, tier2_max_credits: 200 },
+      budgetManager: new BudgetManager(creditDb, 'alice', DEFAULT_BUDGET_CONFIG),
+      registryUrl: 'http://registry.example.com',
+    });
+
+    const result = await requestorWithRemote.requestWithAutonomy({
+      query: 'text-to-speech',
+      maxCostCredits: 50,
+    });
+
+    expect(result.status).toBe('no_peer');
+    // Should not crash — graceful degradation
   });
 
   it('filters candidates exceeding maxCostCredits', async () => {

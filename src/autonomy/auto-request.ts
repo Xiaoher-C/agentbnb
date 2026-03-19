@@ -12,6 +12,7 @@ import {
 import { createPendingRequest } from '../autonomy/pending-requests.js';
 import { findPeer } from '../cli/peers.js';
 import type { CapabilityCard } from '../types/index.js';
+import { fetchRemoteCards } from '../cli/remote-registry.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -45,6 +46,8 @@ export interface AutoRequestOptions {
   budgetManager: BudgetManager;
   /** Maximum number of candidates to retrieve from search. Default 10. */
   maxSearchResults?: number;
+  /** Optional remote registry URL for fallback when local search returns no results. */
+  registryUrl?: string;
 }
 
 /**
@@ -179,6 +182,7 @@ export class AutoRequestor {
   private readonly creditDb: Database.Database;
   private readonly autonomyConfig: AutonomyConfig;
   private readonly budgetManager: BudgetManager;
+  private readonly registryUrl?: string;
 
   /**
    * Creates a new AutoRequestor.
@@ -191,6 +195,7 @@ export class AutoRequestor {
     this.creditDb = opts.creditDb;
     this.autonomyConfig = opts.autonomyConfig;
     this.budgetManager = opts.budgetManager;
+    this.registryUrl = opts.registryUrl;
   }
 
   /**
@@ -212,8 +217,27 @@ export class AutoRequestor {
    * @returns The result of the auto-request attempt.
    */
   async requestWithAutonomy(need: CapabilityNeed): Promise<AutoRequestResult> {
-    // Step 1: Search for matching cards
-    const cards = searchCards(this.registryDb, need.query, { online: true });
+    // Step 1: Search for matching cards (local first, remote fallback)
+    let cards = searchCards(this.registryDb, need.query, { online: true });
+
+    // Remote fallback: when local returns zero and registryUrl is configured
+    if (cards.length === 0 && this.registryUrl) {
+      try {
+        cards = await fetchRemoteCards(this.registryUrl, { q: need.query, online: true });
+      } catch {
+        // Graceful degradation — network errors result in empty cards
+        insertAuditEvent(this.registryDb, {
+          type: 'auto_request_failed',
+          card_id: 'none',
+          skill_id: 'none',
+          tier_invoked: 3,
+          credits: 0,
+          peer: 'none',
+          reason: `Remote registry fallback failed for query "${need.query}"`,
+        });
+        cards = [];
+      }
+    }
 
     // Step 2: Build candidates from both v1.0 and v2.0 cards
     const candidates: Candidate[] = [];
