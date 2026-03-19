@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v3.2
 milestone_name: Registry Credit Ledger
 status: planning
-stopped_at: Completed 29-02-PLAN.md — Backward Compatibility Verification (FINAL plan of v3.2)
-last_updated: "2026-03-19T05:29:01.984Z"
-last_activity: 2026-03-19 — Roadmap created for v3.2 (Phases 25-29, 35 requirements)
+stopped_at: Completed 30-01-PLAN.md — Fix v2.0 Card Relay Registration
+last_updated: "2026-03-19T06:37:39Z"
+last_activity: 2026-03-19 — Phase 30 Plan 01 complete (v2.0 card relay fix)
 progress:
   total_phases: 5
   completed_phases: 5
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-19)
 
 **Core value:** Fill the market gap for agent-to-agent capability exchange.
-**Current focus:** Phase 25 — Relay Timeout
+**Current focus:** Phase 30 — Fix Upstream (v2.0 card relay)
 
 ## Current Position
 
-Phase: 25 of 29 (Relay Timeout)
-Plan: 0 of TBD in current phase
-Status: Ready to plan
-Last activity: 2026-03-19 — Roadmap created for v3.2 (Phases 25-29, 35 requirements)
+Phase: 30 of 30 (Fix Upstream)
+Plan: 1 of 1 in current phase
+Status: Complete
+Last activity: 2026-03-19 — Phase 30 Plan 01 complete (v2.0 card relay fix)
 
 Progress: [░░░░░░░░░░] 0% (v3.2 milestone)
 
@@ -69,6 +69,8 @@ Progress: [░░░░░░░░░░] 0% (v3.2 milestone)
 - [Phase 29-cli-hub-compatibility]: CLI request: CreditLedger for direct HTTP path only; relay-only path skips CLI escrow — relay does server-side hold/settle/release to avoid double-holding
 - [Phase 29-cli-hub-compatibility]: Registry server uses direct DB mode createLedger({ db }) for /me and /me/transactions — avoids HTTP round-trip to itself; per-request construction is cheap
 - [Phase 29-02]: No source code changes needed — Plan 01 wiring complete; 865 tests pass without modification
+- [Phase 30-01]: Replaced insertCard/updateCard/getCard with AnyCardSchema + raw SQL in relay upsertCard() — store.ts functions locked to v1.0 schema
+- [Phase 30-01]: Used same raw SQL pattern as soul-sync.ts for v2.0 card persistence consistency
 
 ### Pending Todos
 
@@ -81,8 +83,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-19T05:25:26.813Z
-Stopped at: Completed 29-02-PLAN.md — Backward Compatibility Verification (FINAL plan of v3.2)
+Last session: 2026-03-19T06:37:39Z
+Stopped at: Completed 30-01-PLAN.md — Fix v2.0 Card Relay Registration
 Resume file: None
 
 ---

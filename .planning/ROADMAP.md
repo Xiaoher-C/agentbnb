@@ -95,7 +95,7 @@
 
 #### 軌道 A：OpenClaw 體驗閉環修復
 
-- [ ] **Phase 30: 被發現 (Fix Upstream)** — Fix v2.0 card relay registration (AnyCardSchema + raw SQL), offline/online lifecycle
+- [x] **Phase 30: 被發現 (Fix Upstream)** — Fix v2.0 card relay registration (AnyCardSchema + raw SQL), offline/online lifecycle [1/1 plans]
 - [ ] **Phase 31: 找人用 (Fix Downstream)** — AutoRequestor + capability-matcher remote fallback, CLI request/conduct wired to registry
 - [ ] **Phase 32: 定價引導 (Pricing Guidance)** — GET /api/pricing endpoint, market reference in openclaw sync, SOUL.md custom pricing
 - [ ] **Phase 33: Conductor 雙重角色** — Push conductor card via relay, conductor.public config, relay-based orchestration
