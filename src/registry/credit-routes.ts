@@ -4,6 +4,7 @@ import { holdEscrow, settleEscrow, releaseEscrow } from '../credit/escrow.js';
 import { bootstrapAgent, getBalance, getTransactions } from '../credit/ledger.js';
 import { AgentBnBError } from '../types/index.js';
 import { identityAuthPlugin } from './identity-auth.js';
+import { initFreeTierTable } from './free-tier.js';
 
 /** Options for creditRoutesPlugin — requires a credit database instance. */
 export interface CreditRoutesOptions {
@@ -40,6 +41,9 @@ export async function creditRoutesPlugin(
       granted_at TEXT NOT NULL
     )
   `);
+
+  // Initialize free-tier usage tracking table
+  initFreeTierTable(creditDb);
 
   // Register all credit routes in a scoped block with identity auth
   await fastify.register(async (scope) => {
