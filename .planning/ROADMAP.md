@@ -106,7 +106,7 @@
 - [x] **Phase 35: OpenAPI Spec + GPT Actions** — @fastify/swagger for Registry, Swagger UI, GPT Actions schema
 - [ ] **Phase 36: Hub Agent Core** — Platform-hosted persistent agents with skill routing table and direct API execution
 - [ ] **Phase 37: Job Queue + Relay Bridge** — SQLite job queue for offline requests, auto-dispatch on agent reconnect
-- [ ] **Phase 38: Framework Adapters** — LangChain, CrewAI, AutoGen (Python), OpenAI function calling (JSON)
+- [x] **Phase 38: Framework Adapters** — LangChain, CrewAI, AutoGen (Python), OpenAI function calling (JSON) (completed 2026-03-19)
 - [ ] **Phase 39: Hub Agent UI + Dashboard** — Create Agent wizard, operations dashboard, skill marketplace browse
 
 ## Phase Details
@@ -252,7 +252,7 @@ Plans:
 | 35 | v4.0 | 1/1 | Complete | 2026-03-19 |
 | 36 | v4.0 | 0/2 | **Wave 3** | — |
 | 37 | v4.0 | 0/1 | Wave 4 | — |
-| 38 | v4.0 | 0/1 | **Wave 3** | — |
+| 38 | 1/1 | Complete   | 2026-03-19 | — |
 | 39 | v4.0 | 0/1 | Wave 5 | — |
 
 **Total:** 39 phases, 93+ plans, 8 milestones (7 shipped), v4.0 in progress.

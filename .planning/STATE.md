@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v4.0
 milestone_name: Agent Economy Platform
 status: completed
-stopped_at: Completed 34-01-PLAN.md — MCP Server with 6 tools
-last_updated: "2026-03-19T07:19:17Z"
-last_activity: 2026-03-19 — Phase 34 Plan 01 complete (MCP server + 6 tools + CLI command)
+stopped_at: Completed 38-01-PLAN.md -- Framework Adapters (LangChain, CrewAI, AutoGen, OpenAI)
+last_updated: "2026-03-19T08:14:55.732Z"
+last_activity: 2026-03-19 — Phase 38 Plan 01 complete (Framework Adapters — LangChain, CrewAI, AutoGen, OpenAI)
 progress:
   total_phases: 10
-  completed_phases: 6
-  total_plans: 8
-  completed_plans: 7
-  percent: 50
+  completed_phases: 8
+  total_plans: 10
+  completed_plans: 9
+  percent: 60
 ---
 
 # AgentBnB — Project State
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-19)
 
 **Core value:** Fill the market gap for agent-to-agent capability exchange.
-**Current focus:** Phase 34 — MCP Server (complete)
+**Current focus:** Phase 38 — Framework Adapters (complete)
 
 ## Current Position
 
-Phase: 34 of 39 (MCP Server)
+Phase: 38 of 39 (Framework Adapters)
 Plan: 1 of 1 in current phase
 Status: Complete
-Last activity: 2026-03-19 — Phase 34 Plan 01 complete (MCP server + 6 tools + CLI command)
+Last activity: 2026-03-19 — Phase 38 Plan 01 complete (Framework Adapters — LangChain, CrewAI, AutoGen, OpenAI)
 
-Progress: [#####░░░░░] 50% (v4.0 milestone)
+Progress: [######░░░░] 60% (v4.0 milestone)
 
 ## Accumulated Context
 
@@ -87,6 +87,7 @@ Progress: [#####░░░░░] 50% (v4.0 milestone)
 - [Phase 34]: All MCP server logging goes to stderr — stdout reserved for JSON-RPC protocol
 - [Phase 34]: Tool handlers exported as standalone handleXxx() functions for direct unit testing
 - [Phase 34]: serve_skill stores RelayClient on McpServerContext for graceful SIGINT/SIGTERM shutdown
+- [Phase 38]: Each Python adapter is fully self-contained with inline Ed25519 auth -- no shared module
 
 ### Pending Todos
 
@@ -99,8 +100,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-19T07:19:17Z
-Stopped at: Completed 34-01-PLAN.md — MCP Server with 6 tools
+Last session: 2026-03-19T08:14:55.730Z
+Stopped at: Completed 38-01-PLAN.md -- Framework Adapters (LangChain, CrewAI, AutoGen, OpenAI)
 Resume file: None
 
 ---
