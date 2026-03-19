@@ -104,7 +104,10 @@ Plans:
   3. `RegistryCreditLedger` routes calls to the Registry HTTP API when `registryUrl` is configured
   4. `RegistryCreditLedger` performs DB operations directly when running inside the Registry server process
   5. An agent with no `registryUrl` config falls back to `LocalCreditLedger` automatically
-**Plans**: TBD
+**Plans:** 2 plans
+Plans:
+- [ ] 26-01-PLAN.md — CreditLedger interface + LocalCreditLedger wrapper
+- [ ] 26-02-PLAN.md — RegistryCreditLedger dual-mode + createLedger factory
 
 ### Phase 27: Registry Credit Endpoints
 **Goal**: The Registry server exposes authenticated credit endpoints that any agent can call to hold, settle, release, grant, and query credits
@@ -157,7 +160,7 @@ Plans:
 | 19-23 | v3.0 | 16/16 | Complete | 2026-03-17 |
 | 24 | v3.1 | — | Superseded | — |
 | 25 | 3/3 | Complete    | 2026-03-19 | — |
-| 26 | v3.2 | 0/TBD | Not started | — |
+| 26 | v3.2 | 0/2 | Planning | — |
 | 27 | v3.2 | 0/TBD | Not started | — |
 | 28 | v3.2 | 0/TBD | Not started | — |
 | 29 | v3.2 | 0/TBD | Not started | — |
