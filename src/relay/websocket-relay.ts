@@ -2,7 +2,6 @@ import type { FastifyInstance } from 'fastify';
 import type Database from 'better-sqlite3';
 import type { WebSocket } from 'ws';
 import { randomUUID } from 'node:crypto';
-import { insertCard, getCard, updateCard } from '../registry/store.js';
 import { insertRequestLog } from '../registry/request-log.js';
 import {
   RelayMessageSchema,
@@ -15,7 +14,7 @@ import {
   type RelayState,
 } from './types.js';
 import { lookupCardPrice, holdForRelay, settleForRelay, releaseForRelay, calculateConductorFee } from './relay-credit.js';
-import { AgentBnBError } from '../types/index.js';
+import { AgentBnBError, AnyCardSchema } from '../types/index.js';
 
 /** Maximum relay requests per agent per minute */
 const RATE_LIMIT_MAX = 60;
@@ -111,19 +110,32 @@ export function registerWebSocketRelay(
 
   /**
    * Upsert a card into the registry from a relay register message.
+   * Uses AnyCardSchema to accept both v1.0 and v2.0 cards, and raw SQL
+   * to bypass store.ts functions which are locked to v1.0 schema only.
    */
   function upsertCard(cardData: Record<string, unknown>, owner: string): string {
-    const cardId = cardData.id as string;
-    const existing = getCard(db, cardId);
+    const parsed = AnyCardSchema.safeParse(cardData);
+    if (!parsed.success) {
+      throw new AgentBnBError(
+        `Card validation failed: ${parsed.error.message}`,
+        'VALIDATION_ERROR',
+      );
+    }
+
+    const card = { ...parsed.data, availability: { ...parsed.data.availability, online: true } };
+    const cardId = card.id;
+    const now = new Date().toISOString();
+
+    const existing = db.prepare('SELECT id FROM capability_cards WHERE id = ?').get(cardId) as { id: string } | undefined;
 
     if (existing) {
-      // Update existing card — mark online
-      const updates = { ...cardData, availability: { ...((cardData.availability as Record<string, unknown>) ?? {}), online: true } };
-      updateCard(db, cardId, owner, updates);
+      db.prepare(
+        'UPDATE capability_cards SET data = ?, updated_at = ? WHERE id = ?',
+      ).run(JSON.stringify(card), now, cardId);
     } else {
-      // Insert new card — mark online
-      const card = { ...cardData, availability: { ...((cardData.availability as Record<string, unknown>) ?? {}), online: true } };
-      insertCard(db, card as Parameters<typeof insertCard>[1]);
+      db.prepare(
+        'INSERT INTO capability_cards (id, owner, data, created_at, updated_at) VALUES (?, ?, ?, ?, ?)',
+      ).run(cardId, owner, JSON.stringify(card), now, now);
     }
 
     return cardId;
