@@ -35,9 +35,9 @@
 
 ### Relay Integration
 
-- [ ] **INTG-01**: WebSocket relay holds escrow on Registry before forwarding request to provider
-- [ ] **INTG-02**: WebSocket relay settles escrow on Registry after receiving successful response
-- [ ] **INTG-03**: WebSocket relay releases escrow on Registry on failure, timeout, or provider disconnect
+- [x] **INTG-01**: WebSocket relay holds escrow on Registry before forwarding request to provider
+- [x] **INTG-02**: WebSocket relay settles escrow on Registry after receiving successful response
+- [x] **INTG-03**: WebSocket relay releases escrow on Registry on failure, timeout, or provider disconnect
 - [ ] **INTG-04**: Conductor orchestration fee calculated as 10% of total sub-task cost (min 1 cr, max 20 cr)
 
 ### CLI Changes
@@ -112,9 +112,9 @@
 | REG-06 | Phase 27 | Complete |
 | REG-07 | Phase 27 | Complete |
 | REG-08 | Phase 27 | Complete |
-| INTG-01 | Phase 28 | Pending |
-| INTG-02 | Phase 28 | Pending |
-| INTG-03 | Phase 28 | Pending |
+| INTG-01 | Phase 28 | Complete |
+| INTG-02 | Phase 28 | Complete |
+| INTG-03 | Phase 28 | Complete |
 | INTG-04 | Phase 28 | Pending |
 | CLI-01 | Phase 29 | Pending |
 | CLI-02 | Phase 29 | Pending |

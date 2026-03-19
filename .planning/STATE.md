@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v3.2
 milestone_name: Registry Credit Ledger
 status: planning
-stopped_at: Completed 27-02-PLAN.md — Free-tier tracking + Ed25519 HTTP client signing
-last_updated: "2026-03-19T04:48:31.097Z"
+stopped_at: Completed 28-01-PLAN.md — Relay credit integration (hold/settle/release)
+last_updated: "2026-03-19T05:00:18.121Z"
 last_activity: 2026-03-19 — Roadmap created for v3.2 (Phases 25-29, 35 requirements)
 progress:
   total_phases: 5
   completed_phases: 3
-  total_plans: 7
-  completed_plans: 7
+  total_plans: 9
+  completed_plans: 8
   percent: 0
 ---
 
@@ -60,6 +60,9 @@ Progress: [░░░░░░░░░░] 0% (v3.2 milestone)
 - [Phase 27-01]: credit_grants table on creditDb — grants are a credit concern, not registry
 - [Phase 27-02]: free-tier tracking uses creditDb (not registryDb) — consistent with credit_grants placement; free_tier is a credit concern
 - [Phase 27-02]: privateKey required (not optional) in HttpClientConfig and createLedger HTTP options — fail fast if misconfigured
+- [Phase 28]: relay-credit.ts as thin wrapper layer over escrow.ts — keeps relay focused on routing, credit module owns escrow operations
+- [Phase 28]: handleRelayRequest made async — allows proper credit hold before forwarding, void-wrapped in message handler to avoid unhandled promise
+- [Phase 28]: handleDisconnect tracks both requester and provider disconnects — releases escrow immediately on provider disconnect (not waiting for timeout)
 
 ### Pending Todos
 
@@ -72,8 +75,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-19T04:45:56.543Z
-Stopped at: Completed 27-02-PLAN.md — Free-tier tracking + Ed25519 HTTP client signing
+Last session: 2026-03-19T05:00:18.119Z
+Stopped at: Completed 28-01-PLAN.md — Relay credit integration (hold/settle/release)
 Resume file: None
 
 ---
