@@ -9,6 +9,7 @@ import type Database from 'better-sqlite3';
 import { getCard, insertCard, updateCard, listCards } from './store.js';
 import { listPendingRequests, resolvePendingRequest } from '../autonomy/pending-requests.js';
 import { searchCards, filterCards } from './matcher.js';
+import { getPricingStats } from './pricing.js';
 import { getRequestLog, getActivityFeed } from './request-log.js';
 import type { SincePeriod } from './request-log.js';
 import { createLedger } from '../credit/create-ledger.js';
@@ -310,6 +311,24 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
       .filter((item): item is NonNullable<typeof item> => item !== null);
 
     return reply.send({ items });
+  });
+
+  /**
+   * GET /api/pricing — Returns aggregate pricing statistics for skills matching a query.
+   *
+   * Query parameters:
+   *   q — Search query string (required)
+   *
+   * Returns { query, min, max, median, mean, count } or 400 if q is missing.
+   */
+  server.get('/api/pricing', async (request, reply) => {
+    const query = request.query as Record<string, string | undefined>;
+    const q = query.q?.trim();
+    if (!q) {
+      return reply.code(400).send({ error: 'q parameter is required' });
+    }
+    const stats = getPricingStats(db, q);
+    return reply.send({ query: q, ...stats });
   });
 
   /**
