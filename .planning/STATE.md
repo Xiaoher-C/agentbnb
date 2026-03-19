@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v3.2
 milestone_name: Registry Credit Ledger
 status: planning
-stopped_at: Completed 25-02-PLAN.md — progress callbacks wired through SkillExecutor dispatch
-last_updated: "2026-03-18T20:04:42.890Z"
+stopped_at: Completed 25-03-PLAN.md — relay-to-executor progress bridge fully wired
+last_updated: "2026-03-19T04:07:42.223Z"
 last_activity: 2026-03-19 — Roadmap created for v3.2 (Phases 25-29, 35 requirements)
 progress:
   total_phases: 5
   completed_phases: 1
-  total_plans: 2
-  completed_plans: 2
+  total_plans: 3
+  completed_plans: 3
   percent: 0
 ---
 
@@ -48,6 +48,8 @@ Progress: [░░░░░░░░░░] 0% (v3.2 milestone)
 - [Phase 25]: PendingRequest stores timeoutMs field to allow clean timer reset in handleProgress without needing access to outer scope constants
 - [Phase 25-relay-timeout]: ProgressCallback as optional 3rd param on ExecutorMode.execute — minimal interface change, symmetric with existing (config, params) call sites
 - [Phase 25-relay-timeout]: PipelineExecutor emits N-1 callbacks for N-step pipeline (not after final step) — progress means forward movement, completion via return value
+- [Phase 25-03]: CLI onRequest uses relayClient! non-null assertion inside onProgress — safe because callback only fires when relay is connected
+- [Phase 25-03]: handlerUrl path intentionally does not receive onProgress — HTTP fetch has no step-level progress
 
 ### Pending Todos
 
@@ -60,8 +62,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-18T20:04:42.889Z
-Stopped at: Completed 25-02-PLAN.md — progress callbacks wired through SkillExecutor dispatch
+Last session: 2026-03-19T04:07:42.222Z
+Stopped at: Completed 25-03-PLAN.md — relay-to-executor progress bridge fully wired
 Resume file: None
 
 ---
