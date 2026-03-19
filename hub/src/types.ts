@@ -127,3 +127,36 @@ export interface ActivityEvent {
   latency_ms: number;
   created_at: string;
 }
+
+/** Hub Agent as returned by GET /api/hub-agents */
+export interface HubAgentSummary {
+  agent_id: string;
+  name: string;
+  public_key: string;
+  skill_routes: HubAgentSkillRoute[];
+  status: 'active' | 'paused';
+  secret_keys?: string[];
+  created_at: string;
+  updated_at: string;
+}
+
+/** Skill routing config for a Hub Agent */
+export type HubAgentSkillRoute =
+  | { skill_id: string; mode: 'direct_api'; config: { id: string; type: 'api'; name: string; endpoint: string; method: string; pricing: { credits_per_call: number }; [key: string]: unknown } }
+  | { skill_id: string; mode: 'relay'; config: { relay_owner: string } }
+  | { skill_id: string; mode: 'queue'; config: { relay_owner: string } };
+
+/** Job record from GET /api/hub-agents/:id/jobs */
+export interface HubAgentJob {
+  id: string;
+  hub_agent_id: string;
+  skill_id: string;
+  requester_owner: string;
+  params: string;
+  status: 'queued' | 'dispatched' | 'completed' | 'failed';
+  result: string | null;
+  escrow_id: string | null;
+  relay_owner: string | null;
+  created_at: string;
+  updated_at: string;
+}
