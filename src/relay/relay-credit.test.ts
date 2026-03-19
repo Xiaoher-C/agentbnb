@@ -154,12 +154,12 @@ describe('relay-credit module', () => {
       bootstrapAgent(creditDb, 'requester-poor', 5);
       const cardId = randomUUID();
 
-      expect(() => holdForRelay(creditDb, 'requester-poor', 10, cardId)).toThrow('INSUFFICIENT_CREDITS');
+      expect(() => holdForRelay(creditDb, 'requester-poor', 10, cardId)).toThrow('Insufficient credits');
     });
 
     it('throws INSUFFICIENT_CREDITS when owner has no balance row', () => {
       const cardId = randomUUID();
-      expect(() => holdForRelay(creditDb, 'requester-new', 10, cardId)).toThrow('INSUFFICIENT_CREDITS');
+      expect(() => holdForRelay(creditDb, 'requester-new', 10, cardId)).toThrow('Insufficient credits');
     });
   });
 

@@ -114,6 +114,10 @@ export interface RateLimitEntry {
 export interface PendingRelayRequest {
   originOwner: string;
   timeout: ReturnType<typeof setTimeout>;
+  /** Escrow ID for the credit hold, if credits were reserved for this request */
+  escrowId?: string;
+  /** The target provider owner, needed to release escrow on provider disconnect */
+  targetOwner?: string;
 }
 
 /** Relay server state returned from registerWebSocketRelay */
