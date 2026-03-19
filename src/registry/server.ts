@@ -27,6 +27,7 @@ import {
   initiateGithubAuth,
 } from '../identity/guarantor.js';
 import { creditRoutesPlugin } from './credit-routes.js';
+import { hubAgentRoutesPlugin } from '../hub-agent/routes.js';
 import { convertToGptActions } from './openapi-gpt-actions.js';
 
 /**
@@ -139,6 +140,11 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
   // Register credit endpoints when creditDb is provided — agents can hold/settle/release/grant credits
   if (opts.creditDb) {
     void server.register(creditRoutesPlugin, { creditDb: opts.creditDb });
+  }
+
+  // Register Hub Agent CRUD endpoints — requires HUB_MASTER_KEY env var for secret encryption
+  if (opts.creditDb) {
+    void server.register(hubAgentRoutesPlugin, { registryDb: db, creditDb: opts.creditDb });
   }
 
   // Register static file serving for the hub SPA (optional — skipped if hub not built)
