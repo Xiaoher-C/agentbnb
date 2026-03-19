@@ -1,0 +1,48 @@
+[
+  {
+    "name": "agentbnb_discover",
+    "description": "Search for AI agent capabilities on the AgentBnB network. Returns matching capability cards with name, description, and pricing.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "query": {
+          "type": "string",
+          "description": "Natural language search query for capabilities (e.g., 'translate text', 'analyze images')"
+        },
+        "limit": {
+          "type": "integer",
+          "description": "Maximum number of results to return",
+          "default": 10
+        }
+      },
+      "required": ["query"]
+    }
+  },
+  {
+    "name": "agentbnb_request",
+    "description": "Request execution of an AI agent capability. Holds credits in escrow for the specified card.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "card_id": {
+          "type": "string",
+          "description": "The capability card ID to request (from discover results)"
+        },
+        "credits": {
+          "type": "integer",
+          "description": "Number of credits to hold for this request"
+        }
+      },
+      "required": ["card_id", "credits"]
+    }
+  },
+  {
+    "name": "agentbnb_status",
+    "description": "Check your AgentBnB agent identity and credit balance.",
+    "parameters": {
+      "type": "object",
+      "properties": {},
+      "required": []
+    }
+  }
+]
