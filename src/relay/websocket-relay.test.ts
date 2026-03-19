@@ -468,6 +468,91 @@ describe('WebSocket Relay', () => {
     ws2.close();
   });
 
+  // ── multi-card registration tests ──────────────────────────────────────────
+
+  it('RegisterMessageSchema accepts optional cards array', async () => {
+    const { RegisterMessageSchema } = await import('./types.js');
+    const msg = {
+      type: 'register',
+      owner: 'agent-mc',
+      token: 'test-token',
+      card: { spec_version: '1.0', id: 'c1', owner: 'agent-mc', name: 'Primary', description: 'Primary card', level: 1, inputs: [], outputs: [], pricing: { credits_per_call: 5 }, availability: { online: true } },
+      cards: [
+        { spec_version: '2.0', id: 'c2', owner: 'agent-mc', agent_name: 'Conductor', skills: [{ id: 'orchestrate', name: 'Orchestrate', description: 'Orchestration', level: 3, inputs: [{ name: 'task', type: 'text' }], outputs: [{ name: 'result', type: 'json' }], pricing: { credits_per_call: 5 } }], availability: { online: true } },
+      ],
+    };
+    const result = RegisterMessageSchema.safeParse(msg);
+    expect(result.success).toBe(true);
+  });
+
+  it('RegisterMessageSchema still works without cards array (backward compat)', async () => {
+    const { RegisterMessageSchema } = await import('./types.js');
+    const msg = {
+      type: 'register',
+      owner: 'agent-bc',
+      token: 'test-token',
+      card: { spec_version: '1.0', id: 'c1', owner: 'agent-bc', name: 'Primary', description: 'desc', level: 1, inputs: [], outputs: [], pricing: { credits_per_call: 5 }, availability: { online: true } },
+    };
+    const result = RegisterMessageSchema.safeParse(msg);
+    expect(result.success).toBe(true);
+  });
+
+  it('handleRegister with cards array upserts all cards', async () => {
+    const ws = connect();
+    await waitForOpen(ws);
+    const responsePromise = waitForMessage(ws);
+
+    const primaryCard = makeV2Card('agent-multi');
+    const secondaryCard = {
+      ...makeV2Card('agent-multi'),
+      id: crypto.randomUUID(),
+      agent_name: 'agent-multi Conductor',
+    };
+
+    send(ws, {
+      type: 'register',
+      owner: 'agent-multi',
+      token: 'test-token',
+      card: primaryCard,
+      cards: [secondaryCard],
+    });
+
+    const response = await responsePromise;
+    expect(response.type).toBe('registered');
+
+    // Both cards should be in the DB
+    const rows = db.prepare('SELECT id, data FROM capability_cards WHERE owner = ?').all('agent-multi') as Array<{ id: string; data: string }>;
+    expect(rows.length).toBe(2);
+
+    const ids = rows.map(r => r.id);
+    expect(ids).toContain(primaryCard.id);
+    expect(ids).toContain(secondaryCard.id);
+
+    ws.close();
+  });
+
+  it('handleRegister with only card (no cards) still works', async () => {
+    const ws = connect();
+    await waitForOpen(ws);
+    const responsePromise = waitForMessage(ws);
+
+    const card = makeV2Card('agent-single');
+    send(ws, {
+      type: 'register',
+      owner: 'agent-single',
+      token: 'test-token',
+      card,
+    });
+
+    const response = await responsePromise;
+    expect(response.type).toBe('registered');
+
+    const rows = db.prepare('SELECT id FROM capability_cards WHERE owner = ?').all('agent-single') as Array<{ id: string }>;
+    expect(rows.length).toBe(1);
+
+    ws.close();
+  });
+
   it('relay_progress for unknown request is ignored (no crash)', async () => {
     const wsProvider = await registerAgent('provider3');
 

@@ -59,6 +59,37 @@ describe('Conductor Card', () => {
     });
   });
 
+  describe('buildConductorCard(owner)', () => {
+    it('uses provided owner instead of CONDUCTOR_OWNER', () => {
+      const card = buildConductorCard('my-agent');
+      expect(card.owner).toBe('my-agent');
+    });
+
+    it('produces a deterministic card ID per owner', () => {
+      const c1 = buildConductorCard('alice');
+      const c2 = buildConductorCard('alice');
+      expect(c1.id).toBe(c2.id);
+    });
+
+    it('produces different card IDs for different owners', () => {
+      const c1 = buildConductorCard('alice');
+      const c2 = buildConductorCard('bob');
+      expect(c1.id).not.toBe(c2.id);
+    });
+
+    it('produces a different ID from the default singleton', () => {
+      const defaultCard = buildConductorCard();
+      const ownerCard = buildConductorCard('my-agent');
+      expect(ownerCard.id).not.toBe(defaultCard.id);
+    });
+
+    it('returns a valid CapabilityCardV2 when owner is provided', () => {
+      const card = buildConductorCard('my-agent');
+      const result = CapabilityCardV2Schema.safeParse(card);
+      expect(result.success).toBe(true);
+    });
+  });
+
   describe('registerConductorCard()', () => {
     it('inserts the card into the database and retrieves it', () => {
       const db = openDatabase();
