@@ -23,6 +23,7 @@ import {
   getAgentGuarantor,
   initiateGithubAuth,
 } from '../identity/guarantor.js';
+import { creditRoutesPlugin } from './credit-routes.js';
 
 /**
  * Options for creating the public registry server.
@@ -80,7 +81,7 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
   void server.register(cors, {
     origin: true,
     methods: ['GET', 'POST', 'PATCH', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Agent-PublicKey', 'X-Agent-Signature', 'X-Agent-Timestamp'],
   });
 
   // Register WebSocket support for relay
@@ -90,6 +91,11 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
   let relayState: RelayState | null = null;
   if (opts.creditDb) {
     relayState = registerWebSocketRelay(server, db);
+  }
+
+  // Register credit endpoints when creditDb is provided — agents can hold/settle/release/grant credits
+  if (opts.creditDb) {
+    void server.register(creditRoutesPlugin, { creditDb: opts.creditDb });
   }
 
   // Register static file serving for the hub SPA (optional — skipped if hub not built)
