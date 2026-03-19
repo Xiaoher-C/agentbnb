@@ -15,8 +15,8 @@
   "workflow": {
     "discuss_phase": true,
     "nyquist_validation": true,
-    "auto_advance": false,
-    "_auto_chain_active": false,
+    "auto_advance": true,
+    "_auto_chain_active": true,
     "research": false
   }
 }

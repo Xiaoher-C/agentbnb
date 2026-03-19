@@ -251,11 +251,11 @@ Plans:
 | 34 | v4.0 | 1/1 | Complete | 2026-03-19 |
 | 35 | v4.0 | 1/1 | Complete | 2026-03-19 |
 | 36 | v4.0 | 2/2 | Complete | 2026-03-19 |
-| 37 | 1/1 | Complete   | 2026-03-19 | — |
+| 37 | v4.0 | 1/1 | Complete | 2026-03-19 |
 | 38 | v4.0 | 1/1 | Complete | 2026-03-19 |
-| 39 | 1/1 | Complete   | 2026-03-19 | — |
+| 39 | v4.0 | 1/1 | Complete | 2026-03-19 |
 
-**Total:** 39 phases, 93+ plans, 8 milestones (7 shipped), v4.0 in progress.
+**Total:** 39 phases, 93+ plans, 8 milestones shipped. v4.0 complete.
 
 ---
 *Full milestone details archived in .planning/milestones/*
