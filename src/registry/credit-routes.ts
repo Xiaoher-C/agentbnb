@@ -38,9 +38,14 @@ export async function creditRoutesPlugin(
   creditDb.exec(`
     CREATE TABLE IF NOT EXISTS credit_grants (
       public_key TEXT PRIMARY KEY,
-      granted_at TEXT NOT NULL
+      granted_at TEXT NOT NULL,
+      owner TEXT
     )
   `);
+  // Add owner column if missing (migration for existing tables)
+  try {
+    creditDb.exec('ALTER TABLE credit_grants ADD COLUMN owner TEXT');
+  } catch { /* column already exists */ }
 
   // Initialize free-tier usage tracking table
   initFreeTierTable(creditDb);
@@ -221,19 +226,25 @@ export async function creditRoutesPlugin(
 
       // Check for existing grant using public key as dedup key
       const existing = creditDb
-        .prepare('SELECT public_key FROM credit_grants WHERE public_key = ?')
-        .get(publicKey) as { public_key: string } | undefined;
+        .prepare('SELECT public_key, owner FROM credit_grants WHERE public_key = ?')
+        .get(publicKey) as { public_key: string; owner: string | null } | undefined;
 
       if (existing) {
+        // Auto-rename: if owner changed since original grant, migrate credits
+        if (existing.owner && existing.owner !== owner) {
+          migrateOwner(creditDb, existing.owner, owner);
+          creditDb.prepare('UPDATE credit_grants SET owner = ? WHERE public_key = ?').run(owner, publicKey);
+          return reply.send({ ok: true, granted: 0, reason: 'renamed', from: existing.owner, to: owner });
+        }
         return reply.send({ ok: true, granted: 0, reason: 'already_granted' });
       }
 
-      // Grant credits and record in dedup table
+      // Grant credits and record in dedup table (with owner for future rename)
       const now = new Date().toISOString();
       bootstrapAgent(creditDb, owner, amount);
       creditDb
-        .prepare('INSERT INTO credit_grants (public_key, granted_at) VALUES (?, ?)')
-        .run(publicKey, now);
+        .prepare('INSERT INTO credit_grants (public_key, granted_at, owner) VALUES (?, ?, ?)')
+        .run(publicKey, now, owner);
 
       return reply.send({ ok: true, granted: amount });
     });
