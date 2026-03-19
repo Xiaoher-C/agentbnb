@@ -1811,6 +1811,18 @@ program
   });
 
 // ---------------------------------------------------------------------------
+// MCP Server
+// ---------------------------------------------------------------------------
+
+program
+  .command('mcp-server')
+  .description('Start an MCP (Model Context Protocol) server for IDE integration')
+  .action(async () => {
+    const { startMcpServer } = await import('../mcp/server.js');
+    await startMcpServer();
+  });
+
+// ---------------------------------------------------------------------------
 // Execute
 // ---------------------------------------------------------------------------
 
