@@ -98,7 +98,7 @@
 - [x] **Phase 30: 被發現 (Fix Upstream)** — Fix v2.0 card relay registration (AnyCardSchema + raw SQL), offline/online lifecycle [1/1 plans]
 - [x] **Phase 31: 找人用 (Fix Downstream)** — AutoRequestor + capability-matcher remote fallback, CLI request/conduct wired to registry (completed 2026-03-19)
 - [x] **Phase 32: 定價引導 (Pricing Guidance)** — GET /api/pricing endpoint, market reference in openclaw sync, SOUL.md custom pricing (completed 2026-03-19)
-- [ ] **Phase 33: Conductor 雙重角色** — Push conductor card via relay, conductor.public config, relay-based orchestration
+- [x] **Phase 33: Conductor 雙重角色** — Push conductor card via relay, conductor.public config, relay-based orchestration (completed 2026-03-19)
 
 #### 軌道 B：平台擴展
 
@@ -242,12 +242,12 @@ Plans:
 | 19-23 | v3.0 | 16/16 | Complete | 2026-03-17 |
 | 24 | v3.1 | — | Superseded | — |
 | 25-29 | v3.2 | 11/11 | Complete | 2026-03-19 |
-| 30 | v4.0 | 0/1 | **Wave 1** | — |
-| 31 | 2/2 | Complete   | 2026-03-19 | — |
-| 32 | 1/1 | Complete   | 2026-03-19 | — |
-| 33 | v4.0 | 0/1 | Wave 2 | — |
-| 34 | v4.0 | 0/1 | Wave 2 | — |
-| 35 | v4.0 | 0/1 | Wave 2 | — |
+| 30 | v4.0 | 1/1 | Complete | 2026-03-19 |
+| 31 | v4.0 | 2/2 | Complete | 2026-03-19 |
+| 32 | v4.0 | 1/1 | Complete | 2026-03-19 |
+| 33 | 1/1 | Complete   | 2026-03-19 | — |
+| 34 | v4.0 | 0/1 | **Wave 2** | — |
+| 35 | v4.0 | 0/1 | **Wave 2** | — |
 | 36 | v4.0 | 0/1 | Wave 3 | — |
 | 37 | v4.0 | 0/1 | Wave 4 | — |
 | 38 | v4.0 | 0/1 | Wave 3 | — |

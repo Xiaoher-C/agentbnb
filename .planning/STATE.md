@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v4.0
 milestone_name: Agent Economy Platform
 status: completed
-stopped_at: Completed 31-02-PLAN.md — CLI Commands + Relay Execution
-last_updated: "2026-03-19T06:46:37.458Z"
+stopped_at: Completed 33-01-PLAN.md — Conductor dual role
+last_updated: "2026-03-19T07:13:33.876Z"
 last_activity: 2026-03-19 — Phase 32 Plan 01 complete (pricing endpoint + SOUL.md custom pricing)
 progress:
   total_phases: 10
-  completed_phases: 3
-  total_plans: 4
-  completed_plans: 4
+  completed_phases: 4
+  total_plans: 7
+  completed_plans: 5
   percent: 30
 ---
 
@@ -78,6 +78,9 @@ Progress: [###░░░░░░░] 30% (v4.0 milestone)
 - [Phase 31]: relay:// sentinel URL convention for remote agents — resolveAgentUrl returns relay://<owner> when no local peer
 - [Phase 31]: Temporary RelayClient with minimal conductor card — connect/disconnect lifecycle scoped to single CLI action
 - [Phase 31]: selected_card_id added to MatchResult for relay card ID resolution
+- [Phase 33]: buildConductorCard(owner) uses SHA-256 of owner for deterministic UUID-shaped card ID
+- [Phase 33]: cards array in RegisterMessage is optional for backward compat; card field stays required
+- [Phase 33]: handleRegister upserts primary card first, then additional cards; logs agent_joined once
 
 ### Pending Todos
 
@@ -90,8 +93,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-19T06:46:37.456Z
-Stopped at: Completed 31-02-PLAN.md — CLI Commands + Relay Execution
+Last session: 2026-03-19T07:13:33.874Z
+Stopped at: Completed 33-01-PLAN.md — Conductor dual role
 Resume file: None
 
 ---
