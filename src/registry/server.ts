@@ -7,6 +7,7 @@ import fastifyWebsocket from '@fastify/websocket';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { existsSync } from 'node:fs';
+import { z } from 'zod';
 import type Database from 'better-sqlite3';
 import { getCard, insertCard, updateCard, listCards } from './store.js';
 import { listPendingRequests, resolvePendingRequest } from '../autonomy/pending-requests.js';
@@ -30,6 +31,8 @@ import { creditRoutesPlugin } from './credit-routes.js';
 import { hubAgentRoutesPlugin } from '../hub-agent/routes.js';
 import { createRelayBridge } from '../hub-agent/relay-bridge.js';
 import { convertToGptActions } from './openapi-gpt-actions.js';
+import feedbackPlugin from '../feedback/api.js';
+import { executeCapabilityBatch } from '../gateway/execute.js';
 
 /**
  * Options for creating the public registry server.
@@ -198,6 +201,9 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
       return reply.code(404).send({ error: 'Not found' });
     });
   }
+
+  // Register feedback plugin — POST /api/feedback, GET /api/feedback/:skill_id, GET /api/reputation/:agent_id
+  void server.register(feedbackPlugin, { db });
 
   // ---- All API routes registered inside a plugin so @fastify/swagger captures them ----
   // Routes registered directly on the server (outside a plugin) are invisible to swagger
@@ -1199,6 +1205,84 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
     const openapiSpec = server.swagger();
     const gptActions = convertToGptActions(openapiSpec as Record<string, unknown>, serverUrl);
     return reply.send(gptActions);
+  });
+
+  // ---------------------------------------------------------------------------
+  // Batch request endpoint — POST /api/request/batch
+  // ---------------------------------------------------------------------------
+
+  /** Zod schema for validating POST /api/request/batch request body. */
+  const BatchRequestBodySchema = z.object({
+    requests: z.array(
+      z.object({
+        skill_id: z.string().min(1),
+        params: z.record(z.unknown()).default({}),
+        max_credits: z.number().positive(),
+      }),
+    ).min(1),
+    strategy: z.enum(['parallel', 'sequential', 'best_effort']),
+    total_budget: z.number().positive(),
+  });
+
+  /**
+   * POST /api/request/batch — Execute multiple capability requests in a single call.
+   *
+   * Strategies:
+   *   - `parallel`    — all requests run concurrently; any failure makes overall success false
+   *   - `sequential`  — requests run one at a time; stops on first failure
+   *   - `best_effort` — all run concurrently; partial success is acceptable
+   *
+   * Auth: reads `owner` from `Authorization: Bearer <owner>` header.
+   * Budget: sum(max_credits) must be <= total_budget or the call is rejected immediately.
+   *
+   * Body: { requests: [{ skill_id, params, max_credits }], strategy, total_budget }
+   * Response: BatchExecuteResult
+   */
+  api.post('/api/request/batch', {
+    schema: {
+      tags: ['cards'],
+      summary: 'Execute multiple capability requests in one batch call',
+      body: { type: 'object', additionalProperties: true },
+      response: {
+        200: { type: 'object', additionalProperties: true },
+        400: { type: 'object', properties: { error: { type: 'string' } } },
+        401: { type: 'object', properties: { error: { type: 'string' } } },
+        503: { type: 'object', properties: { error: { type: 'string' } } },
+      },
+    },
+  }, async (request, reply) => {
+    // Require creditDb to be present for credit operations
+    if (!opts.creditDb) {
+      return reply.code(503).send({ error: 'Credit database not configured' });
+    }
+
+    // Extract owner from Bearer token header
+    const auth = request.headers.authorization;
+    const owner = auth?.startsWith('Bearer ') ? auth.slice(7).trim() : null;
+    if (!owner) {
+      return reply.code(401).send({ error: 'Authorization header with Bearer <owner> is required' });
+    }
+
+    // Validate request body with Zod
+    const parseResult = BatchRequestBodySchema.safeParse(request.body);
+    if (!parseResult.success) {
+      return reply.code(400).send({
+        error: 'Request body validation failed',
+        issues: parseResult.error.issues,
+      });
+    }
+
+    const { requests, strategy, total_budget } = parseResult.data;
+
+    const batchResult = await executeCapabilityBatch({
+      requests,
+      strategy,
+      total_budget,
+      db: opts.creditDb,
+      owner,
+    });
+
+    return reply.send(batchResult);
   });
 
   // Register owner routes as a scoped plugin (NOT fastify-plugin) so the auth hook

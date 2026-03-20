@@ -838,12 +838,79 @@ program
   .option('--query <text>', 'Search query for capability gap (triggers auto-request flow)')
   .option('--max-cost <credits>', 'Maximum credits to spend on auto-request (default: 50)')
   .option('--no-receipt', 'Skip signed escrow receipt (local-only mode)')
+  .option('--batch <file>', 'Path to JSON file with batch request payload { requests, strategy, total_budget }')
   .option('--json', 'Output as JSON')
-  .action(async (cardId: string | undefined, opts: { params: string; peer?: string; skill?: string; cost?: string; query?: string; maxCost?: string; receipt: boolean; json?: boolean }) => {
+  .action(async (cardId: string | undefined, opts: { params: string; peer?: string; skill?: string; cost?: string; query?: string; maxCost?: string; receipt: boolean; batch?: string; json?: boolean }) => {
     const config = loadConfig();
     if (!config) {
       console.error('Error: not initialized. Run `agentbnb init` first.');
       process.exit(1);
+    }
+
+    // Batch request flow: --batch reads a JSON file and POSTs to /api/request/batch
+    if (opts.batch) {
+      const registryUrl = config.registry;
+      if (!registryUrl) {
+        console.error('Error: --batch requires a remote registry. Set one with: agentbnb config set registry <url>');
+        process.exit(1);
+      }
+
+      let batchPayload: unknown;
+      try {
+        const raw = readFileSync(opts.batch, 'utf-8');
+        batchPayload = JSON.parse(raw);
+      } catch (err) {
+        console.error(`Error: could not read batch file: ${(err as Error).message}`);
+        process.exit(1);
+      }
+
+      const batchUrl = `${registryUrl.replace(/\/$/, '')}/api/request/batch`;
+      let batchResp: Response;
+      let batchResult: unknown;
+      try {
+        batchResp = await fetch(batchUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${config.owner}`,
+          },
+          body: JSON.stringify(batchPayload),
+        });
+        batchResult = await batchResp.json();
+      } catch (err) {
+        console.error(`Error: batch request failed: ${(err as Error).message}`);
+        process.exit(1);
+      }
+
+      if (opts.json) {
+        console.log(JSON.stringify(batchResult, null, 2));
+        return;
+      }
+
+      // Display results table
+      const res = batchResult as { results?: Array<{ request_index: number; status: string; credits_spent: number; credits_refunded: number; error?: string }>; total_credits_spent?: number; total_credits_refunded?: number; success?: boolean };
+      if (!batchResp.ok || !res.results) {
+        console.error('Batch request failed:');
+        console.error(JSON.stringify(batchResult, null, 2));
+        process.exit(1);
+      }
+
+      console.log(`\nBatch Results (${res.results.length} items):`);
+      console.log('─'.repeat(70));
+      console.log('  #  Status    Credits Spent  Credits Refunded  Error');
+      console.log('─'.repeat(70));
+      for (const item of res.results) {
+        const statusStr = item.status.padEnd(8);
+        const spentStr = String(item.credits_spent).padStart(13);
+        const refundStr = String(item.credits_refunded).padStart(16);
+        const errStr = item.error ? `  ${item.error}` : '';
+        console.log(`  ${String(item.request_index).padStart(1)}  ${statusStr}  ${spentStr}  ${refundStr}${errStr}`);
+      }
+      console.log('─'.repeat(70));
+      console.log(`  Total credits spent: ${res.total_credits_spent ?? 0}`);
+      console.log(`  Total credits refunded: ${res.total_credits_refunded ?? 0}`);
+      console.log(`  Overall success: ${res.success ? 'yes' : 'no'}`);
+      return;
     }
 
     // Auto-request flow: --query triggers AutoRequestor instead of direct request
@@ -1864,6 +1931,105 @@ program
       console.log('\nErrors:');
       for (const err of result.errors) {
         console.log(`  - ${err}`);
+      }
+    }
+  });
+
+// ---------------------------------------------------------------------------
+// feedback
+// ---------------------------------------------------------------------------
+
+const feedback = program.command('feedback').description('Feedback and reputation commands');
+
+/**
+ * agentbnb feedback submit --json <json-string>
+ * Submits structured feedback for a completed transaction via POST /api/feedback.
+ */
+feedback
+  .command('submit')
+  .description('Submit structured feedback for a completed transaction')
+  .requiredOption('--json <json-string>', 'StructuredFeedback JSON string')
+  .action(async (opts: { json: string }) => {
+    const config = loadConfig();
+    if (!config?.registry) {
+      console.error('Error: no registry configured. Run agentbnb config set registry <url>');
+      process.exit(1);
+    }
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(opts.json);
+    } catch {
+      console.error('Error: --json must be valid JSON');
+      process.exit(1);
+    }
+    const { StructuredFeedbackSchema } = await import('../feedback/schema.js');
+    const result = StructuredFeedbackSchema.safeParse(parsed);
+    if (!result.success) {
+      console.error('Error: invalid feedback JSON —', result.error.issues.map((i) => i.message).join(', '));
+      process.exit(1);
+    }
+    const registryUrl = config.registry.replace(/\/$/, '');
+    let res: Response;
+    try {
+      res = await fetch(`${registryUrl}/api/feedback`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(result.data),
+      });
+    } catch (err) {
+      console.error('Error: failed to connect to registry —', (err as Error).message);
+      process.exit(1);
+    }
+    const body = (await res.json()) as Record<string, unknown>;
+    if (!res.ok) {
+      console.error(`Error ${res.status}: ${body['error'] ?? 'unknown error'}`);
+      process.exit(1);
+    }
+    console.log(`Feedback submitted. feedback_id: ${body['feedback_id']}`);
+  });
+
+/**
+ * agentbnb feedback list --skill <skill-id> [--since 7d]
+ * Lists feedback for a specific skill from the registry.
+ */
+feedback
+  .command('list')
+  .description('List feedback entries for a skill')
+  .requiredOption('--skill <skill-id>', 'Skill ID to list feedback for')
+  .option('--since <duration>', 'Only show feedback from the last N days (e.g. 7d)', undefined)
+  .action(async (opts: { skill: string; since?: string }) => {
+    const config = loadConfig();
+    if (!config?.registry) {
+      console.error('Error: no registry configured. Run agentbnb config set registry <url>');
+      process.exit(1);
+    }
+    const registryUrl = config.registry.replace(/\/$/, '');
+    const url = `${registryUrl}/api/feedback/${encodeURIComponent(opts.skill)}?limit=20`;
+    let res: Response;
+    try {
+      res = await fetch(url);
+    } catch (err) {
+      console.error('Error: failed to connect to registry —', (err as Error).message);
+      process.exit(1);
+    }
+    const body = (await res.json()) as Record<string, unknown>;
+    if (!res.ok) {
+      console.error(`Error ${res.status}: ${body['error'] ?? 'unknown error'}`);
+      process.exit(1);
+    }
+    const feedbacks = body['feedbacks'] as Array<Record<string, unknown>>;
+    if (!feedbacks || feedbacks.length === 0) {
+      console.log(`No feedback found for skill: ${opts.skill}`);
+      return;
+    }
+    console.log(`\nFeedback for skill: ${opts.skill} (${feedbacks.length} entries)\n`);
+    for (const fb of feedbacks) {
+      const reuse = fb['would_reuse'] ? 'yes' : 'no';
+      console.log(
+        `  [${fb['timestamp']}] rating=${fb['rating']}/5  quality=${fb['result_quality']}  reuse=${reuse}  cost=${fb['cost_value_ratio']}  from=${fb['requester_agent']}`,
+      );
+      if (fb['quality_details']) {
+        console.log(`    "${fb['quality_details']}"`);
       }
     }
   });
