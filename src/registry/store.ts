@@ -2,6 +2,7 @@ import Database from 'better-sqlite3';
 import { CapabilityCardSchema, AgentBnBError } from '../types/index.js';
 import type { CapabilityCard, CapabilityCardV2 } from '../types/index.js';
 import { createRequestLogTable } from './request-log.js';
+import { initFeedbackTable } from '../feedback/store.js';
 
 export type { Database };
 
@@ -186,6 +187,9 @@ export function openDatabase(path = ':memory:'): Database.Database {
 
   // Create request_log table (adds skill_id column idempotently)
   createRequestLogTable(db);
+
+  // Create feedback table and indexes
+  initFeedbackTable(db);
 
   // Run schema migrations — installs v2.0 FTS triggers and migrates v1.0 cards
   runMigrations(db);
