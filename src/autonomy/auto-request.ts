@@ -79,6 +79,19 @@ export interface Candidate {
   cost: number;
   /** Skill ID for v2.0 multi-skill cards. Undefined for v1.0 cards. */
   skillId: string | undefined;
+  /**
+   * Per-skill metadata for v2.0 multi-skill candidates.
+   * When set, scorePeers() prefers these over card-level metadata fields,
+   * enabling accurate scoring when different skills on the same card have
+   * different success rates.
+   */
+  skillMetadata?: { success_rate?: number };
+  /**
+   * Per-skill _internal for v2.0 multi-skill candidates.
+   * Carries skill-level idle_rate, which is tracked independently per skill
+   * by IdleMonitor. When set, scorePeers() prefers this over card-level _internal.
+   */
+  skillInternal?: Record<string, unknown>;
 }
 
 /**
@@ -121,9 +134,11 @@ export function minMaxNormalize(values: number[]): number[] {
  * Scores and sorts peer candidates using min-max normalized composite scoring.
  *
  * Scoring dimensions:
- * - success_rate: from card.metadata.success_rate (default 0.5)
+ * - success_rate: from skill-level metadata.success_rate if available (v2.0 multi-skill),
+ *   otherwise falls back to card.metadata.success_rate (default 0.5)
  * - cost_efficiency: 1/credits_per_call (zero-cost cards get max efficiency of 1)
- * - idle_rate: from card._internal.idle_rate (missing = 1.0, maximally idle)
+ * - idle_rate: from skill-level _internal.idle_rate if available (v2.0 multi-skill),
+ *   otherwise falls back to card._internal.idle_rate (missing = 1.0, maximally idle)
  *
  * Self-exclusion: candidates where card.owner === selfOwner are filtered out.
  * Results are sorted by rawScore descending (best first).
@@ -138,12 +153,29 @@ export function scorePeers(candidates: Candidate[], selfOwner: string): ScoredPe
 
   if (eligible.length === 0) return [];
 
-  // Extract raw dimension values
-  const successRates = eligible.map((c) => c.card.metadata?.success_rate ?? 0.5);
+  // Extract raw dimension values.
+  // For v2.0 multi-skill candidates, prefer skill-level metadata/internal over card-level.
+  // This ensures accurate scoring when skills on the same card have different performance profiles.
+  const successRates = eligible.map((c) => {
+    // Prefer skill-level success_rate (v2.0 multi-skill)
+    if (c.skillMetadata?.success_rate !== undefined) {
+      return c.skillMetadata.success_rate;
+    }
+    // Fall back to card-level
+    return c.card.metadata?.success_rate ?? 0.5;
+  });
+
   const costEfficiencies = eligible.map((c) => (c.cost === 0 ? 1 : 1 / c.cost));
+
   const idleRates = eligible.map((c) => {
+    // Prefer skill-level _internal.idle_rate (v2.0 multi-skill, tracked by IdleMonitor per skill)
+    if (c.skillInternal !== undefined) {
+      const skillIdleRate = c.skillInternal['idle_rate'];
+      if (typeof skillIdleRate === 'number') return skillIdleRate;
+    }
+    // Fall back to card-level _internal.idle_rate
     const internal = c.card._internal as Record<string, unknown> | undefined;
-    const idleRate = internal?.idle_rate;
+    const idleRate = internal?.['idle_rate'];
     return typeof idleRate === 'number' ? idleRate : 1.0;
   });
 
@@ -239,18 +271,34 @@ export class AutoRequestor {
       }
     }
 
-    // Step 2: Build candidates from both v1.0 and v2.0 cards
+    // Step 2: Build candidates from both v1.0 and v2.0 cards.
+    // For v2.0 multi-skill cards, each skill becomes its own Candidate carrying
+    // skill-level metadata and _internal so scorePeers() can use per-skill metrics.
     const candidates: Candidate[] = [];
 
     for (const card of cards) {
-      const cardAsV2 = card as CapabilityCard & { skills?: Array<{ id: string; pricing: { credits_per_call: number } }> };
+      const cardAsV2 = card as CapabilityCard & {
+        skills?: Array<{
+          id: string;
+          pricing: { credits_per_call: number };
+          metadata?: { success_rate?: number; avg_latency_ms?: number };
+          _internal?: Record<string, unknown>;
+        }>;
+      };
 
       if (Array.isArray(cardAsV2.skills)) {
-        // v2.0 multi-skill card — flatten skills
+        // v2.0 multi-skill card — flatten skills, carrying per-skill metadata
         for (const skill of cardAsV2.skills) {
           const cost = skill.pricing.credits_per_call;
           if (cost <= need.maxCostCredits) {
-            candidates.push({ card, cost, skillId: skill.id });
+            candidates.push({
+              card,
+              cost,
+              skillId: skill.id,
+              // Carry skill-level metadata so scorePeers() can prefer it over card-level
+              skillMetadata: skill.metadata,
+              skillInternal: skill._internal,
+            });
           }
         }
       } else {
