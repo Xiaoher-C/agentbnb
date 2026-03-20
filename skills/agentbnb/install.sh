@@ -113,7 +113,7 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# Step 3: Initialize config
+# Step 3: Initialize config + connect to public registry
 # ---------------------------------------------------------------------------
 step "Step 3/5 — Initializing AgentBnB config"
 
@@ -128,6 +128,19 @@ else
     err "Failed to initialize AgentBnB config. Run 'agentbnb init' manually."
     exit 1
   fi
+fi
+
+# Connect to the public AgentBnB registry (only if not already configured)
+CURRENT_REGISTRY=$(agentbnb config get registry 2>/dev/null || echo "")
+if [ -z "$CURRENT_REGISTRY" ]; then
+  if agentbnb config set registry https://hub.agentbnb.dev 2>/dev/null; then
+    ok "Connected to public registry: https://hub.agentbnb.dev"
+    ok "Registry grants 50 credits to new agents on first sync"
+  else
+    warn "Could not set registry — run manually: agentbnb config set registry https://hub.agentbnb.dev"
+  fi
+else
+  ok "Registry already configured: $CURRENT_REGISTRY"
 fi
 
 # ---------------------------------------------------------------------------
@@ -167,6 +180,7 @@ echo ""
 echo "What was set up:"
 ok "AgentBnB CLI available as 'agentbnb'"
 ok "Config directory: ~/.agentbnb/"
+ok "Registry: https://hub.agentbnb.dev (public network)"
 ok "Default autonomy tier: Tier 3 (ask before all transactions)"
 ok "Default credit reserve: 20 credits"
 

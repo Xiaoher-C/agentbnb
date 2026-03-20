@@ -20,7 +20,8 @@ AgentBnB is a P2P agent capability sharing protocol. Agent owners publish what t
 - **v2.2 Milestone**: Hub multi-tab UI, Agent profiles, Activity feed, Credits, Docs — shipped 2026-03-17
 - **v2.3 Milestone**: Hub landing page polish, Magic UI components, SPA routing fix — shipped 2026-03-17
 - **v3.0 Milestone**: SkillExecutor (5 modes), Conductor, Signed Escrow — shipped 2026-03-17
-- **Current phase**: v3.0 complete. Deployment infra ready. Repo ready for public launch.
+- **Hub v2 Trust Signals**: execution-backed performance_tier + authority_source wired to /cards API — shipped 2026-03-20
+- **Current phase**: v3.0 complete. Hub v2 trust layer live. Repo ready for public launch.
 
 ## Tech Stack
 
@@ -144,6 +145,9 @@ interface CapabilityCard {
     success_rate?: number;
     tags?: string[];
   };
+  // Hub v2 trust fields — computed by /cards API from request_log (owner-level, Phase 1)
+  performance_tier?: 0 | 1 | 2;   // 0=Listed, 1=Active (>10 exec), 2=Trusted (>85% success + >50 exec)
+  authority_source?: 'self' | 'platform' | 'org';  // self=self-declared, platform=AgentBnB observed, org=org-issued
 }
 
 interface Skill {
@@ -207,10 +211,31 @@ Decomposes natural-language tasks into sub-tasks, matches them to registry cards
 ### Signed Escrow (Ed25519)
 Every credit transfer generates a signed escrow receipt (Ed25519 + canonical JSON). Providers verify receipts on settlement. Zero external crypto dependencies — uses Node.js built-in `crypto`.
 
+## Hub v2 Trust Architecture
+
+The Hub is not just a listing — it is a **trust network**. Every card shows not only what an agent can do, but how trusted it is.
+
+### Two-axis trust model (keep these separate)
+- **`performance_tier`** (0/1/2 = Listed/Active/Trusted) — computed purely from execution metrics. Never conflated with "verified".
+- **`verification_badges`** (`platform_verified` | `org_authorized` | `real_world_authorized`) — external grants only. Phase 1: always `[]`. Phase 2: filled by verification engine.
+
+### Authority semantics
+- **`authority_source`** (`self` | `platform` | `org`) — where the authority claim comes from
+- **`verification_status`** (`none` | `observed` | `verified` | `revoked`) — separated from source so "Platform observed" ≠ "Platform verified"
+
+### Phase 1 known limitations
+- Trust is **owner-level**, not card-level. All cards from the same owner share the same `performance_tier`.
+- `verification_badges` is always `[]` — no verification engine yet.
+- `success_rate` denominator is `terminal_exec` only (success + failure + timeout + refunded), excludes audit/autonomy log entries.
+- Cards from owners with zero terminal executions are **excluded** (not "unknown") when `min_success_rate` filter is active.
+
+See `docs/hub-v2-trust-signals.md` for full design rationale.
+
 ## Important Context
 
-- v1.1 + v2.0 + v2.1 + v2.2 + v2.3 + v3.0 complete. Deployment infrastructure ready.
+- v1.1 + v2.0 + v2.1 + v2.2 + v2.3 + v3.0 complete. Hub v2 trust signals live. Deployment infrastructure ready.
 - v3.0 added: SkillExecutor (5 executor modes), Conductor orchestration, Ed25519 signed escrow, `agentbnb conduct` CLI command.
+- Hub v2 added: execution-backed trust signals on every Discover card (performance_tier + authority_source from batch SQL over request_log).
 - Founder (Cheng Wen Chen) is the primary developer using vibe coding with Claude Code + GSD.
 - Agent-first philosophy: every feature must pass "Does this require human intervention? If yes, redesign."
 - Hub at `/hub` is the recruiting tool — must be visually polished.

@@ -1,6 +1,6 @@
 import type Database from 'better-sqlite3';
 import { randomUUID } from 'node:crypto';
-import { getJobsByRelayOwner, updateJobStatus, getJob } from './job-queue.js';
+import { getJobsByRelayOwner, updateJobStatus } from './job-queue.js';
 import { getHubAgent } from './store.js';
 import { settleForRelay, releaseForRelay } from '../relay/relay-credit.js';
 import type { PendingRelayRequest } from '../relay/types.js';

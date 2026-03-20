@@ -113,7 +113,10 @@ export interface RateLimitEntry {
 
 /** Pending relay request tracking */
 export interface PendingRelayRequest {
+  /** Connection key used to route the response back (may be a synthetic ID) */
   originOwner: string;
+  /** Actual agent owner for credit operations (defaults to originOwner) */
+  creditOwner?: string;
   timeout: ReturnType<typeof setTimeout>;
   /** Escrow ID for the credit hold, if credits were reserved for this request */
   escrowId?: string;

@@ -1,7 +1,13 @@
 /**
- * CapabilityCard — Compact card component for the Hub grid.
- * Clicking a card triggers the modal overlay (handled by parent via onClick).
- * No in-place expand behavior — modal comes in plan 02.
+ * CapabilityCard v2 — Hub v2 compact card with trust-first layout.
+ *
+ * Header:    [Avatar] Name                    [Tier badge]
+ * Subheader:          @owner          [Authority source]
+ * Chips:     [category] [category]
+ * Footer:    ● success%  latency  price
+ *
+ * Trust signals at the TOP — tier badge and authority source are the first
+ * things the eye catches, not an afterthought at the bottom.
  */
 import Avatar from 'boring-avatars';
 import { inferCategories } from '../lib/categories.js';
@@ -16,79 +22,95 @@ interface CapabilityCardProps {
   onClick: () => void;
 }
 
-/**
- * Renders a compact capability card with dark SaaS aesthetic.
- * Layout: 32px identicon + title/owner/level row, ghost category chips, stats row.
- * Hover: lifts 2px, border brightens, shadow deepens.
- *
- * @param card - The HubCard data to display
- * @param onClick - Callback invoked when the card is clicked (opens modal)
- */
+const TIER_CONFIG = {
+  0: { label: 'Listed',  cls: 'text-hub-text-muted border-hub-border/60 bg-white/[0.02]' },
+  1: { label: 'Active',  cls: 'text-blue-400 border-blue-400/25 bg-blue-400/[0.06]' },
+  2: { label: 'Trusted', cls: 'text-emerald-400 border-emerald-400/25 bg-emerald-400/[0.06]' },
+} as const;
+
+const AUTHORITY_CONFIG = {
+  platform: { label: 'Platform observed', cls: 'text-blue-400/70' },
+  org:      { label: 'Org-backed',        cls: 'text-violet-400/70' },
+  self:     { label: 'Self-declared',     cls: 'text-hub-text-muted' },
+} as const;
+
 export default function CapabilityCard({ card, onClick }: CapabilityCardProps) {
   const { categories, overflow } = inferCategories(card.metadata);
   const online = card.availability.online;
   const successRate = card.metadata?.success_rate;
+  const avgLatency = card.metadata?.avg_latency_ms;
+
+  const tier = TIER_CONFIG[card.performance_tier ?? 0];
+  const authority = AUTHORITY_CONFIG[card.authority_source ?? 'self'];
 
   return (
     <article
       role="article"
       onClick={onClick}
-      className="bg-hub-surface border border-hub-border rounded-card p-6 cursor-pointer transition-all duration-200 ease-[cubic-bezier(0.4,0,0.2,1)] hover:-translate-y-0.5 hover:border-hub-border-hover hover:shadow-[0_8px_32px_rgba(0,0,0,0.3)]"
+      className="bg-hub-surface border border-hub-border rounded-card p-5 cursor-pointer transition-all duration-200 ease-[cubic-bezier(0.4,0,0.2,1)] hover:-translate-y-0.5 hover:border-hub-border-hover hover:shadow-[0_8px_32px_rgba(0,0,0,0.3)] flex flex-col gap-3"
     >
-      {/* Header row: 32px identicon + name/owner/level */}
+      {/* Header: avatar + name + tier badge */}
       <div className="flex items-start gap-3">
         <div className="flex-shrink-0 mt-0.5">
-          <Avatar
-            size={32}
-            name={card.id}
-            variant="beam"
-          />
+          <Avatar size={32} name={card.id} variant="beam" />
         </div>
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
+          {/* Row 1: name (left) + tier badge (right) */}
+          <div className="flex items-center justify-between gap-2">
             <p className="text-[15px] font-semibold text-hub-text-primary truncate leading-tight">
               {card.name}
             </p>
-            <LevelBadge level={card.level} />
+            <span className={`flex-shrink-0 text-[10px] font-medium border rounded px-1.5 py-0.5 ${tier.cls}`}>
+              {tier.label}
+            </span>
           </div>
-          <p className="text-[13px] text-hub-text-tertiary mt-0.5">@{card.owner}</p>
+          {/* Row 2: owner (left) + authority source (right) */}
+          <div className="flex items-center justify-between gap-2 mt-0.5">
+            <div className="flex items-center gap-1.5">
+              <p className="text-[12px] text-hub-text-tertiary">@{card.owner}</p>
+              <LevelBadge level={card.level} />
+            </div>
+            <span className={`flex-shrink-0 text-[10px] ${authority.cls}`}>
+              {authority.label}
+            </span>
+          </div>
         </div>
       </div>
 
-      {/* Category chips row */}
-      <div className="mt-3 flex flex-wrap gap-1.5">
-        {categories.map((cat) => (
-          <CategoryChip key={cat.id} category={cat} />
-        ))}
-        {overflow > 0 && <CategoryChip category={categories[0]} overflowCount={overflow} />}
-      </div>
+      {/* Category chips */}
+      {categories.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {categories.map((cat) => (
+            <CategoryChip key={cat.id} category={cat} />
+          ))}
+          {overflow > 0 && <CategoryChip category={categories[0]} overflowCount={overflow} />}
+        </div>
+      )}
 
-      {/* Stats row */}
-      <div className="mt-3 flex items-center gap-3 text-xs text-hub-text-secondary flex-wrap">
-        <span className="flex items-center gap-1.5">
-          <StatusDot online={online} />
-          {online ? 'Online' : 'Offline'}
-        </span>
+      {/* Footer: status dot + metrics + price */}
+      <div className="flex items-center gap-2.5 text-xs text-hub-text-secondary flex-wrap">
+        {/* Online status — weak dot only, no big "Online" label */}
+        <StatusDot online={online} />
+
         {successRate !== undefined && (
           <>
-            <span className="text-hub-text-tertiary">·</span>
-            <span>{Math.round(successRate * 100)}% success</span>
+            <span className="text-hub-text-tertiary/50">·</span>
+            <span className={successRate >= 0.85 ? 'text-emerald-400/80' : successRate >= 0.7 ? 'text-amber-400/80' : 'text-hub-text-secondary'}>
+              {Math.round(successRate * 100)}%
+            </span>
           </>
         )}
-        {card.uses_this_week !== undefined && card.uses_this_week > 0 && (
+
+        {avgLatency !== undefined && (
           <>
-            <span className="text-hub-text-tertiary">·</span>
-            <span>{card.uses_this_week} uses this week</span>
+            <span className="text-hub-text-tertiary/50">·</span>
+            <span>{avgLatency < 1000 ? `${avgLatency}ms` : `${(avgLatency / 1000).toFixed(1)}s`}</span>
           </>
         )}
-        <span className="text-hub-text-tertiary">·</span>
-        <span className="font-mono text-hub-accent">{formatCredits(card.pricing)}</span>
-        {card.pricing.free_tier !== undefined && card.pricing.free_tier > 0 && (
-          <>
-            <span className="text-hub-text-tertiary">·</span>
-            <span className="font-mono text-hub-accent">{card.pricing.free_tier} free/mo</span>
-          </>
-        )}
+
+        <span className="ml-auto font-mono text-hub-accent">
+          {formatCredits(card.pricing)}
+        </span>
       </div>
     </article>
   );

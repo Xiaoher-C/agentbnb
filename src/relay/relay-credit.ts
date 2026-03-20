@@ -31,20 +31,38 @@ export function lookupCardPrice(
     return null;
   }
 
-  // If skillId provided and card has skills array, try to find skill-level pricing
-  if (skillId && Array.isArray(card.skills)) {
+  // If card has a skills array, attempt skill-level pricing
+  if (Array.isArray(card.skills) && card.skills.length > 0) {
     const skills = card.skills as Array<Record<string, unknown>>;
-    const skill = skills.find((s) => s.id === skillId);
-    if (skill) {
-      const skillPricing = skill.pricing as Record<string, unknown> | undefined;
-      if (skillPricing && typeof skillPricing.credits_per_call === 'number') {
-        return skillPricing.credits_per_call;
+
+    if (skillId) {
+      // Match by skill ID — fall through to card-level pricing if not found
+      const skill = skills.find((s) => s.id === skillId);
+      if (skill) {
+        const skillPricing = skill.pricing as Record<string, unknown> | undefined;
+        if (skillPricing && typeof skillPricing.credits_per_call === 'number') {
+          return skillPricing.credits_per_call;
+        }
       }
+      // Skill ID provided but not found — fall through to card-level pricing
+    } else {
+      // No skillId — return the minimum skill price as a floor so v2.0
+      // multi-skill cards always trigger a credit hold even when the caller
+      // does not specify which skill is being invoked.
+      let minPrice: number | null = null;
+      for (const s of skills) {
+        const sp = s.pricing as Record<string, unknown> | undefined;
+        if (sp && typeof sp.credits_per_call === 'number' && sp.credits_per_call > 0) {
+          if (minPrice === null || sp.credits_per_call < minPrice) {
+            minPrice = sp.credits_per_call;
+          }
+        }
+      }
+      if (minPrice !== null) return minPrice;
     }
-    // Skill not found in array — fall through to card-level pricing
   }
 
-  // Card-level pricing
+  // Card-level pricing (v1.0 cards or v2.0 fallback)
   const pricing = card.pricing as Record<string, unknown> | undefined;
   if (!pricing || typeof pricing.credits_per_call !== 'number') {
     return null;

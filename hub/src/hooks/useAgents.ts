@@ -10,7 +10,8 @@
  * - error is cleared on success
  */
 import { useState, useEffect, useCallback, useRef } from 'react';
-import type { AgentProfile, AgentProfileResponse, ActivityEntry, HubCard } from '../types.js';
+import { normalizeCard } from '../lib/normalize-card.js';
+import type { AgentProfile, AgentProfileV2, ActivityEntry, HubCard } from '../types.js';
 
 const POLL_INTERVAL_MS = 30_000;
 
@@ -21,6 +22,8 @@ interface UseAgentsResult {
 }
 
 interface UseAgentProfileResult {
+  profileV2: AgentProfileV2 | null;
+  /** Backwards-compat shortcut: profileV2?.profile */
   profile: AgentProfile | null;
   skills: HubCard[];
   recentActivity: ActivityEntry[];
@@ -82,13 +85,15 @@ export function useAgents(): UseAgentsResult {
 /**
  * Fetches a single agent's full profile from GET /api/agents/:owner and polls every 30s.
  *
+ * Returns AgentProfileV2 with trust_metrics, execution_proofs, performance_tier,
+ * verification_badges, authority, suitability, and learning signals.
+ * Also exposes backwards-compat `profile`, `skills`, `recentActivity` fields.
+ *
  * Handles 404 by setting error to "Agent not found".
  * Re-fetches automatically when the owner parameter changes.
  */
 export function useAgentProfile(owner: string): UseAgentProfileResult {
-  const [profile, setProfile] = useState<AgentProfile | null>(null);
-  const [skills, setSkills] = useState<HubCard[]>([]);
-  const [recentActivity, setRecentActivity] = useState<ActivityEntry[]>([]);
+  const [profileV2, setProfileV2] = useState<AgentProfileV2 | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -104,10 +109,10 @@ export function useAgentProfile(owner: string): UseAgentProfileResult {
       if (!res.ok) {
         throw new Error(`Server returned ${res.status}`);
       }
-      const data = (await res.json()) as AgentProfileResponse;
-      setProfile(data.profile);
-      setSkills(data.skills);
-      setRecentActivity(data.recent_activity);
+      const data = (await res.json()) as AgentProfileV2;
+      // Normalize skills: v2.0 cards have nested skills[] — flatten to HubCard[]
+      const normalizedSkills: HubCard[] = (data.skills as unknown as Record<string, unknown>[]).flatMap((s) => normalizeCard(s));
+      setProfileV2({ ...data, skills: normalizedSkills });
       setError(null);
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Unknown error';
@@ -134,5 +139,12 @@ export function useAgentProfile(owner: string): UseAgentProfileResult {
     return () => clearInterval(id);
   }, [fetchProfile]);
 
-  return { profile, skills, recentActivity, loading, error };
+  return {
+    profileV2,
+    profile: profileV2?.profile ?? null,
+    skills: profileV2?.skills ?? [],
+    recentActivity: profileV2?.recent_activity ?? [],
+    loading,
+    error,
+  };
 }

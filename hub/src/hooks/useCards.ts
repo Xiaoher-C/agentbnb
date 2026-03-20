@@ -6,41 +6,11 @@
  */
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { inferCategories } from '../lib/categories.js';
+import { normalizeCard } from '../lib/normalize-card.js';
 import type { Category, HubCard, SortOption } from '../types.js';
 
 const POLL_INTERVAL_MS = 30_000;
 const DEBOUNCE_MS = 300;
-
-/**
- * Normalize a v2.0 API card (with skills[]) into HubCard shapes.
- * Each skill becomes its own HubCard so all skills are visible in the grid.
- * v1.0 cards pass through unchanged.
- */
-function normalizeCard(raw: Record<string, unknown>, usesMap?: Record<string, number>): HubCard[] {
-  // v2.0 card with skills[] array — one HubCard per skill
-  if (raw.skills && Array.isArray(raw.skills) && raw.skills.length > 0) {
-    return (raw.skills as Record<string, unknown>[]).map((skill) => {
-      const skillId = (skill.id as string) || (raw.id as string);
-      return {
-        id: skillId,
-        owner: raw.owner as string,
-        name: (skill.name as string) || (raw.name as string) || 'Unknown',
-        description: (skill.description as string) || '',
-        level: (skill.level as 1 | 2 | 3) || 1,
-        inputs: (skill.inputs as HubCard['inputs']) || [],
-        outputs: (skill.outputs as HubCard['outputs']) || [],
-        pricing: (skill.pricing as HubCard['pricing']) || { credits_per_call: 0 },
-        availability: (skill.availability as HubCard['availability']) || (raw.availability as HubCard['availability']) || { online: false },
-        powered_by: (skill.powered_by as HubCard['powered_by']) || (raw.powered_by as HubCard['powered_by']),
-        metadata: (skill.metadata as HubCard['metadata']) || (raw.metadata as HubCard['metadata']),
-        uses_this_week: usesMap?.[skillId] ?? usesMap?.[raw.id as string] ?? undefined,
-      };
-    });
-  }
-  // v1.0 card — already in HubCard shape
-  const card = raw as unknown as HubCard;
-  return [{ ...card, uses_this_week: usesMap?.[card.id] ?? undefined }];
-}
 
 interface UseCardsResult {
   // Data
@@ -57,16 +27,22 @@ interface UseCardsResult {
   setCategory: (c: string | null) => void;
   onlineOnly: boolean;
   setOnlineOnly: (v: boolean) => void;
+  minSuccessRate: number | null;
+  setMinSuccessRate: (v: number | null) => void;
+  verifiedOnly: boolean;
+  setVerifiedOnly: (v: boolean) => void;
   // Sort state
   sort: SortOption;
   setSort: (s: SortOption) => void;
   // Derived
   availableCategories: Category[];
   retry: () => void;
-  // Stats
+  // Stats (Hub v2: includes executions_7d + verifiedProviders)
   agentsOnline: number;
   totalCapabilities: number;
   totalExchanges: number;
+  executions7d: number;
+  verifiedProviders: number;
 }
 
 /**
@@ -87,6 +63,8 @@ export function useCards(): UseCardsResult {
   const [level, setLevel] = useState<number | null>(null);
   const [category, setCategory] = useState<string | null>(null);
   const [onlineOnly, setOnlineOnly] = useState(false);
+  const [minSuccessRate, setMinSuccessRate] = useState<number | null>(null);
+  const [verifiedOnly, setVerifiedOnly] = useState(false);
   const [sort, setSort] = useState<SortOption>('popular');
 
   // Track whether this is the initial fetch
@@ -106,6 +84,7 @@ export function useCards(): UseCardsResult {
       if (debouncedQuery.trim()) params.set('q', debouncedQuery.trim());
       if (level !== null) params.set('level', String(level));
       if (onlineOnly) params.set('online', 'true');
+      if (minSuccessRate !== null) params.set('min_success_rate', String(minSuccessRate));
       params.set('sort', sort);
       params.set('limit', '100');
 
@@ -135,7 +114,7 @@ export function useCards(): UseCardsResult {
         setLoading(false);
       }
     }
-  }, [debouncedQuery, level, onlineOnly, sort]);
+  }, [debouncedQuery, level, onlineOnly, minSuccessRate, sort]);
 
   // Fetch on mount and when filters change
   useEffect(() => {
@@ -152,14 +131,23 @@ export function useCards(): UseCardsResult {
     return () => clearInterval(interval);
   }, [fetchCards]);
 
-  // Client-side category filter
-  const cards =
-    category === null
-      ? allCards
-      : allCards.filter((card) => {
-          const { categories } = inferCategories(card.metadata);
-          return categories.some((c) => c.id === category);
-        });
+  // Client-side filters: category + minSuccessRate + verifiedOnly
+  const cards = allCards.filter((card) => {
+    if (category !== null) {
+      const { categories } = inferCategories(card.metadata);
+      if (!categories.some((c) => c.id === category)) return false;
+    }
+    if (minSuccessRate !== null) {
+      const rate = card.metadata?.success_rate ?? 0;
+      if (rate < minSuccessRate) return false;
+    }
+    // verifiedOnly: filter by metadata tag "verified" (Phase 1 approximation)
+    if (verifiedOnly) {
+      const tags = card.metadata?.tags ?? [];
+      if (!tags.includes('verified')) return false;
+    }
+    return true;
+  });
 
   // Available categories from ALL fetched cards (before client-side filter)
   const availableCategories: Category[] = useMemo(() => {
@@ -177,15 +165,33 @@ export function useCards(): UseCardsResult {
     return result;
   }, [allCards]);
 
-  // Stats — fetch from /api/stats for accurate counts
-  const [stats, setStats] = useState({ agents_online: 0, total_capabilities: 0, total_exchanges: 0 });
+  // Stats — fetch from /api/stats for accurate counts (Hub v2: includes executions_7d + verified_providers_count)
+  const [stats, setStats] = useState({
+    agents_online: 0,
+    total_capabilities: 0,
+    total_exchanges: 0,
+    executions_7d: 0,
+    verified_providers_count: 0,
+  });
   useEffect(() => {
     const fetchStats = async () => {
       try {
         const res = await fetch('/api/stats');
         if (res.ok) {
-          const data = await res.json() as { agents_online: number; total_capabilities: number; total_exchanges: number };
-          setStats({ agents_online: data.agents_online, total_capabilities: data.total_capabilities, total_exchanges: data.total_exchanges });
+          const data = await res.json() as {
+            agents_online: number;
+            total_capabilities: number;
+            total_exchanges: number;
+            executions_7d?: number;
+            verified_providers_count?: number;
+          };
+          setStats({
+            agents_online: data.agents_online,
+            total_capabilities: data.total_capabilities,
+            total_exchanges: data.total_exchanges,
+            executions_7d: data.executions_7d ?? 0,
+            verified_providers_count: data.verified_providers_count ?? 0,
+          });
         }
       } catch { /* graceful degradation */ }
     };
@@ -200,6 +206,8 @@ export function useCards(): UseCardsResult {
   ).size;
   const totalCapabilities = stats.total_capabilities || total;
   const totalExchanges = stats.total_exchanges;
+  const executions7d = stats.executions_7d;
+  const verifiedProviders = stats.verified_providers_count;
 
   const retry = useCallback(() => {
     setLoading(true);
@@ -220,6 +228,10 @@ export function useCards(): UseCardsResult {
     setCategory,
     onlineOnly,
     setOnlineOnly,
+    minSuccessRate,
+    setMinSuccessRate,
+    verifiedOnly,
+    setVerifiedOnly,
     sort,
     setSort,
     availableCategories,
@@ -227,5 +239,7 @@ export function useCards(): UseCardsResult {
     agentsOnline,
     totalCapabilities,
     totalExchanges,
+    executions7d,
+    verifiedProviders,
   };
 }

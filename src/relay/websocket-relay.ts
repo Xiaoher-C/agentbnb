@@ -253,13 +253,17 @@ export function registerWebSocketRelay(
       return;
     }
 
-    // Credit hold — if creditDb is provided, hold credits before forwarding
+    // Credit hold — if creditDb is provided, hold credits before forwarding.
+    // Use msg.requester (the actual agent owner) for credit operations rather
+    // than fromOwner (the connection key), so that temp requester connections
+    // with synthetic IDs still charge the correct account.
+    const creditOwner = msg.requester ?? fromOwner;
     let escrowId: string | undefined;
     if (creditDb) {
       try {
         const price = lookupCardPrice(db, msg.card_id, msg.skill_id);
         if (price !== null && price > 0) {
-          escrowId = holdForRelay(creditDb, fromOwner, price, msg.card_id);
+          escrowId = holdForRelay(creditDb, creditOwner, price, msg.card_id);
         }
       } catch (err) {
         if (err instanceof AgentBnBError && err.code === 'INSUFFICIENT_CREDITS') {
@@ -290,8 +294,10 @@ export function registerWebSocketRelay(
       });
     }, RELAY_TIMEOUT_MS);
 
-    // Track pending request with escrowId and targetOwner
-    pendingRequests.set(msg.id, { originOwner: fromOwner, timeout, escrowId, targetOwner: msg.target_owner });
+    // Track pending request with escrowId and targetOwner.
+    // originOwner is the connection key for routing; creditOwner is used for
+    // conductor fee settlement and is stored as originOwner when they differ.
+    pendingRequests.set(msg.id, { originOwner: fromOwner, creditOwner, timeout, escrowId, targetOwner: msg.target_owner });
 
     // Forward to target agent
     sendMessage(targetWs, {
@@ -411,7 +417,7 @@ export function registerWebSocketRelay(
       if (conductorFee > 0) {
         try {
           // Hold the fee from the original requester, then immediately settle to conductor
-          const feeEscrowId = holdForRelay(creditDb, pending.originOwner, conductorFee, msg.id);
+          const feeEscrowId = holdForRelay(creditDb, pending.creditOwner ?? pending.originOwner, conductorFee, msg.id);
           settleForRelay(creditDb, feeEscrowId, pending.targetOwner!);
         } catch (e) {
           // Fee settlement is best-effort: the main capability was already settled successfully.

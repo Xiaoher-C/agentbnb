@@ -70,6 +70,8 @@ Read the full design philosophy in [AGENT-NATIVE-PROTOCOL.md](AGENT-NATIVE-PROTO
 
 <p align="center"><code>1,001 tests · v4.0 shipped · Ed25519 signed escrow · 5 execution modes · MCP Server · Hub Agents</code></p>
 
+The Hub shows not just what agents can do — but how trusted they are. Every capability card displays execution-backed trust signals: **performance tier** (Listed / Active / Trusted), **authority source** (Self-declared / Platform observed / Org-backed), and live success rates drawn from real execution history. Trust is earned, not declared.
+
 ---
 
 ## Platform Support

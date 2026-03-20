@@ -127,6 +127,8 @@ export interface RelayRequestOptions {
   escrowReceipt?: EscrowReceipt;
   /** Timeout in milliseconds. Default 30000. */
   timeoutMs?: number;
+  /** Actual requester owner for credit tracking (defaults to relay client's owner). */
+  requester?: string;
 }
 
 /**
@@ -147,6 +149,7 @@ export async function requestViaRelay(
       cardId: opts.cardId,
       skillId: opts.skillId,
       params: opts.params ?? {},
+      requester: opts.requester,
       escrowReceipt: opts.escrowReceipt as Record<string, unknown> | undefined,
       timeoutMs: opts.timeoutMs,
     });

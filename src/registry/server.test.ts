@@ -170,28 +170,40 @@ describe('createRegistryServer', () => {
     await server.close();
   });
 
-  // Test 8: GET /cards?min_success_rate=0.8 returns only cards with success_rate >= 0.8
+  // Test 8: GET /cards?min_success_rate=0.8 returns only cards with execution-based success_rate >= 0.8
+  // Cards without any terminal executions are excluded when min_success_rate filter is active.
   it('GET /cards?min_success_rate=0.8 returns cards with high success rate', async () => {
-    insertCard(
-      db,
-      makeCard({
-        name: 'High Success',
-        description: 'High success rate',
-        metadata: { success_rate: 0.95 },
-      })
-    );
-    insertCard(
-      db,
-      makeCard({
-        name: 'Low Success',
-        description: 'Low success rate',
-        metadata: { success_rate: 0.5 },
-      })
-    );
-    insertCard(
-      db,
-      makeCard({ name: 'No Success', description: 'No success rate', metadata: {} })
-    );
+    const highCard = makeCard({ name: 'High Success', description: 'High success rate', owner: 'owner-high' });
+    const lowCard = makeCard({ name: 'Low Success', description: 'Low success rate', owner: 'owner-low' });
+    const noCard = makeCard({ name: 'No Success', description: 'No executions', owner: 'owner-none' });
+    insertCard(db, highCard);
+    insertCard(db, lowCard);
+    insertCard(db, noCard);
+
+    // Add execution history: highCard owner has 100% success (10 success)
+    for (let i = 0; i < 10; i++) {
+      insertRequestLog(db, {
+        id: crypto.randomUUID(), card_id: highCard.id, card_name: 'High Success',
+        requester: 'requester', status: 'success', latency_ms: 100, credits_charged: 5,
+        created_at: new Date().toISOString(),
+      });
+    }
+    // lowCard owner has 40% success (4 success, 6 failure)
+    for (let i = 0; i < 4; i++) {
+      insertRequestLog(db, {
+        id: crypto.randomUUID(), card_id: lowCard.id, card_name: 'Low Success',
+        requester: 'requester', status: 'success', latency_ms: 100, credits_charged: 5,
+        created_at: new Date().toISOString(),
+      });
+    }
+    for (let i = 0; i < 6; i++) {
+      insertRequestLog(db, {
+        id: crypto.randomUUID(), card_id: lowCard.id, card_name: 'Low Success',
+        requester: 'requester', status: 'failure', latency_ms: 100, credits_charged: 0,
+        created_at: new Date().toISOString(),
+      });
+    }
+    // noCard owner has no executions — excluded when filter is active
 
     const { server } = createRegistryServer({ registryDb: db, silent: true });
     await server.ready();

@@ -17,7 +17,7 @@ import type { SincePeriod } from './request-log.js';
 import { createLedger } from '../credit/create-ledger.js';
 import { detectApiKeys, buildDraftCard, KNOWN_API_KEYS } from '../cli/onboarding.js';
 import { AgentBnBError, AnyCardSchema } from '../types/index.js';
-import type { CapabilityCard, CapabilityCardV2 } from '../types/index.js';
+import type { CapabilityCard, CapabilityCardV2, AgentProfileV2 } from '../types/index.js';
 import { registerWebSocketRelay } from '../relay/websocket-relay.js';
 import type { RelayState } from '../relay/types.js';
 import {
@@ -299,13 +299,6 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
       cards = cards.filter((c) => c.metadata?.tags?.includes(tag));
     }
 
-    // Post-filter by min_success_rate (cards without success_rate are excluded)
-    if (minSuccessRate !== undefined && !isNaN(minSuccessRate)) {
-      cards = cards.filter(
-        (c) => (c.metadata?.success_rate ?? -1) >= minSuccessRate
-      );
-    }
-
     // Post-filter by max_latency_ms (cards without avg_latency_ms are excluded)
     if (maxLatencyMs !== undefined && !isNaN(maxLatencyMs)) {
       cards = cards.filter(
@@ -331,6 +324,67 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
       if (row.skill_id) {
         usesMap.set(row.skill_id, (usesMap.get(row.skill_id) ?? 0) + row.cnt);
       }
+    }
+
+    // Compute owner trust summary (batch SQL — owner-level, not card-level)
+    // NOTE: Phase 1 design — trust is per-owner. All cards from the same owner
+    // share the same performance_tier and success_rate. Per-skill trust is Phase 2.
+    // success_rate denominator = terminal_exec (success+failure+timeout+refunded only),
+    // excluding audit/autonomy action_type rows.
+    interface OwnerTrust {
+      performance_tier: 0 | 1 | 2;
+      authority_source: 'self' | 'platform' | 'org';
+      success_rate: number;
+      avg_latency_ms: number;
+      terminal_exec: number;
+    }
+    const ownerTrustMap = new Map<string, OwnerTrust>();
+    const uniqueOwners = [...new Set(cards.map((c) => c.owner))];
+    if (uniqueOwners.length > 0) {
+      const placeholders = uniqueOwners.map(() => '?').join(',');
+      const trustStmt = db.prepare(`
+        SELECT cc.owner,
+          COUNT(rl.id) as total_exec,
+          SUM(CASE WHEN rl.status IN ('success','failure','timeout','refunded') THEN 1 ELSE 0 END) as terminal_exec,
+          SUM(CASE WHEN rl.status = 'success' THEN 1 ELSE 0 END) as success_exec,
+          AVG(CASE WHEN rl.status = 'success' THEN rl.latency_ms END) as avg_latency
+        FROM capability_cards cc
+        LEFT JOIN request_log rl ON rl.card_id = cc.id AND rl.action_type IS NULL
+        WHERE cc.owner IN (${placeholders})
+        GROUP BY cc.owner
+      `);
+      const trustRows = trustStmt.all(...uniqueOwners) as Array<{
+        owner: string;
+        total_exec: number;
+        terminal_exec: number;
+        success_exec: number;
+        avg_latency: number | null;
+      }>;
+      for (const row of trustRows) {
+        const terminalExec = row.terminal_exec ?? 0;
+        const successExec = row.success_exec ?? 0;
+        const successRate = terminalExec > 0 ? successExec / terminalExec : 0;
+        let tier: 0 | 1 | 2 = 0;
+        if (row.total_exec > 10) tier = 1;
+        if (row.total_exec > 50 && successRate >= 0.85) tier = 2;
+        ownerTrustMap.set(row.owner, {
+          performance_tier: tier,
+          authority_source: 'self', // Phase 1: all self-declared
+          success_rate: successRate,
+          avg_latency_ms: Math.round(row.avg_latency ?? 0),
+          terminal_exec: terminalExec,
+        });
+      }
+    }
+
+    // Post-filter by min_success_rate using owner trust (execution-based).
+    // Cards from owners with zero terminal executions are excluded when filter is active.
+    if (minSuccessRate !== undefined && !isNaN(minSuccessRate)) {
+      cards = cards.filter((c) => {
+        const trust = ownerTrustMap.get(c.owner);
+        if (!trust || trust.terminal_exec === 0) return false;
+        return trust.success_rate >= minSuccessRate;
+      });
     }
 
     // Sorting
@@ -373,7 +427,26 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
     }
 
     const total = cards.length;
-    const items = cards.slice(offset, offset + limit).map(stripInternal);
+    const pagedCards = cards.slice(offset, offset + limit);
+
+    // Augment each card with owner trust summary fields
+    const items = pagedCards.map((card) => {
+      const trust = ownerTrustMap.get(card.owner);
+      const stripped = stripInternal(card);
+      return {
+        ...stripped,
+        performance_tier: trust?.performance_tier ?? 0,
+        authority_source: trust?.authority_source ?? 'self',
+        // Enrich metadata with live execution-based success_rate if available
+        metadata: trust && trust.terminal_exec > 0
+          ? {
+              ...stripped.metadata,
+              success_rate: trust.success_rate,
+              avg_latency_ms: trust.avg_latency_ms || stripped.metadata?.avg_latency_ms,
+            }
+          : stripped.metadata,
+      };
+    });
 
     // Build uses_this_week lookup for returned items
     const usesThisWeek: Record<string, number> = {};
@@ -381,7 +454,7 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
       if (count > 0) usesThisWeek[key] = count;
     }
 
-    const result = { total, limit, offset, items: items as CapabilityCard[], uses_this_week: usesThisWeek };
+    const result = { total, limit, offset, items, uses_this_week: usesThisWeek };
     return reply.send(result);
   });
 
@@ -659,25 +732,20 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
   });
 
   /**
-   * GET /api/agents/:owner — Returns profile, skills, and recent activity for a specific agent.
+   * GET /api/agents/:owner — Returns AgentProfileV2 for Hub v2.
    *
    * Returns 404 if the owner has no capability cards registered.
-   * recent_activity contains up to 10 most recent request log entries for this owner's cards.
+   * Computes trust_metrics, execution_proofs, and performance_tier from
+   * request_log at query time (no snapshots in phase 1).
+   * Also includes backwards-compatible `profile` and `recent_activity` fields.
    */
   api.get('/api/agents/:owner', {
     schema: {
       tags: ['agents'],
-      summary: 'Get agent profile, skills, and recent activity',
+      summary: 'Get agent profile, skills, and recent activity (AgentProfileV2)',
       params: { type: 'object', properties: { owner: { type: 'string' } }, required: ['owner'] },
       response: {
-        200: {
-          type: 'object',
-          properties: {
-            profile: { type: 'object', additionalProperties: true },
-            skills: { type: 'array' },
-            recent_activity: { type: 'array' },
-          },
-        },
+        200: { type: 'object', additionalProperties: true },
         404: { type: 'object', properties: { error: { type: 'string' } } },
       },
     },
@@ -689,31 +757,122 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
       return reply.status(404).send({ error: 'Agent not found' });
     }
 
-    const skillCount = ownerCards.reduce((sum, card) => sum + ((card as unknown as CapabilityCardV2).skills?.length ?? 1), 0);
-    const successRates = ownerCards
-      .map((c) => c.metadata?.success_rate)
-      .filter((r): r is number => r != null);
-    const avgSuccessRate =
-      successRates.length > 0
-        ? successRates.reduce((a, b) => a + b, 0) / successRates.length
-        : null;
+    // member_since (joined_at) from earliest created_at in DB
+    const memberStmt = db.prepare(
+      'SELECT MIN(created_at) as earliest, MAX(created_at) as latest FROM capability_cards WHERE owner = ?'
+    );
+    const memberRow = memberStmt.get(owner) as { earliest: string; latest: string } | undefined;
+    const joinedAt = memberRow?.earliest ?? new Date().toISOString();
 
-    // Credits earned via aggregate SQL
-    const creditsStmt = db.prepare(`
-      SELECT SUM(CASE WHEN rl.status = 'success' THEN rl.credits_charged ELSE 0 END) as credits_earned
-      FROM capability_cards cc
-      LEFT JOIN request_log rl ON rl.card_id = cc.id
+    // last_active: MAX of either last card update or last successful request
+    const lastActiveStmt = db.prepare(`
+      SELECT MAX(rl.created_at) as last_req
+      FROM request_log rl
+      INNER JOIN capability_cards cc ON rl.card_id = cc.id
       WHERE cc.owner = ?
     `);
-    const creditsRow = creditsStmt.get(owner) as { credits_earned: number } | undefined;
+    const lastActiveRow = lastActiveStmt.get(owner) as { last_req: string | null } | undefined;
+    const lastActive = lastActiveRow?.last_req ?? memberRow?.latest ?? joinedAt;
 
-    // member_since from earliest created_at
-    const memberStmt = db.prepare(
-      'SELECT MIN(created_at) as earliest FROM capability_cards WHERE owner = ?'
-    );
-    const memberRow = memberStmt.get(owner) as { earliest: string } | undefined;
+    // --- Trust Metrics (from request_log, all-time) ---
+    const metricsStmt = db.prepare(`
+      SELECT
+        COUNT(*) as total,
+        SUM(CASE WHEN rl.status = 'success' THEN 1 ELSE 0 END) as successes,
+        AVG(CASE WHEN rl.status = 'success' THEN rl.latency_ms END) as avg_latency,
+        COUNT(DISTINCT rl.requester) as unique_requesters,
+        COUNT(DISTINCT CASE WHEN rl.status = 'success' THEN rl.requester END) as repeat_success_requesters
+      FROM request_log rl
+      INNER JOIN capability_cards cc ON rl.card_id = cc.id
+      WHERE cc.owner = ? AND rl.action_type IS NULL
+    `);
+    const metricsRow = metricsStmt.get(owner) as {
+      total: number;
+      successes: number;
+      avg_latency: number | null;
+      unique_requesters: number;
+      repeat_success_requesters: number;
+    } | undefined;
 
-    // Recent activity (last 10 requests involving this owner's cards)
+    const totalExec = metricsRow?.total ?? 0;
+    const successExec = metricsRow?.successes ?? 0;
+    const successRate = totalExec > 0 ? successExec / totalExec : 0;
+    const avgLatency = metricsRow?.avg_latency ?? 0;
+
+    // refund_rate: proportion of requests that resulted in no credits charged (failure/timeout)
+    const refundRate = totalExec > 0 ? (totalExec - successExec) / totalExec : 0;
+
+    // repeat_use_rate: unique requesters who had at least one success / total unique requesters
+    const uniqueReq = metricsRow?.unique_requesters ?? 0;
+    const repeatRate = uniqueReq > 0 ? (metricsRow?.repeat_success_requesters ?? 0) / uniqueReq : 0;
+
+    // 7-day trend: daily execution counts
+    const trendStmt = db.prepare(`
+      SELECT
+        DATE(rl.created_at) as day,
+        COUNT(*) as count,
+        SUM(CASE WHEN rl.status = 'success' THEN 1 ELSE 0 END) as success
+      FROM request_log rl
+      INNER JOIN capability_cards cc ON rl.card_id = cc.id
+      WHERE cc.owner = ? AND rl.action_type IS NULL
+        AND rl.created_at >= DATE('now', '-7 days')
+      GROUP BY DATE(rl.created_at)
+      ORDER BY day ASC
+    `);
+    const trend_7d = (trendStmt.all(owner) as Array<{ day: string; count: number; success: number }>)
+      .map((r) => ({ date: r.day, count: r.count, success: r.success }));
+
+    // --- Performance Tier (metrics-only, no verification implication) ---
+    let performanceTier: 0 | 1 | 2 = 0;
+    if (totalExec > 10) performanceTier = 1;
+    if (totalExec > 50 && successRate >= 0.85) performanceTier = 2;
+
+    // --- Execution Proofs (last 10, proof_source='request_log' in phase 1) ---
+    const proofsStmt = db.prepare(`
+      SELECT rl.card_name, rl.status, rl.latency_ms, rl.id, rl.created_at
+      FROM request_log rl
+      INNER JOIN capability_cards cc ON rl.card_id = cc.id
+      WHERE cc.owner = ? AND rl.action_type IS NULL
+      ORDER BY rl.created_at DESC
+      LIMIT 10
+    `);
+    const proofRows = proofsStmt.all(owner) as Array<{
+      card_name: string;
+      status: 'success' | 'failure' | 'timeout';
+      latency_ms: number;
+      id: string;
+      created_at: string;
+    }>;
+
+    const statusToOutcomeClass = (s: string): 'completed' | 'partial' | 'failed' | 'cancelled' => {
+      if (s === 'success') return 'completed';
+      if (s === 'timeout') return 'cancelled';
+      return 'failed';
+    };
+
+    const executionProofs: AgentProfileV2['execution_proofs'] = proofRows.map((r) => ({
+      action: r.card_name,
+      status: r.status === 'timeout' ? 'timeout' : r.status,
+      outcome_class: statusToOutcomeClass(r.status),
+      latency_ms: r.latency_ms,
+      receipt_id: r.id,
+      proof_source: 'request_log' as const,
+      timestamp: r.created_at,
+    }));
+
+    // --- Suitability from most recent v2.0 card ---
+    const v2Card = ownerCards.find((c) => (c as unknown as CapabilityCardV2).spec_version === '2.0') as CapabilityCardV2 | undefined;
+    const suitability = v2Card?.suitability;
+
+    // --- Learning from most recent v2.0 card ---
+    const learning: AgentProfileV2['learning'] = {
+      known_limitations: v2Card?.learning?.known_limitations ?? [],
+      common_failure_patterns: v2Card?.learning?.common_failure_patterns ?? [],
+      recent_improvements: v2Card?.learning?.recent_improvements ?? [],
+      critiques: v2Card?.learning?.critiques ?? [],
+    };
+
+    // --- Recent activity (backwards compat) ---
     const activityStmt = db.prepare(`
       SELECT rl.id, rl.card_name, rl.requester, rl.status, rl.credits_charged, rl.created_at
       FROM request_log rl
@@ -722,27 +881,58 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
       ORDER BY rl.created_at DESC
       LIMIT 10
     `);
-    const recentActivity = activityStmt.all(owner) as Array<{
-      id: string;
-      card_name: string;
-      requester: string;
-      status: string;
-      credits_charged: number;
-      created_at: string;
-    }>;
+    const recentActivity = activityStmt.all(owner) as AgentProfileV2['recent_activity'];
 
-    const profile = {
+    // --- Backwards-compat profile aggregate ---
+    const skillCount = ownerCards.reduce((sum, card) => sum + ((card as unknown as CapabilityCardV2).skills?.length ?? 1), 0);
+    const creditsStmt = db.prepare(`
+      SELECT SUM(CASE WHEN rl.status = 'success' THEN rl.credits_charged ELSE 0 END) as credits_earned
+      FROM capability_cards cc
+      LEFT JOIN request_log rl ON rl.card_id = cc.id
+      WHERE cc.owner = ?
+    `);
+    const creditsRow = creditsStmt.get(owner) as { credits_earned: number } | undefined;
+
+    const response: AgentProfileV2 = {
       owner,
-      skill_count: skillCount,
-      success_rate: avgSuccessRate,
-      total_earned: creditsRow?.credits_earned ?? 0,
-      member_since: memberRow?.earliest ?? new Date().toISOString(),
-    };
-
-    return reply.send({
-      profile,
+      agent_name: v2Card?.agent_name,
+      short_description: v2Card?.short_description,
+      joined_at: joinedAt,
+      last_active: lastActive,
+      performance_tier: performanceTier,
+      verification_badges: [], // Phase 1: no verification mechanism yet
+      authority: {
+        authority_source: 'self',
+        verification_status: 'none',
+      },
+      suitability,
+      trust_metrics: {
+        total_executions: totalExec,
+        successful_executions: successExec,
+        success_rate: successRate,
+        avg_latency_ms: Math.round(avgLatency),
+        refund_rate: refundRate,
+        repeat_use_rate: repeatRate,
+        trend_7d,
+        snapshot_at: null,
+        aggregation_window: 'all',
+      },
+      execution_proofs: executionProofs,
+      learning,
       skills: ownerCards,
       recent_activity: recentActivity,
+    };
+
+    // Backwards-compat: also include `profile` shape for Hub v1 consumers
+    return reply.send({
+      ...response,
+      profile: {
+        owner,
+        skill_count: skillCount,
+        success_rate: successRate > 0 ? successRate : null,
+        total_earned: creditsRow?.credits_earned ?? 0,
+        member_since: joinedAt,
+      },
     });
   });
 
@@ -794,6 +984,8 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
    * - agents_online: count of connected agents via WebSocket relay + cards with online=true
    * - total_capabilities: total number of registered capability cards
    * - total_exchanges: count of successful exchanges (excluding autonomy audits)
+   * - executions_7d: successful executions in the last 7 days (Hub v2 Narrative Strip)
+   * - verified_providers_count: providers with at least one verification_badge (always 0 in phase 1)
    */
   api.get('/api/stats', {
     schema: {
@@ -806,6 +998,8 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
             agents_online: { type: 'integer' },
             total_capabilities: { type: 'integer' },
             total_exchanges: { type: 'integer' },
+            executions_7d: { type: 'integer' },
+            verified_providers_count: { type: 'integer' },
           },
         },
       },
@@ -832,6 +1026,12 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
     );
     const exchangeRow = exchangeStmt.get() as { count: number };
 
+    // Executions in last 7 days (all statuses, excluding autonomy audits)
+    const exec7dStmt = db.prepare(
+      "SELECT COUNT(*) as count FROM request_log WHERE action_type IS NULL AND created_at >= DATE('now', '-7 days')"
+    );
+    const exec7dRow = exec7dStmt.get() as { count: number };
+
     return reply.send({
       agents_online: onlineOwners.size,
       total_capabilities: allCards.reduce((sum, card) => {
@@ -839,6 +1039,8 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
         return sum + (v2.skills?.length ?? 1);
       }, 0),
       total_exchanges: exchangeRow.count,
+      executions_7d: exec7dRow.count,
+      verified_providers_count: 0, // Phase 1: no verification mechanism yet
     });
   });
 
@@ -865,6 +1067,7 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
         201: { type: 'object', additionalProperties: true },
         400: { type: 'object', properties: { error: { type: 'string' } } },
         409: { type: 'object', properties: { error: { type: 'string' } } },
+        503: { type: 'object', properties: { error: { type: 'string' } } },
       },
     },
   }, async (request, reply) => {
@@ -911,6 +1114,7 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
         400: { type: 'object', properties: { error: { type: 'string' } } },
         404: { type: 'object', properties: { error: { type: 'string' } } },
         409: { type: 'object', properties: { error: { type: 'string' } } },
+        503: { type: 'object', properties: { error: { type: 'string' } } },
       },
     },
   }, async (request, reply) => {
@@ -928,7 +1132,7 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
       return reply.send({ guarantor: record });
     } catch (err) {
       if (err instanceof AgentBnBError) {
-        const statusMap: Record<string, number> = {
+        const statusMap: Record<string, 400 | 404 | 409> = {
           GUARANTOR_NOT_FOUND: 404,
           MAX_AGENTS_EXCEEDED: 409,
           AGENT_ALREADY_LINKED: 409,
@@ -958,6 +1162,7 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
             guarantor: { oneOf: [{ type: 'object', additionalProperties: true }, { type: 'null' }] },
           },
         },
+        503: { type: 'object', properties: { error: { type: 'string' } } },
       },
     },
   }, async (request, reply) => {
@@ -1102,6 +1307,7 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
           params: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] },
           response: {
             200: { type: 'object', properties: { ok: { type: 'boolean' }, online: { type: 'boolean' } } },
+            403: { type: 'object', properties: { error: { type: 'string' } } },
             404: { type: 'object', properties: { error: { type: 'string' } } },
           },
         },

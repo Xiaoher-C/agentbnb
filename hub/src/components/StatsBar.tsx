@@ -10,6 +10,10 @@ interface StatsBarProps {
   agentsOnline: number;
   totalCapabilities: number;
   totalExchanges: number;
+  /** Hub v2: executions in the last 7 days */
+  executions7d?: number;
+  /** Hub v2: providers with at least one verification badge */
+  verifiedProviders?: number;
 }
 
 /**
@@ -50,14 +54,32 @@ function useCountUp(target: number, duration = 400): number {
  * @param totalCapabilities - Total capability cards in registry
  * @param totalExchanges - Total exchanges (currently 0, no backend endpoint yet)
  */
-export default function StatsBar({ agentsOnline, totalCapabilities, totalExchanges }: StatsBarProps) {
+export default function StatsBar({
+  agentsOnline,
+  totalCapabilities,
+  totalExchanges,
+  executions7d,
+  verifiedProviders,
+}: StatsBarProps) {
   const animatedAgents = useCountUp(agentsOnline);
   const animatedCapabilities = useCountUp(totalCapabilities);
   const animatedExchanges = useCountUp(totalExchanges);
+  const animatedExec7d = useCountUp(executions7d ?? 0);
+  const animatedVerified = useCountUp(verifiedProviders ?? 0);
+
+  // Hub v2 Narrative Strip mode — show the 3 trust-oriented stats
+  const isV2 = executions7d !== undefined && verifiedProviders !== undefined;
 
   return (
-    <div className="relative flex justify-center items-center py-8">
-      {/* Ambient glow behind stats — soft emerald halo */}
+    <div className="relative flex flex-col items-center py-8 gap-3">
+      {/* Tagline — only in Hub v2 mode */}
+      {isV2 && (
+        <p className="text-sm text-hub-text-muted tracking-wide text-center">
+          Authorized agents for real-world and digital execution
+        </p>
+      )}
+
+      {/* Ambient glow */}
       <div
         className="absolute inset-0 pointer-events-none"
         style={{
@@ -72,35 +94,37 @@ export default function StatsBar({ agentsOnline, totalCapabilities, totalExchang
       />
 
       {/* Stats row */}
-      <div className="relative flex items-center justify-center gap-12" style={{ zIndex: 10 }}>
-        {/* Agents Online */}
+      <div className="relative flex flex-wrap items-center justify-center gap-8 sm:gap-12" style={{ zIndex: 10 }}>
+        {/* Active agents */}
         <div className="flex flex-col items-center gap-1">
           <span className="text-[32px] leading-tight font-mono font-semibold text-hub-accent">
             {animatedAgents}
           </span>
-          <span className="text-sm text-hub-text-muted">Agents Online</span>
+          <span className="text-sm text-hub-text-muted">Active agents</span>
         </div>
 
-        {/* Separator */}
-        <div className="w-px h-8 bg-white/[0.06]" />
+        <div className="w-px h-8 bg-white/[0.06] hidden sm:block" />
 
-        {/* Capabilities */}
+        {/* Executions (7d) — Hub v2 preferred; fallback to total capabilities */}
         <div className="flex flex-col items-center gap-1">
           <span className="text-[32px] leading-tight font-mono font-semibold text-hub-accent">
-            {animatedCapabilities}
+            {isV2 ? animatedExec7d : animatedCapabilities}
           </span>
-          <span className="text-sm text-hub-text-muted">Capabilities</span>
+          <span className="text-sm text-hub-text-muted">
+            {isV2 ? 'Executions (7d)' : 'Capabilities'}
+          </span>
         </div>
 
-        {/* Separator */}
-        <div className="w-px h-8 bg-white/[0.06]" />
+        <div className="w-px h-8 bg-white/[0.06] hidden sm:block" />
 
-        {/* Exchanges */}
+        {/* Verified providers — Hub v2 preferred; fallback to exchanges */}
         <div className="flex flex-col items-center gap-1">
           <span className="text-[32px] leading-tight font-mono font-semibold text-hub-accent">
-            {animatedExchanges}
+            {isV2 ? animatedVerified : animatedExchanges}
           </span>
-          <span className="text-sm text-hub-text-muted">Exchanges</span>
+          <span className="text-sm text-hub-text-muted">
+            {isV2 ? 'Verified providers' : 'Exchanges'}
+          </span>
         </div>
       </div>
     </div>

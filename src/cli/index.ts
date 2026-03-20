@@ -1129,11 +1129,14 @@ program
       const { RelayClient } = await import('../relay/websocket-client.js');
       const { requestViaRelay } = await import('../gateway/client.js');
 
+      // Use a unique requester ID so the temp connection does not kick out
+      // the provider's serve connection when both share the same owner name.
+      const requesterId = `${config.owner}:req:${randomUUID()}`;
       const tempRelay = new RelayClient({
         registryUrl: config.registry!,
-        owner: config.owner,
+        owner: requesterId,
         token: config.token,
-        card: { id: config.owner, owner: config.owner },
+        card: { id: randomUUID(), owner: requesterId, name: requesterId, description: 'Requester', level: 1, spec_version: '1.0', inputs: [], outputs: [], pricing: { credits_per_call: 1 }, availability: { online: false } },
         onRequest: async () => ({ error: { code: -32601, message: 'Not serving' } }),
         silent: true,
       });
@@ -1145,6 +1148,7 @@ program
           cardId,
           skillId: opts.skill,
           params: { ...params, ...(opts.skill ? { skill_id: opts.skill } : {}) },
+          requester: config.owner, // actual owner for credit tracking on relay server
           escrowReceipt,
         });
         return result;

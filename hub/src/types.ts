@@ -30,6 +30,10 @@ export interface HubCard {
   };
   /** Number of successful uses in the last 7 days (enriched by API) */
   uses_this_week?: number;
+  /** Owner-level performance tier (0=Listed, 1=Active, 2=Trusted) — injected by /cards API */
+  performance_tier?: 0 | 1 | 2;
+  /** Owner-level authority source — injected by /cards API */
+  authority_source?: 'self' | 'platform' | 'org';
 }
 
 export interface Category {
@@ -92,6 +96,93 @@ export interface AgentProfileResponse {
   profile: AgentProfile;
   skills: HubCard[];
   recent_activity: ActivityEntry[];
+}
+
+/** Suitability metadata from AgentProfileV2 */
+export interface AgentSuitability {
+  ideal_for?: string[];
+  not_suitable_for?: string[];
+  excluded_domains?: string[];
+  risk_conditions?: string[];
+  fallback_recommendation?: string;
+}
+
+/** Single execution proof entry from AgentProfileV2 */
+export interface ExecutionProof {
+  action: string;
+  status: 'success' | 'failure' | 'timeout' | 'refunded';
+  outcome_class: 'completed' | 'partial' | 'failed' | 'cancelled';
+  latency_ms?: number;
+  receipt_id?: string;
+  proof_source: 'request_log' | 'signed_receipt' | 'settlement_record';
+  timestamp: string;
+}
+
+/** 7-day trend data point from AgentProfileV2 trust_metrics */
+export interface TrendDay {
+  date: string;
+  count: number;
+  success: number;
+}
+
+/** Learning signals from AgentProfileV2 */
+export interface AgentLearning {
+  known_limitations: string[];
+  common_failure_patterns: string[];
+  recent_improvements: { version: string; summary: string; timestamp: string }[];
+  critiques: { type: 'structured'; summary: string; source_tier: string; timestamp: string }[];
+}
+
+/**
+ * Hub v2 Agent Profile — returned by GET /api/agents/:owner.
+ * Extends AgentProfileResponse with trust, authority, and learning signals.
+ */
+export interface AgentProfileV2 {
+  owner: string;
+  agent_name?: string;
+  short_description?: string;
+  joined_at: string;
+  last_active: string;
+
+  /** Performance tier based on execution metrics only (0=Listed, 1=Active, 2=Trusted). */
+  performance_tier: 0 | 1 | 2;
+
+  /** Verification badges granted by external actions, not metrics. */
+  verification_badges: ('platform_verified' | 'org_authorized' | 'real_world_authorized')[];
+
+  /** Authority metadata — source and current status. */
+  authority: {
+    authority_source: 'self' | 'platform' | 'org';
+    verification_status: 'none' | 'observed' | 'verified' | 'revoked';
+    scope?: string[];
+    constraints?: Record<string, unknown>;
+    expires_at?: string;
+    status_ref?: string;
+  };
+
+  suitability?: AgentSuitability;
+
+  trust_metrics: {
+    total_executions: number;
+    successful_executions: number;
+    success_rate: number;
+    avg_latency_ms: number;
+    refund_rate: number;
+    repeat_use_rate: number;
+    trend_7d: TrendDay[];
+    snapshot_at: string | null;
+    aggregation_window: '7d' | '30d' | 'all';
+  };
+
+  execution_proofs: ExecutionProof[];
+  learning: AgentLearning;
+
+  /** All capability cards (backwards compat: was `skills`) */
+  skills: HubCard[];
+  recent_activity: ActivityEntry[];
+
+  /** Backwards-compat aggregate profile shape */
+  profile: AgentProfile;
 }
 
 /**

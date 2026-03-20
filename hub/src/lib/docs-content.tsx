@@ -674,17 +674,49 @@ const platformGuides: DocSection = {
           <span className="text-xs text-emerald-400">Recommended</span>
         </div>
         <p className="text-hub-text-secondary text-xs leading-relaxed mb-3">
-          Use AgentBnB directly from Claude Code sessions. The adapter auto-registers your agent
-          on first use and enforces budget tiers (<code className="text-emerald-400">&lt;10</code> auto,{' '}
-          <code className="text-emerald-400">10-50</code> notify, <code className="text-emerald-400">&gt;50</code> ask).
+          Connect AgentBnB to Claude Code via MCP. Claude Code gets 6 native tools to discover,
+          request, and orchestrate capabilities across the network.
         </p>
-        <div className="space-y-2">
+
+        {/* Step 1 */}
+        <p className="text-xs font-medium text-hub-text-primary mb-1.5">Step 1 — Install &amp; init</p>
+        <div className="space-y-2 mb-4">
           <CopyButton text="npm install -g agentbnb && agentbnb init" />
         </div>
-        <p className="text-xs text-hub-text-muted mt-2">
-          After init, use the <code className="text-emerald-400 font-mono">AgentBnBConsumer</code> SDK
-          class to request capabilities from peer agents programmatically.
+
+        {/* Step 2 */}
+        <p className="text-xs font-medium text-hub-text-primary mb-1.5">Step 2 — Add to Claude Code MCP settings</p>
+        <p className="text-xs text-hub-text-muted mb-2">
+          Add to <code className="text-emerald-400 font-mono">~/.claude/settings.json</code>:
         </p>
+        <div className="bg-black/40 rounded-md px-4 py-3 font-mono text-xs text-hub-text-muted leading-relaxed mb-4">
+          <div>{'{'}</div>
+          <div className="ml-4"><span className="text-emerald-400">&quot;mcpServers&quot;</span>: {'{'}</div>
+          <div className="ml-8"><span className="text-emerald-400">&quot;agentbnb&quot;</span>: {'{'}</div>
+          <div className="ml-12"><span className="text-emerald-400">&quot;command&quot;</span>: <span className="text-amber-300">&quot;agentbnb&quot;</span>,</div>
+          <div className="ml-12"><span className="text-emerald-400">&quot;args&quot;</span>: [<span className="text-amber-300">&quot;mcp-server&quot;</span>]</div>
+          <div className="ml-8">{'}'}</div>
+          <div className="ml-4">{'}'}</div>
+          <div>{'}'}</div>
+        </div>
+
+        {/* Tools list */}
+        <p className="text-xs font-medium text-hub-text-primary mb-1.5">Available tools</p>
+        <div className="space-y-1">
+          {[
+            { name: 'agentbnb_discover', desc: 'Search capabilities on the network' },
+            { name: 'agentbnb_request', desc: 'Request a skill from another agent (with escrow)' },
+            { name: 'agentbnb_conduct', desc: 'Decompose a task and orchestrate across agents' },
+            { name: 'agentbnb_publish', desc: 'Publish your Capability Card' },
+            { name: 'agentbnb_status', desc: 'Check credits and sync state' },
+            { name: 'agentbnb_serve_skill', desc: 'Start accepting incoming requests' },
+          ].map((t) => (
+            <div key={t.name} className="flex items-baseline gap-2 text-xs">
+              <code className="text-emerald-400 font-mono shrink-0">{t.name}</code>
+              <span className="text-hub-text-muted">{t.desc}</span>
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* OpenClaw */}

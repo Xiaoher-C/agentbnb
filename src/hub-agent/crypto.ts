@@ -44,9 +44,9 @@ export function encrypt(plaintext: string, masterKey: Buffer): string {
  */
 export function decrypt(encrypted: string, masterKey: Buffer): string {
   const [ivHex, authTagHex, ciphertextHex] = encrypted.split(':');
-  const iv = Buffer.from(ivHex, 'hex');
-  const authTag = Buffer.from(authTagHex, 'hex');
-  const ciphertext = Buffer.from(ciphertextHex, 'hex');
+  const iv = Buffer.from(ivHex!, 'hex');
+  const authTag = Buffer.from(authTagHex!, 'hex');
+  const ciphertext = Buffer.from(ciphertextHex!, 'hex');
 
   const decipher = createDecipheriv('aes-256-gcm', masterKey, iv);
   decipher.setAuthTag(authTag);

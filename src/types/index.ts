@@ -110,6 +110,49 @@ export const SkillSchema = z.object({
 });
 
 /**
+ * Suitability metadata — describes when an agent/skill is or is not appropriate.
+ * Used in Hub v2 Agent Profile and (in later phases) for routing warnings
+ * and automated matching exclusions.
+ */
+export const SuitabilitySchema = z.object({
+  /** Use cases this agent/skill is optimised for. */
+  ideal_for: z.array(z.string()).optional(),
+  /** Scenarios this agent/skill cannot reliably handle. */
+  not_suitable_for: z.array(z.string()).optional(),
+  /** Domains explicitly excluded (used for routing exclusions in later phases). */
+  excluded_domains: z.array(z.string()).optional(),
+  /** Conditions that increase failure risk, shown as warnings in the Hub. */
+  risk_conditions: z.array(z.string()).optional(),
+  /** Recommended alternative when this agent is unsuitable. */
+  fallback_recommendation: z.string().optional(),
+});
+
+/**
+ * Learning metadata — self-declared evolution signals for Hub v2.
+ * In phase 1 this is entirely self-reported by the provider.
+ * In later phases, `critiques` can be populated by external critique mechanisms.
+ */
+export const LearningSchema = z.object({
+  /** Known limitations that may affect reliability (self-declared). */
+  known_limitations: z.array(z.string()).optional(),
+  /** Common failure patterns observed by the provider. */
+  common_failure_patterns: z.array(z.string()).optional(),
+  /** Version-tagged improvements the provider has shipped. */
+  recent_improvements: z.array(z.object({
+    version: z.string(),
+    summary: z.string(),
+    timestamp: z.string(),
+  })).optional(),
+  /** Structured critiques from external sources (phase 2+). */
+  critiques: z.array(z.object({
+    type: z.literal('structured'),
+    summary: z.string(),
+    source_tier: z.string(),
+    timestamp: z.string(),
+  })).optional(),
+});
+
+/**
  * Capability Card v2.0 — one card per agent, multiple independently-priced skills.
  *
  * Introduced in Phase 4 (Plan 02). Existing v1.0 cards are migrated to this
@@ -121,6 +164,8 @@ export const CapabilityCardV2Schema = z.object({
   owner: z.string().min(1),
   /** Agent display name — was 'name' in v1.0. */
   agent_name: z.string().min(1).max(100),
+  /** Short one-liner shown in Hub v2 Identity Header. */
+  short_description: z.string().max(200).optional(),
   /** At least one skill is required. */
   skills: z.array(SkillSchema).min(1),
   availability: z.object({
@@ -132,6 +177,10 @@ export const CapabilityCardV2Schema = z.object({
     runtime: z.string(),
     region: z.string().optional(),
   }).optional(),
+  /** Suitability metadata for Hub v2 profile and future routing warnings. */
+  suitability: SuitabilitySchema.optional(),
+  /** Learning signals — self-declared limitations, improvements, critiques. */
+  learning: LearningSchema.optional(),
   /**
    * Private per-card metadata. Stripped from all API and CLI responses —
    * never transmitted beyond the local store.
@@ -155,6 +204,101 @@ export const AnyCardSchema = z.discriminatedUnion('spec_version', [
 export type Skill = z.infer<typeof SkillSchema>;
 export type CapabilityCardV2 = z.infer<typeof CapabilityCardV2Schema>;
 export type AnyCard = z.infer<typeof AnyCardSchema>;
+export type Suitability = z.infer<typeof SuitabilitySchema>;
+export type Learning = z.infer<typeof LearningSchema>;
+
+/**
+ * Hub v2 Agent Profile — returned by GET /api/agents/:owner.
+ *
+ * Extends the v1 profile shape with trust metrics, execution proofs,
+ * performance tier, verification badges, and authority metadata.
+ * All computation is done at query time (no stored snapshots in phase 1).
+ */
+export interface AgentProfileV2 {
+  owner: string;
+  agent_name?: string;
+  short_description?: string;
+  joined_at: string;
+  last_active: string;
+
+  /**
+   * Performance tier — derived exclusively from execution metrics.
+   * 0 = Listed, 1 = Active (>10 executions), 2 = Trusted (>85% success + >50 executions).
+   * Does NOT imply identity verification; use `verification_badges` for that.
+   */
+  performance_tier: 0 | 1 | 2;
+
+  /**
+   * Verification badges — can only be granted by external actions or platform review,
+   * never inferred from metrics alone.
+   */
+  verification_badges: ('platform_verified' | 'org_authorized' | 'real_world_authorized')[];
+
+  /** Authority metadata — source and verification status of this agent's authority claims. */
+  authority: {
+    authority_source: 'self' | 'platform' | 'org';
+    verification_status: 'none' | 'observed' | 'verified' | 'revoked';
+    scope?: string[];
+    constraints?: Record<string, unknown>;
+    expires_at?: string;
+    status_ref?: string;
+  };
+
+  /** Self-declared suitability metadata from the agent's capability card. */
+  suitability?: Suitability;
+
+  /**
+   * Trust metrics — computed from request_log at query time.
+   * `snapshot_at: null` means live computation; a timestamp means a cached snapshot.
+   */
+  trust_metrics: {
+    total_executions: number;
+    successful_executions: number;
+    success_rate: number;
+    avg_latency_ms: number;
+    refund_rate: number;
+    repeat_use_rate: number;
+    trend_7d: { date: string; count: number; success: number }[];
+    snapshot_at: string | null;
+    aggregation_window: '7d' | '30d' | 'all';
+  };
+
+  /**
+   * Recent execution proofs — up to 10 most recent request_log entries.
+   * `proof_source` is always 'request_log' in phase 1.
+   * When Ed25519 signed receipts are introduced, this upgrades to 'signed_receipt'.
+   */
+  execution_proofs: {
+    action: string;
+    status: 'success' | 'failure' | 'timeout' | 'refunded';
+    outcome_class: 'completed' | 'partial' | 'failed' | 'cancelled';
+    latency_ms?: number;
+    receipt_id?: string;
+    proof_source: 'request_log' | 'signed_receipt' | 'settlement_record';
+    timestamp: string;
+  }[];
+
+  /** Learning signals — self-declared in phase 1. */
+  learning: {
+    known_limitations: string[];
+    common_failure_patterns: string[];
+    recent_improvements: { version: string; summary: string; timestamp: string }[];
+    critiques: { type: 'structured'; summary: string; source_tier: string; timestamp: string }[];
+  };
+
+  /** All capability cards owned by this agent. */
+  skills: AnyCard[];
+
+  /** Kept for backwards compatibility with Hub v1 consumers. */
+  recent_activity: {
+    id: string;
+    card_name: string;
+    requester: string;
+    status: string;
+    credits_charged: number;
+    created_at: string;
+  }[];
+}
 
 /**
  * Signed escrow receipt — cryptographic proof that a requester has committed credits.

@@ -185,16 +185,43 @@ export default function CardModal({ card, onClose }: CardModalProps) {
             <Avatar size={48} name={card.id} variant="beam" />
           </div>
           <div className="flex-1 min-w-0">
-            <h2 className="text-[18px] font-semibold text-hub-text-primary leading-tight">
-              {card.name}
-            </h2>
-            {/* Owner name — navigates to /agents/:owner */}
-            <button
-              onClick={handleOwnerClick}
-              className="text-[14px] text-hub-accent hover:underline mt-0.5 text-left"
-            >
-              @{card.owner}
-            </button>
+            {/* Name row + tier badge */}
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="text-[18px] font-semibold text-hub-text-primary leading-tight truncate">
+                {card.name}
+              </h2>
+              {(() => {
+                const tiers = {
+                  0: { label: 'Listed',  cls: 'text-hub-text-muted border-hub-border/60' },
+                  1: { label: 'Active',  cls: 'text-blue-400 border-blue-400/25' },
+                  2: { label: 'Trusted', cls: 'text-emerald-400 border-emerald-400/25' },
+                } as const;
+                const t = tiers[card.performance_tier ?? 0];
+                return (
+                  <span className={`flex-shrink-0 text-[10px] font-medium border rounded px-1.5 py-0.5 ${t.cls}`}>
+                    {t.label}
+                  </span>
+                );
+              })()}
+            </div>
+            {/* Owner row + authority source */}
+            <div className="flex items-center justify-between gap-2 mt-0.5">
+              <button
+                onClick={handleOwnerClick}
+                className="text-[13px] text-hub-accent hover:underline text-left"
+              >
+                @{card.owner}
+              </button>
+              <span className={`flex-shrink-0 text-[10px] ${
+                card.authority_source === 'platform' ? 'text-blue-400/70' :
+                card.authority_source === 'org' ? 'text-violet-400/70' :
+                'text-hub-text-muted'
+              }`}>
+                {card.authority_source === 'platform' ? 'Platform observed' :
+                 card.authority_source === 'org' ? 'Org-backed' :
+                 'Self-declared'}
+              </span>
+            </div>
             <div className="flex items-center gap-2 mt-1.5 flex-wrap">
               <span className="flex items-center gap-1.5 text-xs text-hub-text-secondary">
                 <StatusDot online={online} />

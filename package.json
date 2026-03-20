@@ -1,6 +1,6 @@
 {
   "name": "agentbnb",
-  "version": "3.1.6",
+  "version": "4.0.2",
   "description": "P2P Agent Capability Sharing Protocol — Airbnb for AI agent pipelines",
   "type": "module",
   "main": "dist/index.js",
@@ -11,7 +11,8 @@
   "files": [
     "dist",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "skills"
   ],
   "exports": {
     ".": {
@@ -25,10 +26,6 @@
     "./identity": {
       "types": "./dist/identity/index.d.ts",
       "import": "./dist/identity/index.js"
-    },
-    "./adapters/claude-code": {
-      "types": "./dist/adapters/claude-code/index.d.ts",
-      "import": "./dist/adapters/claude-code/index.js"
     }
   },
   "scripts": {
