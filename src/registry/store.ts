@@ -3,6 +3,7 @@ import { CapabilityCardSchema, AgentBnBError } from '../types/index.js';
 import type { CapabilityCard, CapabilityCardV2 } from '../types/index.js';
 import { createRequestLogTable } from './request-log.js';
 import { initFeedbackTable } from '../feedback/store.js';
+import { initEvolutionTable } from '../evolution/store.js';
 
 export type { Database };
 
@@ -190,6 +191,9 @@ export function openDatabase(path = ':memory:'): Database.Database {
 
   // Create feedback table and indexes
   initFeedbackTable(db);
+
+  // Create evolution_versions table and indexes
+  initEvolutionTable(db);
 
   // Run schema migrations — installs v2.0 FTS triggers and migrates v1.0 cards
   runMigrations(db);

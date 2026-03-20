@@ -32,6 +32,7 @@ import { hubAgentRoutesPlugin } from '../hub-agent/routes.js';
 import { createRelayBridge } from '../hub-agent/relay-bridge.js';
 import { convertToGptActions } from './openapi-gpt-actions.js';
 import feedbackPlugin from '../feedback/api.js';
+import evolutionPlugin from '../evolution/api.js';
 import { executeCapabilityBatch } from '../gateway/execute.js';
 
 /**
@@ -204,6 +205,9 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
 
   // Register feedback plugin — POST /api/feedback, GET /api/feedback/:skill_id, GET /api/reputation/:agent_id
   void server.register(feedbackPlugin, { db });
+
+  // Register evolution plugin — POST /api/evolution/publish, GET /api/evolution/latest, GET /api/evolution/history
+  void server.register(evolutionPlugin, { db });
 
   // ---- All API routes registered inside a plugin so @fastify/swagger captures them ----
   // Routes registered directly on the server (outside a plugin) are invisible to swagger

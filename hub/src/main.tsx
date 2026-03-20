@@ -31,6 +31,7 @@ import DocsPage from './components/DocsPage.js';
 import HubAgentListPage from './pages/HubAgentListPage.js';
 import CreateAgentPage from './pages/CreateAgentPage.js';
 import HubAgentDashboardPage from './pages/HubAgentDashboardPage.js';
+import GenesisPage from './pages/GenesisPage.js';
 import type { AppOutletContext } from './types.js';
 
 /** Wrapper: reads apiKey from outlet context and passes it to SharePage */
@@ -83,6 +84,7 @@ const router = createHashRouter([
         path: 'docs',
         element: <DocsPage />,
       },
+      { path: 'genesis', element: <GenesisPage /> },
       { path: 'share', element: <SharePageWrapper /> },
       { path: 'myagent', element: <MyAgentWrapper /> },
       {

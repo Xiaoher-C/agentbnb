@@ -228,6 +228,12 @@ export default function NavBar({ apiKey, balance, onLogout }: NavBarProps): JSX.
         >
           Docs
         </NavLink>
+        <NavLink
+          to="/genesis"
+          className={({ isActive }) => navTabClass(isActive)}
+        >
+          Genesis
+        </NavLink>
         <MyAgentDropdown />
       </nav>
 
@@ -272,6 +278,13 @@ export default function NavBar({ apiKey, balance, onLogout }: NavBarProps): JSX.
             className={({ isActive }) => `${navTabClass(isActive)} block`}
           >
             Docs
+          </NavLink>
+          <NavLink
+            to="/genesis"
+            onClick={() => setMenuOpen(false)}
+            className={({ isActive }) => `${navTabClass(isActive)} block`}
+          >
+            Genesis
           </NavLink>
           <NavLink
             to="/myagent"
