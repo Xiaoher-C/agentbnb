@@ -169,7 +169,7 @@ export class AgentRuntime {
         const peer = peers.find(p => p.name.toLowerCase() === owner.toLowerCase());
         if (!peer) {
           throw new Error(
-            `No peer found for agent owner "${owner}". Add with: agentbnb peers add ${owner} <url> <token>`,
+            `No peer found for agent owner "${owner}". Add with: agentbnb connect ${owner} <url> <token>`,
           );
         }
         // Look up this peer's card ID from registry DB

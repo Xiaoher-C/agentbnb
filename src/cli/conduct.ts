@@ -149,7 +149,7 @@ export async function conductAction(
     }
 
     throw new Error(
-      `Unknown peer "${owner}". Add with: agentbnb peers add ${owner} <url> <token>`,
+      `Unknown peer "${owner}". Add with: agentbnb connect ${owner} <url> <token>`,
     );
   };
 
