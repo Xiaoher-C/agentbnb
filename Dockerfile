@@ -17,6 +17,7 @@ RUN pnpm install
 
 # Copy source files
 COPY src/ ./src/
+COPY skills/ ./skills/
 COPY hub/ ./hub/
 
 # Build CLI (tsup) + Hub (Vite)
