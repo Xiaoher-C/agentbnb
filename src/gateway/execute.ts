@@ -27,6 +27,11 @@ export interface ExecuteRequestOptions {
   timeoutMs?: number;
   /** Optional progress callback forwarded to SkillExecutor during execution. */
   onProgress?: ProgressCallback;
+  /**
+   * When true, skip local credit check and escrow management.
+   * Used for relay-routed requests where the Hub relay has already held credits.
+   */
+  relayAuthorized?: boolean;
 }
 
 /**
@@ -56,6 +61,7 @@ export async function executeCapabilityRequest(opts: ExecuteRequestOptions): Pro
     handlerUrl,
     timeoutMs = 300_000,
     onProgress,
+    relayAuthorized = false,
   } = opts;
 
   // Look up card in registry
@@ -92,7 +98,10 @@ export async function executeCapabilityRequest(opts: ExecuteRequestOptions): Pro
   let escrowId: string | null = null;
   let isRemoteEscrow = false;
 
-  if (receipt) {
+  if (relayAuthorized) {
+    // Hub relay has already held credits — skip local credit check entirely.
+    // The relay will settle or release the Hub-side escrow based on our response.
+  } else if (receipt) {
     const { signature, ...receiptData } = receipt;
     const publicKeyBuf = Buffer.from(receipt.requester_public_key, 'hex');
     const valid = verifyEscrowReceipt(receiptData as Record<string, unknown>, signature, publicKeyBuf);

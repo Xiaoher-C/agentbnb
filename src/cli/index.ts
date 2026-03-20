@@ -1453,6 +1453,8 @@ program
               skillExecutor: runtime.skillExecutor,
               handlerUrl: opts.handlerUrl,
               onProgress,
+              // Relay requests have credits managed by the Hub relay — skip local credit check.
+              relayAuthorized: true,
             });
             if (result.success) {
               return { result: result.result };

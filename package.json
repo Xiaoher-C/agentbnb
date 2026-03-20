@@ -1,6 +1,6 @@
 {
   "name": "agentbnb",
-  "version": "4.0.2",
+  "version": "4.0.4",
   "description": "P2P Agent Capability Sharing Protocol — Airbnb for AI agent pipelines",
   "type": "module",
   "main": "dist/index.js",
@@ -12,7 +12,8 @@
     "dist",
     "README.md",
     "LICENSE",
-    "skills"
+    "skills",
+    "openclaw.plugin.json"
   ],
   "exports": {
     ".": {
@@ -78,6 +79,11 @@
     "typed-emitter": "^2.1.0",
     "ws": "^8.19.0",
     "zod": "^3.24.0"
+  },
+  "openclaw": {
+    "extensions": [
+      "./dist/skills/agentbnb/bootstrap.js"
+    ]
   },
   "engines": {
     "node": ">=20.0.0"
