@@ -1,0 +1,24 @@
+{
+  "version": "1.0.0",
+  "generation": 1,
+  "core_memories": [
+    {
+      "category": "patterns",
+      "importance": 0.9,
+      "content": "Always check credit balance before initiating Layer 2 rentals. Reserve floor is non-negotiable.",
+      "scope": "global"
+    },
+    {
+      "category": "patterns",
+      "importance": 0.8,
+      "content": "Layer 0 first. Only escalate when output confidence < 0.6. Pure reasoning never needs Layer 2.",
+      "scope": "global"
+    },
+    {
+      "category": "patterns",
+      "importance": 0.7,
+      "content": "Leave structured feedback after every rental. Feedback quality directly improves network trust scores.",
+      "scope": "agent:feedback"
+    }
+  ]
+}

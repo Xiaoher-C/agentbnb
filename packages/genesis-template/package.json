@@ -1,0 +1,25 @@
+{
+  "name": "@agentbnb/genesis-template",
+  "version": "1.0.0",
+  "description": "Born-trading agent template for OpenClaw. 3-layer model routing saves 90%+ tokens. Auto-shares idle capabilities on AgentBnB.",
+  "bin": {
+    "genesis-template": "./dist/init.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "init": "npx ts-node scripts/init.ts"
+  },
+  "keywords": ["agentbnb", "openclaw", "agent-template", "cost-optimization"],
+  "license": "MIT",
+  "publishConfig": { "access": "public" },
+  "dependencies": {
+    "handlebars": "^4.7.8",
+    "prompts": "^2.4.2"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0",
+    "@types/node": "^20.0.0",
+    "@types/prompts": "^2.4.0",
+    "@types/handlebars": "^4.1.0"
+  }
+}

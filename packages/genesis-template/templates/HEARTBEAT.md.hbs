@@ -1,0 +1,31 @@
+# {{agentName}} Heartbeat Configuration
+
+## Cycle
+- Interval: 30 minutes
+- Max concurrent heartbeat tasks: 3
+
+## Heartbeat Sequence
+1. genesis-pulse (always runs)
+2. genesis-gap-detector (if pulse.recent_failures > 0 OR pulse.idle_rate < 0.3)
+3. genesis-skill-scout (if gap_detector found priority >= high gaps)
+4. genesis-smart-renter (if skill_scout found viable matches)
+5. genesis-idle-sharer (if pulse.idle_rate > 0.7)
+6. genesis-feedback (if pending_feedback queue is non-empty)
+7. genesis-evolution (every 10th heartbeat cycle)
+
+## AgentBnB Trading Autonomy
+- Tier 1 (full auto): < {{tier1Threshold}} credits per transaction
+- Tier 2 (notify Handler after): {{tier1Threshold}}-{{tier2Threshold}} credits per transaction
+- Tier 3 (ask Handler before): > {{tier2Threshold}} credits per transaction
+- Reserve floor: {{reserveFloor}} credits (never spend below this)
+- Auto-share when idle_rate > 0.7
+
+## Model Routing Budget
+- Layer 0 ({{layer0Model}}): unlimited
+- Layer 1 ({{layer1Model}}): max {{layer1DailyCap}} tokens/day
+- Layer 2 (AgentBnB rental): max {{layer2DailyCap}} credits/day
+
+## Evolution Autonomy
+- Auto-evolve: skill improvements with expected fitness delta > 0.05
+- Notify Handler: new skill creation, pricing changes > 20%
+- Ask Handler: template structural changes, module additions

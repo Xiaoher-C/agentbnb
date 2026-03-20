@@ -1,5 +1,6 @@
 {
   "name": "agentbnb",
+  "workspaces": ["packages/*"],
   "version": "4.0.4",
   "description": "P2P Agent Capability Sharing Protocol — Airbnb for AI agent pipelines",
   "type": "module",
