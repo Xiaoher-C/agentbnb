@@ -1,5 +1,6 @@
 import type Database from 'better-sqlite3';
 import type { CapabilityCard } from '../types/index.js';
+import { getReputationScore } from '../feedback/reputation.js';
 
 /**
  * Filters for capability card search.
@@ -11,6 +12,12 @@ export interface SearchFilters {
   online?: boolean;
   /** Filter cards that use all of the specified APIs. */
   apis_used?: string[];
+  /**
+   * Minimum reputation score (0.0 - 1.0) for the card owner.
+   * Cards whose owner has a reputation score below this value are excluded.
+   * Owners with no feedback default to 0.5 (cold-start score).
+   */
+  min_reputation?: number;
 }
 
 /**
@@ -20,7 +27,7 @@ export interface SearchFilters {
  *
  * @param db - Open database instance.
  * @param query - Full-text search query string.
- * @param filters - Optional filters for level, online status, and apis_used.
+ * @param filters - Optional filters for level, online status, apis_used, and min_reputation.
  * @returns Array of matching CapabilityCard objects sorted by relevance.
  */
 export function searchCards(
@@ -75,15 +82,21 @@ export function searchCards(
   const results = rows.map((row) => JSON.parse(row.data) as CapabilityCard);
 
   // Post-filter by apis_used if specified (not easily done in FTS5 query)
+  let filtered = results;
   if (filters.apis_used && filters.apis_used.length > 0) {
     const requiredApis = filters.apis_used;
-    return results.filter((card) => {
+    filtered = filtered.filter((card) => {
       const cardApis = card.metadata?.apis_used ?? [];
       return requiredApis.every((api) => cardApis.includes(api));
     });
   }
 
-  return results;
+  // Post-filter by min_reputation using a batch reputation lookup for efficiency
+  if (filters.min_reputation !== undefined && filters.min_reputation > 0) {
+    filtered = applyReputationFilter(db, filtered, filters.min_reputation);
+  }
+
+  return filtered;
 }
 
 /**
@@ -91,12 +104,12 @@ export function searchCards(
  * Useful for listing/browsing all capabilities by level or availability.
  *
  * @param db - Open database instance.
- * @param filters - Filters: level, online status.
+ * @param filters - Filters: level, online status, min_reputation.
  * @returns Array of matching CapabilityCard objects.
  */
 export function filterCards(
   db: Database.Database,
-  filters: Pick<SearchFilters, 'level' | 'online'>
+  filters: Pick<SearchFilters, 'level' | 'online' | 'min_reputation'>
 ): CapabilityCard[] {
   const conditions: string[] = [];
   const params: (string | number)[] = [];
@@ -118,5 +131,58 @@ export function filterCards(
   const stmt = db.prepare(sql);
   const rows = stmt.all(...params) as Array<{ data: string }>;
 
-  return rows.map((row) => JSON.parse(row.data) as CapabilityCard);
+  let cards = rows.map((row) => JSON.parse(row.data) as CapabilityCard);
+
+  // Post-filter by min_reputation using batch reputation lookup
+  if (filters.min_reputation !== undefined && filters.min_reputation > 0) {
+    cards = applyReputationFilter(db, cards, filters.min_reputation);
+  }
+
+  return cards;
+}
+
+/**
+ * Filters a list of CapabilityCards to those whose owner has a reputation score
+ * >= minReputation. Uses a batch query over the feedback table to avoid N+1 queries.
+ *
+ * @param db - Open database instance.
+ * @param cards - Cards to filter.
+ * @param minReputation - Minimum reputation threshold (0.0 - 1.0).
+ * @returns Filtered array of cards.
+ */
+function applyReputationFilter(
+  db: Database.Database,
+  cards: CapabilityCard[],
+  minReputation: number
+): CapabilityCard[] {
+  // Collect unique owners, then compute reputation per owner
+  const owners = [...new Set(cards.map((c) => c.owner))];
+  const reputationMap = new Map<string, number>();
+  for (const owner of owners) {
+    reputationMap.set(owner, getReputationScore(db, owner));
+  }
+  return cards.filter((card) => {
+    const score = reputationMap.get(card.owner) ?? 0.5;
+    return score >= minReputation;
+  });
+}
+
+/**
+ * Computes a reputation score map for a given list of owner IDs.
+ * Uses per-owner getReputationScore calls (batch deduplication applied).
+ *
+ * @param db - Open database instance.
+ * @param owners - Array of owner agent IDs.
+ * @returns Map from owner ID to reputation score (0.0 - 1.0).
+ */
+export function buildReputationMap(
+  db: Database.Database,
+  owners: string[]
+): Map<string, number> {
+  const unique = [...new Set(owners)];
+  const map = new Map<string, number>();
+  for (const owner of unique) {
+    map.set(owner, getReputationScore(db, owner));
+  }
+  return map;
 }

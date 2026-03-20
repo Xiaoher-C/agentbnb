@@ -11,7 +11,7 @@ import { z } from 'zod';
 import type Database from 'better-sqlite3';
 import { getCard, insertCard, updateCard, listCards } from './store.js';
 import { listPendingRequests, resolvePendingRequest } from '../autonomy/pending-requests.js';
-import { searchCards, filterCards } from './matcher.js';
+import { searchCards, filterCards, buildReputationMap } from './matcher.js';
 import { getPricingStats } from './pricing.js';
 import { getRequestLog, getActivityFeed } from './request-log.js';
 import type { SincePeriod } from './request-log.js';
@@ -233,7 +233,8 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
    *   tag                — Filter cards that have this tag in metadata.tags
    *   min_success_rate   — Filter cards with success_rate >= value (0-1)
    *   max_latency_ms     — Filter cards with avg_latency_ms <= value
-   *   sort               — Sort order: 'success_rate' (desc) or 'latency' (asc)
+   *   min_reputation     — Filter cards with peer feedback reputation >= value (0-1)
+   *   sort               — Sort order: 'popular'|'rated'|'success_rate'|'cheapest'|'newest'|'latency'|'reputation_desc'|'reputation_asc'
    *   limit              — Max items per page (default 20, max 100)
    *   offset             — Pagination offset (default 0)
    */
@@ -250,7 +251,8 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
           tag: { type: 'string', description: 'Filter by metadata tag' },
           min_success_rate: { type: 'number', description: 'Minimum success rate (0-1)' },
           max_latency_ms: { type: 'number', description: 'Maximum average latency in ms' },
-          sort: { type: 'string', enum: ['popular', 'rated', 'success_rate', 'cheapest', 'newest', 'latency'], description: 'Sort order' },
+          min_reputation: { type: 'number', description: 'Minimum reputation score (0-1) based on peer feedback' },
+          sort: { type: 'string', enum: ['popular', 'rated', 'success_rate', 'cheapest', 'newest', 'latency', 'reputation_desc', 'reputation_asc'], description: 'Sort order' },
           limit: { type: 'integer', default: 20, description: 'Max items per page (max 100)' },
           offset: { type: 'integer', default: 0, description: 'Pagination offset' },
         },
@@ -284,6 +286,8 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
       query.min_success_rate !== undefined ? parseFloat(query.min_success_rate) : undefined;
     const maxLatencyMs =
       query.max_latency_ms !== undefined ? parseFloat(query.max_latency_ms) : undefined;
+    const minReputation =
+      query.min_reputation !== undefined ? parseFloat(query.min_reputation) : undefined;
     const sort = query.sort;
 
     // Limit/offset with defaults and cap
@@ -295,9 +299,9 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
     // Fetch cards — use searchCards (FTS5) if query string provided, else filterCards
     let cards: CapabilityCard[];
     if (q.length > 0) {
-      cards = searchCards(db, q, { level, online });
+      cards = searchCards(db, q, { level, online, min_reputation: minReputation });
     } else {
-      cards = filterCards(db, { level, online });
+      cards = filterCards(db, { level, online, min_reputation: minReputation });
     }
 
     // Post-filter by tag
@@ -430,10 +434,24 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
         const bLatency = b.metadata?.avg_latency_ms ?? Infinity;
         return aLatency - bLatency;
       });
+    } else if (sort === 'reputation_desc' || sort === 'reputation_asc') {
+      // Sort by peer feedback reputation score.
+      // Build reputation map in one batch pass (deduplicates owner lookups).
+      const repMap = buildReputationMap(db, cards.map((c) => c.owner));
+      const dir = sort === 'reputation_desc' ? -1 : 1;
+      cards = [...cards].sort((a, b) => {
+        const aScore = repMap.get(a.owner) ?? 0.5;
+        const bScore = repMap.get(b.owner) ?? 0.5;
+        return dir * (bScore - aScore);
+      });
     }
 
     const total = cards.length;
     const pagedCards = cards.slice(offset, offset + limit);
+
+    // Build reputation map for paged cards (batch, deduplicates owner lookups).
+    // Only compute for paged items to avoid scanning feedback for the entire result set.
+    const pageRepMap = buildReputationMap(db, pagedCards.map((c) => c.owner));
 
     // Augment each card with owner trust summary fields
     const items = pagedCards.map((card) => {
@@ -443,6 +461,7 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
         ...stripped,
         performance_tier: trust?.performance_tier ?? 0,
         authority_source: trust?.authority_source ?? 'self',
+        reputation_score: pageRepMap.get(card.owner) ?? 0.5,
         // Enrich metadata with live execution-based success_rate if available
         metadata: trust && trust.terminal_exec > 0
           ? {
