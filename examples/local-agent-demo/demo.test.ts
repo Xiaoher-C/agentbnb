@@ -7,12 +7,10 @@
  * 3. OpenClaw bootstrap lifecycle (activate → deactivate)
  */
 
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
 
 import { CapabilityCardV2Schema } from '../../src/types/index.js';
 import { openDatabase } from '../../src/registry/store.js';
@@ -183,82 +181,79 @@ describe('Conductor Integration', () => {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Part 3: OpenClaw Bootstrap Lifecycle
+// bootstrap.ts is a thin adapter — tests use mocks for ServiceCoordinator.
 // ─────────────────────────────────────────────────────────────────────────────
+
+const mockEnsureRunning = vi.fn<() => Promise<'started' | 'already_running'>>();
+const mockGetNodeStatus = vi.fn();
+const mockStop = vi.fn<() => Promise<void>>();
+
+vi.mock('../../src/app/agentbnb-service.js', () => ({
+  AgentBnBService: vi.fn().mockImplementation(() => ({
+    ensureRunning: mockEnsureRunning,
+    getNodeStatus: mockGetNodeStatus,
+    stop: mockStop,
+  })),
+}));
+vi.mock('../../src/runtime/service-coordinator.js', () => ({
+  ServiceCoordinator: vi.fn().mockImplementation(() => ({})),
+}));
+vi.mock('../../src/runtime/process-guard.js', () => ({
+  ProcessGuard: vi.fn().mockImplementation(() => ({})),
+}));
+vi.mock('../../src/cli/config.js', () => ({
+  loadConfig: vi.fn().mockReturnValue({
+    owner: 'text-gen-studio',
+    gateway_url: 'http://localhost:7700',
+    gateway_port: 7700,
+    db_path: ':memory:',
+    credit_db_path: ':memory:',
+    token: 'test-token',
+    api_key: 'test-api-key',
+    registry: 'https://agentbnb.fly.dev',
+  }),
+  getConfigDir: vi.fn(() => '/tmp/.agentbnb-demo-test'),
+}));
 
 describe('OpenClaw Bootstrap', () => {
   let ctx: BootstrapContext | undefined;
-  let tmpDir: string;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockEnsureRunning.mockResolvedValue('started');
+    mockGetNodeStatus.mockResolvedValue({
+      state: 'running',
+      pid: 9999,
+      port: 7700,
+      owner: 'text-gen-studio',
+      relayConnected: false,
+      uptime_ms: 0,
+    });
+    mockStop.mockResolvedValue(undefined);
+  });
 
   afterEach(async () => {
     if (ctx) {
-      await deactivate(ctx);
+      await deactivate(ctx).catch(() => undefined);
       ctx = undefined;
     }
-    if (tmpDir) {
-      rmSync(tmpDir, { recursive: true, force: true });
-    }
+    process.removeAllListeners('SIGTERM');
+    process.removeAllListeners('SIGINT');
   });
 
-  it('activate() publishes card from SOUL.md and starts gateway', async () => {
-    tmpDir = mkdtempSync(join(tmpdir(), 'agentbnb-demo-'));
+  it('activate() returns BootstrapContext with service and status', async () => {
+    ctx = await activate();
 
-    ctx = await activate({
-      owner: 'text-gen-studio',
-      soulMdPath: SOUL_PATH,
-      registryDbPath: join(tmpDir, 'registry.db'),
-      creditDbPath: join(tmpDir, 'credit.db'),
-      gatewayPort: 0, // random available port
-      silent: true,
-    });
-
-    // Card should be published with skills from SOUL.md H2 sections
-    expect(ctx.card.owner).toBe('text-gen-studio');
-    expect(ctx.card.skills.length).toBeGreaterThanOrEqual(2);
-
-    // Gateway should be listening
-    const addr = ctx.gateway.server.address();
-    expect(addr).toBeTruthy();
-    const port =
-      typeof addr === 'string' ? parseInt(addr) : (addr?.port ?? 0);
-    expect(port).toBeGreaterThan(0);
-
-    // Health endpoint should respond
-    const res = await fetch(`http://localhost:${port}/health`);
-    expect(res.status).toBe(200);
-    const body = (await res.json()) as { status: string };
-    expect(body.status).toBe('ok');
+    expect(ctx).toHaveProperty('service');
+    expect(ctx.status.owner).toBe('text-gen-studio');
+    expect(ctx.startDisposition).toBe('started');
   });
 
-  it('deactivate() cleanly shuts down all resources', async () => {
-    tmpDir = mkdtempSync(join(tmpdir(), 'agentbnb-demo-'));
-
-    ctx = await activate({
-      owner: 'text-gen-studio',
-      soulMdPath: SOUL_PATH,
-      registryDbPath: join(tmpDir, 'registry.db'),
-      creditDbPath: join(tmpDir, 'credit.db'),
-      gatewayPort: 0,
-      silent: true,
-    });
-
-    const addr = ctx.gateway.server.address();
-    const port =
-      typeof addr === 'string' ? parseInt(addr) : (addr?.port ?? 0);
-
-    // Deactivate
+  it('deactivate() stops node when activate() started it', async () => {
+    ctx = await activate();
     await deactivate(ctx);
-
-    // Gateway should no longer respond
-    try {
-      await fetch(`http://localhost:${port}/health`);
-      // If we get here, the server is still up — fail
-      expect(true).toBe(false);
-    } catch {
-      // Expected: connection refused
-      expect(true).toBe(true);
-    }
-
-    // Mark as cleaned up so afterEach doesn't double-deactivate
     ctx = undefined;
+
+    expect(mockStop).toHaveBeenCalledTimes(1);
   });
 });
