@@ -56,8 +56,9 @@ Replaces the three separate modules (gap-detector, skill-scout, smart-renter) fo
 For each high-priority gap, search AgentBnB Registry:
 
 ```bash
-curl -s "https://hub.agentbnb.dev/api/cards?capability=${gap.capability_needed}&sort=reputation_desc&min_reputation=0.7&online=true" \
-  | jq '[.cards[] | select(.pricing.credits_per_call <= ${gap.estimated_credit_cost * 1.5})]'
+REGISTRY=$(agentbnb config get registry)
+curl -s "${REGISTRY}/cards?capability=${gap.capability_needed}&sort=reputation_desc&min_reputation=0.7&online=true" \
+  | jq '[.items[] | select(.skills[0].pricing.credits_per_call <= ${gap.estimated_credit_cost * 1.5})]'
 ```
 
 Cross-reference with memory:

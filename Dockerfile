@@ -12,6 +12,9 @@ COPY package.json pnpm-lock.yaml tsup.config.ts tsconfig.json ./
 # Copy hub package files
 COPY hub/package.json hub/pnpm-lock.yaml ./hub/
 
+# Copy workspace package manifests (needed for pnpm workspace resolution)
+COPY packages/genesis-template/package.json ./packages/genesis-template/
+
 # Install root dependencies (including dev for build)
 RUN pnpm install
 

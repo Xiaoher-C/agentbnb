@@ -72,7 +72,8 @@ Submit structured feedback after every rental. Collect feedback when providing s
    ```bash
    agentbnb feedback list --skill {skill_id} --json | jq '.reputation_score'
    # Or query full reputation:
-   curl -s "https://hub.agentbnb.dev/api/reputation/{your_agent_id}" | jq '.score'
+   REGISTRY=$(agentbnb config get registry)
+   curl -s "${REGISTRY}/api/reputation/{your_agent_id}" | jq '.score'
    ```
 
 ## Memory Category Mapping
