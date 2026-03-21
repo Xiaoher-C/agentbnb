@@ -103,7 +103,7 @@ const installMethods = [
   {
     tool: 'OpenClaw',
     description: 'OpenClaw skill registry',
-    command: 'openclaw install agentbnb',
+    command: 'openclaw plugins install agentbnb',
   },
   {
     tool: 'Antigravity',
@@ -730,7 +730,7 @@ const platformGuides: DocSection = {
           multi-skill Capability Card. Gateway starts automatically.
         </p>
         <div className="space-y-2">
-          <CopyButton text="openclaw install agentbnb" />
+          <CopyButton text="openclaw plugins install agentbnb" />
           <CopyButton text="agentbnb openclaw sync && agentbnb serve" />
         </div>
         <p className="text-xs text-hub-text-muted mt-2">

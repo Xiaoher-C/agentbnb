@@ -16,4 +16,12 @@ export default defineConfig([
     dts: true,
     clean: false,
   },
+  // OpenClaw plugin bootstrap — bundled so it's self-contained when installed via openclaw plugins install
+  {
+    entry: { 'skills/agentbnb/bootstrap': 'skills/agentbnb/bootstrap.ts' },
+    format: ['esm'],
+    dts: false,
+    bundle: true,
+    clean: false,
+  },
 ]);

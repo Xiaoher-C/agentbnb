@@ -10,7 +10,9 @@
 - ✅ **v3.0 Production-Ready Launch** - Phases 19-23 (shipped 2026-03-17)
 - ~~📋 **v3.1 Code Quality** - Phase 24 (superseded — deferred to v3.3+)~~
 - ✅ **v3.2 Registry Credit Ledger** - Phases 25-29 (shipped 2026-03-19)
-- 🚧 **v4.0 Agent Economy Platform** - Phases 30-39 (in progress)
+- ✅ **v4.0 Agent Economy Platform** - Phases 30-39 (shipped 2026-03-21)
+- ✅ **v5.0 Genesis Flywheel** - Phases 40-44 (shipped 2026-03-21)
+- 📋 **v6.0 Team Formation Protocol** - Phases 50-53 (planned)
 
 ## Phases
 
@@ -255,7 +257,41 @@ Plans:
 | 38 | v4.0 | 1/1 | Complete | 2026-03-19 |
 | 39 | v4.0 | 1/1 | Complete | 2026-03-19 |
 
-**Total:** 39 phases, 93+ plans, 8 milestones shipped. v4.0 complete.
+| 40 | v5.0 | 1/1 | Complete | 2026-03-21 |
+| 41 | v5.0 | 1/1 | Complete | 2026-03-21 |
+| 42 | v5.0 | 1/1 | Complete | 2026-03-21 |
+| 43 | v5.0 | 1/1 | Complete | 2026-03-21 |
+| 44 | v5.0 | 1/1 | Complete | 2026-03-21 |
+
+**Total:** 44 phases, 93+ plans, 9 milestones (8 shipped, 1 in progress).
+
+---
+
+### v5.0 Genesis Flywheel (In Progress)
+
+**Milestone Goal:** Genesis 飛輪在真實網路上跑起來 — genesis-bot + HeavyLift 完成端對端自主交易，評價被記錄，Hub 顯示信譽評分。
+
+- [ ] **Phase 40: Feedback API (ADR-018)** — `src/feedback/` module, POST /api/feedback, GET /api/reputation/:agent, CLI feedback command
+- [ ] **Phase 41: Enhanced Search + Reputation Filters** — min_reputation filter, sort=reputation_desc, wire feedback score into /api/cards
+- [ ] **Phase 42: Batch Request API** — POST /api/request/batch, executeCapabilityBatch(), CLI --batch flag
+- [ ] **Phase 43: Genesis Template Package** — packages/genesis-template/, npx @agentbnb/genesis-template init, Handlebars templates
+- [ ] **Phase 44: Evolution API + Genesis Dashboard** — src/evolution/, POST /api/evolution/publish, GET /api/evolution/latest, hub/genesis page
+
+**Execution waves:**
+- Wave 1 (parallel): Phase 40 + Phase 42
+- Wave 2 (parallel): Phase 41 + Phase 43 (after Wave 1)
+- Wave 3: Phase 44 (after Phase 43)
+
+---
+
+### v6.0 Team Formation Protocol (Planned)
+
+**Milestone Goal:** AgentBnB 成為 Internet-native ClawTeam formation layer — 任何 swarm framework 都能透過 AgentBnB 組建跨網路 agent team。
+
+- [ ] **Phase 50: LLM TaskDecomposer** — 3-layer decomposer (Rule Engine + Ollama + fallback to FTS5 single-step)，替換 hardcoded templates
+- [ ] **Phase 51: Role Schema** — Capability bundle + context constraints，Zod schema，roles field on CapabilityCard
+- [ ] **Phase 52: Team Formation API** — POST /api/v1/teams/form，Team Escrow（multi-agent joint settlement）
+- [ ] **Phase 53: ClawTeam Bridge** — Python adapter（builds on Phase 38 adapters），agentbnb transport for ClawTeam spawn，PR to HKUDS/ClawTeam
 
 ---
 *Full milestone details archived in .planning/milestones/*
