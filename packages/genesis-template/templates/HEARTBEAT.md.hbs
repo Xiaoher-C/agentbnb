@@ -6,12 +6,10 @@
 
 ## Heartbeat Sequence
 1. genesis-pulse (always runs)
-2. genesis-gap-detector (if pulse.recent_failures > 0 OR pulse.idle_rate < 0.3)
-3. genesis-skill-scout (if gap_detector found priority >= high gaps)
-4. genesis-smart-renter (if skill_scout found viable matches)
-5. genesis-idle-sharer (if pulse.idle_rate > 0.7)
-6. genesis-feedback (if pending_feedback queue is non-empty)
-7. genesis-evolution (every 10th heartbeat cycle)
+2. genesis-trader (if pulse.recent_failures > 0 OR pulse.idle_rate < 0.3 OR on_capability_needed)
+3. genesis-idle-sharer (if pulse.idle_rate > 0.7)
+4. genesis-feedback (if pending_feedback queue is non-empty)
+5. genesis-evolution (every 10th heartbeat cycle)
 
 ## AgentBnB Trading Autonomy
 - Tier 1 (full auto): < {{tier1Threshold}} credits per transaction

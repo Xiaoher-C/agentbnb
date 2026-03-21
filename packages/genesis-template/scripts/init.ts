@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import prompts from 'prompts';
 import Handlebars from 'handlebars';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, cpSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execSync } from 'node:child_process';
@@ -61,11 +61,22 @@ async function main() {
   if (network.joinNetwork) {
     console.log('\nRegistering on AgentBnB network...');
     try {
-      execSync(`agentbnb init --non-interactive --name "${identity.agentName as string}"`, { stdio: 'inherit' });
+      execSync(`agentbnb init --yes --owner "${identity.ownerName as string}"`, { stdio: 'inherit' });
       console.log('Registered on AgentBnB. Starting balance: 50 credits.');
     } catch {
       console.log('agentbnb CLI not found. Install: npm install -g agentbnb');
     }
+  }
+
+  // Copy skills/ directory
+  const skillsSrc = join(__dirname, '../skills');
+  const skillsDst = join(outputDir, 'skills');
+  try {
+    mkdirSync(skillsDst, { recursive: true });
+    cpSync(skillsSrc, skillsDst, { recursive: true });
+    console.log('  Copied skills/');
+  } catch {
+    // skills dir may not exist in some build configs
   }
 
   // Seed core memories

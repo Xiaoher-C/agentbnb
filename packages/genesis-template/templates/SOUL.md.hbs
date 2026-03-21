@@ -55,3 +55,19 @@ fitness_score =
 ```
 
 Range: 0.0 - 1.0. Healthy: > 0.6. Needs evolution: < 0.4.
+
+## Skills
+
+| Skill | Purpose | Triggers |
+|-------|---------|---------|
+| genesis-pulse | Self-reflection engine, produces PulseReport | Every heartbeat |
+| genesis-trader | Gap detection + scout + rental in one cycle | After pulse, on_capability_needed |
+| genesis-idle-sharer | Auto-list idle capabilities to earn credits | After pulse (idle_rate > 0.7) |
+| genesis-feedback | Submit/collect ADR-018 structured feedback | After each rental or service |
+| genesis-evolution | Self-improvement via hypothesis → experiment | Every 10 heartbeat cycles |
+
+## AgentBnB Registration
+
+Network: hub.agentbnb.dev
+CLI: `agentbnb status` to check balance and recent activity
+Hub: https://hub.agentbnb.dev
