@@ -9,11 +9,12 @@
 #   bash install.sh
 #
 # What it does:
-#   1. Checks Node.js >= 20 and pnpm are available
+#   1. Resolves canonical Node.js runtime and verifies >= 20
 #   2. Installs the agentbnb CLI globally
-#   3. Initializes the ~/.agentbnb/ config directory with defaults
-#   4. Syncs capabilities from SOUL.md if one is found
-#   5. Prints a success summary and next steps
+#   3. Verifies better-sqlite3 native module; rebuilds if needed
+#   4. Initializes the ~/.agentbnb/ config directory with defaults
+#   5. Syncs capabilities from SOUL.md if one is found
+#   6. Prints a success summary and next steps
 
 set -euo pipefail
 
@@ -40,28 +41,43 @@ err()  { echo "${RED}✗${RESET} $*" >&2; }
 step() { echo ""; echo "${BOLD}$*${RESET}"; }
 
 # ---------------------------------------------------------------------------
-# Step 1: Check prerequisites
+# Step 1: Resolve canonical Node runtime + verify version
 # ---------------------------------------------------------------------------
-step "Step 1/5 — Checking prerequisites"
+step "Step 1/6 — Checking prerequisites"
 
-# Node.js >= 20
-if ! command -v node &>/dev/null; then
+# Resolve canonical Node exec path:
+#   1. OPENCLAW_NODE_EXEC (set by OpenClaw harness when it manages the runtime)
+#   2. Fallback: ask the shell's `node` for its own execPath (avoids shims/wrappers)
+if [ -n "${OPENCLAW_NODE_EXEC:-}" ] && [ -x "$OPENCLAW_NODE_EXEC" ]; then
+  NODE_EXEC="$OPENCLAW_NODE_EXEC"
+  ok "Using Node runtime from OPENCLAW_NODE_EXEC: $NODE_EXEC"
+elif command -v node &>/dev/null; then
+  NODE_EXEC="$(node -e 'process.stdout.write(process.execPath)')"
+  ok "Using Node runtime (resolved from shell): $NODE_EXEC"
+else
   err "Node.js not found. Please install Node.js 20+ from https://nodejs.org"
   exit 1
 fi
 
-NODE_VERSION=$(node --version | sed 's/v//' | cut -d. -f1)
+NODE_VERSION="$("$NODE_EXEC" --version | sed 's/v//' | cut -d. -f1)"
 if [ "$NODE_VERSION" -lt 20 ]; then
   err "Node.js >= 20 required (found v${NODE_VERSION}). Please upgrade: https://nodejs.org"
   exit 1
 fi
 
-ok "Node.js $(node --version) found"
+ok "Node.js $("$NODE_EXEC" --version) confirmed"
+
+# Persist the resolved runtime path so bootstrap / ServiceCoordinator spawn
+# child processes with the same binary — prevents ABI mismatches.
+AGENTBNB_DIR="$HOME/.agentbnb"
+mkdir -p "$AGENTBNB_DIR"
+printf '{"node_exec":"%s"}\n' "$NODE_EXEC" > "$AGENTBNB_DIR/runtime.json"
+ok "Runtime path written to ~/.agentbnb/runtime.json"
 
 # pnpm (attempt install if missing)
 if ! command -v pnpm &>/dev/null; then
   warn "pnpm not found — attempting to install via npm"
-  if npm install -g pnpm 2>/dev/null; then
+  if "$NODE_EXEC" "$(command -v npm)" install -g pnpm 2>/dev/null; then
     ok "pnpm installed via npm"
   else
     warn "Could not install pnpm — will fall back to npm for AgentBnB install"
@@ -73,7 +89,7 @@ fi
 # ---------------------------------------------------------------------------
 # Step 2: Install AgentBnB CLI
 # ---------------------------------------------------------------------------
-step "Step 2/5 — Installing AgentBnB CLI"
+step "Step 2/6 — Installing AgentBnB CLI"
 
 # Check if already installed (idempotent)
 if command -v agentbnb &>/dev/null; then
@@ -93,7 +109,7 @@ else
 
   # Fall back to npm global install
   if [ "$INSTALL_OK" = false ]; then
-    if npm install -g agentbnb 2>/dev/null; then
+    if "$NODE_EXEC" "$(command -v npm)" install -g agentbnb 2>/dev/null; then
       INSTALL_OK=true
       ok "AgentBnB CLI installed via npm"
     else
@@ -113,9 +129,32 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# Step 3: Initialize config + connect to public registry
+# Step 3: Verify better-sqlite3 native module; rebuild if ABI mismatch
 # ---------------------------------------------------------------------------
-step "Step 3/5 — Initializing AgentBnB config"
+step "Step 3/6 — Verifying native modules"
+
+if "$NODE_EXEC" -e "require('better-sqlite3')" 2>/dev/null; then
+  ok "better-sqlite3 native module OK for $("$NODE_EXEC" --version)"
+else
+  warn "better-sqlite3 not compiled for $("$NODE_EXEC" --version) — rebuilding..."
+  AGENTBNB_PKG="$("$NODE_EXEC" -e "
+    try { process.stdout.write(require.resolve('agentbnb/package.json').replace('/package.json','')); }
+    catch { process.stdout.write(''); }
+  " 2>/dev/null || true)"
+
+  if [ -n "$AGENTBNB_PKG" ]; then
+    (cd "$AGENTBNB_PKG" && npm rebuild better-sqlite3) \
+      && ok "better-sqlite3 rebuild OK" \
+      || warn "Rebuild failed — run manually: cd $AGENTBNB_PKG && npm rebuild better-sqlite3"
+  else
+    warn "Could not locate agentbnb package directory — run 'npm rebuild better-sqlite3' manually"
+  fi
+fi
+
+# ---------------------------------------------------------------------------
+# Step 4: Initialize config + connect to public registry
+# ---------------------------------------------------------------------------
+step "Step 4/6 — Initializing AgentBnB config"
 
 # agentbnb init is idempotent — safe to run on existing installs
 if agentbnb init --yes 2>/dev/null; then
@@ -133,20 +172,20 @@ fi
 # Connect to the public AgentBnB registry (only if not already configured)
 CURRENT_REGISTRY=$(agentbnb config get registry 2>/dev/null || echo "")
 if [ -z "$CURRENT_REGISTRY" ]; then
-  if agentbnb config set registry https://hub.agentbnb.dev 2>/dev/null; then
-    ok "Connected to public registry: https://hub.agentbnb.dev"
+  if agentbnb config set registry https://agentbnb.fly.dev 2>/dev/null; then
+    ok "Connected to public registry: https://agentbnb.fly.dev"
     ok "Registry grants 50 credits to new agents on first sync"
   else
-    warn "Could not set registry — run manually: agentbnb config set registry https://hub.agentbnb.dev"
+    warn "Could not set registry — run manually: agentbnb config set registry https://agentbnb.fly.dev"
   fi
 else
   ok "Registry already configured: $CURRENT_REGISTRY"
 fi
 
 # ---------------------------------------------------------------------------
-# Step 4: Sync from SOUL.md
+# Step 5: Sync from SOUL.md
 # ---------------------------------------------------------------------------
-step "Step 4/5 — Syncing capabilities from SOUL.md"
+step "Step 5/6 — Syncing capabilities from SOUL.md"
 
 SOUL_PATH=""
 # Check current directory first, then parent directory
@@ -170,9 +209,9 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# Step 5: Print success summary
+# Step 6: Print success summary
 # ---------------------------------------------------------------------------
-step "Step 5/5 — Setup complete"
+step "Step 6/6 — Setup complete"
 
 echo ""
 echo "${GREEN}${BOLD}AgentBnB skill installed successfully!${RESET}"
@@ -180,7 +219,8 @@ echo ""
 echo "What was set up:"
 ok "AgentBnB CLI available as 'agentbnb'"
 ok "Config directory: ~/.agentbnb/"
-ok "Registry: https://hub.agentbnb.dev (public network)"
+ok "Node runtime: $NODE_EXEC (saved to ~/.agentbnb/runtime.json)"
+ok "Registry: https://agentbnb.fly.dev (public network)"
 ok "Default autonomy tier: Tier 3 (ask before all transactions)"
 ok "Default credit reserve: 20 credits"
 
