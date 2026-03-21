@@ -1,126 +1,82 @@
 /**
- * AgentBnB Bootstrap — single-call OpenClaw skill lifecycle entry point.
+ * AgentBnB Bootstrap — thin OpenClaw adapter layer.
  *
- * Usage: `const ctx = await activate({ owner: 'alice', soulMdPath: './SOUL.md' });`
+ * Delegates all lifecycle logic to the shared Core Foundation:
+ *   ProcessGuard → ServiceCoordinator → AgentBnBService
+ *
+ * Usage: `const ctx = await activate({ port: 7700 });`
  * Teardown: `await deactivate(ctx);`
  */
 
-import { existsSync, readFileSync } from 'node:fs';
-import { randomUUID } from 'node:crypto';
-import { homedir } from 'node:os';
 import { join } from 'node:path';
-import type { FastifyInstance } from 'fastify';
+import { homedir } from 'node:os';
 
-import { AgentRuntime } from '../../src/runtime/agent-runtime.js';
-import { publishFromSoulV2 } from '../../src/openclaw/soul-sync.js';
-import { createGatewayServer } from '../../src/gateway/server.js';
-import { IdleMonitor } from '../../src/autonomy/idle-monitor.js';
-import { DEFAULT_AUTONOMY_CONFIG } from '../../src/autonomy/tiers.js';
+import { loadConfig } from '../../src/cli/config.js';
 import { AgentBnBError } from '../../src/types/index.js';
-import { ensureIdentity, type AgentIdentity } from '../../src/identity/identity.js';
-import type { AutonomyConfig } from '../../src/autonomy/tiers.js';
-import type { CapabilityCardV2 } from '../../src/types/index.js';
+import { ProcessGuard } from '../../src/runtime/process-guard.js';
+import { ServiceCoordinator } from '../../src/runtime/service-coordinator.js';
+import type { ServiceOptions, ServiceStatus } from '../../src/runtime/service-coordinator.js';
+import { AgentBnBService } from '../../src/app/agentbnb-service.js';
 
-/** Configuration for bringing an AgentBnB agent online. */
+/** Configuration for bringing an AgentBnB agent online via OpenClaw. */
 export interface BootstrapConfig {
-  /** Agent owner identifier. */
-  owner: string;
-  /** Absolute path to SOUL.md. */
-  soulMdPath: string;
-  /** Registry DB path. Defaults to ~/.agentbnb/registry.db */
-  registryDbPath?: string;
-  /** Credit DB path. Defaults to ~/.agentbnb/credit.db */
-  creditDbPath?: string;
-  /** Gateway port. Defaults to 7700. */
-  gatewayPort?: number;
-  /** Bearer token for gateway auth. Defaults to a random UUID. */
-  gatewayToken?: string;
-  /** Handler URL for capability forwarding. Defaults to http://localhost:{gatewayPort}. */
-  handlerUrl?: string;
-  /** Autonomy tier config. Defaults to DEFAULT_AUTONOMY_CONFIG (Tier 3). */
-  autonomyConfig?: AutonomyConfig;
-  /** Suppress gateway logs. Defaults to false. */
-  silent?: boolean;
-  /** When true, ensures identity.json exists on activate. Defaults to true. */
-  identityRequired?: boolean;
+  /** Gateway port override. Defaults to config value or 7700. */
+  port?: number;
+  /** Registry URL override. */
+  registryUrl?: string;
+  /** Enable WebSocket relay. Defaults to true. */
+  relay?: boolean;
 }
 
-/** Live handles returned by activate(). Pass to deactivate() for clean teardown. */
+/** Context returned by activate(). Pass to deactivate() for conditional teardown. */
 export interface BootstrapContext {
-  /** AgentRuntime managing DBs and background job lifecycle. */
-  runtime: AgentRuntime;
-  /** Fastify gateway HTTP server instance. */
-  gateway: FastifyInstance;
-  /** IdleMonitor background loop. */
-  idleMonitor: IdleMonitor;
-  /** Published CapabilityCard derived from SOUL.md. */
-  card: CapabilityCardV2;
-  /** Agent identity (created/loaded during activation). */
-  identity: AgentIdentity | null;
+  /** Unified facade — use this for all AgentBnB operations. */
+  service: AgentBnBService;
+  /** Node status snapshot at activation time. */
+  status: ServiceStatus;
+  /** Whether this activate() call started a new node or found one already running. */
+  startDisposition: 'started' | 'already_running';
 }
 
 /**
- * Brings an agent fully online: Runtime -> publishCard -> gateway.listen -> IdleMonitor.
- * @throws {AgentBnBError} FILE_NOT_FOUND if SOUL.md does not exist.
+ * Brings an AgentBnB node online (idempotent — safe to call when already running).
+ * @throws {AgentBnBError} CONFIG_NOT_FOUND if ~/.agentbnb/config.json does not exist.
  */
-export async function activate(config: BootstrapConfig): Promise<BootstrapContext> {
-  const {
-    owner,
-    soulMdPath,
-    registryDbPath = join(homedir(), '.agentbnb', 'registry.db'),
-    creditDbPath = join(homedir(), '.agentbnb', 'credit.db'),
-    gatewayPort = 7700,
-    gatewayToken = randomUUID(),
-    autonomyConfig = DEFAULT_AUTONOMY_CONFIG,
-    silent = false,
-  } = config;
-
-  const identityRequired = config.identityRequired ?? false;
-  const handlerUrl = config.handlerUrl ?? `http://localhost:${gatewayPort}`;
-
-  if (!existsSync(soulMdPath)) {
-    throw new AgentBnBError(`SOUL.md not found at path: ${soulMdPath}`, 'FILE_NOT_FOUND');
-  }
-  const soulContent = readFileSync(soulMdPath, 'utf8');
-
-  const runtime = new AgentRuntime({ registryDbPath, creditDbPath, owner });
-  await runtime.start();
-
-  // Ensure agent identity exists (idempotent — preserves existing identity)
-  let identity: AgentIdentity | null = null;
-  if (identityRequired) {
-    const configDir = join(homedir(), '.agentbnb');
-    identity = ensureIdentity(configDir, owner);
+export async function activate(config: BootstrapConfig = {}): Promise<BootstrapContext> {
+  const agentConfig = loadConfig();
+  if (!agentConfig) {
+    throw new AgentBnBError(
+      'AgentBnB config not found. Run: agentbnb init',
+      'CONFIG_NOT_FOUND',
+    );
   }
 
-  const card = publishFromSoulV2(runtime.registryDb, soulContent, owner);
+  const guard = new ProcessGuard(join(homedir(), '.agentbnb', '.pid'));
+  const coordinator = new ServiceCoordinator(agentConfig, guard);
+  const service = new AgentBnBService(coordinator, agentConfig);
 
-  const gateway = createGatewayServer({
-    port: gatewayPort,
-    registryDb: runtime.registryDb,
-    creditDb: runtime.creditDb,
-    tokens: [gatewayToken],
-    handlerUrl,
-    silent,
-  });
-  await gateway.listen({ port: gatewayPort, host: '0.0.0.0' });
+  const opts: ServiceOptions = {
+    port: config.port,
+    registryUrl: config.registryUrl,
+    relay: config.relay,
+  };
 
-  const idleMonitor = new IdleMonitor({ owner, db: runtime.registryDb, autonomyConfig });
-  const idleJob = idleMonitor.start();
-  runtime.registerJob(idleJob);
+  const startDisposition = await service.ensureRunning(opts);
+  const status = await service.getNodeStatus();
 
-  return { runtime, gateway, idleMonitor, card, identity };
+  return { service, status, startDisposition };
 }
 
 /**
- * Tears down all active components: gateway.close() then runtime.shutdown().
- * Idempotent — safe to call multiple times.
+ * Tears down the AgentBnB node — only if this activate() call was the one that started it.
+ * If the node was already running before activate(), it is left untouched.
  */
 export async function deactivate(ctx: BootstrapContext): Promise<void> {
-  try {
-    await ctx.gateway.close();
-    await ctx.runtime.shutdown();
-  } catch {
-    // Swallow errors — idempotent teardown
+  if (ctx.startDisposition === 'started') {
+    try {
+      await ctx.service.stop();
+    } catch {
+      // Swallow errors — idempotent teardown
+    }
   }
 }
