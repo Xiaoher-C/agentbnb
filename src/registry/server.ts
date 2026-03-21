@@ -1311,7 +1311,8 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
       requests,
       strategy,
       total_budget,
-      db: opts.creditDb,
+      registryDb: db,
+      creditDb: opts.creditDb,
       owner,
     });
 

@@ -57,8 +57,10 @@ export interface BatchExecuteOptions {
   strategy: 'parallel' | 'sequential' | 'best_effort';
   /** Total credit budget across all items. Rejected immediately if sum(max_credits) > total_budget. */
   total_budget: number;
-  /** SQLite credit database handle. */
-  db: Database.Database;
+  /** SQLite registry database handle (capability_cards, request_log, reputation). */
+  registryDb: Database.Database;
+  /** SQLite credit database handle (escrow, ledger). */
+  creditDb: Database.Database;
   /** Requester agent ID used for credit tracking. */
   owner: string;
   /** Optional registry URL (currently unused — reserved for future remote execution). */
@@ -333,7 +335,7 @@ export async function executeCapabilityRequest(opts: ExecuteRequestOptions): Pro
  * @returns Aggregated results with per-item status and total credit accounting.
  */
 export async function executeCapabilityBatch(options: BatchExecuteOptions): Promise<BatchExecuteResult> {
-  const { requests, strategy, total_budget, db, owner } = options;
+  const { requests, strategy, total_budget, registryDb, creditDb, owner } = options;
 
   // Guard: empty request list
   if (requests.length === 0) {
@@ -365,7 +367,7 @@ export async function executeCapabilityBatch(options: BatchExecuteOptions): Prom
     // Resolve skill_id → card. skill_id may be either a card ID or a skill ID embedded in a card.
     // We search by iterating cards (registry lookup via getCard) — try skill_id as cardId first,
     // then fall back to scanning (not supported without DB scan; use card_id equals skill_id convention).
-    const card = getCard(db, item.skill_id);
+    const card = getCard(registryDb, item.skill_id);
     if (!card) {
       return {
         request_index: index,
@@ -412,7 +414,7 @@ export async function executeCapabilityBatch(options: BatchExecuteOptions): Prom
     // Hold escrow
     let escrowId: string;
     try {
-      const balance = getBalance(db, owner);
+      const balance = getBalance(creditDb, owner);
       if (balance < creditsNeeded) {
         return {
           request_index: index,
@@ -422,7 +424,7 @@ export async function executeCapabilityBatch(options: BatchExecuteOptions): Prom
           error: 'Insufficient credits',
         };
       }
-      escrowId = holdEscrow(db, owner, creditsNeeded, card.id);
+      escrowId = holdEscrow(creditDb, owner, creditsNeeded, card.id);
     } catch (err) {
       const msg = err instanceof AgentBnBError ? err.message : 'Failed to hold escrow';
       return {
@@ -443,10 +445,10 @@ export async function executeCapabilityBatch(options: BatchExecuteOptions): Prom
     const latencyMs = Date.now() - startMs;
 
     // Settle escrow and log success
-    settleEscrow(db, escrowId, card.owner);
-    updateReputation(db, card.id, true, latencyMs);
+    settleEscrow(creditDb, escrowId, card.owner);
+    updateReputation(registryDb, card.id, true, latencyMs);
     try {
-      insertRequestLog(db, {
+      insertRequestLog(registryDb, {
         id: randomUUID(),
         card_id: card.id,
         card_name: card.name,

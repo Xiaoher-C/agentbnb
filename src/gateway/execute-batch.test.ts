@@ -92,7 +92,8 @@ const fakeDb = {} as Database;
 const baseOptions = {
   strategy: 'parallel' as const,
   total_budget: 1000,
-  db: fakeDb,
+  registryDb: fakeDb,
+  creditDb: fakeDb,
   owner: 'requester-agent',
 };
 
