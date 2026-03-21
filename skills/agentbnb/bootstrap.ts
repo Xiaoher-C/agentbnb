@@ -36,11 +36,22 @@ export interface BootstrapContext {
   status: ServiceStatus;
   /** Whether this activate() call started a new node or found one already running. */
   startDisposition: 'started' | 'already_running';
+  /**
+   * Removes the SIGTERM/SIGINT handlers registered by activate().
+   * Called automatically by deactivate() — do not call manually.
+   * @internal
+   */
+  _removeSignalHandlers: () => void;
 }
 
 /**
  * Brings an AgentBnB node online (idempotent — safe to call when already running).
+ * Registers SIGTERM/SIGINT handlers that conditionally stop the node on process exit.
+ *
  * @throws {AgentBnBError} CONFIG_NOT_FOUND if ~/.agentbnb/config.json does not exist.
+ *
+ * TODO: Once ServiceCoordinator gains its own signal handling, remove the handlers
+ * registered here to avoid double-handler conflicts. Track in Layer A implementation.
  */
 export async function activate(config: BootstrapConfig = {}): Promise<BootstrapContext> {
   const agentConfig = loadConfig();
@@ -64,14 +75,40 @@ export async function activate(config: BootstrapConfig = {}): Promise<BootstrapC
   const startDisposition = await service.ensureRunning(opts);
   const status = await service.getNodeStatus();
 
-  return { service, status, startDisposition };
+  // Register signal handlers.
+  // Use process.once so each signal fires at most once and self-removes.
+  // No process.exit() — closing open handles via service.stop() drains the event loop naturally.
+  // Only stop the node when we were the ones who started it.
+  const onSigterm = () => {
+    if (startDisposition === 'started') {
+      void service.stop();
+    }
+  };
+  const onSigint = () => {
+    if (startDisposition === 'started') {
+      void service.stop();
+    }
+  };
+
+  process.once('SIGTERM', onSigterm);
+  process.once('SIGINT', onSigint);
+
+  const _removeSignalHandlers = () => {
+    process.removeListener('SIGTERM', onSigterm);
+    process.removeListener('SIGINT', onSigint);
+  };
+
+  return { service, status, startDisposition, _removeSignalHandlers };
 }
 
 /**
  * Tears down the AgentBnB node — only if this activate() call was the one that started it.
  * If the node was already running before activate(), it is left untouched.
+ * Always removes the signal handlers registered by activate().
  */
 export async function deactivate(ctx: BootstrapContext): Promise<void> {
+  ctx._removeSignalHandlers();
+
   if (ctx.startDisposition === 'started') {
     try {
       await ctx.service.stop();
