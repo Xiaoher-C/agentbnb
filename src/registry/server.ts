@@ -308,9 +308,14 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
       cards = filterCards(db, { level, online, min_reputation: minReputation });
     }
 
-    // Post-filter by tag
+    // Post-filter by tag — check both card-root and skill-level metadata
     if (tag !== undefined && tag.length > 0) {
-      cards = cards.filter((c) => c.metadata?.tags?.includes(tag));
+      cards = cards.filter((c) => {
+        const rootTags = c.metadata?.tags ?? [];
+        const skillTags = (c as unknown as { skills?: Array<{ metadata?: { tags?: string[] } }> })
+          .skills?.flatMap((s) => s.metadata?.tags ?? []) ?? [];
+        return [...rootTags, ...skillTags].includes(tag);
+      });
     }
 
     // Post-filter by max_latency_ms (cards without avg_latency_ms are excluded)
@@ -417,9 +422,14 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
         return bRate - aRate;
       });
     } else if (sort === 'cheapest') {
-      // Sort by credits_per_call ascending
+      // Sort by credits_per_call ascending — fall back to first skill price for v2 cards
       cards = [...cards].sort((a, b) => {
-        return a.pricing.credits_per_call - b.pricing.credits_per_call;
+        type MaybeV2 = { pricing?: { credits_per_call: number }; skills?: Array<{ pricing: { credits_per_call: number } }> };
+        const aCard = a as unknown as MaybeV2;
+        const bCard = b as unknown as MaybeV2;
+        const aPrice = aCard.pricing?.credits_per_call ?? aCard.skills?.[0]?.pricing?.credits_per_call ?? Infinity;
+        const bPrice = bCard.pricing?.credits_per_call ?? bCard.skills?.[0]?.pricing?.credits_per_call ?? Infinity;
+        return aPrice - bPrice;
       });
     } else if (sort === 'newest') {
       // Sort by created_at descending — use SQL table row, not JSON

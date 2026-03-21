@@ -1,5 +1,5 @@
 import Database from 'better-sqlite3';
-import { CapabilityCardSchema, AgentBnBError } from '../types/index.js';
+import { AnyCardSchema, CapabilityCardSchema, AgentBnBError } from '../types/index.js';
 import type { CapabilityCard, CapabilityCardV2 } from '../types/index.js';
 import { createRequestLogTable } from './request-log.js';
 import { initFeedbackTable } from '../feedback/store.js';
@@ -419,7 +419,7 @@ export function updateCard(
   const now = new Date().toISOString();
   const merged = { ...existing, ...updates, updated_at: now };
 
-  const parsed = CapabilityCardSchema.safeParse(merged);
+  const parsed = AnyCardSchema.safeParse(merged);
   if (!parsed.success) {
     throw new AgentBnBError(
       `Card validation failed: ${parsed.error.message}`,
