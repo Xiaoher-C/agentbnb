@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import type { AgentBnBConfig } from '../cli/config.js';
 import { getConfigDir } from '../cli/config.js';
 import { ensureIdentity } from '../identity/identity.js';
@@ -7,11 +8,12 @@ import { settleRequesterEscrow, releaseRequesterEscrow } from '../credit/settlem
 import { openDatabase, getCard } from '../registry/store.js';
 import { searchCards, filterCards } from '../registry/matcher.js';
 import { fetchRemoteCards } from '../cli/remote-registry.js';
-import { requestCapability } from '../gateway/client.js';
+import { requestCapability, requestViaRelay as requestCapabilityViaRelay } from '../gateway/client.js';
 import { createLedger } from '../credit/create-ledger.js';
 import { openCreditDb, getBalance as getLocalBalance } from '../credit/ledger.js';
 import { AnyCardSchema, AgentBnBError } from '../types/index.js';
-import type { AnyCard } from '../types/index.js';
+import type { AnyCard, EscrowReceipt } from '../types/index.js';
+import { RelayClient } from '../relay/websocket-client.js';
 import type {
   ServiceCoordinator,
   ServiceOptions,
@@ -114,7 +116,8 @@ export class AgentBnBService {
     }
 
     const target = await this.resolveTargetCard(params.cardId);
-    if (!target.gatewayUrl) {
+    const canRelay = target.remote && Boolean(this.config.registry && target.owner);
+    if (!target.gatewayUrl && !canRelay) {
       throw new AgentBnBError(
         `Target card ${params.cardId} has no gateway_url; provider may be offline.`,
         'MISSING_GATEWAY_URL',
@@ -139,18 +142,44 @@ export class AgentBnBService {
       );
 
       try {
-        const identityAuth = this.loadIdentityAuth();
-        const result = await requestCapability({
-          gatewayUrl: target.gatewayUrl,
-          token: target.token,
-          cardId: params.cardId,
-          params: {
-            ...params.taskParams,
-            ...(params.skillId ? { skill_id: params.skillId } : {}),
-          },
-          escrowReceipt: receipt,
-          identity: target.remote ? identityAuth : undefined,
-        });
+        const requestParams = {
+          ...params.taskParams,
+          ...(params.skillId ? { skill_id: params.skillId } : {}),
+        };
+        let result: unknown;
+
+        if (!target.gatewayUrl) {
+          result = await this.requestViaRelay({
+            targetOwner: target.owner,
+            cardId: params.cardId,
+            skillId: params.skillId,
+            params: requestParams,
+            escrowReceipt: receipt,
+          });
+        } else {
+          try {
+            result = await requestCapability({
+              gatewayUrl: target.gatewayUrl,
+              token: target.token,
+              cardId: params.cardId,
+              params: requestParams,
+              escrowReceipt: receipt,
+              identity: target.remote ? this.loadIdentityAuth() : undefined,
+            });
+          } catch (directErr) {
+            if (canRelay && isNetworkError(directErr)) {
+              result = await this.requestViaRelay({
+                targetOwner: target.owner,
+                cardId: params.cardId,
+                skillId: params.skillId,
+                params: requestParams,
+                escrowReceipt: receipt,
+              });
+            } else {
+              throw directErr;
+            }
+          }
+        }
 
         settleRequesterEscrow(creditDb, escrowId);
         return {
@@ -243,6 +272,7 @@ export class AgentBnBService {
     gatewayUrl: string;
     token: string;
     remote: boolean;
+    owner: string;
   }> {
     const db = openDatabase(this.config.db_path);
     try {
@@ -252,6 +282,7 @@ export class AgentBnBService {
           gatewayUrl: this.config.gateway_url,
           token: this.config.token,
           remote: false,
+          owner: local.owner,
         };
       }
     } finally {
@@ -287,7 +318,55 @@ export class AgentBnBService {
       gatewayUrl: gatewayUrl ?? '',
       token: '',
       remote: true,
+      owner: parsed.data.owner,
     };
+  }
+
+  private async requestViaRelay(opts: {
+    targetOwner: string;
+    cardId: string;
+    skillId?: string;
+    params: Record<string, unknown>;
+    escrowReceipt?: EscrowReceipt;
+  }): Promise<unknown> {
+    if (!this.config.registry) {
+      throw new AgentBnBError('Registry is required for relay fallback.', 'RELAY_NOT_AVAILABLE');
+    }
+
+    const requesterId = `${this.config.owner}:req:${randomUUID()}`;
+    const tempRelay = new RelayClient({
+      registryUrl: this.config.registry,
+      owner: requesterId,
+      token: this.config.token,
+      card: {
+        id: randomUUID(),
+        owner: requesterId,
+        name: requesterId,
+        description: 'Requester',
+        level: 1,
+        spec_version: '1.0',
+        inputs: [],
+        outputs: [],
+        pricing: { credits_per_call: 1 },
+        availability: { online: false },
+      },
+      onRequest: async () => ({ error: { code: -32601, message: 'Not serving' } }),
+      silent: true,
+    });
+
+    try {
+      await tempRelay.connect();
+      return await requestCapabilityViaRelay(tempRelay, {
+        targetOwner: opts.targetOwner,
+        cardId: opts.cardId,
+        skillId: opts.skillId,
+        params: opts.params,
+        requester: this.config.owner,
+        escrowReceipt: opts.escrowReceipt,
+      });
+    } finally {
+      tempRelay.disconnect();
+    }
   }
 
   private getOrCreateKeyPair(): import('../credit/signing.js').KeyPair {
@@ -370,4 +449,16 @@ function readGatewayUrl(card: AnyCard): string | undefined {
     return card.gateway_url;
   }
   return card.gateway_url;
+}
+
+function isNetworkError(err: unknown): boolean {
+  if (err instanceof AgentBnBError && err.code === 'NETWORK_ERROR') {
+    return true;
+  }
+
+  const msg = err instanceof Error ? err.message : String(err);
+  return msg.includes('NETWORK_ERROR')
+    || msg.includes('ECONNREFUSED')
+    || msg.includes('fetch failed')
+    || msg.includes('Network error');
 }
