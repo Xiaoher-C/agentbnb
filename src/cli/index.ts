@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { join } from 'node:path';
-import { networkInterfaces, homedir } from 'node:os';
+import { networkInterfaces } from 'node:os';
 
 import { createInterface } from 'node:readline';
 
@@ -15,7 +15,6 @@ import { generateKeyPair, saveKeyPair, loadKeyPair } from '../credit/signing.js'
 import { createSignedEscrowReceipt } from '../credit/escrow-receipt.js';
 import { settleRequesterEscrow, releaseRequesterEscrow } from '../credit/settlement.js';
 import { DEFAULT_AUTONOMY_CONFIG } from '../autonomy/tiers.js';
-import { IdleMonitor } from '../autonomy/idle-monitor.js';
 import { BudgetManager, DEFAULT_BUDGET_CONFIG } from '../credit/budget.js';
 import { AutoRequestor } from '../autonomy/auto-request.js';
 import { fetchRemoteCards, mergeResults } from './remote-registry.js';
@@ -29,11 +28,8 @@ import { searchCards, filterCards } from '../registry/matcher.js';
 import { getPricingStats } from '../registry/pricing.js';
 import { openCreditDb, getBalance, bootstrapAgent, getTransactions, migrateOwner } from '../credit/ledger.js';
 import { createLedger } from '../credit/create-ledger.js';
-import { AgentRuntime } from '../runtime/agent-runtime.js';
 import { requestCapability } from '../gateway/client.js';
-import { createGatewayServer } from '../gateway/server.js';
-import { createRegistryServer } from '../registry/server.js';
-import { announceGateway, discoverLocalAgents, stopAnnouncement } from '../discovery/mdns.js';
+import { discoverLocalAgents } from '../discovery/mdns.js';
 import type { CapabilityCard } from '../types/index.js';
 import {
   publishFromSoulV2,
@@ -1366,190 +1362,33 @@ program
       console.error('Error: not initialized. Run `agentbnb init` first.');
       process.exit(1);
     }
+    const { ProcessGuard } = await import('../runtime/process-guard.js');
+    const { ServiceCoordinator } = await import('../runtime/service-coordinator.js');
 
     const port = opts.port ? parseInt(opts.port, 10) : config.gateway_port;
     const registryPort = parseInt(opts.registryPort, 10);
-
-    const skillsYamlPath = opts.skillsYaml ?? join(homedir(), '.agentbnb', 'skills.yaml');
-    const runtime = new AgentRuntime({
-      registryDbPath: config.db_path,
-      creditDbPath: config.credit_db_path,
-      owner: config.owner,
-      skillsYamlPath,
-      conductorEnabled: opts.conductor ?? false,
-      conductorToken: config.token,
-    });
-    await runtime.start();
-
-    if (runtime.skillExecutor) {
-      console.log(`SkillExecutor initialized from ${skillsYamlPath}`);
-    }
-    if (opts.conductor) {
-      console.log('Conductor mode enabled — orchestrate/plan skills available via gateway');
+    if (!Number.isFinite(port) || !Number.isFinite(registryPort)) {
+      console.error('Error: --port and --registry-port must be valid numbers.');
+      process.exit(1);
     }
 
-    // Register conductor card locally when conductor.public is enabled
-    if (opts.conductor && config.conductor?.public) {
-      const { buildConductorCard } = await import('../conductor/card.js');
-      const conductorCard = buildConductorCard(config.owner);
-      // Use raw SQL to insert (same pattern as relay upsertCard)
-      const now = new Date().toISOString();
-      const existing = runtime.registryDb.prepare('SELECT id FROM capability_cards WHERE id = ?').get(conductorCard.id) as { id: string } | undefined;
-      if (existing) {
-        runtime.registryDb.prepare('UPDATE capability_cards SET data = ?, updated_at = ? WHERE id = ?').run(JSON.stringify(conductorCard), now, conductorCard.id);
-      } else {
-        runtime.registryDb.prepare('INSERT INTO capability_cards (id, owner, data, created_at, updated_at) VALUES (?, ?, ?, ?, ?)').run(conductorCard.id, config.owner, JSON.stringify(conductorCard), now, now);
-      }
-      console.log('Conductor card registered locally (conductor.public: true)');
-    }
-
-    // Start IdleMonitor background loop
-    const autonomyConfig = config.autonomy ?? DEFAULT_AUTONOMY_CONFIG;
-    const idleMonitor = new IdleMonitor({
-      owner: config.owner,
-      db: runtime.registryDb,
-      autonomyConfig,
-    });
-    const idleJob = idleMonitor.start();
-    runtime.registerJob(idleJob);
-    console.log('IdleMonitor started (60s poll interval, 70% idle threshold)');
-
-    const server = createGatewayServer({
-      port,
-      registryDb: runtime.registryDb,
-      creditDb: runtime.creditDb,
-      tokens: [config.token],
-      handlerUrl: opts.handlerUrl,
-      skillExecutor: runtime.skillExecutor,
-    });
-
-    // Start public registry server if registry-port > 0
-    let registryFastify: import('fastify').FastifyInstance | null = null;
-    let relayClient: import('../relay/websocket-client.js').RelayClient | null = null;
-
-    const gracefulShutdown = async () => {
-      console.log('\nShutting down...');
-      if (relayClient) {
-        relayClient.disconnect();
-      }
-      if (opts.announce) {
-        await stopAnnouncement();
-      }
-      if (registryFastify) {
-        await registryFastify.close();
-      }
-      await server.close();
-      await runtime.shutdown();
-      process.exit(0);
-    };
-
-    process.on('SIGINT', () => { void gracefulShutdown(); });
-    process.on('SIGTERM', () => { void gracefulShutdown(); });
+    const guard = new ProcessGuard(join(getConfigDir(), '.pid'));
+    const coordinator = new ServiceCoordinator(config, guard);
 
     try {
-      await server.listen({ port, host: '0.0.0.0' });
-      console.log(`Gateway running on port ${port}`);
-
-      if (registryPort > 0) {
-        if (!config.api_key) {
-          console.warn('No API key found. Run `agentbnb init` to enable dashboard features.');
-        }
-        const { server: regServer, relayState } = createRegistryServer({
-          registryDb: runtime.registryDb,
-          silent: false,
-          ownerName: config.owner,
-          ownerApiKey: config.api_key,
-          creditDb: runtime.creditDb,
-        });
-        registryFastify = regServer;
-        await registryFastify.listen({ port: registryPort, host: '0.0.0.0' });
-        console.log(`Registry API: http://0.0.0.0:${registryPort}/cards`);
-        if (relayState) {
-          console.log(`WebSocket relay active on /ws`);
-        }
-      }
-
-      // Connect to remote registry via WebSocket relay (auto from config, or explicit --registry)
-      const relayUrl = opts.registry ?? config.registry;
-      if (relayUrl && opts.relay !== false) {
-        const { RelayClient } = await import('../relay/websocket-client.js');
-        const { executeCapabilityRequest } = await import('../gateway/execute.js');
-
-        // Build card data for registration
-        const cards = listCards(runtime.registryDb, config.owner);
-        const card = cards[0] ?? {
-          id: randomUUID(),
-          owner: config.owner,
-          name: config.owner,
-          description: 'Agent registered via CLI',
-          spec_version: '1.0',
-          level: 1,
-          inputs: [],
-          outputs: [],
-          pricing: { credits_per_call: 1 },
-          availability: { online: true },
-        };
-
-        // Build conductor card for relay registration if conductor.public is enabled
-        const additionalCards: Record<string, unknown>[] = [];
-        if (config.conductor?.public) {
-          const { buildConductorCard } = await import('../conductor/card.js');
-          const conductorCard = buildConductorCard(config.owner);
-          additionalCards.push(conductorCard as unknown as Record<string, unknown>);
-          console.log('Conductor card will be published to registry (conductor.public: true)');
-        }
-
-        relayClient = new RelayClient({
-          registryUrl: relayUrl,
-          owner: config.owner,
-          token: config.token,
-          card: card as Record<string, unknown>,
-          cards: additionalCards.length > 0 ? additionalCards : undefined,
-          onRequest: async (req) => {
-            const onProgress: import('../skills/executor.js').ProgressCallback = (info) => {
-              relayClient!.sendProgress(req.id, info);
-            };
-            const result = await executeCapabilityRequest({
-              registryDb: runtime.registryDb,
-              creditDb: runtime.creditDb,
-              cardId: req.card_id,
-              skillId: req.skill_id,
-              params: req.params as Record<string, unknown>,
-              requester: req.requester ?? req.from_owner,
-              escrowReceipt: req.escrow_receipt as import('../types/index.js').EscrowReceipt | undefined,
-              skillExecutor: runtime.skillExecutor,
-              handlerUrl: opts.handlerUrl,
-              onProgress,
-              // Relay requests have credits managed by the Hub relay — skip local credit check.
-              relayAuthorized: true,
-            });
-            if (result.success) {
-              return { result: result.result };
-            }
-            return { error: { code: result.error.code, message: result.error.message } };
-          },
-        });
-
-        try {
-          await relayClient.connect();
-          console.log(`Connected to registry: ${relayUrl}${opts.registry ? '' : ' (auto)'}`);
-        } catch (err) {
-          console.warn(`Warning: could not connect to registry ${relayUrl}: ${err instanceof Error ? err.message : err}`);
-          console.warn('Will auto-reconnect in background...');
-        }
-      }
-
-      if (opts.announce) {
-        announceGateway(config.owner, port);
-        console.log('Announcing on local network via mDNS');
-      }
+      await coordinator.ensureRunning({
+        port,
+        handlerUrl: opts.handlerUrl,
+        skillsYamlPath: opts.skillsYaml,
+        registryPort,
+        registryUrl: opts.registry,
+        relay: opts.relay,
+        conductorEnabled: opts.conductor,
+        announce: opts.announce,
+        foreground: true,
+      });
     } catch (err) {
       console.error('Failed to start:', err);
-      if (relayClient) relayClient.disconnect();
-      if (registryFastify) {
-        await registryFastify.close().catch(() => {});
-      }
-      await runtime.shutdown();
       process.exit(1);
     }
   });
