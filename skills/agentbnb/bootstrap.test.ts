@@ -1,323 +1,223 @@
 /**
- * Integration test for bootstrap.ts activate()/deactivate() lifecycle.
+ * Unit tests for bootstrap.ts thin OpenClaw adapter.
  *
- * Tests the full lifecycle using real implementations with in-memory DBs:
- *   activate() -> runtime + card published + gateway listening + IdleMonitor running
- *   deactivate() -> gateway closed + runtime shutdown + resources cleaned up
- *
- * No mocks — this is an end-to-end integration test.
+ * bootstrap.ts is a thin adapter — it delegates all lifecycle logic to
+ * ServiceCoordinator via AgentBnBService. Tests verify the adapter's own
+ * responsibilities:
+ *   - CONFIG_NOT_FOUND when no config exists
+ *   - BootstrapContext shape (service, status, startDisposition)
+ *   - Signal handler registration and removal
+ *   - deactivate() only stops node when startDisposition === 'started'
+ *   - deactivate() is idempotent
  */
 
-import { describe, it, expect, afterEach } from 'vitest';
-import { mkdtempSync, writeFileSync, rmSync, existsSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { homedir } from 'node:os';
 import { join } from 'node:path';
 
+// ---------------------------------------------------------------------------
+// Mocks — must be hoisted before imports
+// ---------------------------------------------------------------------------
+
+const mockEnsureRunning = vi.fn<() => Promise<'started' | 'already_running'>>();
+const mockGetNodeStatus = vi.fn();
+const mockStop = vi.fn<() => Promise<void>>();
+
+vi.mock('../../src/app/agentbnb-service.js', () => ({
+  AgentBnBService: vi.fn().mockImplementation(() => ({
+    ensureRunning: mockEnsureRunning,
+    getNodeStatus: mockGetNodeStatus,
+    stop: mockStop,
+  })),
+}));
+
+vi.mock('../../src/runtime/service-coordinator.js', () => ({
+  ServiceCoordinator: vi.fn().mockImplementation(() => ({})),
+}));
+
+vi.mock('../../src/runtime/process-guard.js', () => ({
+  ProcessGuard: vi.fn().mockImplementation(() => ({})),
+}));
+
+vi.mock('../../src/cli/config.js', () => ({
+  loadConfig: vi.fn(),
+  getConfigDir: vi.fn(() => join(homedir(), '.agentbnb')),
+}));
+
+import { loadConfig } from '../../src/cli/config.js';
 import { activate, deactivate } from './bootstrap.js';
 import type { BootstrapContext } from './bootstrap.js';
-import { IdleMonitor } from '../../src/autonomy/idle-monitor.js';
-import { loadIdentity } from '../../src/identity/identity.js';
 
-// ---------------------------------------------------------------------------
-// Test fixture: minimal SOUL.md with 2 skills
-// ---------------------------------------------------------------------------
-const SOUL_MD_CONTENT = `# Test Agent
+const mockLoadConfig = vi.mocked(loadConfig);
 
-A test agent for integration testing.
+const MINIMAL_CONFIG = {
+  owner: 'test-agent',
+  gateway_url: 'http://localhost:7700',
+  gateway_port: 7700,
+  db_path: ':memory:',
+  credit_db_path: ':memory:',
+  token: 'test-token',
+  api_key: 'test-api-key',
+  registry: 'https://agentbnb.fly.dev',
+};
 
-## Code Review
-Reviews code for quality and bugs.
-
-## Translation
-Translates text between languages.
-`;
+const MOCK_STATUS = {
+  state: 'running' as const,
+  pid: 1234,
+  port: 7700,
+  owner: 'test-agent',
+  relayConnected: false,
+  uptime_ms: 100,
+};
 
 // ---------------------------------------------------------------------------
 // Test suite
 // ---------------------------------------------------------------------------
 
 describe('bootstrap activate/deactivate lifecycle', () => {
-  let tmpDir: string | undefined;
   let ctx: BootstrapContext | undefined;
 
-  /**
-   * Create a fresh temp dir with a SOUL.md file.
-   * Returns the absolute path to the SOUL.md file.
-   */
-  function setupSoulMd(): string {
-    tmpDir = mkdtempSync(join(tmpdir(), 'agentbnb-test-'));
-    const path = join(tmpDir, 'SOUL.md');
-    writeFileSync(path, SOUL_MD_CONTENT, 'utf8');
-    return path;
-  }
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockEnsureRunning.mockResolvedValue('started');
+    mockGetNodeStatus.mockResolvedValue(MOCK_STATUS);
+    mockStop.mockResolvedValue(undefined);
+    mockLoadConfig.mockReturnValue(MINIMAL_CONFIG as ReturnType<typeof loadConfig>);
+  });
 
-  // Ensure all resources are torn down after every test
   afterEach(async () => {
     if (ctx) {
       await deactivate(ctx).catch(() => undefined);
       ctx = undefined;
     }
-    if (tmpDir) {
-      rmSync(tmpDir, { recursive: true, force: true });
-      tmpDir = undefined;
-    }
+    process.removeAllListeners('SIGTERM');
+    process.removeAllListeners('SIGINT');
   });
 
   // ---------------------------------------------------------------------------
-  // Test 1: activate() returns BootstrapContext with all components
+  // Test 1: CONFIG_NOT_FOUND when no config exists
   // ---------------------------------------------------------------------------
-  it('activate() returns BootstrapContext with all components', async () => {
-    const soulMdPath = setupSoulMd();
+  it('activate() throws CONFIG_NOT_FOUND when config is missing', async () => {
+    mockLoadConfig.mockReturnValue(null);
 
-    ctx = await activate({
-      owner: 'test-agent',
-      soulMdPath,
-      registryDbPath: ':memory:',
-      creditDbPath: ':memory:',
-      gatewayPort: 0,
-      silent: true,
+    await expect(activate()).rejects.toMatchObject({
+      code: 'CONFIG_NOT_FOUND',
     });
-
-    // runtime has both DB handles
-    expect(ctx.runtime).toBeDefined();
-    expect(ctx.runtime.registryDb).toBeDefined();
-    expect(ctx.runtime.creditDb).toBeDefined();
-
-    // gateway is a Fastify instance (has inject method)
-    expect(ctx.gateway).toBeDefined();
-    expect(typeof ctx.gateway.inject).toBe('function');
-
-    // idleMonitor is an IdleMonitor instance
-    expect(ctx.idleMonitor).toBeInstanceOf(IdleMonitor);
-
-    // card has correct structure: spec_version 2.0, 2 skills
-    expect(ctx.card.spec_version).toBe('2.0');
-    expect(Array.isArray(ctx.card.skills)).toBe(true);
-    expect(ctx.card.skills!.length).toBe(2);
   });
 
   // ---------------------------------------------------------------------------
-  // Test 2: activate() publishes card from SOUL.md into registry
+  // Test 2: BootstrapContext shape
   // ---------------------------------------------------------------------------
-  it('activate() publishes card from SOUL.md into registry', async () => {
-    const soulMdPath = setupSoulMd();
+  it('activate() returns BootstrapContext with correct shape', async () => {
+    ctx = await activate();
 
-    ctx = await activate({
-      owner: 'test-agent',
-      soulMdPath,
-      registryDbPath: ':memory:',
-      creditDbPath: ':memory:',
-      gatewayPort: 0,
-      silent: true,
-    });
-
-    // Query the registry DB for capability_cards owned by this agent
-    const rows = ctx.runtime.registryDb
-      .prepare('SELECT id, owner, data FROM capability_cards WHERE owner = ?')
-      .all('test-agent') as Array<{ id: string; owner: string; data: string }>;
-
-    expect(rows.length).toBe(1);
-    expect(rows[0].owner).toBe('test-agent');
-
-    // Parse the card data and verify both skills are present
-    const cardData = JSON.parse(rows[0].data) as {
-      skills?: Array<{ name: string }>;
-    };
-    const skillNames = (cardData.skills ?? []).map((s) => s.name);
-    expect(skillNames).toContain('Code Review');
-    expect(skillNames).toContain('Translation');
+    expect(ctx).toHaveProperty('service');
+    expect(ctx).toHaveProperty('status');
+    expect(ctx).toHaveProperty('startDisposition');
+    expect(ctx).toHaveProperty('_removeSignalHandlers');
+    expect(typeof ctx._removeSignalHandlers).toBe('function');
   });
 
   // ---------------------------------------------------------------------------
-  // Test 3: activate() starts gateway that responds to health check
+  // Test 3: startDisposition reflects ensureRunning result
   // ---------------------------------------------------------------------------
-  it('activate() starts gateway that responds to health check', async () => {
-    const soulMdPath = setupSoulMd();
+  it('startDisposition is "started" when ensureRunning returns "started"', async () => {
+    mockEnsureRunning.mockResolvedValue('started');
+    ctx = await activate();
+    expect(ctx.startDisposition).toBe('started');
+  });
 
-    ctx = await activate({
-      owner: 'test-agent',
-      soulMdPath,
-      registryDbPath: ':memory:',
-      creditDbPath: ':memory:',
-      gatewayPort: 0,
-      silent: true,
-    });
-
-    // Use Fastify inject — no real HTTP connection needed
-    const response = await ctx.gateway.inject({
-      method: 'GET',
-      url: '/health',
-    });
-
-    expect(response.statusCode).toBe(200);
-    const body = JSON.parse(response.body) as { status: string };
-    expect(body.status).toBe('ok');
+  it('startDisposition is "already_running" when node was already up', async () => {
+    mockEnsureRunning.mockResolvedValue('already_running');
+    ctx = await activate();
+    expect(ctx.startDisposition).toBe('already_running');
   });
 
   // ---------------------------------------------------------------------------
-  // Test 4: activate() registers IdleMonitor job in runtime.jobs
+  // Test 4: status snapshot from getNodeStatus
   // ---------------------------------------------------------------------------
-  it('activate() registers IdleMonitor job in runtime.jobs', async () => {
-    const soulMdPath = setupSoulMd();
-
-    ctx = await activate({
-      owner: 'test-agent',
-      soulMdPath,
-      registryDbPath: ':memory:',
-      creditDbPath: ':memory:',
-      gatewayPort: 0,
-      silent: true,
-    });
-
-    // At least one cron job registered (the IdleMonitor's polling job)
-    expect(ctx.runtime.jobs.length).toBeGreaterThanOrEqual(1);
+  it('activate() status reflects getNodeStatus() snapshot', async () => {
+    ctx = await activate();
+    expect(ctx.status).toEqual(MOCK_STATUS);
   });
 
   // ---------------------------------------------------------------------------
-  // Test 5: deactivate() sets runtime.isDraining to true
+  // Test 5: signal handlers registered
   // ---------------------------------------------------------------------------
-  it('deactivate() sets runtime.isDraining to true', async () => {
-    const soulMdPath = setupSoulMd();
+  it('activate() registers SIGTERM and SIGINT handlers', async () => {
+    const sigtermBefore = process.listenerCount('SIGTERM');
+    const sigintBefore = process.listenerCount('SIGINT');
 
-    ctx = await activate({
-      owner: 'test-agent',
-      soulMdPath,
-      registryDbPath: ':memory:',
-      creditDbPath: ':memory:',
-      gatewayPort: 0,
-      silent: true,
-    });
+    ctx = await activate();
 
-    expect(ctx.runtime.isDraining).toBe(false);
+    expect(process.listenerCount('SIGTERM')).toBe(sigtermBefore + 1);
+    expect(process.listenerCount('SIGINT')).toBe(sigintBefore + 1);
+  });
 
-    await deactivate(ctx);
-    // Clear so afterEach doesn't double-deactivate
-    const savedCtx = ctx;
+  // ---------------------------------------------------------------------------
+  // Test 6: _removeSignalHandlers removes them
+  // ---------------------------------------------------------------------------
+  it('_removeSignalHandlers() removes SIGTERM and SIGINT handlers', async () => {
+    ctx = await activate();
+    const sigtermAfterActivate = process.listenerCount('SIGTERM');
+    const sigintAfterActivate = process.listenerCount('SIGINT');
+
+    ctx._removeSignalHandlers();
+
+    expect(process.listenerCount('SIGTERM')).toBe(sigtermAfterActivate - 1);
+    expect(process.listenerCount('SIGINT')).toBe(sigintAfterActivate - 1);
+
     ctx = undefined;
-
-    expect(savedCtx.runtime.isDraining).toBe(true);
   });
 
   // ---------------------------------------------------------------------------
-  // Test 6: deactivate() closes DB handles
+  // Test 7: deactivate() stops node when startDisposition === 'started'
   // ---------------------------------------------------------------------------
-  it('deactivate() closes DB handles', async () => {
-    const soulMdPath = setupSoulMd();
+  it('deactivate() calls service.stop() when startDisposition is "started"', async () => {
+    mockEnsureRunning.mockResolvedValue('started');
+    ctx = await activate();
 
-    ctx = await activate({
-      owner: 'test-agent',
-      soulMdPath,
-      registryDbPath: ':memory:',
-      creditDbPath: ':memory:',
-      gatewayPort: 0,
-      silent: true,
-    });
-
-    // Capture reference before clearing ctx
-    const runtime = ctx.runtime;
     await deactivate(ctx);
     ctx = undefined;
 
-    // Queries should throw after DB handles are closed
-    expect(() => {
-      runtime.registryDb.prepare('SELECT 1').get();
-    }).toThrow();
+    expect(mockStop).toHaveBeenCalledTimes(1);
   });
 
   // ---------------------------------------------------------------------------
-  // Test 7: deactivate() is idempotent
+  // Test 8: deactivate() does NOT stop node when already_running
   // ---------------------------------------------------------------------------
-  it('deactivate() is idempotent', async () => {
-    const soulMdPath = setupSoulMd();
-
-    ctx = await activate({
-      owner: 'test-agent',
-      soulMdPath,
-      registryDbPath: ':memory:',
-      creditDbPath: ':memory:',
-      gatewayPort: 0,
-      silent: true,
-    });
+  it('deactivate() does NOT call service.stop() when startDisposition is "already_running"', async () => {
+    mockEnsureRunning.mockResolvedValue('already_running');
+    ctx = await activate();
 
     await deactivate(ctx);
-    // Second call must not throw
+    ctx = undefined;
+
+    expect(mockStop).not.toHaveBeenCalled();
+  });
+
+  // ---------------------------------------------------------------------------
+  // Test 9: deactivate() is idempotent
+  // ---------------------------------------------------------------------------
+  it('deactivate() is idempotent — second call does not throw', async () => {
+    ctx = await activate();
+
+    await deactivate(ctx);
     await expect(deactivate(ctx)).resolves.not.toThrow();
 
     ctx = undefined;
   });
 
   // ---------------------------------------------------------------------------
-  // Test 8: activate() throws when SOUL.md does not exist
+  // Test 10: deactivate() removes signal handlers
   // ---------------------------------------------------------------------------
-  it('activate() throws when SOUL.md does not exist', async () => {
-    await expect(
-      activate({
-        owner: 'test-agent',
-        soulMdPath: '/nonexistent/path/SOUL.md',
-        registryDbPath: ':memory:',
-        creditDbPath: ':memory:',
-        gatewayPort: 0,
-        silent: true,
-      }),
-    ).rejects.toThrow();
-  });
+  it('deactivate() removes signal handlers', async () => {
+    ctx = await activate();
+    const sigtermAfterActivate = process.listenerCount('SIGTERM');
 
-  // ---------------------------------------------------------------------------
-  // Test 9: activate() with identityRequired creates identity.json
-  // ---------------------------------------------------------------------------
-  it('activate() with identityRequired creates identity.json', async () => {
-    const soulMdPath = setupSoulMd();
-    const identityDir = mkdtempSync(join(tmpdir(), 'agentbnb-identity-'));
+    await deactivate(ctx);
+    ctx = undefined;
 
-    // Temporarily override HOME so identity writes to temp dir
-    const origHome = process.env['HOME'];
-    process.env['HOME'] = identityDir;
-
-    try {
-      ctx = await activate({
-        owner: 'identity-agent',
-        soulMdPath,
-        registryDbPath: ':memory:',
-        creditDbPath: ':memory:',
-        gatewayPort: 0,
-        silent: true,
-        identityRequired: true,
-      });
-
-      // identity should be populated
-      expect(ctx.identity).not.toBeNull();
-      expect(ctx.identity!.owner).toBe('identity-agent');
-      expect(ctx.identity!.agent_id).toBeTruthy();
-
-      // identity.json should exist on disk
-      const identityPath = join(identityDir, '.agentbnb', 'identity.json');
-      expect(existsSync(identityPath)).toBe(true);
-
-      const loaded = loadIdentity(join(identityDir, '.agentbnb'));
-      expect(loaded).not.toBeNull();
-      expect(loaded!.agent_id).toBe(ctx.identity!.agent_id);
-    } finally {
-      process.env['HOME'] = origHome;
-      rmSync(identityDir, { recursive: true, force: true });
-    }
-  });
-
-  // ---------------------------------------------------------------------------
-  // Test 10: activate() without identityRequired skips identity creation
-  // ---------------------------------------------------------------------------
-  it('activate() without identityRequired skips identity creation', async () => {
-    const soulMdPath = setupSoulMd();
-
-    ctx = await activate({
-      owner: 'test-agent',
-      soulMdPath,
-      registryDbPath: ':memory:',
-      creditDbPath: ':memory:',
-      gatewayPort: 0,
-      silent: true,
-      identityRequired: false,
-    });
-
-    expect(ctx.identity).toBeNull();
+    expect(process.listenerCount('SIGTERM')).toBeLessThan(sigtermAfterActivate);
   });
 });

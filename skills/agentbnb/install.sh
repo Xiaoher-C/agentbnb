@@ -9,11 +9,12 @@
 #   bash install.sh
 #
 # What it does:
-#   1. Checks Node.js >= 20 and pnpm are available
+#   1. Resolves canonical Node.js runtime and verifies >= 20
 #   2. Installs the agentbnb CLI globally
-#   3. Initializes the ~/.agentbnb/ config directory with defaults
-#   4. Syncs capabilities from SOUL.md if one is found
-#   5. Prints a success summary and next steps
+#   3. Verifies better-sqlite3 native module; rebuilds with persisted runtime if ABI mismatch
+#   4. Initializes the ~/.agentbnb/ config directory with defaults
+#   5. Syncs capabilities from SOUL.md if one is found
+#   6. Prints a success summary and next steps
 
 set -euo pipefail
 
@@ -40,23 +41,52 @@ err()  { echo "${RED}✗${RESET} $*" >&2; }
 step() { echo ""; echo "${BOLD}$*${RESET}"; }
 
 # ---------------------------------------------------------------------------
-# Step 1: Check prerequisites
+# Step 1: Resolve canonical Node runtime + verify version
 # ---------------------------------------------------------------------------
-step "Step 1/5 — Checking prerequisites"
+step "Step 1/6 — Checking prerequisites"
 
-# Node.js >= 20
-if ! command -v node &>/dev/null; then
+# Resolve canonical Node exec path:
+#   1. OPENCLAW_NODE_EXEC (set by OpenClaw harness when it manages the runtime)
+#   2. Fallback: ask the shell's `node` for its own execPath (resolves shims to real binary)
+#
+# The resolved path is persisted to ~/.agentbnb/runtime.json.
+# bootstrap.ts / ServiceCoordinator read this file to ensure all child processes
+# (including better-sqlite3 native module consumers) use the same binary.
+if [ -n "${OPENCLAW_NODE_EXEC:-}" ] && [ -x "$OPENCLAW_NODE_EXEC" ]; then
+  NODE_EXEC="$OPENCLAW_NODE_EXEC"
+  NODE_SOURCE="OPENCLAW_NODE_EXEC"
+  ok "Using Node runtime from OPENCLAW_NODE_EXEC: $NODE_EXEC"
+elif command -v node &>/dev/null; then
+  NODE_EXEC="$(node -e 'process.stdout.write(process.execPath)')"
+  NODE_SOURCE="shell"
+  ok "Using Node runtime (resolved from shell): $NODE_EXEC"
+else
   err "Node.js not found. Please install Node.js 20+ from https://nodejs.org"
   exit 1
 fi
 
-NODE_VERSION=$(node --version | sed 's/v//' | cut -d. -f1)
-if [ "$NODE_VERSION" -lt 20 ]; then
-  err "Node.js >= 20 required (found v${NODE_VERSION}). Please upgrade: https://nodejs.org"
+NODE_VERSION_FULL="$("$NODE_EXEC" --version)"
+NODE_VERSION_MAJOR="$(echo "$NODE_VERSION_FULL" | sed 's/v//' | cut -d. -f1)"
+if [ "$NODE_VERSION_MAJOR" -lt 20 ]; then
+  err "Node.js >= 20 required (found ${NODE_VERSION_FULL}). Please upgrade: https://nodejs.org"
   exit 1
 fi
 
-ok "Node.js $(node --version) found"
+ok "Node.js ${NODE_VERSION_FULL} confirmed"
+
+# Persist the canonical runtime so bootstrap and ServiceCoordinator use the same binary.
+# Schema: { node_exec, node_version, source, detected_at }
+#   node_exec    — absolute path to the node binary
+#   node_version — full version string (e.g. "v20.11.0")
+#   source       — how it was resolved: "OPENCLAW_NODE_EXEC" | "shell"
+#   detected_at  — ISO 8601 UTC timestamp
+AGENTBNB_DIR="$HOME/.agentbnb"
+mkdir -p "$AGENTBNB_DIR"
+DETECTED_AT="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+printf '{"node_exec":"%s","node_version":"%s","source":"%s","detected_at":"%s"}\n' \
+  "$NODE_EXEC" "$NODE_VERSION_FULL" "$NODE_SOURCE" "$DETECTED_AT" \
+  > "$AGENTBNB_DIR/runtime.json"
+ok "Runtime persisted to ~/.agentbnb/runtime.json (source: ${NODE_SOURCE})"
 
 # pnpm (attempt install if missing)
 if ! command -v pnpm &>/dev/null; then
@@ -73,7 +103,7 @@ fi
 # ---------------------------------------------------------------------------
 # Step 2: Install AgentBnB CLI
 # ---------------------------------------------------------------------------
-step "Step 2/5 — Installing AgentBnB CLI"
+step "Step 2/6 — Installing AgentBnB CLI"
 
 # Check if already installed (idempotent)
 if command -v agentbnb &>/dev/null; then
@@ -113,9 +143,39 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# Step 3: Initialize config + connect to public registry
+# Step 3: Verify better-sqlite3 native module; rebuild if ABI mismatch
+# Rebuild always uses the persisted runtime from ~/.agentbnb/runtime.json
+# to ensure the compiled .node binary matches the binary used at runtime.
 # ---------------------------------------------------------------------------
-step "Step 3/5 — Initializing AgentBnB config"
+step "Step 3/6 — Verifying native modules"
+
+if "$NODE_EXEC" -e "require('better-sqlite3')" 2>/dev/null; then
+  ok "better-sqlite3 native module OK for ${NODE_VERSION_FULL}"
+else
+  warn "better-sqlite3 not compiled for ${NODE_VERSION_FULL} — rebuilding..."
+  # Locate the agentbnb package directory
+  AGENTBNB_PKG="$("$NODE_EXEC" -e "
+    try { process.stdout.write(require.resolve('agentbnb/package.json').replace('/package.json','')); }
+    catch { process.stdout.write(''); }
+  " 2>/dev/null || true)"
+
+  if [ -n "$AGENTBNB_PKG" ]; then
+    # Pass --target so node-pre-gyp compiles against the exact persisted runtime version
+    NODE_TARGET="$(echo "$NODE_VERSION_FULL" | sed 's/v//')"
+    (cd "$AGENTBNB_PKG" && npm rebuild better-sqlite3 \
+      --runtime=node \
+      --target="$NODE_TARGET") \
+      && ok "better-sqlite3 rebuilt for node@${NODE_TARGET}" \
+      || warn "Rebuild failed — run manually: cd $AGENTBNB_PKG && npm rebuild better-sqlite3 --runtime=node --target=${NODE_TARGET}"
+  else
+    warn "Could not locate agentbnb package directory — run 'npm rebuild better-sqlite3' manually"
+  fi
+fi
+
+# ---------------------------------------------------------------------------
+# Step 4: Initialize config + connect to public registry
+# ---------------------------------------------------------------------------
+step "Step 4/6 — Initializing AgentBnB config"
 
 # agentbnb init is idempotent — safe to run on existing installs
 if agentbnb init --yes 2>/dev/null; then
@@ -133,20 +193,20 @@ fi
 # Connect to the public AgentBnB registry (only if not already configured)
 CURRENT_REGISTRY=$(agentbnb config get registry 2>/dev/null || echo "")
 if [ -z "$CURRENT_REGISTRY" ]; then
-  if agentbnb config set registry https://hub.agentbnb.dev 2>/dev/null; then
-    ok "Connected to public registry: https://hub.agentbnb.dev"
+  if agentbnb config set registry https://agentbnb.fly.dev 2>/dev/null; then
+    ok "Connected to public registry: https://agentbnb.fly.dev"
     ok "Registry grants 50 credits to new agents on first sync"
   else
-    warn "Could not set registry — run manually: agentbnb config set registry https://hub.agentbnb.dev"
+    warn "Could not set registry — run manually: agentbnb config set registry https://agentbnb.fly.dev"
   fi
 else
   ok "Registry already configured: $CURRENT_REGISTRY"
 fi
 
 # ---------------------------------------------------------------------------
-# Step 4: Sync from SOUL.md
+# Step 5: Sync from SOUL.md
 # ---------------------------------------------------------------------------
-step "Step 4/5 — Syncing capabilities from SOUL.md"
+step "Step 5/6 — Syncing capabilities from SOUL.md"
 
 SOUL_PATH=""
 # Check current directory first, then parent directory
@@ -170,9 +230,9 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# Step 5: Print success summary
+# Step 6: Print success summary
 # ---------------------------------------------------------------------------
-step "Step 5/5 — Setup complete"
+step "Step 6/6 — Setup complete"
 
 echo ""
 echo "${GREEN}${BOLD}AgentBnB skill installed successfully!${RESET}"
@@ -180,7 +240,9 @@ echo ""
 echo "What was set up:"
 ok "AgentBnB CLI available as 'agentbnb'"
 ok "Config directory: ~/.agentbnb/"
-ok "Registry: https://hub.agentbnb.dev (public network)"
+ok "Node runtime: ${NODE_EXEC} (${NODE_VERSION_FULL}, source: ${NODE_SOURCE})"
+ok "Runtime persisted to: ~/.agentbnb/runtime.json"
+ok "Registry: https://agentbnb.fly.dev (public network)"
 ok "Default autonomy tier: Tier 3 (ask before all transactions)"
 ok "Default credit reserve: 20 credits"
 
@@ -197,10 +259,18 @@ fi
 
 echo ""
 echo "Next steps:"
-echo "  1. Run ${BOLD}agentbnb serve${RESET} to start accepting requests"
-echo "  2. Run ${BOLD}agentbnb openclaw status${RESET} to see your sync state"
-echo "  3. Run ${BOLD}agentbnb openclaw rules${RESET} to see your autonomy rules"
-echo "  4. Paste the rules into your HEARTBEAT.md (or copy from HEARTBEAT.rules.md)"
+echo ""
+echo "  ${BOLD}If using OpenClaw (recommended):${RESET}"
+echo "    Import activate() from bootstrap.ts — it starts the node automatically."
+echo "    No need to run 'agentbnb serve' manually."
+echo ""
+echo "  ${BOLD}If running standalone (CLI only):${RESET}"
+echo "    Run ${BOLD}agentbnb serve${RESET} to start accepting requests."
+echo ""
+echo "  ${BOLD}Either way:${RESET}"
+echo "    Run ${BOLD}agentbnb openclaw status${RESET} to see your sync state"
+echo "    Run ${BOLD}agentbnb openclaw rules${RESET} to see your autonomy rules"
+echo "    Paste the rules into your HEARTBEAT.md (or copy from HEARTBEAT.rules.md)"
 echo ""
 echo "Configure autonomy thresholds:"
 echo "  ${BOLD}agentbnb config set tier1 10${RESET}   # auto-execute under 10 credits"
