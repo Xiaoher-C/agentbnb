@@ -112,10 +112,18 @@ export class CommandExecutor implements ExecutorMode {
 
     let stdout: string;
 
+    // Unset CLAUDECODE so nested `claude --print` calls don't fail with
+    // "Claude Code cannot be launched inside another Claude Code session"
+    const env = { ...process.env };
+    delete env['CLAUDECODE'];
+
     try {
-      const result = await execFileAsync('/bin/sh', ['-c', interpolatedCommand], {
+      // Redirect stdin from /dev/null so subprocesses like `claude --print`
+      // don't hang waiting for interactive input when launched from a daemon.
+      const result = await execFileAsync('/bin/sh', ['-c', `${interpolatedCommand} < /dev/null`], {
         timeout,
         cwd,
+        env,
         maxBuffer: 10 * 1024 * 1024, // 10 MB
       });
       stdout = result.stdout;
