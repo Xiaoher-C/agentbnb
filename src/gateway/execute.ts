@@ -144,6 +144,20 @@ export async function executeCapabilityRequest(opts: ExecuteRequestOptions): Pro
     return { success: false, error: { code: -32602, message: `Card not found: ${cardId}` } };
   }
 
+  // Self-request guard: requester should not be the card owner.
+  // This usually indicates AGENTBNB_DIR is not set — the requester is accidentally
+  // using the provider's identity instead of their own.
+  if (requester === card.owner && !relayAuthorized) {
+    return {
+      success: false,
+      error: {
+        code: -32603,
+        message: `Self-request blocked: requester (${requester}) is the card owner. ` +
+          `Set AGENTBNB_DIR to your agent's config directory before calling agentbnb request.`,
+      },
+    };
+  }
+
   // Resolve skill and pricing
   let creditsNeeded: number;
   let cardName: string;

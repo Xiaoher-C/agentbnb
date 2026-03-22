@@ -56,14 +56,17 @@ export interface BootstrapContext {
 export async function activate(config: BootstrapConfig = {}): Promise<BootstrapContext> {
   const configDir = getConfigDir();
 
-  // Isolation warning: each agent should have its own data directory.
-  // Without AGENTBNB_DIR, multiple agents share ~/.agentbnb and pollute each other's
-  // owner / identity / registry / credit state.
+  // Isolation: each agent must have its own data directory.
+  // If AGENTBNB_DIR is not set, auto-set it from configDir so all child processes
+  // spawned by this OpenClaw session (e.g. `agentbnb request` CLI calls) inherit it.
   if (!process.env['AGENTBNB_DIR']) {
+    process.env['AGENTBNB_DIR'] = configDir;
     process.stderr.write(
-      '[agentbnb] WARNING: AGENTBNB_DIR is not set. Using shared ~/.agentbnb — ' +
-      'multiple agents on the same machine will overwrite each other\'s owner and credits. ' +
-      'Set AGENTBNB_DIR=~/.agentbnb/<agent-name> for per-agent isolation.\n'
+      `[agentbnb] AGENTBNB_DIR not set — auto-configured to ${configDir} for child process isolation.\n`
+    );
+  } else if (process.env['AGENTBNB_DIR'] !== configDir) {
+    process.stderr.write(
+      `[agentbnb] WARNING: AGENTBNB_DIR (${process.env['AGENTBNB_DIR']}) differs from resolved configDir (${configDir}).\n`
     );
   }
 
