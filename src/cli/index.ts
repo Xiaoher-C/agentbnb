@@ -1248,7 +1248,7 @@ program
             params: {
               ...params,
               ...(opts.skill ? { skill_id: opts.skill } : {}),
-              ...(isRemoteRequest ? { requester: config.owner } : {}),
+              requester: config.owner,
             },
             escrowReceipt,
             identity: identityAuth,
