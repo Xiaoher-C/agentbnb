@@ -309,6 +309,10 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
       cards = filterCards(db, { level, online, min_reputation: minReputation });
     }
 
+    // Filter out ephemeral requester stub cards (owner contains ':req:').
+    // These are transient relay connections, not real capability providers.
+    cards = cards.filter((c) => !c.owner.includes(':req:'));
+
     // Post-filter by tag — check both card-root and skill-level metadata
     if (tag !== undefined && tag.length > 0) {
       cards = cards.filter((c) => {

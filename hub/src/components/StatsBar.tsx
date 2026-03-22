@@ -68,7 +68,9 @@ export default function StatsBar({
   const animatedVerified = useCountUp(verifiedProviders ?? 0);
 
   // Hub v2 Narrative Strip mode — show the 3 trust-oriented stats
+  // Fall back to "Capabilities" when executions_7d is 0 (no data yet or fresh registry)
   const isV2 = executions7d !== undefined && verifiedProviders !== undefined;
+  const showExec7d = isV2 && (executions7d ?? 0) > 0;
 
   return (
     <div className="relative flex flex-col items-center py-8 gap-3">
@@ -105,13 +107,13 @@ export default function StatsBar({
 
         <div className="w-px h-8 bg-white/[0.06] hidden sm:block" />
 
-        {/* Executions (7d) — Hub v2 preferred; fallback to total capabilities */}
+        {/* Executions (7d) — shown when >0; fallback to total capabilities */}
         <div className="flex flex-col items-center gap-1">
           <span className="text-[32px] leading-tight font-mono font-semibold text-hub-accent">
-            {isV2 ? animatedExec7d : animatedCapabilities}
+            {showExec7d ? animatedExec7d : animatedCapabilities}
           </span>
           <span className="text-sm text-hub-text-muted">
-            {isV2 ? 'Executions (7d)' : 'Capabilities'}
+            {showExec7d ? 'Executions (7d)' : 'Capabilities'}
           </span>
         </div>
 

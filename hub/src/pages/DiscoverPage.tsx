@@ -56,6 +56,10 @@ export default function DiscoverPage(): JSX.Element {
     setVerifiedOnly,
     sort,
     setSort,
+    page,
+    setPage,
+    totalPages,
+    filteredTotal,
     availableCategories,
     retry,
     agentsOnline,
@@ -173,11 +177,9 @@ export default function DiscoverPage(): JSX.Element {
       ) : (
         <>
           {/* Section label */}
-          {!query && (
-            <p className="text-[11px] text-hub-text-muted uppercase tracking-wider mb-3">
-              All agents ({cards.length})
-            </p>
-          )}
+          <p className="text-[11px] text-hub-text-muted uppercase tracking-wider mb-3">
+            {query ? `Results for "${query}"` : 'All agents'} ({filteredTotal})
+          </p>
           <CardGrid>
             {cards.map((card) => (
               <CapabilityCard
@@ -187,6 +189,29 @@ export default function DiscoverPage(): JSX.Element {
               />
             ))}
           </CardGrid>
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-center gap-2 mt-8">
+              <button
+                onClick={() => setPage(page - 1)}
+                disabled={page <= 1}
+                className="px-3 py-1.5 text-sm bg-hub-surface border border-hub-border rounded-lg text-hub-text-secondary hover:bg-white/[0.06] hover:text-hub-text-primary disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+              >
+                ← Prev
+              </button>
+              <span className="text-sm text-hub-text-muted px-2">
+                {page} / {totalPages}
+              </span>
+              <button
+                onClick={() => setPage(page + 1)}
+                disabled={page >= totalPages}
+                className="px-3 py-1.5 text-sm bg-hub-surface border border-hub-border rounded-lg text-hub-text-secondary hover:bg-white/[0.06] hover:text-hub-text-primary disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+              >
+                Next →
+              </button>
+            </div>
+          )}
         </>
       )}
 

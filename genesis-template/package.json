@@ -1,0 +1,52 @@
+{
+  "name": "@agentbnb/genesis-template",
+  "version": "1.0.0",
+  "description": "Born-trader OpenClaw agent template. 3-layer model routing + AgentBnB network trading. Every clone is a live participant from day one.",
+  "type": "module",
+  "main": "scripts/init.js",
+  "bin": {
+    "genesis-template": "scripts/init.js"
+  },
+  "scripts": {
+    "init": "ts-node scripts/init.ts",
+    "build": "tsc",
+    "test": "vitest"
+  },
+  "files": [
+    "scripts/",
+    "templates/",
+    "schema/",
+    "memory-seeds/"
+  ],
+  "keywords": [
+    "agentbnb",
+    "openclaw",
+    "agent-template",
+    "genesis",
+    "cost-optimization",
+    "capability-sharing"
+  ],
+  "dependencies": {
+    "@clack/prompts": "^0.7.0",
+    "handlebars": "^4.7.8",
+    "zod": "^3.22.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "ts-node": "^10.9.0",
+    "typescript": "^5.3.0",
+    "vitest": "^1.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "peerDependencies": {
+    "agentbnb": ">=1.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Xiaoher-C/agentbnb.git",
+    "directory": "packages/genesis-template"
+  },
+  "license": "MIT"
+}

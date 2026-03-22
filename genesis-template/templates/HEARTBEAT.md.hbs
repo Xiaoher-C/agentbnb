@@ -1,0 +1,115 @@
+# Heartbeat Configuration
+
+## Cycle
+
+- **Interval**: 30 minutes
+- **Max concurrent tasks per heartbeat**: 3
+- **Model**: Layer 0 (Haiku/Flash) for all routing decisions
+
+---
+
+## Heartbeat Sequence
+
+Run these skills in order. Each step is conditional on the previous result.
+
+```
+Step 1: genesis-pulse          (always runs)
+  → Produces: PulseReport
+
+Step 2: genesis-idle-sharer    (if pulse.idle_rate > {{idleThreshold}})
+  → Publishes available skills to AgentBnB Hub
+  → Unpublishes skills that are busy or below quality threshold
+
+Step 3: genesis-trader         (always runs, reads PulseReport)
+  → If incoming rental requests pending → serve them (Layer 0 overhead only, actual work in Layer 2)
+  → If task requires a capability gap → search Hub → decide → rent
+  → Credit check before any rental: balance must be > reserve_floor + rental_cost
+
+Step 4: genesis-feedback       (if any transactions completed this cycle)
+  → Submit structured ADR-018 feedback for every completed rental
+  → Collect incoming feedback on skills you provided → log to memory
+```
+
+---
+
+## Model Routing Budget
+
+| Layer | Model | Daily Cap | Trigger |
+|-------|-------|-----------|---------|
+| Layer 0 | Haiku / Flash | Unlimited | Default for all routing |
+| Layer 1 | Sonnet / 4o | {{layer1DailyTokenCap}} tokens | Only when Layer 0 confidence < 0.6 |
+| Layer 2 | AgentBnB rental | {{layer2DailyCreditCap}} credits | Only when execution environment needed |
+
+**Budget enforcement**:
+- If Layer 1 daily spend > 80% of cap → switch remaining tasks to Layer 0, note quality may drop
+- If Layer 2 daily spend > 80% of cap → queue remaining Layer 2 tasks for next heartbeat cycle
+- If Layer 2 credit balance < reserve floor → no new rentals until balance recovers
+
+---
+
+## AgentBnB Trading Autonomy
+
+| Tier | Credit threshold | Behavior |
+|------|-----------------|----------|
+| Tier 1 | < {{tier1Threshold}} credits | Execute automatically, no owner notification |
+| Tier 2 | {{tier1Threshold}}–{{tier2Threshold}} credits | Execute, send brief Telegram notification after |
+| Tier 3 | > {{tier2Threshold}} credits | Request owner approval before executing |
+
+**Reserve floor**: {{reserveFloor}} credits — hard floor, never auto-spend below this.
+
+---
+
+## Idle Detection
+
+- **Idle threshold**: `idle_rate > {{idleThreshold}}`
+- **Best idle window**: {{ownerActiveEnd}} – {{ownerActiveStart}} (when owner is away, agent earns)
+- **Idle rate formula**: `1 - (active_execution_seconds_last_60min / 3600)`
+
+When idle:
+1. Auto-publish skills that have been successfully executed 3+ times
+2. Set `online: true` in capability-card.json for shareable skills
+3. Notify Hub of availability
+
+When busy (idle_rate < 0.5):
+1. Unpublish non-essential skills
+2. Maintain capacity for current tasks
+
+---
+
+## Fitness Check
+
+Every heartbeat, after genesis-pulse completes:
+
+- **fitness_score > 0.6**: Normal operation
+- **fitness_score 0.4–0.6**: Log warning, increase monitoring frequency
+- **fitness_score < 0.4**: Trigger evolution review (genesis-evolution runs next cycle)
+- **fitness_score < 0.2**: Notify owner immediately, pause non-critical operations
+
+---
+
+## Error Handling
+
+| Error type | Response |
+|-----------|----------|
+| AgentBnB Hub unreachable | Skip trading steps, retry next heartbeat |
+| Rental provider timeout | Release escrow, log failure, mark provider reputation down |
+| Layer 2 execution failed | Auto-retry once, then return error to requester, escrow refund |
+| Memory read/write failed | Log error, continue heartbeat without memory operations |
+| Credit balance at floor | Pause outgoing rentals, increase incoming rental acceptance |
+
+**Never crash the heartbeat.** Always complete the cycle and report status.
+
+---
+
+## Daily Report
+
+Send a brief summary to owner once per day (at end of owner's active window: {{ownerActiveEnd}}).
+
+Include:
+- `fitness_score` (today vs. yesterday)
+- `credit_balance` (earned / spent today)
+- Top 1 task completed via Layer 2 rental
+- Any Tier 3 decisions pending
+- Any fitness warning if score < 0.5
+
+Keep it under 5 bullet points. Owner reads this in 10 seconds.

@@ -11,6 +11,7 @@ import type { Category, HubCard, SortOption } from '../types.js';
 
 const POLL_INTERVAL_MS = 30_000;
 const DEBOUNCE_MS = 300;
+const PAGE_SIZE = 12;
 
 interface UseCardsResult {
   // Data
@@ -34,6 +35,11 @@ interface UseCardsResult {
   // Sort state
   sort: SortOption;
   setSort: (s: SortOption) => void;
+  // Pagination
+  page: number;
+  setPage: (p: number) => void;
+  totalPages: number;
+  filteredTotal: number;
   // Derived
   availableCategories: Category[];
   retry: () => void;
@@ -66,6 +72,7 @@ export function useCards(): UseCardsResult {
   const [minSuccessRate, setMinSuccessRate] = useState<number | null>(null);
   const [verifiedOnly, setVerifiedOnly] = useState(false);
   const [sort, setSort] = useState<SortOption>('popular');
+  const [page, setPage] = useState(1);
 
   // Track whether this is the initial fetch
   const isFirstFetch = useRef(true);
@@ -132,7 +139,7 @@ export function useCards(): UseCardsResult {
   }, [fetchCards]);
 
   // Client-side filters: category + minSuccessRate + verifiedOnly
-  const cards = allCards.filter((card) => {
+  const filteredCards = allCards.filter((card) => {
     if (category !== null) {
       const { categories } = inferCategories(card.metadata);
       if (!categories.some((c) => c.id === category)) return false;
@@ -148,6 +155,13 @@ export function useCards(): UseCardsResult {
     }
     return true;
   });
+
+  // Paginate the filtered results
+  const filteredTotal = filteredCards.length;
+  const totalPages = Math.max(1, Math.ceil(filteredTotal / PAGE_SIZE));
+  // Reset to page 1 when filters change (but don't add to deps — handled via setPage in setters)
+  const clampedPage = Math.min(page, totalPages);
+  const cards = filteredCards.slice((clampedPage - 1) * PAGE_SIZE, clampedPage * PAGE_SIZE);
 
   // Available categories from ALL fetched cards (before client-side filter)
   const availableCategories: Category[] = useMemo(() => {
@@ -215,25 +229,38 @@ export function useCards(): UseCardsResult {
     void fetchCards();
   }, [fetchCards]);
 
+  // Wrappers that reset page to 1 on filter changes
+  const setQueryAndReset = useCallback((q: string) => { setQuery(q); setPage(1); }, []);
+  const setLevelAndReset = useCallback((l: number | null) => { setLevel(l); setPage(1); }, []);
+  const setCategoryAndReset = useCallback((c: string | null) => { setCategory(c); setPage(1); }, []);
+  const setOnlineOnlyAndReset = useCallback((v: boolean) => { setOnlineOnly(v); setPage(1); }, []);
+  const setMinSuccessRateAndReset = useCallback((v: number | null) => { setMinSuccessRate(v); setPage(1); }, []);
+  const setVerifiedOnlyAndReset = useCallback((v: boolean) => { setVerifiedOnly(v); setPage(1); }, []);
+  const setSortAndReset = useCallback((s: SortOption) => { setSort(s); setPage(1); }, []);
+
   return {
     cards,
     total,
     loading,
     error,
     query,
-    setQuery,
+    setQuery: setQueryAndReset,
     level,
-    setLevel,
+    setLevel: setLevelAndReset,
     category,
-    setCategory,
+    setCategory: setCategoryAndReset,
     onlineOnly,
-    setOnlineOnly,
+    setOnlineOnly: setOnlineOnlyAndReset,
     minSuccessRate,
-    setMinSuccessRate,
+    setMinSuccessRate: setMinSuccessRateAndReset,
     verifiedOnly,
-    setVerifiedOnly,
+    setVerifiedOnly: setVerifiedOnlyAndReset,
     sort,
-    setSort,
+    setSort: setSortAndReset,
+    page: clampedPage,
+    setPage,
+    totalPages,
+    filteredTotal,
     availableCategories,
     retry,
     agentsOnline,

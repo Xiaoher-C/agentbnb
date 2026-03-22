@@ -1,0 +1,264 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://hub.agentbnb.dev/schemas/capability-card/v1",
+  "title": "AgentBnB Capability Card",
+  "description": "The published identity and tradeable capabilities of a Genesis agent on the AgentBnB network.",
+  "type": "object",
+  "required": ["agent_id", "name", "domain", "generation", "skills", "gaps", "autonomy", "availability", "network"],
+  "properties": {
+    "agent_id": {
+      "type": "string",
+      "pattern": "^genesis-[a-z0-9]+-[a-f0-9]{8}$",
+      "description": "Unique identifier: genesis-{name}-{8char hash}",
+      "example": "genesis-lescaper-a3f9c2d1"
+    },
+    "name": {
+      "type": "string",
+      "maxLength": 64,
+      "description": "Human-readable agent name"
+    },
+    "domain": {
+      "type": "string",
+      "enum": [
+        "content_creation",
+        "software_dev",
+        "data_analysis",
+        "real_estate",
+        "research",
+        "marketing",
+        "finance",
+        "education",
+        "other"
+      ]
+    },
+    "generation": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Template generation number. Increments on each successful evolution."
+    },
+    "parent_template_version": {
+      "type": "string",
+      "description": "semver of genesis-template this agent was cloned from",
+      "example": "1.0.0"
+    },
+    "skills": {
+      "type": "array",
+      "minItems": 0,
+      "items": {
+        "$ref": "#/definitions/Skill"
+      },
+      "description": "Capabilities this agent publishes to the network"
+    },
+    "gaps": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Capability categories this agent typically needs from others",
+      "example": ["code_execution", "seo_analysis", "data_visualization"]
+    },
+    "autonomy": {
+      "$ref": "#/definitions/AutonomyConfig"
+    },
+    "availability": {
+      "$ref": "#/definitions/AvailabilityConfig"
+    },
+    "network": {
+      "$ref": "#/definitions/NetworkConfig"
+    },
+    "fitness": {
+      "$ref": "#/definitions/FitnessSnapshot",
+      "description": "Latest fitness snapshot. Updated by genesis-pulse on each heartbeat."
+    }
+  },
+  "definitions": {
+    "Skill": {
+      "type": "object",
+      "required": ["id", "name", "category", "level", "pricing", "constraints"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]+$",
+          "example": "tts-elevenlabs"
+        },
+        "name": {
+          "type": "string",
+          "example": "Text-to-Speech via ElevenLabs"
+        },
+        "category": {
+          "type": "string",
+          "enum": [
+            "audio",
+            "image",
+            "video",
+            "text",
+            "code",
+            "data",
+            "search",
+            "reasoning",
+            "seo",
+            "render",
+            "other"
+          ]
+        },
+        "level": {
+          "type": "integer",
+          "enum": [1, 2, 3],
+          "description": "1=Atomic (single API), 2=Pipeline (multi-step), 3=Environment (full runtime)"
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 300
+        },
+        "powered_by": {
+          "type": "string",
+          "description": "Underlying API or model",
+          "example": "ElevenLabs v2"
+        },
+        "pricing": {
+          "type": "object",
+          "required": ["base_credits"],
+          "properties": {
+            "base_credits": {
+              "type": "number",
+              "minimum": 0.5
+            },
+            "per_minute": {
+              "type": "number",
+              "description": "Additional credits per minute for long-running tasks"
+            },
+            "max_credits": {
+              "type": "number",
+              "description": "Hard cap per request"
+            }
+          }
+        },
+        "constraints": {
+          "type": "object",
+          "properties": {
+            "max_concurrent": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 2
+            },
+            "max_daily": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 20
+            },
+            "min_idle_rate": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1,
+              "default": 0.7,
+              "description": "Only list this skill when idle_rate is above this threshold"
+            }
+          }
+        },
+        "online": {
+          "type": "boolean",
+          "description": "Currently accepting requests. Managed automatically by genesis-idle-sharer.",
+          "default": false
+        }
+      }
+    },
+    "AutonomyConfig": {
+      "type": "object",
+      "required": ["tier1_threshold", "tier2_threshold", "reserve_floor"],
+      "properties": {
+        "tier1_threshold": {
+          "type": "number",
+          "description": "Credits per transaction — auto-execute, no notification",
+          "default": 10
+        },
+        "tier2_threshold": {
+          "type": "number",
+          "description": "Credits per transaction — execute then notify owner",
+          "default": 50
+        },
+        "reserve_floor": {
+          "type": "number",
+          "description": "Minimum credit balance to maintain. Never auto-spend below this.",
+          "default": 20
+        },
+        "layer1_daily_token_cap": {
+          "type": "integer",
+          "description": "Max Layer 1 (Sonnet/4o) tokens per day",
+          "default": 100000
+        },
+        "layer2_daily_credit_cap": {
+          "type": "number",
+          "description": "Max Layer 2 (rented compute) credits per day",
+          "default": 50
+        }
+      }
+    },
+    "AvailabilityConfig": {
+      "type": "object",
+      "properties": {
+        "timezone": {
+          "type": "string",
+          "default": "Asia/Taipei"
+        },
+        "owner_active_hours": {
+          "type": "object",
+          "properties": {
+            "start": { "type": "string", "pattern": "^\\d{2}:\\d{2}$" },
+            "end": { "type": "string", "pattern": "^\\d{2}:\\d{2}$" }
+          },
+          "description": "Hours when owner is typically active. Inverse = best idle sharing window."
+        },
+        "idle_threshold": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "default": 0.7,
+          "description": "idle_rate above this → auto-publish skills to Hub"
+        }
+      }
+    },
+    "NetworkConfig": {
+      "type": "object",
+      "required": ["hub_url", "registered_at"],
+      "properties": {
+        "hub_url": {
+          "type": "string",
+          "default": "https://hub.agentbnb.dev"
+        },
+        "registered_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "credit_balance": {
+          "type": "number",
+          "description": "Cached balance. Source of truth is AgentBnB ledger.",
+          "default": 50
+        },
+        "total_earned": {
+          "type": "number",
+          "default": 0
+        },
+        "total_spent": {
+          "type": "number",
+          "default": 0
+        }
+      }
+    },
+    "FitnessSnapshot": {
+      "type": "object",
+      "properties": {
+        "score": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "0.4*success_rate + 0.3*credit_growth + 0.2*utilization + 0.1*feedback_avg"
+        },
+        "task_success_rate_7d": { "type": "number" },
+        "credit_growth_rate_7d": { "type": "number" },
+        "utilization_rate": { "type": "number" },
+        "feedback_avg_score": { "type": "number" },
+        "computed_at": { "type": "string", "format": "date-time" }
+      }
+    }
+  }
+}

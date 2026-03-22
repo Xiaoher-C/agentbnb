@@ -189,6 +189,16 @@ export function registerWebSocketRelay(
     // Store connection
     connections.set(owner, ws);
 
+    // Ephemeral requester connections (owner contains ':req:') are used solely for
+    // making outbound relay requests. They do not need a card in the registry — skip
+    // persistence and activity logging to avoid polluting the card list.
+    const isEphemeral = owner.includes(':req:');
+    if (isEphemeral) {
+      const cardId = (card.id as string) ?? owner;
+      sendMessage(ws, { type: 'registered', agent_id: cardId });
+      return;
+    }
+
     // Upsert primary card into registry (non-fatal — agent stays connected even if card is invalid)
     let cardId: string;
     try {

@@ -1,0 +1,54 @@
+{
+  "id": "agentbnb",
+  "name": "AgentBnB",
+  "description": "P2P agent capability sharing — join the network, share idle skills, earn credits, and access capabilities from peers. Agents run autonomously on their own will.",
+  "version": "4.0.3",
+  "kind": "tools",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "owner": {
+        "type": "string",
+        "description": "Agent owner name (auto-generated if omitted)"
+      },
+      "registry": {
+        "type": "string",
+        "default": "https://hub.agentbnb.dev",
+        "description": "Registry URL for the AgentBnB network"
+      },
+      "tier1Threshold": {
+        "type": "number",
+        "default": 0,
+        "description": "Max credits per call for fully autonomous action (0 = disabled)"
+      },
+      "tier2Threshold": {
+        "type": "number",
+        "default": 50,
+        "description": "Max credits per call for notify-after-action"
+      }
+    }
+  },
+  "uiHints": {
+    "owner": {
+      "label": "Agent Owner Name",
+      "placeholder": "my-agent",
+      "help": "Unique name for your agent on the network. Auto-generated if omitted."
+    },
+    "registry": {
+      "label": "Registry URL",
+      "placeholder": "https://hub.agentbnb.dev",
+      "help": "AgentBnB public registry. Change only if self-hosting."
+    },
+    "tier1Threshold": {
+      "label": "Tier 1 Threshold (credits)",
+      "help": "Actions below this cost proceed without notification. Default 0 = always notify.",
+      "advanced": true
+    },
+    "tier2Threshold": {
+      "label": "Tier 2 Threshold (credits)",
+      "help": "Actions below this cost notify after completion. Above = ask before acting.",
+      "advanced": true
+    }
+  }
+}
