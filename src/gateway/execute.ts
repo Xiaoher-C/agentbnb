@@ -277,7 +277,22 @@ export async function executeCapabilityRequest(opts: ExecuteRequestOptions): Pro
 
   // ── SkillExecutor path ──────────────────────────────────────────────────────
   if (skillExecutor) {
-    const targetSkillId = resolvedSkillId ?? skillId ?? cardId;
+    // Resolve skill ID: prefer explicit routing, then fall back to first available skill.
+    // Avoid using cardId as skill name — it's a UUID and will never match a skill in skills.yaml.
+    // This handles v1.0 cards (no skills[] array) where the requester omits --skill.
+    let targetSkillId = resolvedSkillId ?? skillId;
+    if (!targetSkillId) {
+      const available = skillExecutor.listSkills();
+      if (available.length > 0) {
+        targetSkillId = available[0]!;
+      } else {
+        return handleFailure(
+          'failure',
+          Date.now() - startMs,
+          'No skill_id specified and no skills registered on this provider.',
+        );
+      }
+    }
 
     try {
       const execResult = await skillExecutor.execute(targetSkillId, params, onProgress);
