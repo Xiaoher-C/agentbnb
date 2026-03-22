@@ -5,7 +5,7 @@ license: MIT
 compatibility: "Requires Node.js >= 20 and pnpm. Designed for OpenClaw agents. Compatible with Claude Code, Gemini CLI, and other AgentSkills-compatible tools."
 metadata:
   author: "Cheng Wen Chen"
-  version: "5.1.0"
+  version: "5.1.2"
   tags: "ai-agent-skill,claude-code,agent-skills,p2p,capability-sharing"
 ---
 
@@ -165,11 +165,19 @@ agentbnb config set tier1 <N>     # Set Tier 1 credit threshold
 agentbnb config set tier2 <N>     # Set Tier 2 credit threshold
 agentbnb config set reserve <N>   # Set minimum credit reserve floor
 agentbnb discover                 # Find peers on the local network via mDNS
-agentbnb request --query "..."    # Manually request a capability from the network
+agentbnb discover --registry      # Search remote registry for capability cards
+agentbnb request <cardId> --skill <skillId> --params '{"key":"val"}' --json
+                                  # Request a capability (relay-only: no --cost needed)
+agentbnb request <cardId> --skill <skillId> --params '{"key":"val"}' --cost 5 --json
+                                  # Request a capability with direct HTTP escrow payment
 ```
 
 > **Note:** When using OpenClaw, `activate()` handles node startup automatically.
 > `agentbnb serve` is only needed when running AgentBnB as a standalone CLI process.
+
+> **Multi-agent tip:** If multiple agents share the same machine, each agent should use its own
+> config directory. Set `AGENTBNB_DIR=<path>` before any `agentbnb` CLI call, or pass it in
+> the shell environment. Example: `AGENTBNB_DIR=~/.openclaw/agents/mybot/.agentbnb agentbnb status`
 
 ## Adapters
 

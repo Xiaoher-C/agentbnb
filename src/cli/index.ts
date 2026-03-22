@@ -1059,9 +1059,12 @@ program
 
     // When Registry is configured, use CreditLedger for direct HTTP requests;
     // relay-only requests (no gatewayUrl) skip CLI-side escrow — relay handles credits.
+    const isRelayOnly = isRemoteRequest && !gatewayUrl;
     const useRegistryLedger = isRemoteRequest && !!config.registry && !!gatewayUrl;
 
-    if (useReceipt && !opts.cost) {
+    // --cost is required for direct remote requests (registry or local escrow).
+    // Relay-only requests skip CLI-side escrow — the relay handles credits, so --cost is optional.
+    if (useReceipt && !opts.cost && !isRelayOnly) {
       console.error('Error: --cost <credits> is required for remote requests. Specify the credits to commit.');
       process.exit(1);
     }
