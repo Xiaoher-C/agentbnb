@@ -140,7 +140,13 @@ program
       credit_db_path: creditDbPath,
       token: existingConfig?.token ?? token,       // Preserve existing token
       api_key: existingConfig?.api_key ?? randomBytes(32).toString('hex'),
-      registry: existingConfig?.registry ?? 'https://agentbnb.fly.dev',  // Default registry for fresh installs
+      // Default registry for fresh installs: auto-set in --yes (automated) mode only.
+      // Interactive init leaves registry unset so users can configure it explicitly.
+      ...(existingConfig?.registry
+        ? { registry: existingConfig.registry }
+        : opts.yes
+          ? { registry: 'https://agentbnb.fly.dev' }
+          : {}),
     };
 
     saveConfig(config);
