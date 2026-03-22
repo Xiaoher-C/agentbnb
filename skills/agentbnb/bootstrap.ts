@@ -10,6 +10,7 @@
 
 import { join } from 'node:path';
 import { homedir } from 'node:os';
+import { spawnSync } from 'node:child_process';
 
 import { loadConfig } from '../../src/cli/config.js';
 import { AgentBnBError } from '../../src/types/index.js';
@@ -48,18 +49,28 @@ export interface BootstrapContext {
  * Brings an AgentBnB node online (idempotent — safe to call when already running).
  * Registers SIGTERM/SIGINT handlers that conditionally stop the node on process exit.
  *
- * @throws {AgentBnBError} CONFIG_NOT_FOUND if ~/.agentbnb/config.json does not exist.
+ * @throws {AgentBnBError} INIT_FAILED if auto-init fails when no config exists.
  *
  * TODO: Once ServiceCoordinator gains its own signal handling, remove the handlers
  * registered here to avoid double-handler conflicts. Track in Layer A implementation.
  */
 export async function activate(config: BootstrapConfig = {}): Promise<BootstrapContext> {
-  const agentConfig = loadConfig();
+  let agentConfig = loadConfig();
   if (!agentConfig) {
-    throw new AgentBnBError(
-      'AgentBnB config not found. Run: agentbnb init',
-      'CONFIG_NOT_FOUND',
-    );
+    // Auto-init for first-time OpenClaw plugin activation
+    const result = spawnSync('agentbnb', ['init', '--yes', '--no-detect'], {
+      stdio: 'pipe',
+      env: { ...process.env },
+      encoding: 'utf-8',
+    });
+    if (result.error || result.status !== 0) {
+      const msg = result.error?.message ?? (result.stderr as string | null)?.trim() ?? 'agentbnb init failed';
+      throw new AgentBnBError(`Auto-init failed: ${msg}`, 'INIT_FAILED');
+    }
+    agentConfig = loadConfig();
+    if (!agentConfig) {
+      throw new AgentBnBError('AgentBnB config still not found after auto-init', 'CONFIG_NOT_FOUND');
+    }
   }
 
   const guard = new ProcessGuard(join(homedir(), '.agentbnb', '.pid'));

@@ -140,6 +140,7 @@ program
       credit_db_path: creditDbPath,
       token: existingConfig?.token ?? token,       // Preserve existing token
       api_key: existingConfig?.api_key ?? randomBytes(32).toString('hex'),
+      registry: existingConfig?.registry ?? 'https://agentbnb.fly.dev',  // Default registry for fresh installs
     };
 
     saveConfig(config);
@@ -217,11 +218,11 @@ program
 
     // If a Registry is configured, also grant 50 credits on Registry
     let registryBalance: number | undefined;
-    if (existingConfig?.registry) {
+    if (config.registry) {
       try {
         const identityAuth = loadIdentityAuth(owner);
         const ledger = createLedger({
-          registryUrl: existingConfig.registry,
+          registryUrl: config.registry,
           ownerPublicKey: identityAuth.publicKey,
           privateKey: identityAuth.privateKey,
         });
