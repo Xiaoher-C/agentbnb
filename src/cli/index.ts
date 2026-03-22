@@ -120,8 +120,6 @@ program
   .option('--from <file>', 'Parse a specific file for capability detection')
   .option('--json', 'Output as JSON')
   .action(async (opts: { owner?: string; port: string; host?: string; yes?: boolean; detect?: boolean; from?: string; json?: boolean }) => {
-    const owner = opts.owner ?? `agent-${randomBytes(4).toString('hex')}`;
-    const token = randomBytes(32).toString('hex');
     const configDir = getConfigDir();
     const dbPath = join(configDir, 'registry.db');
     const creditDbPath = join(configDir, 'credit.db');
@@ -131,6 +129,10 @@ program
     // Merge with existing config to preserve user-set values (registry, autonomy, budget, etc.)
     const existingConfig = loadConfig();
 
+    // Preserve existing owner — only generate a new one for truly fresh installs.
+    // Without this, every `agentbnb init` call without --owner overwrites the owner.
+    const owner = opts.owner ?? existingConfig?.owner ?? `agent-${randomBytes(4).toString('hex')}`;
+
     const config = {
       ...existingConfig,               // Preserve all existing keys (registry, autonomy, budget, etc.)
       owner,
@@ -138,7 +140,7 @@ program
       gateway_port: port,
       db_path: dbPath,
       credit_db_path: creditDbPath,
-      token: existingConfig?.token ?? token,       // Preserve existing token
+      token: existingConfig?.token ?? randomBytes(32).toString('hex'),  // Preserve existing token
       api_key: existingConfig?.api_key ?? randomBytes(32).toString('hex'),
       // Default registry for fresh installs: auto-set in --yes (automated) mode only.
       // Interactive init leaves registry unset so users can configure it explicitly.
@@ -394,7 +396,7 @@ program
         success: true,
         owner,
         config_dir: configDir,
-        token,
+        token: config.token,
         gateway_url: config.gateway_url,
         keypair: keypairStatus,
         agent_id: identity.agent_id,
@@ -410,7 +412,7 @@ program
     } else {
       console.log(`AgentBnB initialized.`);
       console.log(`  Owner:   ${owner}`);
-      console.log(`  Token:   ${token}`);
+      console.log(`  Token:   ${config.token}`);
       console.log(`  Config:  ${configDir}/config.json`);
       if (registryBalance !== undefined) {
         console.log(`  Registry balance: ${registryBalance} credits`);

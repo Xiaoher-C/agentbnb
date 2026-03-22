@@ -9,10 +9,9 @@
  */
 
 import { join } from 'node:path';
-import { homedir } from 'node:os';
 import { spawnSync } from 'node:child_process';
 
-import { loadConfig } from '../../src/cli/config.js';
+import { getConfigDir, loadConfig } from '../../src/cli/config.js';
 import { AgentBnBError } from '../../src/types/index.js';
 import { ProcessGuard } from '../../src/runtime/process-guard.js';
 import { ServiceCoordinator } from '../../src/runtime/service-coordinator.js';
@@ -55,6 +54,19 @@ export interface BootstrapContext {
  * registered here to avoid double-handler conflicts. Track in Layer A implementation.
  */
 export async function activate(config: BootstrapConfig = {}): Promise<BootstrapContext> {
+  const configDir = getConfigDir();
+
+  // Isolation warning: each agent should have its own data directory.
+  // Without AGENTBNB_DIR, multiple agents share ~/.agentbnb and pollute each other's
+  // owner / identity / registry / credit state.
+  if (!process.env['AGENTBNB_DIR']) {
+    process.stderr.write(
+      '[agentbnb] WARNING: AGENTBNB_DIR is not set. Using shared ~/.agentbnb — ' +
+      'multiple agents on the same machine will overwrite each other\'s owner and credits. ' +
+      'Set AGENTBNB_DIR=~/.agentbnb/<agent-name> for per-agent isolation.\n'
+    );
+  }
+
   let agentConfig = loadConfig();
   if (!agentConfig) {
     // Auto-init for first-time OpenClaw plugin activation
@@ -73,7 +85,14 @@ export async function activate(config: BootstrapConfig = {}): Promise<BootstrapC
     }
   }
 
-  const guard = new ProcessGuard(join(homedir(), '.agentbnb', '.pid'));
+  // Print startup diagnostic so it's always visible in agent logs.
+  process.stderr.write(
+    `[agentbnb] activate: owner=${agentConfig.owner} config=${configDir}/config.json\n`
+  );
+
+  // Use configDir for PID file — previously hardcoded to homedir()/.agentbnb which meant
+  // multiple agents on the same machine would fight over the same PID file.
+  const guard = new ProcessGuard(join(configDir, '.pid'));
   const coordinator = new ServiceCoordinator(agentConfig, guard);
   const service = new AgentBnBService(coordinator, agentConfig);
 
