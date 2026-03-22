@@ -1063,10 +1063,11 @@ program
     // Cross-machine requests use signed escrow receipts
     const useReceipt = isRemoteRequest && opts.receipt !== false;
 
-    // When Registry is configured, use CreditLedger for direct HTTP requests;
     // relay-only requests (no gatewayUrl) skip CLI-side escrow — relay handles credits.
+    // Direct HTTP requests (gatewayUrl present) always use local SQLite escrow + signed receipt,
+    // because the provider gateway verifies the receipt locally without hitting the registry.
     const isRelayOnly = isRemoteRequest && !gatewayUrl;
-    const useRegistryLedger = isRemoteRequest && !!config.registry && !!gatewayUrl;
+    const useRegistryLedger = false; // Registry CreditLedger only for future relay-server-side billing
 
     // --cost is required for direct remote requests (registry or local escrow).
     // Relay-only requests skip CLI-side escrow — the relay handles credits, so --cost is optional.
@@ -1244,7 +1245,11 @@ program
             gatewayUrl,
             token,
             cardId,
-            params: { ...params, ...(opts.skill ? { skill_id: opts.skill } : {}) },
+            params: {
+              ...params,
+              ...(opts.skill ? { skill_id: opts.skill } : {}),
+              ...(isRemoteRequest ? { requester: config.owner } : {}),
+            },
             escrowReceipt,
             identity: identityAuth,
           });
