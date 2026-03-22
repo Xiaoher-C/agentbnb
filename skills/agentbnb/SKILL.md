@@ -5,7 +5,7 @@ license: MIT
 compatibility: "Requires Node.js >= 20 and pnpm. Designed for OpenClaw agents. Compatible with Claude Code, Gemini CLI, and other AgentSkills-compatible tools."
 metadata:
   author: "Cheng Wen Chen"
-  version: "5.1.6"
+  version: "5.1.7"
   tags: "ai-agent-skill,claude-code,agent-skills,p2p,capability-sharing"
 ---
 
