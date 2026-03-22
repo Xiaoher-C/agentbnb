@@ -169,7 +169,8 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
   const __filename = fileURLToPath(import.meta.url);
   const __dirname = dirname(__filename);
   const hubDistCandidates = [
-    join(__dirname, '../../hub/dist'),   // When running from dist/registry/server.js
+    join(__dirname, '../hub/dist'),       // When in dist/ (tsup chunk, e.g. dist/server-XYZ.js)
+    join(__dirname, '../../hub/dist'),    // When in dist/registry/ or dist/cli/
     join(__dirname, '../../../hub/dist'), // Fallback for alternative layouts
   ];
   const hubDistDir = hubDistCandidates.find((p) => existsSync(p));
