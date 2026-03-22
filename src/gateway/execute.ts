@@ -148,14 +148,22 @@ export async function executeCapabilityRequest(opts: ExecuteRequestOptions): Pro
   // This usually indicates AGENTBNB_DIR is not set — the requester is accidentally
   // using the provider's identity instead of their own.
   if (requester === card.owner && !relayAuthorized) {
-    return {
-      success: false,
-      error: {
-        code: -32603,
-        message: `Self-request blocked: requester (${requester}) is the card owner. ` +
-          `Set AGENTBNB_DIR to your agent's config directory before calling agentbnb request.`,
-      },
-    };
+    const msg = `Self-request blocked: requester (${requester}) is the card owner. ` +
+      `Set AGENTBNB_DIR to your agent's config directory before calling agentbnb request.`;
+    try {
+      insertRequestLog(registryDb, {
+        id: randomUUID(),
+        card_id: cardId,
+        card_name: card.name,
+        skill_id: skillId,
+        requester,
+        status: 'failure',
+        latency_ms: 0,
+        credits_charged: 0,
+        created_at: new Date().toISOString(),
+      });
+    } catch { /* silent */ }
+    return { success: false, error: { code: -32603, message: msg } };
   }
 
   // Resolve skill and pricing
