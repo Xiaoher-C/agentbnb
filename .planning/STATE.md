@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v6.0
 milestone_name: Team Formation Protocol
-status: in_progress
-stopped_at: "Phase 50 complete — 3/3 plans done"
-last_updated: "2026-03-24T02:57:00.000Z"
-last_activity: 2026-03-24 — Phase 50 (Network-Native Decomposer) complete
+status: completed
+stopped_at: Completed 51-01-PLAN.md and 51-02-PLAN.md
+last_updated: "2026-03-23T19:07:05.672Z"
+last_activity: 2026-03-24 — Phase 50 executed (3 plans, 26 new tests, 9 files changed)
 progress:
-  total_phases: 4
-  completed_phases: 1
-  total_plans: 9
-  completed_plans: 3
+  total_phases: 14
+  completed_phases: 11
+  total_plans: 17
+  completed_plans: 16
   percent: 33
 ---
 
@@ -50,6 +50,10 @@ Recent decisions for v6.0:
 - [Phase 37]: relay_owner added to queue mode config, jobId on PendingRelayRequest for response routing
 - [Phase 39]: Hub Agent routes placed before agents/:owner in router to avoid param collision
 - [Phase 39]: Jobs poll at 10s (vs 30s default) since job status changes frequently
+- [Phase 51-production-resilience]: FailureReason as string union (not enum) — zero-cost type safety, no runtime overhead
+- [Phase 51-production-resilience]: updateReputation uses stored EWA counter (not live request_log query) — overload path skips calling it entirely
+- [Phase 51-production-resilience]: inFlight map scoped per createGatewayServer() call — no global state, clean test isolation
+- [Phase 51-production-resilience]: typeof getSkillConfig guard required for backward compat with mock executors that lack the method
 
 ### Pending Todos
 
@@ -61,8 +65,8 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-24
-Stopped at: Phase 50 complete — all 3 plans executed, 26 tests added, 1175 passing
+Last session: 2026-03-23T19:06:43.191Z
+Stopped at: Completed 51-01-PLAN.md and 51-02-PLAN.md
 Resume file: None
 
 ---
