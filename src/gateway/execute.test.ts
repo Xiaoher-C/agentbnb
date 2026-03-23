@@ -43,6 +43,7 @@ import { executeCapabilityRequest } from './execute.js';
 import { getCard, updateReputation } from '../registry/store.js';
 import { getBalance } from '../credit/ledger.js';
 import { holdEscrow, settleEscrow } from '../credit/escrow.js';
+import { insertRequestLog } from '../registry/request-log.js';
 import type { ProgressCallback } from '../skills/executor.js';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -173,6 +174,131 @@ describe('executeCapabilityRequest — onProgress wiring', () => {
     expect(result.success).toBe(true);
     // onProgress should NOT have been called on the handlerUrl path
     expect(onProgress).not.toHaveBeenCalled();
+
+    fetchSpy.mockRestore();
+  });
+});
+
+// ── failure_reason wiring tests (Plan 51-01) ─────────────────────────────────
+
+describe('executeCapabilityRequest — failure_reason field', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+
+    vi.mocked(getCard).mockReturnValue(makeCard() as ReturnType<typeof getCard>);
+    vi.mocked(getBalance).mockReturnValue(100);
+    vi.mocked(holdEscrow).mockReturnValue('escrow-uuid');
+    vi.mocked(settleEscrow).mockReturnValue(undefined);
+    vi.mocked(updateReputation).mockReturnValue(undefined);
+  });
+
+  it('stores failure_reason: bad_execution when skillExecutor returns failure', async () => {
+    const mockExecutor = makeMockExecutor({
+      execute: vi.fn().mockResolvedValue({
+        success: false,
+        error: 'Something went wrong',
+        latency_ms: 20,
+      }),
+    });
+
+    await executeCapabilityRequest({
+      registryDb: fakeDb,
+      creditDb: fakeDb,
+      cardId: 'card-1',
+      skillId: 'skill-1',
+      params: {},
+      requester: 'requester-bob',
+      skillExecutor: mockExecutor as unknown as import('../skills/executor.js').SkillExecutor,
+    });
+
+    const calls = vi.mocked(insertRequestLog).mock.calls;
+    expect(calls.length).toBeGreaterThan(0);
+    const logEntry = calls[calls.length - 1]![1];
+    expect(logEntry.failure_reason).toBe('bad_execution');
+  });
+
+  it('stores failure_reason: timeout when handlerUrl fetch times out (AbortError)', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(() => {
+      const err = new Error('The operation was aborted');
+      (err as Error & { name: string }).name = 'AbortError';
+      return Promise.reject(err);
+    });
+
+    await executeCapabilityRequest({
+      registryDb: fakeDb,
+      creditDb: fakeDb,
+      cardId: 'card-1',
+      params: {},
+      requester: 'requester-bob',
+      handlerUrl: 'http://localhost:9999/handle',
+      timeoutMs: 1,
+    });
+
+    const calls = vi.mocked(insertRequestLog).mock.calls;
+    expect(calls.length).toBeGreaterThan(0);
+    const logEntry = calls[calls.length - 1]![1];
+    expect(logEntry.failure_reason).toBe('timeout');
+
+    fetchSpy.mockRestore();
+  });
+
+  it('stores failure_reason: not_found when no skills are registered on the provider', async () => {
+    // Card with no skills[] array (v1.0 card) so resolvedSkillId remains undefined,
+    // forcing the fallback to listSkills() which returns [] — triggering 'not_found'.
+    const v1Card = {
+      id: 'card-1',
+      owner: 'owner-alice',
+      name: 'Test Card',
+      description: 'Test',
+      spec_version: '1.0',
+      level: 1 as const,
+      inputs: [],
+      outputs: [],
+      pricing: { credits_per_call: 5 },
+      availability: { online: true },
+      // no skills[] array
+    };
+    vi.mocked(getCard).mockReturnValue(v1Card as ReturnType<typeof getCard>);
+
+    const mockExecutor = {
+      execute: vi.fn(),
+      listSkills: vi.fn().mockReturnValue([]),
+    };
+
+    await executeCapabilityRequest({
+      registryDb: fakeDb,
+      creditDb: fakeDb,
+      cardId: 'card-1',
+      // no skillId — forces listSkills() path
+      params: {},
+      requester: 'requester-bob',
+      skillExecutor: mockExecutor as unknown as import('../skills/executor.js').SkillExecutor,
+    });
+
+    const calls = vi.mocked(insertRequestLog).mock.calls;
+    expect(calls.length).toBeGreaterThan(0);
+    const logEntry = calls[calls.length - 1]![1];
+    expect(logEntry.failure_reason).toBe('not_found');
+  });
+
+  it('stores failure_reason: bad_execution when handler returns non-ok status', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response('Internal Server Error', { status: 500 }),
+    );
+
+    await executeCapabilityRequest({
+      registryDb: fakeDb,
+      creditDb: fakeDb,
+      cardId: 'card-1',
+      params: {},
+      requester: 'requester-bob',
+      handlerUrl: 'http://localhost:9999/handle',
+    });
+
+    const calls = vi.mocked(insertRequestLog).mock.calls;
+    expect(calls.length).toBeGreaterThan(0);
+    const logEntry = calls[calls.length - 1]![1];
+    expect(logEntry.failure_reason).toBe('bad_execution');
 
     fetchSpy.mockRestore();
   });

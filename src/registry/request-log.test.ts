@@ -7,6 +7,7 @@ import {
   getSkillRequestCount,
   type RequestLogEntry,
 } from './request-log.js';
+import type { FailureReason } from '../types/index.js';
 import type Database from 'better-sqlite3';
 
 describe('request-log: createRequestLogTable', () => {
@@ -86,6 +87,115 @@ describe('request-log: insertRequestLog', () => {
 // -----------------------------------------------------------------------
 // Task 1 — getSkillRequestCount sliding-window query (Plan 06-01)
 // -----------------------------------------------------------------------
+
+// -----------------------------------------------------------------------
+// Task 1 — failure_reason field (Plan 51-01)
+// -----------------------------------------------------------------------
+
+describe('request-log: failure_reason field', () => {
+  let db: Database.Database;
+
+  beforeEach(() => {
+    db = openDatabase(':memory:');
+  });
+
+  it('insertRequestLog with failure_reason: overload stores it correctly', () => {
+    const entry: RequestLogEntry = {
+      id: 'fr-overload-1',
+      card_id: 'card-fr-1',
+      card_name: 'FR Test Card',
+      requester: 'agent-test',
+      status: 'failure',
+      latency_ms: 0,
+      credits_charged: 0,
+      created_at: new Date().toISOString(),
+      failure_reason: 'overload',
+    };
+    insertRequestLog(db, entry);
+
+    const row = db.prepare('SELECT failure_reason FROM request_log WHERE id = ?').get(entry.id) as { failure_reason: string | null };
+    expect(row).toBeDefined();
+    expect(row.failure_reason).toBe('overload');
+  });
+
+  it('insertRequestLog with no failure_reason stores NULL', () => {
+    const entry: RequestLogEntry = {
+      id: 'fr-null-1',
+      card_id: 'card-fr-2',
+      card_name: 'FR Test Card',
+      requester: 'agent-test',
+      status: 'success',
+      latency_ms: 100,
+      credits_charged: 5,
+      created_at: new Date().toISOString(),
+      // failure_reason intentionally omitted
+    };
+    insertRequestLog(db, entry);
+
+    const row = db.prepare('SELECT failure_reason FROM request_log WHERE id = ?').get(entry.id) as { failure_reason: string | null };
+    expect(row).toBeDefined();
+    expect(row.failure_reason).toBeNull();
+  });
+
+  it('createRequestLogTable is idempotent when failure_reason column already exists', () => {
+    // First call — creates table and column
+    createRequestLogTable(db);
+    // Second call — must NOT throw (ALTER TABLE try/catch)
+    expect(() => createRequestLogTable(db)).not.toThrow();
+  });
+
+  it('getRequestLog returns failure_reason field in result rows', () => {
+    const reasons: (FailureReason | null)[] = ['bad_execution', 'timeout', null];
+    reasons.forEach((reason, i) => {
+      const entry: RequestLogEntry = {
+        id: `fr-get-${i}`,
+        card_id: 'card-fr-3',
+        card_name: 'FR Get Test',
+        requester: 'agent-test',
+        status: reason === 'timeout' ? 'timeout' : reason ? 'failure' : 'success',
+        latency_ms: 50,
+        credits_charged: reason ? 0 : 5,
+        created_at: new Date(Date.now() + i * 100).toISOString(),
+        failure_reason: reason,
+      };
+      insertRequestLog(db, entry);
+    });
+
+    const rows = getRequestLog(db, 10);
+    expect(rows.length).toBeGreaterThanOrEqual(3);
+    // Find the overload-tagged row
+    const timeoutRow = rows.find((r) => r.id === 'fr-get-1');
+    expect(timeoutRow).toBeDefined();
+    expect(timeoutRow?.failure_reason).toBe('timeout');
+
+    // Find the null-reason row
+    const nullRow = rows.find((r) => r.id === 'fr-get-2');
+    expect(nullRow).toBeDefined();
+    expect(nullRow?.failure_reason).toBeNull();
+  });
+
+  it('stores all FailureReason values correctly', () => {
+    const allReasons: FailureReason[] = ['bad_execution', 'overload', 'timeout', 'auth_error', 'not_found'];
+    allReasons.forEach((reason, i) => {
+      insertRequestLog(db, {
+        id: `fr-all-${i}`,
+        card_id: 'card-fr-4',
+        card_name: 'FR All Reasons',
+        requester: 'agent-test',
+        status: 'failure',
+        latency_ms: 0,
+        credits_charged: 0,
+        created_at: new Date().toISOString(),
+        failure_reason: reason,
+      });
+    });
+
+    allReasons.forEach((reason, i) => {
+      const row = db.prepare('SELECT failure_reason FROM request_log WHERE id = ?').get(`fr-all-${i}`) as { failure_reason: string };
+      expect(row.failure_reason).toBe(reason);
+    });
+  });
+});
 
 describe('request-log: getSkillRequestCount', () => {
   let db: Database.Database;

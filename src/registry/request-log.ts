@@ -1,4 +1,5 @@
 import type Database from 'better-sqlite3';
+import type { FailureReason } from '../types/index.js';
 
 /**
  * A single entry in the request log table.
@@ -36,6 +37,12 @@ export interface RequestLogEntry {
    * Only set for autonomy audit events. Null for regular request log entries.
    */
   tier_invoked?: number | null;
+  /**
+   * Categorizes the cause of a terminal failure.
+   * Null for successful requests and for rows predating the Phase 51 migration.
+   * Overload failures (failure_reason = 'overload') are excluded from reputation computations.
+   */
+  failure_reason?: FailureReason | null;
 }
 
 /**
@@ -97,6 +104,14 @@ export function createRequestLogTable(db: Database.Database): void {
   } catch {
     // Column already exists — ignore
   }
+
+  // Add failure_reason column for categorizing terminal failures (Phase 51+).
+  // Existing rows (no failure_reason) are treated as bad_execution by default.
+  try {
+    db.exec('ALTER TABLE request_log ADD COLUMN failure_reason TEXT');
+  } catch {
+    // Column already exists — ignore
+  }
 }
 
 /**
@@ -107,8 +122,8 @@ export function createRequestLogTable(db: Database.Database): void {
  */
 export function insertRequestLog(db: Database.Database, entry: RequestLogEntry): void {
   const stmt = db.prepare(`
-    INSERT INTO request_log (id, card_id, card_name, requester, status, latency_ms, credits_charged, created_at, skill_id, action_type, tier_invoked)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO request_log (id, card_id, card_name, requester, status, latency_ms, credits_charged, created_at, skill_id, action_type, tier_invoked, failure_reason)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
   stmt.run(
@@ -122,7 +137,8 @@ export function insertRequestLog(db: Database.Database, entry: RequestLogEntry):
     entry.created_at,
     entry.skill_id ?? null,
     entry.action_type ?? null,
-    entry.tier_invoked ?? null
+    entry.tier_invoked ?? null,
+    entry.failure_reason ?? null
   );
 }
 
@@ -242,7 +258,7 @@ export function getRequestLog(
   if (since !== undefined) {
     const cutoff = new Date(Date.now() - SINCE_MS[since]).toISOString();
     const stmt = db.prepare(`
-      SELECT id, card_id, card_name, requester, status, latency_ms, credits_charged, created_at, skill_id, action_type, tier_invoked
+      SELECT id, card_id, card_name, requester, status, latency_ms, credits_charged, created_at, skill_id, action_type, tier_invoked, failure_reason
       FROM request_log
       WHERE created_at >= ?
       ORDER BY created_at DESC
@@ -252,7 +268,7 @@ export function getRequestLog(
   }
 
   const stmt = db.prepare(`
-    SELECT id, card_id, card_name, requester, status, latency_ms, credits_charged, created_at, skill_id, action_type, tier_invoked
+    SELECT id, card_id, card_name, requester, status, latency_ms, credits_charged, created_at, skill_id, action_type, tier_invoked, failure_reason
     FROM request_log
     ORDER BY created_at DESC
     LIMIT ?

@@ -7,7 +7,7 @@ import { insertRequestLog } from '../registry/request-log.js';
 import { verifyEscrowReceipt } from '../credit/signing.js';
 import { settleProviderEarning } from '../credit/settlement.js';
 import { AgentBnBError } from '../types/index.js';
-import type { CapabilityCardV2, EscrowReceipt } from '../types/index.js';
+import type { CapabilityCardV2, EscrowReceipt, FailureReason } from '../types/index.js';
 import type { SkillExecutor, ProgressCallback } from '../skills/executor.js';
 
 // ── Batch request types ───────────────────────────────────────────────────────
@@ -161,6 +161,7 @@ export async function executeCapabilityRequest(opts: ExecuteRequestOptions): Pro
         latency_ms: 0,
         credits_charged: 0,
         created_at: new Date().toISOString(),
+        failure_reason: 'auth_error',
       });
     } catch { /* silent */ }
     return { success: false, error: { code: -32603, message: msg } };
@@ -228,8 +229,15 @@ export async function executeCapabilityRequest(opts: ExecuteRequestOptions): Pro
   const startMs = Date.now();
   const receiptData = isRemoteEscrow ? { receipt_released: true } : undefined;
 
-  // Helper: log request and handle escrow on failure
-  const handleFailure = (status: 'failure' | 'timeout', latencyMs: number, message: string): ExecuteResult => {
+  // Helper: log request and handle escrow on failure.
+  // updateReputation uses a stored EWA counter on capability_cards (not a live request_log query),
+  // so overload events must NOT call updateReputation — they bypass this helper entirely (Plan 51-02).
+  const handleFailure = (
+    status: 'failure' | 'timeout',
+    latencyMs: number,
+    message: string,
+    failureReason: FailureReason = 'bad_execution',
+  ): ExecuteResult => {
     if (!isRemoteEscrow && escrowId) releaseEscrow(creditDb, escrowId);
     updateReputation(registryDb, cardId, false, latencyMs);
     try {
@@ -243,6 +251,7 @@ export async function executeCapabilityRequest(opts: ExecuteRequestOptions): Pro
         latency_ms: latencyMs,
         credits_charged: 0,
         created_at: new Date().toISOString(),
+        failure_reason: failureReason,
       });
     } catch { /* silent no-op */ }
     return {
@@ -298,6 +307,7 @@ export async function executeCapabilityRequest(opts: ExecuteRequestOptions): Pro
           'failure',
           Date.now() - startMs,
           'No skill_id specified and no skills registered on this provider.',
+          'not_found',
         );
       }
     }
@@ -305,18 +315,18 @@ export async function executeCapabilityRequest(opts: ExecuteRequestOptions): Pro
     try {
       const execResult = await skillExecutor.execute(targetSkillId, params, onProgress);
       if (!execResult.success) {
-        return handleFailure('failure', execResult.latency_ms, execResult.error ?? 'Execution failed');
+        return handleFailure('failure', execResult.latency_ms, execResult.error ?? 'Execution failed', 'bad_execution');
       }
       return handleSuccess(execResult.result, execResult.latency_ms);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Execution error';
-      return handleFailure('failure', Date.now() - startMs, message);
+      return handleFailure('failure', Date.now() - startMs, message, 'bad_execution');
     }
   }
 
   // ── Legacy handlerUrl path ──────────────────────────────────────────────────
   if (!handlerUrl) {
-    return handleFailure('failure', Date.now() - startMs, 'No skill executor or handler URL configured');
+    return handleFailure('failure', Date.now() - startMs, 'No skill executor or handler URL configured', 'bad_execution');
   }
 
   const controller = new AbortController();
@@ -333,7 +343,7 @@ export async function executeCapabilityRequest(opts: ExecuteRequestOptions): Pro
     clearTimeout(timer);
 
     if (!response.ok) {
-      return handleFailure('failure', Date.now() - startMs, `Handler returned ${response.status}`);
+      return handleFailure('failure', Date.now() - startMs, `Handler returned ${response.status}`, 'bad_execution');
     }
 
     const result = (await response.json()) as unknown;
@@ -345,6 +355,7 @@ export async function executeCapabilityRequest(opts: ExecuteRequestOptions): Pro
       isTimeout ? 'timeout' : 'failure',
       Date.now() - startMs,
       isTimeout ? 'Execution timeout' : 'Handler error',
+      isTimeout ? 'timeout' : 'bad_execution',
     );
   }
 }
