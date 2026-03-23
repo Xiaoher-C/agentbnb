@@ -17,10 +17,10 @@
 
 ### RESIL — Production Resilience
 
-- [ ] **RESIL-01**: System categorizes execution failures with FailureReason enum: `bad_execution` | `overload` | `timeout` | `auth_error` | `not_found`; failure_reason recorded in request_log
-- [ ] **RESIL-02**: `overload` failures are excluded from the reputation score denominator — overload does not reduce provider reputation
-- [ ] **RESIL-03**: Per-skill `capacity.max_concurrent` can be declared in skills.yaml; gateway tracks in-flight count per skill_id
-- [ ] **RESIL-04**: When max_concurrent is exceeded, gateway returns a structured busy/overload response without executing the skill, and the event is recorded with `failure_reason: overload`
+- [x] **RESIL-01**: System categorizes execution failures with FailureReason enum: `bad_execution` | `overload` | `timeout` | `auth_error` | `not_found`; failure_reason recorded in request_log
+- [x] **RESIL-02**: `overload` failures are excluded from the reputation score denominator — overload does not reduce provider reputation
+- [x] **RESIL-03**: Per-skill `capacity.max_concurrent` can be declared in skills.yaml; gateway tracks in-flight count per skill_id
+- [x] **RESIL-04**: When max_concurrent is exceeded, gateway returns a structured busy/overload response without executing the skill, and the event is recorded with `failure_reason: overload`
 
 ### TEAM — Team Formation
 
@@ -30,8 +30,8 @@
 
 ### TRACE — Team Traceability
 
-- [ ] **TRACE-01**: request_log records `team_id` and `role` columns for team-originated executions
-- [ ] **TRACE-02**: Hub request history displays role context when `role` is present in log entries
+- [x] **TRACE-01**: request_log records `team_id` and `role` columns for team-originated executions
+- [x] **TRACE-02**: Hub request history displays role context when `role` is present in log entries
 
 ## v7.0 Requirements (Deferred)
 
@@ -70,15 +70,15 @@
 | COND-04 | Phase 50 | Complete |
 | COND-05 | Phase 50 | Complete |
 | COND-06 | Phase 50 | Complete |
-| RESIL-01 | Phase 51 | Pending |
-| RESIL-02 | Phase 51 | Pending |
-| RESIL-03 | Phase 51 | Pending |
-| RESIL-04 | Phase 51 | Pending |
+| RESIL-01 | Phase 51 | Complete |
+| RESIL-02 | Phase 51 | Complete |
+| RESIL-03 | Phase 51 | Complete |
+| RESIL-04 | Phase 51 | Complete |
 | TEAM-01 | Phase 52 | Pending |
 | TEAM-02 | Phase 52 | Pending |
 | TEAM-03 | Phase 52 | Pending |
-| TRACE-01 | Phase 53 | Pending |
-| TRACE-02 | Phase 53 | Pending |
+| TRACE-01 | Phase 53 | Complete |
+| TRACE-02 | Phase 53 | Complete |
 
 **Coverage:**
 - v6.0 requirements: 16 total
