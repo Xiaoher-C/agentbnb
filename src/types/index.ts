@@ -352,3 +352,14 @@ export class AgentBnBError extends Error {
  * not_found     — card or skill ID not found in registry
  */
 export type FailureReason = 'bad_execution' | 'overload' | 'timeout' | 'auth_error' | 'not_found';
+
+/**
+ * Routing hint for team formation — indicates the intended function of a sub-task.
+ * Values: researcher | executor | validator | coordinator
+ *
+ * IMPORTANT: Role is a ROUTING HINT ONLY.
+ * - NOT an authorization boundary — does not grant or restrict permissions
+ * - NOT a hierarchy level — no role outranks another
+ * - Used solely to group sub-tasks for same-agent batching in team formation
+ */
+export type Role = 'researcher' | 'executor' | 'validator' | 'coordinator';

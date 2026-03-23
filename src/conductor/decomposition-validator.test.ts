@@ -96,7 +96,7 @@ describe('validateAndNormalizeSubtasks', () => {
     });
   });
 
-  it('Test 12: Valid array with role and estimated_credits within bounds — role stripped', () => {
+  it('Test 12: Valid array with role and estimated_credits within bounds — role passed through', () => {
     const raw = [
       {
         id: 'step-1',
@@ -111,8 +111,8 @@ describe('validateAndNormalizeSubtasks', () => {
     expect(result.valid).toHaveLength(1);
     const task = result.valid[0]!;
     expect(task.estimated_credits).toBe(5);
-    // role field should NOT be in SubTask
-    expect('role' in task).toBe(false);
+    // role field IS passed through to SubTask (routing hint for team formation)
+    expect(task.role).toBe('executor');
   });
 
   it('Test 13: Diamond DAG (A->B, A->C, B->C) is valid — not a cycle', () => {

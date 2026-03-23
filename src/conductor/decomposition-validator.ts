@@ -1,10 +1,7 @@
 import type { SubTask } from './types.js';
+import type { Role } from '../types/index.js';
 
-/**
- * Recognized role values for task decomposition routing hints.
- * Roles are NOT authorization boundaries — they are routing hints only.
- */
-export type Role = 'researcher' | 'executor' | 'validator' | 'coordinator';
+export type { Role } from '../types/index.js';
 
 /**
  * Raw external subtask input — may contain unknown/invalid fields.
@@ -231,6 +228,8 @@ function _validate(
     const estimated_credits =
       typeof item['estimated_credits'] === 'number' ? (item['estimated_credits'] as number) : 0;
 
+    const role = item['role'];
+
     return {
       id: item['id'] as string,
       description: item['description'] as string,
@@ -238,6 +237,7 @@ function _validate(
       params,
       depends_on,
       estimated_credits,
+      ...(role !== undefined ? { role: role as Role } : {}),
     };
   });
 
