@@ -17,6 +17,8 @@ import { matchSubTasks } from './capability-matcher.js';
 import { BudgetController } from './budget-controller.js';
 import { BudgetManager } from '../credit/budget.js';
 import { orchestrate } from './pipeline-orchestrator.js';
+import { formTeam } from './team-formation.js';
+import type { Team } from './role-schema.js';
 import type { MatchResult, SubTask } from './types.js';
 import { getCardsByCapabilityType } from '../registry/store.js';
 import { requestCapability } from '../gateway/client.js';
@@ -171,6 +173,25 @@ export class ConductorMode implements ExecutorMode {
     });
     onProgress?.({ step: 2, total: 5, message: `Matched ${matchResults.length} sub-tasks to agents` });
 
+    // Step 2b: Form team when subtasks have role hints (orchestrate skill only)
+    let team: Team | undefined;
+    if (conductorSkill === 'orchestrate') {
+      const hasRoleHints = subtasks.some((s) => s.role !== undefined);
+      if (hasRoleHints) {
+        const strategy = typeof params.formation_strategy === 'string'
+          && ['cost_optimized', 'quality_optimized', 'balanced'].includes(params.formation_strategy)
+          ? (params.formation_strategy as 'cost_optimized' | 'quality_optimized' | 'balanced')
+          : 'balanced';
+        team = await formTeam({
+          subtasks,
+          strategy,
+          db: this.db,
+          conductorOwner: this.conductorOwner,
+        });
+        onProgress?.({ step: 2, total: 5, message: `Formed team: ${team.matched.length} members, ${team.unrouted.length} unrouted` });
+      }
+    }
+
     // Step 3: Budget check
     const budgetManager = new BudgetManager(this.creditDb, this.conductorOwner);
     const budgetController = new BudgetController(budgetManager, this.maxBudget);
@@ -192,6 +213,7 @@ export class ConductorMode implements ExecutorMode {
           subtasks,
           matches: matchResults,
           budget: executionBudget,
+          team,  // undefined when no role hints
         },
       };
     }
@@ -207,6 +229,7 @@ export class ConductorMode implements ExecutorMode {
       gatewayToken: this.gatewayToken,
       resolveAgentUrl: this.resolveAgentUrl,
       maxBudget: this.maxBudget,
+      team,
     });
     onProgress?.({ step: 4, total: 5, message: 'Pipeline execution complete' });
 

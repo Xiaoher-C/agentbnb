@@ -13,6 +13,7 @@ import { requestCapability } from '../gateway/client.js';
 import { interpolateObject } from '../utils/interpolation.js';
 import type { RelayClient } from '../relay/websocket-client.js';
 import type { SubTask, MatchResult, OrchestrationResult } from './types.js';
+import type { Team, TeamMember } from './role-schema.js';
 
 /**
  * Options for the orchestrate() function.
@@ -34,6 +35,12 @@ export interface OrchestrateOptions {
   relayClient?: RelayClient;
   /** Owner identifier of the requester agent. Used for relay requests. */
   requesterOwner?: string;
+  /**
+   * Optional pre-formed team from formTeam(). When provided, agent assignments
+   * for matched team members override the MatchResult selected_agent.
+   * Same-role subtasks in the same wave are routed to the same agent.
+   */
+  team?: Team;
 }
 
 /**
@@ -91,6 +98,15 @@ function computeWaves(subtasks: SubTask[]): string[][] {
 export async function orchestrate(opts: OrchestrateOptions): Promise<OrchestrationResult> {
   const { subtasks, matches, gatewayToken, resolveAgentUrl, timeoutMs = 300_000, maxBudget, relayClient, requesterOwner } = opts;
   const startTime = Date.now();
+
+  // Build role-aware agent override map from team (if provided)
+  // Key: subtask_id → TeamMember (for agent override)
+  const teamMemberMap = new Map<string, TeamMember>();
+  if (opts.team) {
+    for (const member of opts.team.matched) {
+      teamMemberMap.set(member.subtask.id, member);
+    }
+  }
 
   // Edge case: empty subtask list
   if (subtasks.length === 0) {
@@ -155,7 +171,9 @@ export async function orchestrate(opts: OrchestrateOptions): Promise<Orchestrati
         );
 
         // Try primary agent
-        const primary = resolveAgentUrl(m.selected_agent);
+        // Use team member agent assignment if available (role-aware routing)
+        const agentOwner = teamMemberMap.get(taskId)?.agent ?? m.selected_agent;
+        const primary = resolveAgentUrl(agentOwner);
         try {
           let res: unknown;
           if (primary.url.startsWith('relay://') && relayClient) {
@@ -172,7 +190,7 @@ export async function orchestrate(opts: OrchestrateOptions): Promise<Orchestrati
               gatewayUrl: primary.url,
               token: gatewayToken,
               cardId: primary.cardId,
-              params: interpolatedParams,
+              params: { ...interpolatedParams, requester: requesterOwner },
               timeoutMs,
             });
           }
@@ -198,7 +216,7 @@ export async function orchestrate(opts: OrchestrateOptions): Promise<Orchestrati
                   gatewayUrl: altAgent.url,
                   token: gatewayToken,
                   cardId: altAgent.cardId,
-                  params: interpolatedParams,
+                  params: { ...interpolatedParams, requester: requesterOwner },
                   timeoutMs,
                 });
               }
