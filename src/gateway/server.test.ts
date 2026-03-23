@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import Fastify from 'fastify';
 import type { FastifyInstance } from 'fastify';
 import { randomUUID } from 'node:crypto';
@@ -9,6 +9,7 @@ import { requestCapability } from './client.js';
 import { getRequestLog } from '../registry/request-log.js';
 import { generateKeyPair, signEscrowReceipt } from '../credit/signing.js';
 import type { CapabilityCard, CapabilityCardV2, EscrowReceipt } from '../types/index.js';
+import type { SkillExecutor } from '../skills/executor.js';
 import type Database from 'better-sqlite3';
 
 // ─── Helper: insert a v2.0 card directly into the DB ─────────────────────────
@@ -1232,6 +1233,250 @@ describe('Gateway Escrow Receipt Verification', () => {
     } finally {
       await errorGateway.close();
       await errorHandler.server.close();
+    }
+  });
+});
+
+// ─── Gateway in-flight / overload tests (Plan 51-02) ─────────────────────────
+
+describe('Gateway concurrency limits (max_concurrent)', () => {
+  let registryDb: Database.Database;
+  let creditDb: Database.Database;
+  let testCard: CapabilityCard;
+  const validToken = 'overload-test-token';
+
+  beforeEach(() => {
+    registryDb = openDatabase(':memory:');
+    creditDb = openCreditDb(':memory:');
+    bootstrapAgent(creditDb, 'requester-agent', 1000);
+    testCard = makeCard({ id: randomUUID() });
+    insertCard(registryDb, testCard);
+  });
+
+  afterEach(() => {
+    registryDb.close();
+    creditDb.close();
+  });
+
+  /**
+   * Creates a mock SkillExecutor with configurable max_concurrent and a
+   * controllable execution delay (for testing concurrent blocking).
+   */
+  function makeMockSkillExecutor(opts: {
+    skillId: string;
+    maxConcurrent?: number;
+    executeDelay?: number;
+  }): SkillExecutor {
+    return {
+      getSkillConfig: vi.fn().mockReturnValue(
+        opts.maxConcurrent !== undefined
+          ? { id: opts.skillId, type: 'api', capacity: { max_concurrent: opts.maxConcurrent } }
+          : { id: opts.skillId, type: 'api' }
+      ),
+      listSkills: vi.fn().mockReturnValue([opts.skillId]),
+      execute: vi.fn().mockImplementation(async () => {
+        if (opts.executeDelay) {
+          await new Promise((resolve) => setTimeout(resolve, opts.executeDelay));
+        }
+        return { success: true, result: { output: 'ok' }, latency_ms: 10 };
+      }),
+    } as unknown as SkillExecutor;
+  }
+
+  it('request below max_concurrent limit executes normally', async () => {
+    const skillExecutor = makeMockSkillExecutor({ skillId: 'test-skill', maxConcurrent: 2 });
+    const gateway = createGatewayServer({
+      registryDb,
+      creditDb,
+      tokens: [validToken],
+      handlerUrl: 'http://localhost:1',
+      skillExecutor,
+      silent: true,
+    });
+    await gateway.ready();
+
+    try {
+      const res = await gateway.inject({
+        method: 'POST',
+        url: '/rpc',
+        headers: { authorization: `Bearer ${validToken}` },
+        payload: {
+          jsonrpc: '2.0',
+          method: 'capability.execute',
+          params: { card_id: testCard.id, skill_id: 'test-skill', requester: 'requester-agent' },
+          id: 'req-1',
+        },
+      });
+
+      const body = res.json<{ result?: unknown; error?: unknown }>();
+      // Should succeed (not overload)
+      expect(body.error).toBeUndefined();
+      expect(body.result).toBeDefined();
+    } finally {
+      await gateway.close();
+    }
+  });
+
+  it('N+1th concurrent request receives overload response without skill executing', async () => {
+    // max_concurrent: 1 — when 1 is in-flight, the 2nd should be rejected
+    let releaseFirstRequest!: () => void;
+    const firstRequestBlocking = new Promise<void>((resolve) => {
+      releaseFirstRequest = resolve;
+    });
+
+    const skillExecutor = {
+      getSkillConfig: vi.fn().mockReturnValue(
+        { id: 'blocking-skill', type: 'api', capacity: { max_concurrent: 1 } }
+      ),
+      listSkills: vi.fn().mockReturnValue(['blocking-skill']),
+      execute: vi.fn().mockImplementation(async () => {
+        // Block until released by test
+        await firstRequestBlocking;
+        return { success: true, result: { output: 'ok' }, latency_ms: 50 };
+      }),
+    } as unknown as SkillExecutor;
+
+    const gateway = createGatewayServer({
+      registryDb,
+      creditDb,
+      tokens: [validToken],
+      handlerUrl: 'http://localhost:1',
+      skillExecutor,
+      silent: true,
+    });
+    await gateway.ready();
+
+    try {
+      // Start first request (will block)
+      const firstRequestPromise = gateway.inject({
+        method: 'POST',
+        url: '/rpc',
+        headers: { authorization: `Bearer ${validToken}` },
+        payload: {
+          jsonrpc: '2.0',
+          method: 'capability.execute',
+          params: { card_id: testCard.id, skill_id: 'blocking-skill', requester: 'requester-agent' },
+          id: 'req-blocking',
+        },
+      });
+
+      // Give the first request time to start executing (increment inFlight)
+      await new Promise((resolve) => setTimeout(resolve, 20));
+
+      // Send 2nd request — should get overload
+      const secondRes = await gateway.inject({
+        method: 'POST',
+        url: '/rpc',
+        headers: { authorization: `Bearer ${validToken}` },
+        payload: {
+          jsonrpc: '2.0',
+          method: 'capability.execute',
+          params: { card_id: testCard.id, skill_id: 'blocking-skill', requester: 'requester-agent' },
+          id: 'req-overload',
+        },
+      });
+
+      const body = secondRes.json<{ error?: { code: number; message: string; data?: { error: string; retry_after_ms: number } } }>();
+      expect(body.error).toBeDefined();
+      expect(body.error?.message).toBe('overload');
+      expect(body.error?.data?.error).toBe('overload');
+      expect(body.error?.data?.retry_after_ms).toBe(5000);
+
+      // Release the first request
+      releaseFirstRequest();
+      await firstRequestPromise;
+    } finally {
+      await gateway.close();
+    }
+  });
+
+  it('overload rejection records request_log row with failure_reason: overload', async () => {
+    // max_concurrent: 0 is prevented by Zod validation, but we can test by simulating
+    // inFlight >= maxConcurrent via a blocking skill
+    let releaseRequest!: () => void;
+    const blockingPromise = new Promise<void>((resolve) => { releaseRequest = resolve; });
+
+    const skillExecutor = {
+      getSkillConfig: vi.fn().mockReturnValue(
+        { id: 'log-test-skill', type: 'api', capacity: { max_concurrent: 1 } }
+      ),
+      listSkills: vi.fn().mockReturnValue(['log-test-skill']),
+      execute: vi.fn().mockImplementation(async () => {
+        await blockingPromise;
+        return { success: true, result: {}, latency_ms: 10 };
+      }),
+    } as unknown as SkillExecutor;
+
+    const gateway = createGatewayServer({
+      registryDb,
+      creditDb,
+      tokens: [validToken],
+      handlerUrl: 'http://localhost:1',
+      skillExecutor,
+      silent: true,
+    });
+    await gateway.ready();
+
+    try {
+      // Block first request
+      const firstReq = gateway.inject({
+        method: 'POST', url: '/rpc',
+        headers: { authorization: `Bearer ${validToken}` },
+        payload: { jsonrpc: '2.0', method: 'capability.execute', id: 'r1',
+          params: { card_id: testCard.id, skill_id: 'log-test-skill', requester: 'requester-agent' } },
+      });
+
+      await new Promise((resolve) => setTimeout(resolve, 20));
+
+      // Second request — overload
+      await gateway.inject({
+        method: 'POST', url: '/rpc',
+        headers: { authorization: `Bearer ${validToken}` },
+        payload: { jsonrpc: '2.0', method: 'capability.execute', id: 'r2',
+          params: { card_id: testCard.id, skill_id: 'log-test-skill', requester: 'requester-agent' } },
+      });
+
+      releaseRequest();
+      await firstReq;
+
+      // Check request_log for overload entry
+      const log = getRequestLog(registryDb, 20);
+      const overloadEntry = log.find((e) => e.failure_reason === 'overload');
+      expect(overloadEntry).toBeDefined();
+      expect(overloadEntry?.status).toBe('failure');
+      expect(overloadEntry?.credits_charged).toBe(0);
+      expect(overloadEntry?.skill_id).toBe('log-test-skill');
+    } finally {
+      await gateway.close();
+    }
+  });
+
+  it('skill without capacity.max_concurrent declared has no concurrency limit enforced', async () => {
+    const skillExecutor = makeMockSkillExecutor({ skillId: 'unlimited-skill' }); // no maxConcurrent
+    const gateway = createGatewayServer({
+      registryDb,
+      creditDb,
+      tokens: [validToken],
+      handlerUrl: 'http://localhost:1',
+      skillExecutor,
+      silent: true,
+    });
+    await gateway.ready();
+
+    try {
+      const res = await gateway.inject({
+        method: 'POST', url: '/rpc',
+        headers: { authorization: `Bearer ${validToken}` },
+        payload: { jsonrpc: '2.0', method: 'capability.execute', id: 'unlimited-req',
+          params: { card_id: testCard.id, skill_id: 'unlimited-skill', requester: 'requester-agent' } },
+      });
+
+      const body = res.json<{ result?: unknown; error?: { message: string } }>();
+      // Must not be overload — should succeed
+      expect(body.error?.message).not.toBe('overload');
+      expect(body.result).toBeDefined();
+    } finally {
+      await gateway.close();
     }
   });
 });

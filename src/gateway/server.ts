@@ -1,9 +1,12 @@
 import Fastify, { type FastifyInstance } from 'fastify';
+import { randomUUID } from 'node:crypto';
 import type Database from 'better-sqlite3';
 import type { SkillExecutor } from '../skills/executor.js';
 import { executeCapabilityRequest } from './execute.js';
 import type { EscrowReceipt } from '../types/index.js';
+// FailureReason is used as a string literal 'overload' in the overload log entry
 import { verifyEscrowReceipt } from '../credit/signing.js';
+import { insertRequestLog } from '../registry/request-log.js';
 
 /**
  * Options for creating a gateway server.
@@ -56,6 +59,12 @@ export function createGatewayServer(opts: GatewayOptions): FastifyInstance {
 
   const fastify = Fastify({ logger: !silent });
   const tokenSet = new Set(tokens);
+
+  // Per-skill in-flight execution counter. Used to enforce capacity.max_concurrent limits.
+  // Scoped to this server instance so each createGatewayServer() call gets its own map.
+  const inFlight = new Map<string, number>();
+  // Hardcoded retry suggestion for overload responses — deterministic and simple.
+  const OVERLOAD_RETRY_MS = 5000;
 
   // Auth: two methods, checked in sequence.
   //   1. Bearer token — checked in onRequest (before body parse)
@@ -155,18 +164,71 @@ export function createGatewayServer(opts: GatewayOptions): FastifyInstance {
     const requester = (params.requester as string | undefined) ?? 'unknown';
     const receipt = params.escrow_receipt as EscrowReceipt | undefined;
 
-    const result = await executeCapabilityRequest({
-      registryDb,
-      creditDb,
-      cardId,
-      skillId,
-      params,
-      requester,
-      escrowReceipt: receipt,
-      skillExecutor,
-      handlerUrl,
-      timeoutMs,
-    });
+    // Check per-skill concurrency limit before executing.
+    // Uses getSkillConfig() on the SkillExecutor to read capacity.max_concurrent.
+    // Overload rejection: log to request_log (failure_reason: 'overload') WITHOUT calling
+    // updateReputation — overload events are infrastructure noise, not provider quality signals.
+    if (skillExecutor && skillId && typeof skillExecutor.getSkillConfig === 'function') {
+      const skillConfig = skillExecutor.getSkillConfig(skillId);
+      const maxConcurrent = skillConfig?.capacity?.max_concurrent;
+      if (maxConcurrent !== undefined) {
+        const current = inFlight.get(skillId) ?? 0;
+        if (current >= maxConcurrent) {
+          // Log overload event without calling updateReputation
+          // card_name uses sentinel '<overload>' to avoid an extra DB lookup for a rejected request
+          try {
+            insertRequestLog(registryDb, {
+              id: randomUUID(),
+              card_id: cardId,
+              card_name: '<overload>',
+              requester,
+              status: 'failure',
+              latency_ms: 0,
+              credits_charged: 0,
+              created_at: new Date().toISOString(),
+              skill_id: skillId,
+              failure_reason: 'overload',
+            });
+          } catch { /* silent — do not let log failure block the response */ }
+          return reply.status(200).send({
+            jsonrpc: '2.0',
+            id,
+            error: {
+              code: -32000,
+              message: 'overload',
+              data: { error: 'overload', retry_after_ms: OVERLOAD_RETRY_MS },
+            },
+          });
+        }
+      }
+    }
+
+    // Track in-flight executions. Increment before execute, decrement in finally
+    // to guarantee no leaks on success, failure, or exception.
+    const trackKey = skillId ?? cardId;
+    inFlight.set(trackKey, (inFlight.get(trackKey) ?? 0) + 1);
+    let result;
+    try {
+      result = await executeCapabilityRequest({
+        registryDb,
+        creditDb,
+        cardId,
+        skillId,
+        params,
+        requester,
+        escrowReceipt: receipt,
+        skillExecutor,
+        handlerUrl,
+        timeoutMs,
+      });
+    } finally {
+      const next = (inFlight.get(trackKey) ?? 1) - 1;
+      if (next <= 0) {
+        inFlight.delete(trackKey);
+      } else {
+        inFlight.set(trackKey, next);
+      }
+    }
 
     if (result.success) {
       return reply.send({ jsonrpc: '2.0', id, result: result.result });

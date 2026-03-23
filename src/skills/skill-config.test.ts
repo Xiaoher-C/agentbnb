@@ -224,6 +224,140 @@ skills:
   });
 });
 
+// -----------------------------------------------------------------------
+// Task 1 — capacity.max_concurrent field (Plan 51-02)
+// -----------------------------------------------------------------------
+
+describe('parseSkillsFile — capacity.max_concurrent', () => {
+  it('parses api skill with capacity.max_concurrent: 2', () => {
+    const yaml = `
+skills:
+  - id: rate-limited-tts
+    type: api
+    name: "Rate Limited TTS"
+    endpoint: "https://api.example.com/tts"
+    method: POST
+    input_mapping: {}
+    output_mapping: {}
+    pricing:
+      credits_per_call: 5
+    capacity:
+      max_concurrent: 2
+`;
+    const skills = parseSkillsFile(yaml);
+    expect(skills).toHaveLength(1);
+    expect(skills[0]?.capacity?.max_concurrent).toBe(2);
+  });
+
+  it('parses skill without capacity — capacity is undefined (not an error)', () => {
+    const yaml = `
+skills:
+  - id: no-limit-skill
+    type: api
+    name: "No Limit Skill"
+    endpoint: "https://api.example.com/tts"
+    method: POST
+    input_mapping: {}
+    output_mapping: {}
+    pricing:
+      credits_per_call: 5
+`;
+    const skills = parseSkillsFile(yaml);
+    expect(skills).toHaveLength(1);
+    expect(skills[0]?.capacity).toBeUndefined();
+  });
+
+  it('throws ZodError for capacity.max_concurrent: 0 (must be positive)', () => {
+    const yaml = `
+skills:
+  - id: zero-concurrent
+    type: api
+    name: "Zero Concurrent"
+    endpoint: "https://api.example.com/tts"
+    method: POST
+    input_mapping: {}
+    output_mapping: {}
+    pricing:
+      credits_per_call: 5
+    capacity:
+      max_concurrent: 0
+`;
+    expect(() => parseSkillsFile(yaml)).toThrow();
+  });
+
+  it('parses pipeline skill with max_concurrent', () => {
+    const yaml = `
+skills:
+  - id: pipeline-limited
+    type: pipeline
+    name: "Limited Pipeline"
+    steps:
+      - skill_id: some-skill
+        input_mapping: {}
+    pricing:
+      credits_per_call: 10
+    capacity:
+      max_concurrent: 3
+`;
+    const skills = parseSkillsFile(yaml);
+    expect(skills).toHaveLength(1);
+    expect(skills[0]?.capacity?.max_concurrent).toBe(3);
+  });
+
+  it('parses command skill with max_concurrent', () => {
+    const yaml = `
+skills:
+  - id: cmd-limited
+    type: command
+    name: "Limited Command"
+    command: echo hello
+    output_type: text
+    pricing:
+      credits_per_call: 1
+    capacity:
+      max_concurrent: 1
+`;
+    const skills = parseSkillsFile(yaml);
+    expect(skills).toHaveLength(1);
+    expect(skills[0]?.capacity?.max_concurrent).toBe(1);
+  });
+
+  it('parses openclaw skill with max_concurrent', () => {
+    const yaml = `
+skills:
+  - id: openclaw-limited
+    type: openclaw
+    name: "Limited OpenClaw"
+    agent_name: my-agent
+    channel: webhook
+    pricing:
+      credits_per_call: 20
+    capacity:
+      max_concurrent: 4
+`;
+    const skills = parseSkillsFile(yaml);
+    expect(skills).toHaveLength(1);
+    expect(skills[0]?.capacity?.max_concurrent).toBe(4);
+  });
+
+  it('parses conductor skill with max_concurrent', () => {
+    const yaml = `
+skills:
+  - id: conductor-limited
+    type: conductor
+    name: "Limited Conductor"
+    conductor_skill: orchestrate
+    pricing:
+      credits_per_call: 50
+    capacity:
+      max_concurrent: 2
+`;
+    const skills = parseSkillsFile(yaml);
+    expect(skills).toHaveLength(1);
+    expect(skills[0]?.capacity?.max_concurrent).toBe(2);
+  });
+});
+
 describe('expandEnvVars', () => {
   beforeEach(() => {
     process.env['MY_TOKEN'] = 'secret123';

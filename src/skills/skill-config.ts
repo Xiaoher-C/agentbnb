@@ -2,6 +2,15 @@ import { z } from 'zod';
 import yaml from 'js-yaml';
 
 /**
+ * Capacity constraints for a skill (optional).
+ * max_concurrent: maximum number of simultaneous in-flight executions allowed.
+ * When not declared, no concurrency limit is enforced.
+ */
+const CapacitySchema = z.object({
+  max_concurrent: z.number().positive().int().optional(),
+}).optional();
+
+/**
  * Pricing schema shared across all skill types.
  */
 const PricingSchema = z.object({
@@ -48,6 +57,7 @@ export const ApiSkillConfigSchema = z.object({
   timeout_ms: z.number().positive().default(30000),
   retries: z.number().nonnegative().int().default(0),
   provider: z.string().optional(),
+  capacity: CapacitySchema,
 });
 
 /**
@@ -76,6 +86,7 @@ export const PipelineSkillConfigSchema = z.object({
   steps: z.array(PipelineStepSchema).min(1),
   pricing: PricingSchema,
   timeout_ms: z.number().positive().optional(),
+  capacity: CapacitySchema,
 });
 
 /**
@@ -90,6 +101,7 @@ export const OpenClawSkillConfigSchema = z.object({
   channel: z.enum(['telegram', 'webhook', 'process']),
   pricing: PricingSchema,
   timeout_ms: z.number().positive().optional(),
+  capacity: CapacitySchema,
 });
 
 /**
@@ -106,6 +118,7 @@ export const CommandSkillConfigSchema = z.object({
   working_dir: z.string().optional(),
   timeout_ms: z.number().positive().default(30000),
   pricing: PricingSchema,
+  capacity: CapacitySchema,
 });
 
 /**
@@ -119,6 +132,7 @@ export const ConductorSkillConfigSchema = z.object({
   conductor_skill: z.enum(['orchestrate', 'plan']),
   pricing: PricingSchema,
   timeout_ms: z.number().positive().optional(),
+  capacity: CapacitySchema,
 });
 
 /**
