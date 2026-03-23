@@ -121,6 +121,7 @@ export async function orchestrate(opts: OrchestrateOptions): Promise<Orchestrati
   const results = new Map<string, unknown>();
   const errors: string[] = [];
   let totalCredits = 0;
+  const traceContext = new Map<string, { team_id: string | null; role: string | null }>();
 
   const waves = computeWaves(subtasks);
   const subtaskMap = new Map(subtasks.map((s) => [s.id, s]));
@@ -170,9 +171,14 @@ export async function orchestrate(opts: OrchestrateOptions): Promise<Orchestrati
           interpContext as unknown as Record<string, unknown>,
         );
 
+        // Capture team traceability context for the caller's log entry
+        const teamMember = teamMemberMap.get(taskId);
+        const teamId = opts.team?.team_id ?? null;
+        const taskRole = teamMember?.role ?? null;
+
         // Try primary agent
         // Use team member agent assignment if available (role-aware routing)
-        const agentOwner = teamMemberMap.get(taskId)?.agent ?? m.selected_agent;
+        const agentOwner = teamMember?.agent ?? m.selected_agent;
         const primary = resolveAgentUrl(agentOwner);
         try {
           let res: unknown;
@@ -194,7 +200,7 @@ export async function orchestrate(opts: OrchestrateOptions): Promise<Orchestrati
               timeoutMs,
             });
           }
-          return { taskId, result: res, credits: m.credits };
+          return { taskId, result: res, credits: m.credits, team_id: teamId, role: taskRole };
         } catch (primaryErr) {
           // Retry with first alternative if available
           if (m.alternatives.length > 0) {
@@ -220,7 +226,7 @@ export async function orchestrate(opts: OrchestrateOptions): Promise<Orchestrati
                   timeoutMs,
                 });
               }
-              return { taskId, result: altRes, credits: alt.credits };
+              return { taskId, result: altRes, credits: alt.credits, team_id: teamId, role: taskRole };
             } catch (altErr) {
               throw new Error(
                 `Task ${taskId}: primary (${m.selected_agent}) failed: ${primaryErr instanceof Error ? primaryErr.message : String(primaryErr)}; ` +
@@ -238,9 +244,10 @@ export async function orchestrate(opts: OrchestrateOptions): Promise<Orchestrati
     // Collect results
     for (const settlement of waveResults) {
       if (settlement.status === 'fulfilled') {
-        const { taskId, result, credits } = settlement.value;
+        const { taskId, result, credits, team_id, role } = settlement.value;
         results.set(taskId, result);
         totalCredits += credits;
+        traceContext.set(taskId, { team_id: team_id ?? null, role: role ?? null });
       } else {
         errors.push(settlement.reason instanceof Error ? settlement.reason.message : String(settlement.reason));
       }
@@ -253,5 +260,6 @@ export async function orchestrate(opts: OrchestrateOptions): Promise<Orchestrati
     total_credits: totalCredits,
     latency_ms: Date.now() - startTime,
     errors: errors.length > 0 ? errors : undefined,
+    trace: traceContext.size > 0 ? traceContext : undefined,
   };
 }

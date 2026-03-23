@@ -91,4 +91,9 @@ export interface OrchestrationResult {
   latency_ms: number;
   /** Error messages for failed sub-tasks. */
   errors?: string[];
+  /**
+   * Per-task team traceability context. Keys are subtask IDs.
+   * Present only when the orchestration ran with a team.
+   */
+  trace?: Map<string, { team_id: string | null; role: string | null }>;
 }

@@ -43,6 +43,17 @@ export interface RequestLogEntry {
    * Overload failures (failure_reason = 'overload') are excluded from reputation computations.
    */
   failure_reason?: FailureReason | null;
+  /**
+   * UUID of the team that originated this execution.
+   * Null for solo (non-team) executions and for rows predating the Phase 53 migration.
+   */
+  team_id?: string | null;
+  /**
+   * Role hint of the TeamMember that executed this subtask.
+   * One of: 'researcher' | 'executor' | 'validator' | 'coordinator'.
+   * Null for solo executions and for rows predating the Phase 53 migration.
+   */
+  role?: string | null;
 }
 
 /**
@@ -112,6 +123,20 @@ export function createRequestLogTable(db: Database.Database): void {
   } catch {
     // Column already exists — ignore
   }
+
+  // Add team_id column for team-originated executions (Phase 53+).
+  try {
+    db.exec('ALTER TABLE request_log ADD COLUMN team_id TEXT');
+  } catch {
+    // Column already exists — ignore
+  }
+
+  // Add role column for team role context (Phase 53+).
+  try {
+    db.exec('ALTER TABLE request_log ADD COLUMN role TEXT');
+  } catch {
+    // Column already exists — ignore
+  }
 }
 
 /**
@@ -122,8 +147,8 @@ export function createRequestLogTable(db: Database.Database): void {
  */
 export function insertRequestLog(db: Database.Database, entry: RequestLogEntry): void {
   const stmt = db.prepare(`
-    INSERT INTO request_log (id, card_id, card_name, requester, status, latency_ms, credits_charged, created_at, skill_id, action_type, tier_invoked, failure_reason)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO request_log (id, card_id, card_name, requester, status, latency_ms, credits_charged, created_at, skill_id, action_type, tier_invoked, failure_reason, team_id, role)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
   stmt.run(
@@ -138,7 +163,9 @@ export function insertRequestLog(db: Database.Database, entry: RequestLogEntry):
     entry.skill_id ?? null,
     entry.action_type ?? null,
     entry.tier_invoked ?? null,
-    entry.failure_reason ?? null
+    entry.failure_reason ?? null,
+    entry.team_id ?? null,
+    entry.role ?? null
   );
 }
 
@@ -258,7 +285,7 @@ export function getRequestLog(
   if (since !== undefined) {
     const cutoff = new Date(Date.now() - SINCE_MS[since]).toISOString();
     const stmt = db.prepare(`
-      SELECT id, card_id, card_name, requester, status, latency_ms, credits_charged, created_at, skill_id, action_type, tier_invoked, failure_reason
+      SELECT id, card_id, card_name, requester, status, latency_ms, credits_charged, created_at, skill_id, action_type, tier_invoked, failure_reason, team_id, role
       FROM request_log
       WHERE created_at >= ?
       ORDER BY created_at DESC
@@ -268,7 +295,7 @@ export function getRequestLog(
   }
 
   const stmt = db.prepare(`
-    SELECT id, card_id, card_name, requester, status, latency_ms, credits_charged, created_at, skill_id, action_type, tier_invoked, failure_reason
+    SELECT id, card_id, card_name, requester, status, latency_ms, credits_charged, created_at, skill_id, action_type, tier_invoked, failure_reason, team_id, role
     FROM request_log
     ORDER BY created_at DESC
     LIMIT ?
