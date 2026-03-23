@@ -5,4 +5,22 @@ dist/
 .env
 .env.local
 .DS_Store
+**/.DS_Store
 coverage/
+
+# Logs
+*.log
+
+# Distribution artifacts
+skills/*.zip
+
+# Internal tooling
+.claude/
+
+# Private / internal documents
+.private/
+.planning/
+
+# One-off scripts
+scripts/text-to-video.ts
+scripts/keyword-scraper.py
