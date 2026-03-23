@@ -1,6 +1,9 @@
 import { randomUUID } from 'node:crypto';
 import type { SubTask } from './types.js';
 
+// Re-export for use by conductor-mode (single import point)
+export { validateAndNormalizeSubtasks } from './decomposition-validator.js';
+
 /**
  * Template step definition used internally to generate SubTask instances.
  */

@@ -12,7 +12,7 @@
 import type Database from 'better-sqlite3';
 import type { SkillConfig } from '../skills/skill-config.js';
 import type { ExecutionResult, ExecutorMode, ProgressCallback } from '../skills/executor.js';
-import { decompose } from './task-decomposer.js';
+import { decompose, validateAndNormalizeSubtasks } from './task-decomposer.js';
 import { matchSubTasks } from './capability-matcher.js';
 import { BudgetController } from './budget-controller.js';
 import { BudgetManager } from '../credit/budget.js';
@@ -132,10 +132,16 @@ export class ConductorMode implements ExecutorMode {
             },
             timeoutMs: 30_000,
           });
-          // Phase 50-02 adds full DAG validation here.
-          // For now: accept if response is an array, otherwise fall through.
+          // Validate and normalize external decomposition output (Plan 50-02).
+          // If validation fails, fall through to Rule Engine.
           if (Array.isArray(response)) {
-            subtasks = response as SubTask[];
+            const validation = validateAndNormalizeSubtasks(response, {
+              available_roles: ['researcher', 'executor', 'validator', 'coordinator'],
+              max_credits: this.maxBudget,
+            });
+            if (validation.errors.length === 0) {
+              subtasks = validation.valid;
+            }
           }
         } catch {
           // Fall through to Rule Engine

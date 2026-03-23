@@ -3,9 +3,14 @@ import type { SubTask, MatchResult, ExecutionBudget, OrchestrationResult } from 
 import { SkillConfigSchema } from '../skills/skill-config.js';
 
 // Mock all upstream modules
-vi.mock('./task-decomposer.js', () => ({
-  decompose: vi.fn(),
-}));
+vi.mock('./task-decomposer.js', async () => {
+  // Import actual validateAndNormalizeSubtasks from decomposition-validator directly
+  const { validateAndNormalizeSubtasks } = await import('./decomposition-validator.js');
+  return {
+    decompose: vi.fn(),
+    validateAndNormalizeSubtasks,
+  };
+});
 vi.mock('./capability-matcher.js', () => ({
   matchSubTasks: vi.fn(),
 }));
@@ -380,7 +385,10 @@ describe('ConductorMode — depth guards and network routing', () => {
     };
     mockedGetCardsByCapabilityType.mockReturnValue([decomposerCard]);
 
-    const externalSubtasks = [sub('ext-A')];
+    // Return a valid SubTask array that will pass validateAndNormalizeSubtasks
+    const externalSubtasks = [
+      { id: 'ext-A', description: 'do ext-A', required_capability: 'text_gen', depends_on: [], params: {}, estimated_credits: 5 },
+    ];
     mockedRequestCapability.mockResolvedValue(externalSubtasks);
 
     const matches = [matchRes('ext-A')];
