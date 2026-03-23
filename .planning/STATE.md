@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v6.0
 milestone_name: Team Formation Protocol
 status: completed
-stopped_at: Completed 51-01-PLAN.md and 51-02-PLAN.md
-last_updated: "2026-03-23T19:07:05.672Z"
-last_activity: 2026-03-24 — Phase 50 executed (3 plans, 26 new tests, 9 files changed)
+stopped_at: Completed 52-01-PLAN.md and 52-02-PLAN.md
+last_updated: "2026-03-24T03:23:00Z"
+last_activity: 2026-03-24 — Phase 52 executed (2 plans, 10 new tests, 9 files changed)
 progress:
   total_phases: 14
-  completed_phases: 11
+  completed_phases: 12
   total_plans: 17
-  completed_plans: 16
-  percent: 33
+  completed_plans: 18
+  percent: 43
 ---
 
 # AgentBnB — Project State
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-24)
 
 **Core value:** Fill the market gap for agent-to-agent capability exchange.
-**Current focus:** v6.0 Team Formation Protocol — Phase 50 complete, Phase 51 next.
+**Current focus:** v6.0 Team Formation Protocol — Phase 52 complete, Phase 53 next.
 
 ## Current Position
 
-Phase: 50 of 53 (Network-Native Decomposer) — COMPLETE
-Plan: 3 of 3 in current phase — COMPLETE
-Status: Phase 50 done, proceed to Phase 51
-Last activity: 2026-03-24 — Phase 50 executed (3 plans, 26 new tests, 9 files changed)
+Phase: 52 of 53 (Team Formation) — COMPLETE
+Plan: 2 of 2 in current phase — COMPLETE
+Status: Phase 52 done, proceed to Phase 53
+Last activity: 2026-03-24 — Phase 52 executed (2 plans, 10 new tests, 9 files changed)
 
-Progress: [██░░░░░░░░] 33% (v6.0 milestone — 1/4 phases complete)
+Progress: [████░░░░░░] 43% (v6.0 milestone — 3/4 phases complete)
 
 ## Accumulated Context
 
@@ -45,7 +45,12 @@ Recent decisions for v6.0:
 - [Phase 50]: capability_type is optional on all card schemas — backward-compatible, no migration needed
 - [Phase 50]: getCardsByCapabilityType uses json_extract exact-match, not FTS5
 - [Phase 50]: validateAndNormalizeSubtasks never throws — fail-safe design, always returns {valid, errors}
-- [Phase 50]: role field stripped from external subtasks during normalization — SubTask has no role field
+- [Phase 52]: Role is ROUTING HINT ONLY — not an authorization boundary, not hierarchy
+- [Phase 52]: formTeam reuses matchSubTasks() — no new registry queries
+- [Phase 52]: teamMemberMap overlay in orchestrate() preserves zero-regression for teamless paths
+- [Phase 52]: formTeam only triggers when conductorSkill === orchestrate AND role hints are present
+- [Phase 52]: formation_strategy defaults to balanced; callers opt-in via params.formation_strategy
+- [Phase 50]: role field now PASSES THROUGH to SubTask during normalization (changed from Phase 52)
 - [Phase 50]: registerDecomposerCard failure is non-fatal — agent startup not blocked
 - [Phase 37]: relay_owner added to queue mode config, jobId on PendingRelayRequest for response routing
 - [Phase 39]: Hub Agent routes placed before agents/:owner in router to avoid param collision
