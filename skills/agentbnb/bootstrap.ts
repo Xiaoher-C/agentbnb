@@ -10,6 +10,7 @@
 
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
 
 import { getConfigDir, loadConfig } from '../../src/cli/config.js';
 import { AgentBnBError } from '../../src/types/index.js';
@@ -17,6 +18,7 @@ import { ProcessGuard } from '../../src/runtime/process-guard.js';
 import { ServiceCoordinator } from '../../src/runtime/service-coordinator.js';
 import type { ServiceOptions, ServiceStatus } from '../../src/runtime/service-coordinator.js';
 import { AgentBnBService } from '../../src/app/agentbnb-service.js';
+import { openDatabase } from '../../src/registry/store.js';
 
 /** Configuration for bringing an AgentBnB agent online via OpenClaw. */
 export interface BootstrapConfig {
@@ -42,6 +44,83 @@ export interface BootstrapContext {
    * @internal
    */
   _removeSignalHandlers: () => void;
+}
+
+/**
+ * Idempotently registers a task_decomposition Capability Card for this agent.
+ * Uses raw SQL upsert to accept v2.0 card shape (same pattern as websocket-relay.ts).
+ * No-op if a task_decomposition card for this owner already exists.
+ * Non-fatal: failure is logged to stderr and does not prevent agent startup.
+ *
+ * @param configDir - Agent config directory (used to locate registry.db).
+ * @param owner - Agent owner identifier from AgentBnBConfig.
+ */
+function registerDecomposerCard(configDir: string, owner: string): void {
+  try {
+    const db = openDatabase(join(configDir, 'registry.db'));
+
+    // Idempotency: skip if a task_decomposition card for this owner already exists
+    const existing = db
+      .prepare(
+        "SELECT id FROM capability_cards WHERE owner = ? AND json_extract(data, '$.capability_type') = ?"
+      )
+      .get(owner, 'task_decomposition') as { id: string } | undefined;
+
+    if (existing) return;
+
+    const cardId = randomUUID();
+    const now = new Date().toISOString();
+    const card = {
+      spec_version: '2.0' as const,
+      id: cardId,
+      owner,
+      agent_name: `${owner}-decomposer`,
+      capability_type: 'task_decomposition',
+      skills: [
+        {
+          id: 'task-decomposition',
+          name: 'Task Decomposition',
+          description:
+            'Decomposes natural-language tasks into executable sub-task DAGs using the AgentBnB Rule Engine.',
+          level: 1 as const,
+          category: 'task_decomposition',
+          inputs: [
+            {
+              name: 'task',
+              type: 'text' as const,
+              description: 'Natural language task description',
+              required: true,
+            },
+          ],
+          outputs: [
+            {
+              name: 'subtasks',
+              type: 'json' as const,
+              description: 'Array of SubTask objects with id, role, description, dependencies',
+              required: true,
+            },
+          ],
+          pricing: { credits_per_call: 1 },
+        },
+      ],
+      availability: { online: true },
+      created_at: now,
+      updated_at: now,
+    };
+
+    db.prepare(
+      'INSERT INTO capability_cards (id, owner, data, created_at, updated_at) VALUES (?, ?, ?, ?, ?)'
+    ).run(cardId, owner, JSON.stringify(card), now, now);
+
+    process.stderr.write(
+      `[agentbnb] registered task_decomposition card: ${cardId} (owner=${owner})\n`
+    );
+  } catch (err) {
+    // Non-fatal: log and continue. The agent still starts without decomposer card.
+    process.stderr.write(
+      `[agentbnb] WARNING: failed to register task_decomposition card: ${String(err)}\n`
+    );
+  }
 }
 
 /**
@@ -106,6 +185,10 @@ export async function activate(config: BootstrapConfig = {}): Promise<BootstrapC
   };
 
   const startDisposition = await service.ensureRunning(opts);
+
+  // Auto-register task_decomposition card so this agent is discoverable as a decomposer peer.
+  registerDecomposerCard(configDir, agentConfig.owner);
+
   const status = await service.getNodeStatus();
 
   // Register signal handlers.
