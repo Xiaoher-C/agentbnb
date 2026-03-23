@@ -1,6 +1,6 @@
 import Database from 'better-sqlite3';
 import { AnyCardSchema, CapabilityCardSchema, AgentBnBError } from '../types/index.js';
-import type { CapabilityCard, CapabilityCardV2 } from '../types/index.js';
+import type { AnyCard, CapabilityCard, CapabilityCardV2 } from '../types/index.js';
 import { createRequestLogTable } from './request-log.js';
 import { initFeedbackTable } from '../feedback/store.js';
 import { initEvolutionTable } from '../evolution/store.js';
@@ -623,4 +623,27 @@ export function listCards(db: Database.Database, owner?: string): CapabilityCard
   }
 
   return rows.map((row) => JSON.parse(row.data) as CapabilityCard);
+}
+
+/**
+ * Returns all Capability Cards (v1.0 or v2.0) where the card's top-level
+ * `capability_type` field exactly matches the given value.
+ *
+ * Uses SQLite json_extract for an exact-match lookup — does NOT use FTS5.
+ * Returns an empty array when no cards match.
+ *
+ * @param db - Open database instance.
+ * @param capabilityType - Exact value to match (e.g. 'task_decomposition').
+ * @returns Array of AnyCard objects.
+ */
+export function getCardsByCapabilityType(
+  db: Database.Database,
+  capabilityType: string,
+): AnyCard[] {
+  const rows = db
+    .prepare(
+      "SELECT data FROM capability_cards WHERE json_extract(data, '$.capability_type') = ?"
+    )
+    .all(capabilityType) as Array<{ data: string }>;
+  return rows.map((row) => JSON.parse(row.data) as AnyCard);
 }

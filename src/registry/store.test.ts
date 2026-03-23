@@ -11,6 +11,7 @@ import {
   runMigrations,
   updateSkillAvailability,
   updateSkillIdleRate,
+  getCardsByCapabilityType,
 } from './store.js';
 import { searchCards, filterCards } from './matcher.js';
 import { AgentBnBError } from '../types/index.js';
@@ -777,5 +778,94 @@ describe('updateSkillIdleRate', () => {
 
   it('no-ops if skillId not found on the card', () => {
     expect(() => updateSkillIdleRate(db, cardId, 'nonexistent-skill', 0.5)).not.toThrow();
+  });
+});
+
+describe('getCardsByCapabilityType', () => {
+  let db: ReturnType<typeof openDatabase>;
+
+  beforeEach(() => {
+    db = openDatabase(':memory:');
+  });
+
+  it('returns cards that match the given capability_type', () => {
+    // Insert a v2.0 card with capability_type via raw SQL (bypassing v1.0 Zod schema)
+    const cardId = randomUUID();
+    const now = new Date().toISOString();
+    const card = {
+      spec_version: '2.0',
+      id: cardId,
+      owner: 'alice',
+      agent_name: 'alice-decomposer',
+      capability_type: 'task_decomposition',
+      skills: [
+        {
+          id: 'task-decomposition',
+          name: 'Task Decomposition',
+          description: 'Decomposes tasks',
+          level: 1,
+          inputs: [{ name: 'task', type: 'text', required: true }],
+          outputs: [{ name: 'subtasks', type: 'json', required: true }],
+          pricing: { credits_per_call: 1 },
+        },
+      ],
+      availability: { online: true },
+    };
+    db.prepare(
+      'INSERT INTO capability_cards (id, owner, data, created_at, updated_at) VALUES (?, ?, ?, ?, ?)'
+    ).run(cardId, 'alice', JSON.stringify(card), now, now);
+
+    const results = getCardsByCapabilityType(db, 'task_decomposition');
+    expect(results).toHaveLength(1);
+    expect(results[0]).toBeDefined();
+    const result = results[0] as Record<string, unknown>;
+    expect(result['id']).toBe(cardId);
+    expect(result['capability_type']).toBe('task_decomposition');
+  });
+
+  it('does NOT return cards without capability_type', () => {
+    // Insert a normal v1.0 card (no capability_type field)
+    const card = makeCard();
+    insertCard(db, card);
+
+    const results = getCardsByCapabilityType(db, 'task_decomposition');
+    expect(results).toHaveLength(0);
+  });
+
+  it('returns empty array for unknown capability_type', () => {
+    const results = getCardsByCapabilityType(db, 'nonexistent_type');
+    expect(results).toHaveLength(0);
+  });
+
+  it('returns multiple cards with the same capability_type', () => {
+    const now = new Date().toISOString();
+    for (const owner of ['alice', 'bob']) {
+      const cardId = randomUUID();
+      const card = {
+        spec_version: '2.0',
+        id: cardId,
+        owner,
+        agent_name: `${owner}-decomposer`,
+        capability_type: 'task_decomposition',
+        skills: [
+          {
+            id: 'task-decomposition',
+            name: 'Task Decomposition',
+            description: 'Decomposes tasks',
+            level: 1,
+            inputs: [{ name: 'task', type: 'text', required: true }],
+            outputs: [{ name: 'subtasks', type: 'json', required: true }],
+            pricing: { credits_per_call: 1 },
+          },
+        ],
+        availability: { online: true },
+      };
+      db.prepare(
+        'INSERT INTO capability_cards (id, owner, data, created_at, updated_at) VALUES (?, ?, ?, ?, ?)'
+      ).run(cardId, owner, JSON.stringify(card), now, now);
+    }
+
+    const results = getCardsByCapabilityType(db, 'task_decomposition');
+    expect(results).toHaveLength(2);
   });
 });

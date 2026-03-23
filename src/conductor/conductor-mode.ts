@@ -17,7 +17,9 @@ import { matchSubTasks } from './capability-matcher.js';
 import { BudgetController } from './budget-controller.js';
 import { BudgetManager } from '../credit/budget.js';
 import { orchestrate } from './pipeline-orchestrator.js';
-import type { MatchResult } from './types.js';
+import type { MatchResult, SubTask } from './types.js';
+import { getCardsByCapabilityType } from '../registry/store.js';
+import { requestCapability } from '../gateway/client.js';
 
 /**
  * Configuration options for ConductorMode.
@@ -93,8 +95,60 @@ export class ConductorMode implements ExecutorMode {
       };
     }
 
-    // Step 1: Decompose task into subtasks
-    const subtasks = decompose(task);
+    // --- Depth limits ---
+    const orchestrationDepth =
+      typeof params.orchestration_depth === 'number' ? params.orchestration_depth : 0;
+    const decompositionDepth =
+      typeof params.decomposition_depth === 'number' ? params.decomposition_depth : 0;
+
+    if (orchestrationDepth >= 2) {
+      return {
+        success: false,
+        error: 'orchestration_depth limit exceeded: max 1 nested orchestration',
+      };
+    }
+
+    // --- Decomposition: network provider first, Rule Engine fallback ---
+    let subtasks: SubTask[] = [];
+
+    if (decompositionDepth === 0) {
+      // Try to find a network task_decomposition provider
+      const allDecomposers = getCardsByCapabilityType(this.db, 'task_decomposition');
+      // Self-exclusion: never use ourselves as decomposer
+      const externalDecomposers = allDecomposers.filter((c) => c.owner !== this.conductorOwner);
+
+      if (externalDecomposers.length > 0) {
+        const provider = externalDecomposers[0]!;
+        try {
+          const providerUrl = this.resolveAgentUrl(provider.owner);
+          const response = await requestCapability({
+            gatewayUrl: providerUrl.url,
+            token: this.gatewayToken,
+            cardId: provider.id,
+            params: {
+              task,
+              decomposition_depth: decompositionDepth + 1,
+              orchestration_depth: orchestrationDepth + 1,
+            },
+            timeoutMs: 30_000,
+          });
+          // Phase 50-02 adds full DAG validation here.
+          // For now: accept if response is an array, otherwise fall through.
+          if (Array.isArray(response)) {
+            subtasks = response as SubTask[];
+          }
+        } catch {
+          // Fall through to Rule Engine
+        }
+      }
+    }
+
+    // Rule Engine fallback (always used when decompositionDepth >= 1, or no provider, or provider failed)
+    if (subtasks.length === 0) {
+      subtasks = decompose(task);
+    }
+
+    // Step 1: Decompose task into subtasks (complete)
     if (subtasks.length === 0) {
       return {
         success: false,

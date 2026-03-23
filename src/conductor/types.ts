@@ -63,6 +63,17 @@ export interface ExecutionBudget {
 }
 
 /**
+ * Depth context passed through nested Conductor calls to enforce recursion limits.
+ * Included in params when Conductor requests another agent's task_decomposition skill.
+ */
+export interface ConductorRequestContext {
+  /** Number of nested decomposition calls. 0 = top-level; >= 1 = already decomposed. */
+  decomposition_depth: number;
+  /** Number of nested orchestration calls. 0 = top-level; >= 2 = error. */
+  orchestration_depth: number;
+}
+
+/**
  * Final result of a completed orchestration.
  */
 export interface OrchestrationResult {

@@ -63,6 +63,8 @@ export const CapabilityCardSchema = z.object({
   }).optional(),
   created_at: z.string().datetime().optional(),
   updated_at: z.string().datetime().optional(),
+  /** Exact-match capability type key for network routing (e.g. 'task_decomposition'). Optional — backward-compatible. */
+  capability_type: z.string().optional(),
 });
 
 export type CapabilityCard = z.infer<typeof CapabilityCardSchema>;
@@ -83,6 +85,8 @@ export const SkillSchema = z.object({
   level: z.union([z.literal(1), z.literal(2), z.literal(3)]),
   /** Optional grouping category, e.g. 'tts' | 'video_gen' | 'code_review'. */
   category: z.string().optional(),
+  /** Exact-match capability type key for network routing (e.g. 'task_decomposition'). Optional — per-skill routing hint. */
+  capability_type: z.string().optional(),
   inputs: z.array(IOSchemaSchema),
   outputs: z.array(IOSchemaSchema),
   pricing: z.object({
@@ -188,6 +192,8 @@ export const CapabilityCardV2Schema = z.object({
   _internal: z.record(z.unknown()).optional(),
   /** Public gateway URL where this agent accepts requests. Populated on remote publish. */
   gateway_url: z.string().url().optional(),
+  /** Exact-match capability type key for network routing (e.g. 'task_decomposition'). Optional — backward-compatible. */
+  capability_type: z.string().optional(),
   created_at: z.string().datetime().optional(),
   updated_at: z.string().datetime().optional(),
 });
@@ -333,3 +339,16 @@ export class AgentBnBError extends Error {
     this.name = 'AgentBnBError';
   }
 }
+
+/**
+ * Categorizes the cause of a terminal execution failure.
+ * Used in request_log.failure_reason to distinguish infrastructure noise
+ * (overload) from provider-quality signals (bad_execution, auth_error, etc.).
+ *
+ * bad_execution — skill ran but returned an error result
+ * overload      — rejected before execution; provider at capacity
+ * timeout       — execution exceeded the allowed time window
+ * auth_error    — request rejected due to invalid credentials or escrow
+ * not_found     — card or skill ID not found in registry
+ */
+export type FailureReason = 'bad_execution' | 'overload' | 'timeout' | 'auth_error' | 'not_found';
