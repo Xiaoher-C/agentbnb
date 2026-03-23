@@ -20,6 +20,20 @@ export interface RequestLogEntry {
   latency_ms: number;
   credits_charged: number;
   created_at: string;
+  /**
+   * Specific skill invoked on the card. Null for v1.0 cards.
+   */
+  skill_id?: string | null;
+  /**
+   * Team UUID if this execution was part of a team pipeline. Null for solo executions.
+   */
+  team_id?: string | null;
+  /**
+   * Role hint of the team member that handled this subtask.
+   * One of: 'researcher' | 'executor' | 'validator' | 'coordinator'.
+   * Null for solo executions.
+   */
+  role?: string | null;
 }
 
 export interface UseRequestsResult {
