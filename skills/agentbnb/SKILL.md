@@ -179,6 +179,41 @@ agentbnb config set tier2 50    # notify-after under 50 credits
 agentbnb config set reserve 20  # keep 20 credit reserve
 ```
 
+## Workspace Isolation
+
+Each OpenClaw workspace gets its own isolated data directory at `~/.agentbnb/<workspace-name>/`.
+AgentBnB auto-detects the workspace name from the SOUL.md location in your working directory.
+
+- Install from your agent's workspace directory for automatic isolation
+- Verify: `agentbnb config show` — config path should contain your workspace name
+- If no SOUL.md is found, falls back to shared `~/.agentbnb/` (not recommended)
+
+To see and manage published cards:
+
+```bash
+agentbnb cards list
+agentbnb cards delete <card-id>
+agentbnb cards delete <card-id> --force
+```
+
+## SOUL.md Capability Metadata
+
+Add metadata bullets inside skill H2 sections to declare routing labels:
+
+```markdown
+## My Skill Name
+Short description of what this skill does.
+- capability_types: financial_analysis, data_retrieval
+- requires: web_search
+- visibility: public
+```
+
+| Field | Description |
+|-------|-------------|
+| `capability_types` | Routing labels for Conductor matching (comma-separated) |
+| `requires` | Capabilities this skill depends on internally |
+| `visibility` | `public` (default) or `private` (excluded from Hub) |
+
 ## CLI Reference
 
 ```bash
