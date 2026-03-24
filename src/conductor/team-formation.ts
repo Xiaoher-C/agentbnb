@@ -12,6 +12,8 @@ import type Database from 'better-sqlite3';
 import type { SubTask, MatchResult } from './types.js';
 import type { Team, TeamMember, FormationStrategy } from './role-schema.js';
 import { matchSubTasks } from './capability-matcher.js';
+import { getCardsBySkillCapability } from '../registry/store.js';
+import type { AnyCard, CapabilityCardV2 } from '../types/index.js';
 
 /**
  * Options for formTeam().
@@ -83,7 +85,43 @@ export async function formTeam(opts: FormTeamOptions): Promise<Team> {
   const unrouted: SubTask[] = [];
 
   for (const subtask of subtasks) {
-    // Try matchSubTasks (FTS5 search) for this subtask
+    // Step 1: skill-level exact capability match (capability_type or capability_types[])
+    const skillCards = getCardsBySkillCapability(db, subtask.required_capability)
+      .filter((c) => (c as AnyCard & { owner?: string }).owner !== conductorOwner);
+
+    if (skillCards.length > 0) {
+      const candidates = skillCards.map((card) => {
+        const skills = (card as CapabilityCardV2).skills ?? [];
+        const matchingSkill = skills.find(
+          (s) =>
+            s.capability_type === subtask.required_capability ||
+            (s.capability_types ?? []).includes(subtask.required_capability),
+        );
+        return {
+          subtask_id: subtask.id,
+          selected_agent: (card as AnyCard & { owner: string }).owner,
+          selected_skill: matchingSkill?.id ?? '',
+          selected_card_id: card.id,
+          score: 1.0,
+          credits: matchingSkill?.pricing.credits_per_call ?? 0,
+          alternatives: [] as Array<{ agent: string; skill: string; score: number; credits: number }>,
+        };
+      });
+
+      const selected = selectByStrategy(candidates, strategy)!;
+      matched.push({
+        subtask,
+        capability_type: subtask.required_capability,
+        agent: selected.selected_agent,
+        skill: selected.selected_skill,
+        card_id: selected.selected_card_id,
+        credits: selected.credits,
+        score: selected.score,
+      });
+      continue;
+    }
+
+    // Step 2: FTS5 fallback via matchSubTasks
     const matchResults = await matchSubTasks({
       db,
       subtasks: [subtask],

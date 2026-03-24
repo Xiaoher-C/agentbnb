@@ -35,6 +35,7 @@ vi.mock('./budget-controller.js', () => {
 });
 vi.mock('../registry/store.js', () => ({
   getCardsByCapabilityType: vi.fn(),
+  getCardsBySkillCapability: vi.fn().mockReturnValue([]),
 }));
 vi.mock('../gateway/client.js', () => ({
   requestCapability: vi.fn(),

@@ -9,8 +9,40 @@
  */
 
 import { join } from 'node:path';
+import { dirname, basename } from 'node:path';
+import { existsSync } from 'node:fs';
+import { homedir } from 'node:os';
 import { spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
+
+/**
+ * Walks up from `startDir` looking for a SOUL.md file.
+ * Returns the absolute path to the first SOUL.md found, or null.
+ */
+function findSoulMd(startDir: string): string | null {
+  let dir = startDir;
+  while (true) {
+    const candidate = join(dir, 'SOUL.md');
+    if (existsSync(candidate)) return candidate;
+    const parent = dirname(dir);
+    if (parent === dir) return null; // filesystem root
+    dir = parent;
+  }
+}
+
+/**
+ * Derives a workspace-specific AGENTBNB_DIR from SOUL.md location.
+ * Uses the name of the directory containing SOUL.md as the workspace identifier.
+ * Falls back to the global ~/.agentbnb if SOUL.md is not found.
+ */
+function resolveWorkspaceDir(): string {
+  const soulPath = findSoulMd(process.cwd());
+  if (soulPath) {
+    const workspaceName = basename(dirname(soulPath));
+    return join(homedir(), '.agentbnb', workspaceName);
+  }
+  return join(homedir(), '.agentbnb');
+}
 
 import { getConfigDir, loadConfig } from '../../src/cli/config.js';
 import { AgentBnBError } from '../../src/types/index.js';
@@ -133,17 +165,20 @@ function registerDecomposerCard(configDir: string, owner: string): void {
  * registered here to avoid double-handler conflicts. Track in Layer A implementation.
  */
 export async function activate(config: BootstrapConfig = {}): Promise<BootstrapContext> {
+  // Per-workspace isolation: if AGENTBNB_DIR is not already set, derive it from
+  // the SOUL.md location in the current working directory. This ensures each
+  // OpenClaw workspace uses its own isolated ~/.agentbnb/<workspace-name>/ directory.
+  if (!process.env['AGENTBNB_DIR']) {
+    const workspaceDir = resolveWorkspaceDir();
+    process.env['AGENTBNB_DIR'] = workspaceDir;
+    process.stderr.write(
+      `[agentbnb] AGENTBNB_DIR auto-configured to ${workspaceDir} for workspace isolation.\n`
+    );
+  }
+
   const configDir = getConfigDir();
 
-  // Isolation: each agent must have its own data directory.
-  // If AGENTBNB_DIR is not set, auto-set it from configDir so all child processes
-  // spawned by this OpenClaw session (e.g. `agentbnb request` CLI calls) inherit it.
-  if (!process.env['AGENTBNB_DIR']) {
-    process.env['AGENTBNB_DIR'] = configDir;
-    process.stderr.write(
-      `[agentbnb] AGENTBNB_DIR not set — auto-configured to ${configDir} for child process isolation.\n`
-    );
-  } else if (process.env['AGENTBNB_DIR'] !== configDir) {
+  if (process.env['AGENTBNB_DIR'] !== configDir) {
     process.stderr.write(
       `[agentbnb] WARNING: AGENTBNB_DIR (${process.env['AGENTBNB_DIR']}) differs from resolved configDir (${configDir}).\n`
     );

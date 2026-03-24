@@ -647,3 +647,41 @@ export function getCardsByCapabilityType(
     .all(capabilityType) as Array<{ data: string }>;
   return rows.map((row) => JSON.parse(row.data) as AnyCard);
 }
+
+/**
+ * Returns all Capability Cards (v2.0) where any skill in the skills[] array
+ * has the given capability type in its `capability_type` or `capability_types[]` field.
+ *
+ * This enables skill-level precision routing: a Conductor looking for 'tts' will find
+ * a card that has a skill with capability_types: ['tts', 'audio_gen'] rather than
+ * requiring a card-level capability_type match.
+ *
+ * Falls back to in-memory filtering (safe for local registry sizes).
+ *
+ * @param db - Open database instance.
+ * @param capabilityType - Capability type to search for (e.g. 'tts').
+ * @returns Array of matching AnyCard objects.
+ */
+export function getCardsBySkillCapability(
+  db: Database.Database,
+  capabilityType: string,
+): AnyCard[] {
+  const rows = db
+    .prepare('SELECT data FROM capability_cards')
+    .all() as Array<{ data: string }>;
+
+  return rows
+    .map((row) => JSON.parse(row.data) as AnyCard)
+    .filter((card) => {
+      const skills = (card as Record<string, unknown>)['skills'] as
+        | Array<Record<string, unknown>>
+        | undefined;
+      if (!skills) return false;
+      return skills.some((skill) => {
+        if (skill['capability_type'] === capabilityType) return true;
+        const types = skill['capability_types'] as string[] | undefined;
+        return Array.isArray(types) && types.includes(capabilityType);
+      });
+    });
+}
+

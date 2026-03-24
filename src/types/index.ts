@@ -87,6 +87,23 @@ export const SkillSchema = z.object({
   category: z.string().optional(),
   /** Exact-match capability type key for network routing (e.g. 'task_decomposition'). Optional — per-skill routing hint. */
   capability_type: z.string().optional(),
+  /**
+   * Multi-value capability routing tags — what this skill IS / offers to the outside.
+   * Used by Conductor for precise skill-level matching.
+   * Example: ["audio_generation", "audio_editing", "content_production"]
+   */
+  capability_types: z.array(z.string()).optional(),
+  /**
+   * Capabilities this skill internally depends on when executing.
+   * Used by Conductor for decomposition planning and cost estimation.
+   * Example: ["tts", "sound_effects", "audio_mixing"]
+   */
+  requires_capabilities: z.array(z.string()).optional(),
+  /**
+   * Publishing visibility. 'private' skills are excluded from published CapabilityCards.
+   * Defaults to 'public' when omitted.
+   */
+  visibility: z.enum(['public', 'private']).optional(),
   inputs: z.array(IOSchemaSchema),
   outputs: z.array(IOSchemaSchema),
   pricing: z.object({

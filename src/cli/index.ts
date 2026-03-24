@@ -23,7 +23,7 @@ import { loadPeers, savePeer, removePeer, findPeer } from './peers.js';
 import { detectOpenPorts, buildDraftCard } from './onboarding.js';
 import { detectCapabilities, capabilitiesToV2Card, interactiveTemplateMenu } from '../onboarding/index.js';
 import { AnyCardSchema } from '../types/index.js';
-import { openDatabase, insertCard, listCards } from '../registry/store.js';
+import { openDatabase, insertCard, listCards, deleteCard } from '../registry/store.js';
 import { searchCards, filterCards } from '../registry/matcher.js';
 import { getPricingStats } from '../registry/pricing.js';
 import { openCreditDb, getBalance, bootstrapAgent, getTransactions, migrateOwner } from '../credit/ledger.js';
@@ -1499,7 +1499,7 @@ configCmd
   .command('set <key> <value>')
   .description('Set a configuration value')
   .action((key: string, value: string) => {
-    const allowedKeys = ['registry', 'tier1', 'tier2', 'reserve', 'idle-threshold', 'conductor-public'];
+    const allowedKeys = ['registry', 'tier1', 'tier2', 'reserve', 'idle-threshold', 'conductor-public', 'telegram-notifications', 'telegram-bot-token', 'telegram-chat-id', 'shared-skills'];
     if (!allowedKeys.includes(key)) {
       console.error(`Unknown config key: ${key}. Valid keys: ${allowedKeys.join(', ')}`);
       process.exit(1);
@@ -1589,6 +1589,40 @@ configCmd
       return;
     }
 
+    if (key === 'telegram-notifications') {
+      if (value !== 'true' && value !== 'false') {
+        console.error('Error: telegram-notifications must be "true" or "false"');
+        process.exit(1);
+      }
+      config.telegram_notifications = value === 'true';
+      saveConfig(config);
+      console.log(`Set telegram-notifications = ${config.telegram_notifications}`);
+      return;
+    }
+
+    if (key === 'telegram-bot-token') {
+      config.telegram_bot_token = value;
+      saveConfig(config);
+      console.log('Set telegram-bot-token');
+      return;
+    }
+
+    if (key === 'telegram-chat-id') {
+      config.telegram_chat_id = value;
+      saveConfig(config);
+      console.log(`Set telegram-chat-id = ${value}`);
+      return;
+    }
+
+    if (key === 'shared-skills') {
+      // Accept comma-separated skill IDs, or empty string to clear
+      config.shared_skills = value.trim() === '' ? [] : value.split(',').map((s) => s.trim()).filter(Boolean);
+      saveConfig(config);
+      const display = config.shared_skills.length > 0 ? config.shared_skills.join(', ') : '(all skills published)';
+      console.log(`Set shared-skills: ${display}`);
+      return;
+    }
+
     (config as unknown as Record<string, unknown>)[key] = value;
     saveConfig(config);
     console.log(`Set ${key} = ${value}`);
@@ -1630,8 +1664,87 @@ configCmd
       return;
     }
 
+    if (key === 'telegram-notifications') {
+      console.log(String(config.telegram_notifications ?? false));
+      return;
+    }
+
+    if (key === 'telegram-bot-token') {
+      console.log(config.telegram_bot_token ?? '(not set)');
+      return;
+    }
+
+    if (key === 'telegram-chat-id') {
+      console.log(config.telegram_chat_id ?? '(not set)');
+      return;
+    }
+
+    if (key === 'shared-skills') {
+      const skills = config.shared_skills ?? [];
+      console.log(skills.length > 0 ? skills.join(', ') : '(all skills published)');
+      return;
+    }
+
     const value = (config as unknown as Record<string, unknown>)[key];
     console.log(value !== undefined ? String(value) : '(not set)');
+  });
+
+// ---------------------------------------------------------------------------
+// cards
+// ---------------------------------------------------------------------------
+
+const cardsCmd = program.command('cards').description('Manage published capability cards');
+
+cardsCmd
+  .command('list')
+  .description('List all published capability cards in the local registry')
+  .action(() => {
+    const config = loadConfig();
+    if (!config) {
+      console.error('Error: not initialized. Run `agentbnb init` first.');
+      process.exit(1);
+    }
+    const db = openDatabase(config.db_path);
+    try {
+      const cards = listCards(db);
+      if (cards.length === 0) {
+        console.log('No published cards found.');
+        return;
+      }
+      console.log(`Published cards (${cards.length}):`);
+      for (const card of cards) {
+        const v2 = card as unknown as Record<string, unknown>;
+        const name = String(v2['agent_name'] ?? v2['name'] ?? '(unnamed)');
+        const owner = String(v2['owner'] ?? '');
+        const skills = Array.isArray(v2['skills']) ? v2['skills'].length : 0;
+        const skillsLabel = skills > 0 ? ` (${skills} skill${skills !== 1 ? 's' : ''})` : '';
+        console.log(`  ${card.id}  ${name}  owner: ${owner}${skillsLabel}`);
+      }
+    } finally {
+      db.close();
+    }
+  });
+
+cardsCmd
+  .command('delete <card-id>')
+  .description('Delete a published capability card from the local registry')
+  .action((cardId: string) => {
+    const config = loadConfig();
+    if (!config) {
+      console.error('Error: not initialized. Run `agentbnb init` first.');
+      process.exit(1);
+    }
+    const db = openDatabase(config.db_path);
+    try {
+      deleteCard(db, cardId, config.owner);
+      console.log(`Deleted card: ${cardId}`);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`Error: ${msg}`);
+      process.exit(1);
+    } finally {
+      db.close();
+    }
   });
 
 // ---------------------------------------------------------------------------
@@ -1648,7 +1761,8 @@ openclaw
   .command('sync')
   .description('Read SOUL.md and publish/update a v2.0 capability card')
   .option('--soul-path <path>', 'Path to SOUL.md', './SOUL.md')
-  .action(async (opts: { soulPath: string }) => {
+  .option('--skills <ids>', 'Comma-separated skill IDs to publish (overrides shared-skills config and skill visibility)')
+  .action(async (opts: { soulPath: string; skills?: string }) => {
     const config = loadConfig();
     if (!config) {
       console.error('Error: not initialized. Run `agentbnb init` first.');
@@ -1663,9 +1777,16 @@ openclaw
       process.exit(1);
     }
 
+    // Resolve skill whitelist: --skills flag > config.shared_skills > none (respect visibility)
+    const sharedSkills: string[] | undefined = opts.skills
+      ? opts.skills.split(',').map((s) => s.trim()).filter(Boolean)
+      : config.shared_skills && config.shared_skills.length > 0
+        ? config.shared_skills
+        : undefined;
+
     const db = openDatabase(config.db_path);
     try {
-      const card = publishFromSoulV2(db, content, config.owner);
+      const card = publishFromSoulV2(db, content, config.owner, sharedSkills);
       console.log(`Published card ${card.id} with ${card.skills.length} skill(s)`);
 
       // Display market reference prices per skill

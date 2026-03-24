@@ -80,12 +80,12 @@ ok "Node.js ${NODE_VERSION_FULL} confirmed"
 #   node_version — full version string (e.g. "v20.11.0")
 #   source       — how it was resolved: "OPENCLAW_NODE_EXEC" | "shell"
 #   detected_at  — ISO 8601 UTC timestamp
-AGENTBNB_DIR="$HOME/.agentbnb"
-mkdir -p "$AGENTBNB_DIR"
+_EARLY_DIR="$HOME/.agentbnb"
+mkdir -p "$_EARLY_DIR"
 DETECTED_AT="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
 printf '{"node_exec":"%s","node_version":"%s","source":"%s","detected_at":"%s"}\n' \
   "$NODE_EXEC" "$NODE_VERSION_FULL" "$NODE_SOURCE" "$DETECTED_AT" \
-  > "$AGENTBNB_DIR/runtime.json"
+  > "$_EARLY_DIR/runtime.json"
 ok "Runtime persisted to ~/.agentbnb/runtime.json (source: ${NODE_SOURCE})"
 
 # pnpm (attempt install if missing)
@@ -177,13 +177,53 @@ fi
 # ---------------------------------------------------------------------------
 step "Step 4/6 — Initializing AgentBnB config"
 
+# Per-workspace isolation: detect SOUL.md to derive workspace-specific AGENTBNB_DIR.
+# This ensures each OpenClaw workspace has its own isolated data directory
+# (~/.agentbnb/<workspace-name>/) so multiple agents never share the same registry,
+# credits, or config.
+#
+# Walk up from CWD looking for SOUL.md; use containing directory's name as workspace ID.
+_find_soul_dir() {
+  local d="$1"
+  while [ "$d" != "/" ]; do
+    if [ -f "$d/SOUL.md" ]; then
+      echo "$d"
+      return
+    fi
+    d=$(dirname "$d")
+  done
+}
+
+if [ -z "${AGENTBNB_DIR:-}" ]; then
+  WORKSPACE_DIR=$(_find_soul_dir "$(pwd)")
+  if [ -n "$WORKSPACE_DIR" ]; then
+    WORKSPACE_NAME=$(basename "$WORKSPACE_DIR")
+    export AGENTBNB_DIR="$HOME/.agentbnb/$WORKSPACE_NAME"
+    ok "Workspace detected: $WORKSPACE_NAME"
+    ok "AGENTBNB_DIR=$AGENTBNB_DIR (isolated from other agents)"
+  else
+    export AGENTBNB_DIR="$HOME/.agentbnb"
+    warn "No SOUL.md found — using shared config at ~/.agentbnb/"
+    warn "For isolation, set AGENTBNB_DIR manually or run from your agent's workspace directory."
+  fi
+else
+  ok "AGENTBNB_DIR already set: $AGENTBNB_DIR"
+fi
+
+# Update runtime.json path to match workspace-specific dir
+mkdir -p "$AGENTBNB_DIR"
+DETECTED_AT="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+printf '{"node_exec":"%s","node_version":"%s","source":"%s","detected_at":"%s"}\n' \
+  "$NODE_EXEC" "$NODE_VERSION_FULL" "$NODE_SOURCE" "$DETECTED_AT" \
+  > "$AGENTBNB_DIR/runtime.json"
+
 # agentbnb init is idempotent — safe to run on existing installs
 if agentbnb init --yes 2>/dev/null; then
-  ok "Config initialized at ~/.agentbnb/"
+  ok "Config initialized at $AGENTBNB_DIR/"
 else
   # May already be initialized — check if directory exists
-  if [ -d "$HOME/.agentbnb" ]; then
-    ok "Config already exists at ~/.agentbnb/ (skipping re-init)"
+  if [ -d "$AGENTBNB_DIR" ] && [ -f "$AGENTBNB_DIR/config.json" ]; then
+    ok "Config already exists at $AGENTBNB_DIR/ (skipping re-init)"
   else
     err "Failed to initialize AgentBnB config. Run 'agentbnb init' manually."
     exit 1
@@ -239,7 +279,7 @@ echo "${GREEN}${BOLD}AgentBnB skill installed successfully!${RESET}"
 echo ""
 echo "What was set up:"
 ok "AgentBnB CLI available as 'agentbnb'"
-ok "Config directory: ~/.agentbnb/"
+ok "Config directory: $AGENTBNB_DIR"
 ok "Node runtime: ${NODE_EXEC} (${NODE_VERSION_FULL}, source: ${NODE_SOURCE})"
 ok "Runtime persisted to: ~/.agentbnb/runtime.json"
 ok "Registry: https://agentbnb.fly.dev (public network)"
@@ -247,8 +287,8 @@ ok "Default autonomy tier: Tier 3 (ask before all transactions)"
 ok "Default credit reserve: 20 credits"
 
 # Verify identity.json was created (v4.0+ feature)
-if [ -f "$HOME/.agentbnb/identity.json" ]; then
-  ok "Agent identity: ~/.agentbnb/identity.json"
+if [ -f "$AGENTBNB_DIR/identity.json" ]; then
+  ok "Agent identity: $AGENTBNB_DIR/identity.json"
 else
   warn "identity.json not found — will be created on next agentbnb init"
 fi

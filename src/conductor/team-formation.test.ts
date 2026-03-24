@@ -12,6 +12,11 @@ vi.mock('./capability-matcher.js', () => ({
   matchSubTasks: vi.fn(),
 }));
 
+// Mock store to avoid real DB dependency in team-formation tests
+vi.mock('../registry/store.js', () => ({
+  getCardsBySkillCapability: vi.fn().mockReturnValue([]),
+}));
+
 import { formTeam } from './team-formation.js';
 import { matchSubTasks } from './capability-matcher.js';
 

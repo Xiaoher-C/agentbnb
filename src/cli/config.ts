@@ -49,6 +49,22 @@ export interface AgentBnBConfig {
    * Defaults to undefined (treated as `{ public: false }`).
    */
   conductor?: { public: boolean };
+  /**
+   * When true, sends a Telegram message to the owner each time a skill is
+   * successfully executed on this agent. Requires telegram_bot_token and
+   * telegram_chat_id. Defaults to false.
+   */
+  telegram_notifications?: boolean;
+  /** Telegram Bot API token (from @BotFather). Used when telegram_notifications is true. */
+  telegram_bot_token?: string;
+  /** Telegram chat ID to send notifications to. Used when telegram_notifications is true. */
+  telegram_chat_id?: string;
+  /**
+   * Whitelist of skill IDs to publish via `agentbnb openclaw sync`.
+   * When set, only skills with matching IDs are included in the published card.
+   * When empty/omitted, respects each skill's `visibility` field.
+   */
+  shared_skills?: string[];
 }
 
 /**

@@ -71,15 +71,27 @@ export function parseSoulMdV2(content: string): {
  * @param db - Open registry database instance.
  * @param soulContent - Raw SOUL.md markdown content.
  * @param owner - Agent owner identifier.
+ * @param sharedSkills - Optional whitelist of skill IDs to publish. When provided,
+ *   only skills with matching IDs are included (overrides skill.visibility).
+ *   When empty/omitted, respects each skill's `visibility` field ('private' → excluded).
  * @returns The upserted CapabilityCardV2.
- * @throws {AgentBnBError} with code VALIDATION_ERROR if SOUL.md has no H2 sections.
+ * @throws {AgentBnBError} with code VALIDATION_ERROR if SOUL.md has no publishable H2 sections.
  */
 export function publishFromSoulV2(
   db: Database.Database,
   soulContent: string,
   owner: string,
+  sharedSkills?: string[],
 ): CapabilityCardV2 {
-  const { agentName, skills } = parseSoulMdV2(soulContent);
+  const { agentName, skills: allSkills } = parseSoulMdV2(soulContent);
+
+  // Apply skill visibility / whitelist filter
+  const skills = allSkills.filter((skill) => {
+    if (sharedSkills && sharedSkills.length > 0) {
+      return sharedSkills.includes(skill.id);
+    }
+    return skill.visibility !== 'private';
+  });
 
   if (skills.length === 0) {
     throw new AgentBnBError('SOUL.md has no H2 sections', 'VALIDATION_ERROR');

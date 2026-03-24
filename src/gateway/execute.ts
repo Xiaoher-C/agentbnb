@@ -9,6 +9,48 @@ import { settleProviderEarning } from '../credit/settlement.js';
 import { AgentBnBError } from '../types/index.js';
 import type { CapabilityCardV2, EscrowReceipt, FailureReason } from '../types/index.js';
 import type { SkillExecutor, ProgressCallback } from '../skills/executor.js';
+import { loadConfig } from '../cli/config.js';
+
+/**
+ * Sends a Telegram message to the owner when a skill is successfully executed.
+ * Fire-and-forget — never throws or rejects.
+ *
+ * Requires config.telegram_notifications = true AND both token + chat_id set
+ * (in config.json or via TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID env vars).
+ */
+async function notifyTelegramSkillExecuted(opts: {
+  creditDb: Database.Database;
+  owner: string;
+  skillName: string;
+  skillId: string | null;
+  requester: string;
+  creditsEarned: number;
+  latencyMs: number;
+}): Promise<void> {
+  const cfg = loadConfig();
+  if (!cfg?.telegram_notifications) return;
+
+  const token = cfg.telegram_bot_token ?? process.env['TELEGRAM_BOT_TOKEN'];
+  const chatId = cfg.telegram_chat_id ?? process.env['TELEGRAM_CHAT_ID'];
+  if (!token || !chatId) return;
+
+  const balance = getBalance(opts.creditDb, opts.owner);
+  const skillLabel = opts.skillId ? `${opts.skillName} (${opts.skillId})` : opts.skillName;
+  const text = [
+    '[AgentBnB] Skill executed',
+    `Skill: ${skillLabel}`,
+    `Requester: ${opts.requester}`,
+    `Earned: +${opts.creditsEarned} credits`,
+    `Balance: ${balance} credits`,
+    `Latency: ${opts.latencyMs}ms`,
+  ].join('\n');
+
+  await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ chat_id: chatId, text }),
+  });
+}
 
 // ── Batch request types ───────────────────────────────────────────────────────
 
@@ -281,6 +323,17 @@ export async function executeCapabilityRequest(opts: ExecuteRequestOptions): Pro
         created_at: new Date().toISOString(),
       });
     } catch { /* silent no-op */ }
+
+    // Telegram notification — fire-and-forget, never throws
+    notifyTelegramSkillExecuted({
+      creditDb,
+      owner: card.owner,
+      skillName: cardName,
+      skillId: resolvedSkillId ?? null,
+      requester,
+      creditsEarned: creditsNeeded,
+      latencyMs,
+    }).catch(() => {});
 
     const successResult = isRemoteEscrow
       ? {
