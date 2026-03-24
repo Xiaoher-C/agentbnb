@@ -267,6 +267,44 @@ export default function CardModal({ card, onClose }: CardModalProps) {
           {card.description}
         </p>
 
+        {/* Capability Types */}
+        {card.capability_types && card.capability_types.length > 0 && (
+          <div className="mt-4">
+            <p className="text-[11px] font-medium uppercase tracking-wider text-hub-text-muted mb-2">
+              Capability Types
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {card.capability_types.map((ct) => (
+                <span
+                  key={ct}
+                  className="text-[11px] px-2 py-0.5 rounded-full bg-indigo-500/10 border border-indigo-500/25 text-indigo-300"
+                >
+                  {ct}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Depends On */}
+        {card.requires_capabilities && card.requires_capabilities.length > 0 && (
+          <div className="mt-3">
+            <p className="text-[11px] font-medium uppercase tracking-wider text-hub-text-muted mb-2">
+              Depends On
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {card.requires_capabilities.map((rc) => (
+                <span
+                  key={rc}
+                  className="text-[11px] px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/25 text-amber-300"
+                >
+                  {rc}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Inputs */}
         {card.inputs.length > 0 && (
           <div className="mt-5">

@@ -32,6 +32,8 @@ interface UseCardsResult {
   setMinSuccessRate: (v: number | null) => void;
   verifiedOnly: boolean;
   setVerifiedOnly: (v: boolean) => void;
+  capabilityType: string;
+  setCapabilityType: (v: string) => void;
   // Sort state
   sort: SortOption;
   setSort: (s: SortOption) => void;
@@ -71,6 +73,7 @@ export function useCards(): UseCardsResult {
   const [onlineOnly, setOnlineOnly] = useState(false);
   const [minSuccessRate, setMinSuccessRate] = useState<number | null>(null);
   const [verifiedOnly, setVerifiedOnly] = useState(false);
+  const [capabilityType, setCapabilityType] = useState('');
   const [sort, setSort] = useState<SortOption>('popular');
   const [page, setPage] = useState(1);
 
@@ -138,7 +141,7 @@ export function useCards(): UseCardsResult {
     return () => clearInterval(interval);
   }, [fetchCards]);
 
-  // Client-side filters: category + minSuccessRate + verifiedOnly
+  // Client-side filters: category + minSuccessRate + verifiedOnly + capabilityType
   const filteredCards = allCards.filter((card) => {
     if (category !== null) {
       const { categories } = inferCategories(card.metadata);
@@ -152,6 +155,12 @@ export function useCards(): UseCardsResult {
     if (verifiedOnly) {
       const tags = card.metadata?.tags ?? [];
       if (!tags.includes('verified')) return false;
+    }
+    // capabilityType: substring match against any capability_types entry
+    if (capabilityType.trim() !== '') {
+      const needle = capabilityType.trim().toLowerCase();
+      const haystack = card.capability_types ?? [];
+      if (!haystack.some((ct) => ct.toLowerCase().includes(needle))) return false;
     }
     return true;
   });
@@ -236,6 +245,7 @@ export function useCards(): UseCardsResult {
   const setOnlineOnlyAndReset = useCallback((v: boolean) => { setOnlineOnly(v); setPage(1); }, []);
   const setMinSuccessRateAndReset = useCallback((v: number | null) => { setMinSuccessRate(v); setPage(1); }, []);
   const setVerifiedOnlyAndReset = useCallback((v: boolean) => { setVerifiedOnly(v); setPage(1); }, []);
+  const setCapabilityTypeAndReset = useCallback((v: string) => { setCapabilityType(v); setPage(1); }, []);
   const setSortAndReset = useCallback((s: SortOption) => { setSort(s); setPage(1); }, []);
 
   return {
@@ -255,6 +265,8 @@ export function useCards(): UseCardsResult {
     setMinSuccessRate: setMinSuccessRateAndReset,
     verifiedOnly,
     setVerifiedOnly: setVerifiedOnlyAndReset,
+    capabilityType,
+    setCapabilityType: setCapabilityTypeAndReset,
     sort,
     setSort: setSortAndReset,
     page: clampedPage,

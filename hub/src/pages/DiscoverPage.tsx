@@ -54,6 +54,8 @@ export default function DiscoverPage(): JSX.Element {
     setMinSuccessRate,
     verifiedOnly,
     setVerifiedOnly,
+    capabilityType,
+    setCapabilityType,
     sort,
     setSort,
     page,
@@ -137,6 +139,8 @@ export default function DiscoverPage(): JSX.Element {
         onMinSuccessRateChange={setMinSuccessRate}
         verifiedOnly={verifiedOnly}
         onVerifiedOnlyChange={setVerifiedOnly}
+        capabilityType={capabilityType}
+        onCapabilityTypeChange={setCapabilityType}
       />
 
       {/* Use Case Entry — scenario-driven quick filters */}

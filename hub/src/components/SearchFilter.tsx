@@ -36,6 +36,9 @@ interface SearchFilterProps {
   onMinSuccessRateChange?: (v: number | null) => void;
   verifiedOnly?: boolean;
   onVerifiedOnlyChange?: (v: boolean) => void;
+  /** Capability type filter (client-side substring match against capability_types) */
+  capabilityType?: string;
+  onCapabilityTypeChange?: (v: string) => void;
 }
 
 const selectCls = 'bg-transparent border border-hub-border rounded-lg px-3 h-9 text-sm text-hub-text-secondary focus:outline-none focus:border-hub-border-hover focus:ring-1 focus:ring-hub-border-hover transition-colors appearance-none cursor-pointer';
@@ -56,6 +59,8 @@ export default function SearchFilter({
   onMinSuccessRateChange,
   verifiedOnly,
   onVerifiedOnlyChange,
+  capabilityType,
+  onCapabilityTypeChange,
 }: SearchFilterProps) {
   return (
     <div className="mb-4">
@@ -114,6 +119,18 @@ export default function SearchFilter({
             <option key={cat.id} value={cat.id}>{cat.label}</option>
           ))}
         </select>
+
+        {/* Capability type text filter */}
+        {onCapabilityTypeChange && (
+          <input
+            type="text"
+            value={capabilityType ?? ''}
+            onChange={(e) => onCapabilityTypeChange(e.target.value)}
+            placeholder="e.g. financial_analysis"
+            aria-label="Capability Type"
+            className="bg-transparent border border-hub-border rounded-lg px-3 h-9 text-sm text-hub-text-secondary placeholder:text-hub-text-tertiary focus:outline-none focus:border-hub-border-hover focus:ring-1 focus:ring-hub-border-hover transition-colors w-44"
+          />
+        )}
 
         {/* Divider */}
         <div className="w-px h-5 bg-hub-border hidden sm:block" />
