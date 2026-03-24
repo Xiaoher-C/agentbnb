@@ -17,6 +17,10 @@ export type { Database };
  * NOTE: cards_fts uses content="" (contentless) so SQLite does NOT try to read
  * columns from capability_cards during rebuild. All indexing is trigger-managed.
  * The rowid join in matcher.ts still works because we set rowid explicitly.
+ *
+ * The tags column also indexes skill.capability_type (singular) and all values
+ * from skill.capability_types[] (array) so FTS text search finds cards by their
+ * routing labels (e.g. "financial_analysis", "audio_generation").
  */
 const V2_FTS_TRIGGERS = `
   DROP TRIGGER IF EXISTS cards_ai;
@@ -48,6 +52,17 @@ const V2_FTS_TRIGGERS = `
          FROM json_each(json_extract(new.data, '$.metadata.tags'))),
         ''
       )
+      || ' ' || COALESCE(
+        (SELECT group_concat(json_extract(skill.value, '$.capability_type'), ' ')
+         FROM json_each(json_extract(new.data, '$.skills')) AS skill),
+        ''
+      )
+      || ' ' || COALESCE(
+        (SELECT group_concat(cap_type.value, ' ')
+         FROM json_each(json_extract(new.data, '$.skills')) AS skill,
+              json_each(json_extract(skill.value, '$.capability_types')) AS cap_type),
+        ''
+      )
     );
   END;
 
@@ -77,6 +92,17 @@ const V2_FTS_TRIGGERS = `
          FROM json_each(json_extract(old.data, '$.metadata.tags'))),
         ''
       )
+      || ' ' || COALESCE(
+        (SELECT group_concat(json_extract(skill.value, '$.capability_type'), ' ')
+         FROM json_each(json_extract(old.data, '$.skills')) AS skill),
+        ''
+      )
+      || ' ' || COALESCE(
+        (SELECT group_concat(cap_type.value, ' ')
+         FROM json_each(json_extract(old.data, '$.skills')) AS skill,
+              json_each(json_extract(skill.value, '$.capability_types')) AS cap_type),
+        ''
+      )
     );
     INSERT INTO cards_fts(rowid, id, owner, name, description, tags)
     VALUES (
@@ -100,6 +126,17 @@ const V2_FTS_TRIGGERS = `
          FROM json_each(json_extract(new.data, '$.skills'))),
         (SELECT group_concat(value, ' ')
          FROM json_each(json_extract(new.data, '$.metadata.tags'))),
+        ''
+      )
+      || ' ' || COALESCE(
+        (SELECT group_concat(json_extract(skill.value, '$.capability_type'), ' ')
+         FROM json_each(json_extract(new.data, '$.skills')) AS skill),
+        ''
+      )
+      || ' ' || COALESCE(
+        (SELECT group_concat(cap_type.value, ' ')
+         FROM json_each(json_extract(new.data, '$.skills')) AS skill,
+              json_each(json_extract(skill.value, '$.capability_types')) AS cap_type),
         ''
       )
     );
@@ -129,6 +166,17 @@ const V2_FTS_TRIGGERS = `
          FROM json_each(json_extract(old.data, '$.skills'))),
         (SELECT group_concat(value, ' ')
          FROM json_each(json_extract(old.data, '$.metadata.tags'))),
+        ''
+      )
+      || ' ' || COALESCE(
+        (SELECT group_concat(json_extract(skill.value, '$.capability_type'), ' ')
+         FROM json_each(json_extract(old.data, '$.skills')) AS skill),
+        ''
+      )
+      || ' ' || COALESCE(
+        (SELECT group_concat(cap_type.value, ' ')
+         FROM json_each(json_extract(old.data, '$.skills')) AS skill,
+              json_each(json_extract(skill.value, '$.capability_types')) AS cap_type),
         ''
       )
     );
@@ -315,12 +363,19 @@ function migrateV1toV2(db: Database.Database): void {
         // v2.0 card — aggregate from skills[]
         name = skills.map((s) => String(s['name'] ?? '')).join(' ');
         description = skills.map((s) => String(s['description'] ?? '')).join(' ');
-        tags = skills
-          .flatMap((s) => {
+        tags = [
+          // tags from metadata.tags[]
+          ...skills.flatMap((s) => {
             const meta = s['metadata'] as Record<string, unknown> | undefined;
             return (meta?.['tags'] as string[] | undefined) ?? [];
-          })
-          .join(' ');
+          }),
+          // capability_type (singular)
+          ...skills
+            .map((s) => s['capability_type'] as string | undefined)
+            .filter((v): v is string => typeof v === 'string' && v.length > 0),
+          // capability_types[] (plural)
+          ...skills.flatMap((s) => (s['capability_types'] as string[] | undefined) ?? []),
+        ].join(' ');
       } else {
         // v1.0 card still in flat format (fallback)
         name = String(data['name'] ?? '');
@@ -684,4 +739,3 @@ export function getCardsBySkillCapability(
       });
     });
 }
-
