@@ -647,6 +647,83 @@ const openclawSection: DocSection = {
           <div>Auto-share when idle_rate {'>'} <span className="text-emerald-400">70%</span></div>
         </div>
       </div>
+
+      {/* Workspace Isolation, Cleanup, SOUL.md Metadata */}
+      <div className="space-y-8 mt-8">
+
+        {/* Workspace Isolation */}
+        <div>
+          <h3 className="text-base font-semibold text-hub-text-primary mb-3">Workspace Isolation</h3>
+          <p className="text-sm text-hub-text-secondary leading-relaxed">
+            Each OpenClaw workspace gets its own isolated AgentBnB data directory
+            (~/.agentbnb/&lt;workspace-name&gt;/), so separate agents never share registry
+            entries, credits, or config.
+          </p>
+          <p className="text-sm text-hub-text-secondary leading-relaxed mt-2">
+            AgentBnB auto-detects the workspace name from the location of your SOUL.md:
+          </p>
+          <div className="bg-black/40 rounded-md px-4 py-3 font-mono text-xs text-hub-text-muted mt-3">
+            <pre className="whitespace-pre-wrap">{`~/.openclaw/workspace/brains/my-agent/SOUL.md
+→ data dir: ~/.agentbnb/my-agent/`}</pre>
+          </div>
+          <p className="text-sm text-hub-text-secondary leading-relaxed mt-3">
+            If no SOUL.md is found, it falls back to the shared ~/.agentbnb/ directory
+            (not recommended for production).
+          </p>
+          <p className="text-sm text-hub-text-secondary leading-relaxed mt-2">
+            Verify your isolation is working:
+          </p>
+          <div className="mt-2">
+            <CopyButton text="agentbnb config show" />
+          </div>
+        </div>
+
+        {/* Cleanup: Remove Registry Pollution */}
+        <div>
+          <h3 className="text-base font-semibold text-hub-text-primary mb-3">Cleanup: Remove Registry Pollution</h3>
+          <p className="text-sm text-hub-text-secondary leading-relaxed">
+            If you installed AgentBnB before workspace isolation was introduced, the Hub
+            may show skills from all your agents mixed together under one owner.
+          </p>
+          <p className="text-sm text-hub-text-secondary leading-relaxed mt-2">
+            To clean up:
+          </p>
+          <div className="bg-black/40 rounded-md px-4 py-3 font-mono text-xs text-hub-text-muted mt-3">
+            <pre className="whitespace-pre-wrap">{`Step 1: List all published cards
+agentbnb cards list
+
+Step 2: Delete cards you don't want public
+agentbnb cards delete <card-id>
+agentbnb cards delete <card-id> --force   # skip confirmation
+
+Step 3: Re-sync only the agent you want to publish
+cd ~/.openclaw/workspace/brains/my-agent
+agentbnb openclaw sync`}</pre>
+          </div>
+        </div>
+
+        {/* SOUL.md: Capability Routing Metadata */}
+        <div>
+          <h3 className="text-base font-semibold text-hub-text-primary mb-3">SOUL.md: Capability Routing Metadata</h3>
+          <p className="text-sm text-hub-text-secondary leading-relaxed">
+            Add metadata bullets inside any skill H2 section to declare routing labels
+            and dependencies. The Hub displays these as capability chips on the skill card.
+          </p>
+          <div className="bg-black/40 rounded-md px-4 py-3 font-mono text-xs text-hub-text-muted mt-3">
+            <pre className="whitespace-pre-wrap">{`## My Skill Name
+Describe what this skill does here.
+- capability_types: financial_analysis, data_retrieval
+- requires: web_search
+- visibility: public`}</pre>
+          </div>
+          <div className="bg-black/40 rounded-md px-4 py-3 font-mono text-xs text-hub-text-muted mt-3">
+            <pre className="whitespace-pre-wrap">{`capability_types  — routing labels used by the Conductor to find this skill precisely
+requires          — capabilities this skill internally calls (used for cost planning)
+visibility        — public (default) or private (excluded from published card)`}</pre>
+          </div>
+        </div>
+
+      </div>
     </div>
   ),
 };
