@@ -52,8 +52,15 @@ export interface RequestLogEntry {
    * Role hint of the TeamMember that executed this subtask.
    * One of: 'researcher' | 'executor' | 'validator' | 'coordinator'.
    * Null for solo executions and for rows predating the Phase 53 migration.
+   * @deprecated Use capability_type instead (Phase 52 refactor).
    */
   role?: string | null;
+  /**
+   * Capability type fulfilled by the TeamMember that executed this subtask.
+   * Equals SubTask.required_capability (e.g. 'text_gen', 'tts').
+   * Null for solo executions and for rows predating the Phase 52 migration.
+   */
+  capability_type?: string | null;
 }
 
 /**
@@ -137,6 +144,13 @@ export function createRequestLogTable(db: Database.Database): void {
   } catch {
     // Column already exists — ignore
   }
+
+  // Add capability_type column for capability-first team context (Phase 52 refactor+).
+  try {
+    db.exec('ALTER TABLE request_log ADD COLUMN capability_type TEXT');
+  } catch {
+    // Column already exists — ignore
+  }
 }
 
 /**
@@ -147,8 +161,8 @@ export function createRequestLogTable(db: Database.Database): void {
  */
 export function insertRequestLog(db: Database.Database, entry: RequestLogEntry): void {
   const stmt = db.prepare(`
-    INSERT INTO request_log (id, card_id, card_name, requester, status, latency_ms, credits_charged, created_at, skill_id, action_type, tier_invoked, failure_reason, team_id, role)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO request_log (id, card_id, card_name, requester, status, latency_ms, credits_charged, created_at, skill_id, action_type, tier_invoked, failure_reason, team_id, role, capability_type)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
   stmt.run(
@@ -165,7 +179,8 @@ export function insertRequestLog(db: Database.Database, entry: RequestLogEntry):
     entry.tier_invoked ?? null,
     entry.failure_reason ?? null,
     entry.team_id ?? null,
-    entry.role ?? null
+    entry.role ?? null,
+    entry.capability_type ?? null
   );
 }
 
@@ -285,7 +300,7 @@ export function getRequestLog(
   if (since !== undefined) {
     const cutoff = new Date(Date.now() - SINCE_MS[since]).toISOString();
     const stmt = db.prepare(`
-      SELECT id, card_id, card_name, requester, status, latency_ms, credits_charged, created_at, skill_id, action_type, tier_invoked, failure_reason, team_id, role
+      SELECT id, card_id, card_name, requester, status, latency_ms, credits_charged, created_at, skill_id, action_type, tier_invoked, failure_reason, team_id, role, capability_type
       FROM request_log
       WHERE created_at >= ?
       ORDER BY created_at DESC

@@ -32,8 +32,15 @@ export interface RequestLogEntry {
    * Role hint of the team member that handled this subtask.
    * One of: 'researcher' | 'executor' | 'validator' | 'coordinator'.
    * Null for solo executions.
+   * @deprecated Use capability_type instead (Phase 52 refactor).
    */
   role?: string | null;
+  /**
+   * Capability type fulfilled by the team member that handled this subtask.
+   * Equals the subtask's required_capability (e.g. 'text_gen', 'tts').
+   * Null for solo executions.
+   */
+  capability_type?: string | null;
 }
 
 export interface UseRequestsResult {

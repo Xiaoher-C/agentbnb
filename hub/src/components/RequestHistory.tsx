@@ -55,9 +55,9 @@ export default function RequestHistory({ requests }: RequestHistoryProps): JSX.E
             <tr key={req.id} className="hover:bg-hub-surface-hover transition-colors">
               <td className="px-4 py-3">
                 <span className="font-medium text-hub-text-primary">{req.card_name}</span>
-                {req.role != null && (
+                {req.capability_type != null && (
                   <span className="ml-2 inline-flex items-center rounded px-1.5 py-0.5 text-xs font-medium bg-violet-900/60 text-violet-300">
-                    {req.role}
+                    {req.capability_type}
                   </span>
                 )}
               </td>
