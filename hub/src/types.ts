@@ -38,6 +38,36 @@ export interface HubCard {
   capability_types?: string[];
   /** Capability types this skill depends on from other agents */
   requires_capabilities?: string[];
+  // Agent-level tile fields (populated by normalizeCardAsAgent, Agents tab only)
+  /** Number of skills this agent exposes (agents tab tile) */
+  skill_count?: number;
+  /** Full skill data for agent modal rendering */
+  skills?: RawSkill[];
+  /** Union of all skills' capability_types, deduplicated (for filter + display) */
+  all_capability_types?: string[];
+  /** Formatted price: "from cr 3" (multi-skill) or "cr 15" (single/v1.0) */
+  display_price?: string;
+}
+
+/** Raw skill object as returned inside v2.0 cards from the API */
+export interface RawSkill {
+  id: string;
+  name: string;
+  description: string;
+  level?: 1 | 2 | 3;
+  inputs: Array<{ name: string; type: string; description?: string; required?: boolean }>;
+  outputs: Array<{ name: string; type: string; description?: string; required?: boolean }>;
+  pricing: { credits_per_call: number; credits_per_minute?: number; free_tier?: number };
+  availability?: { online: boolean };
+  capability_types?: string[];
+  requires_capabilities?: string[];
+  metadata?: {
+    apis_used?: string[];
+    avg_latency_ms?: number;
+    success_rate?: number;
+    tags?: string[];
+    idle_rate?: number;
+  };
 }
 
 export interface Category {

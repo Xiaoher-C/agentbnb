@@ -1848,7 +1848,8 @@ cardsCmd
         }
       }
 
-      deleteCard(db, cardId, config.owner);
+      // Local registry: use card's own owner so cross-workspace cleanup works
+      deleteCard(db, cardId, card.owner);
       console.log(`Deleted: "${cardName}" (${skillCount} skill${skillCount !== 1 ? 's' : ''})`);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);

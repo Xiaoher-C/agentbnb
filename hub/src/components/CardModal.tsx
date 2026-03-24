@@ -19,7 +19,7 @@ import { useNavigate } from 'react-router';
 import Avatar from 'boring-avatars';
 import { inferCategories } from '../lib/categories.js';
 import { formatCredits } from '../lib/utils.js';
-import type { HubCard } from '../types.js';
+import type { HubCard, RawSkill } from '../types.js';
 import CategoryChip from './CategoryChip.js';
 import StatusDot from './StatusDot.js';
 import CopyButton from './CopyButton.js';
@@ -52,6 +52,76 @@ function unlockScroll(): void {
   document.body.style.width = '';
   delete document.body.dataset.scrollY;
   window.scrollTo(0, scrollY);
+}
+
+/** Expandable skill row used in the agent modal's skills list. */
+function SkillRow({ skill }: { skill: RawSkill }) {
+  const [expanded, setExpanded] = useState(false);
+  return (
+    <div className="border border-hub-border/50 rounded-lg overflow-hidden">
+      <button
+        onClick={() => setExpanded((v) => !v)}
+        className="w-full flex items-start justify-between gap-3 p-3 text-left hover:bg-white/[0.03] transition-colors"
+      >
+        <div className="flex-1 min-w-0">
+          <p className="text-[13px] font-medium text-hub-text-primary truncate">{skill.name}</p>
+          {skill.description && (
+            <p className="text-[11px] text-hub-text-muted mt-0.5 line-clamp-1">{skill.description}</p>
+          )}
+          {skill.capability_types && skill.capability_types.length > 0 && (
+            <div className="flex flex-wrap gap-1 mt-1.5">
+              {skill.capability_types.map((ct) => (
+                <span key={ct} className="text-[10px] px-1.5 py-0.5 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-300/80">
+                  {ct}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+        <div className="flex items-center gap-2 flex-shrink-0 mt-0.5">
+          <span className="font-mono text-xs text-hub-accent">
+            {skill.pricing.credits_per_call > 0
+              ? `cr ${skill.pricing.credits_per_call}`
+              : 'free'}
+          </span>
+          <span className="text-hub-text-tertiary text-[10px]">{expanded ? '▲' : '▼'}</span>
+        </div>
+      </button>
+      {expanded && (skill.inputs.length > 0 || skill.outputs.length > 0) && (
+        <div className="px-3 pb-3 border-t border-hub-border/40 pt-2.5 space-y-2">
+          {skill.inputs.length > 0 && (
+            <div>
+              <p className="text-[10px] font-medium uppercase tracking-wider text-hub-text-muted mb-1">Inputs</p>
+              <ul className="space-y-0.5">
+                {skill.inputs.map((input) => (
+                  <li key={input.name} className="font-mono text-xs text-hub-text-secondary">
+                    <span className="text-hub-text-primary">{input.name}</span>
+                    <span className="text-hub-text-tertiary">: {input.type}</span>
+                    {input.description && <span className="text-hub-text-muted ml-2 font-sans text-[11px]">— {input.description}</span>}
+                    {input.required && <span className="text-hub-accent ml-1 text-[10px]">*</span>}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {skill.outputs.length > 0 && (
+            <div>
+              <p className="text-[10px] font-medium uppercase tracking-wider text-hub-text-muted mb-1">Outputs</p>
+              <ul className="space-y-0.5">
+                {skill.outputs.map((output) => (
+                  <li key={output.name} className="font-mono text-xs text-hub-text-secondary">
+                    <span className="text-hub-text-primary">{output.name}</span>
+                    <span className="text-hub-text-tertiary">: {output.type}</span>
+                    {output.description && <span className="text-hub-text-muted ml-2 font-sans text-[11px]">— {output.description}</span>}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
 }
 
 /**
@@ -305,51 +375,67 @@ export default function CardModal({ card, onClose }: CardModalProps) {
           </div>
         )}
 
-        {/* Inputs */}
-        {card.inputs.length > 0 && (
+        {/* Agent modal: skills list (dual-layer) vs flat inputs/outputs (skill modal) */}
+        {card.skills && card.skills.length > 0 ? (
           <div className="mt-5">
             <p className="text-[11px] font-medium uppercase tracking-wider text-hub-text-muted mb-2">
-              Inputs
+              Skills ({card.skills.length})
             </p>
-            <ul className="space-y-1">
-              {card.inputs.map((input) => (
-                <li key={input.name} className="font-mono text-sm text-hub-text-secondary">
-                  <span className="text-hub-text-primary">{input.name}</span>
-                  <span className="text-hub-text-tertiary">: {input.type}</span>
-                  {input.description && (
-                    <span className="text-hub-text-muted ml-2 font-sans text-xs">
-                      — {input.description}
-                    </span>
-                  )}
-                  {input.required && (
-                    <span className="text-hub-accent ml-1 text-xs">*</span>
-                  )}
-                </li>
+            <div className="space-y-2">
+              {card.skills.map((skill) => (
+                <SkillRow key={skill.id} skill={skill} />
               ))}
-            </ul>
+            </div>
           </div>
-        )}
+        ) : (
+          <>
+            {/* Inputs */}
+            {card.inputs.length > 0 && (
+              <div className="mt-5">
+                <p className="text-[11px] font-medium uppercase tracking-wider text-hub-text-muted mb-2">
+                  Inputs
+                </p>
+                <ul className="space-y-1">
+                  {card.inputs.map((input) => (
+                    <li key={input.name} className="font-mono text-sm text-hub-text-secondary">
+                      <span className="text-hub-text-primary">{input.name}</span>
+                      <span className="text-hub-text-tertiary">: {input.type}</span>
+                      {input.description && (
+                        <span className="text-hub-text-muted ml-2 font-sans text-xs">
+                          — {input.description}
+                        </span>
+                      )}
+                      {input.required && (
+                        <span className="text-hub-accent ml-1 text-xs">*</span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
 
-        {/* Outputs */}
-        {card.outputs.length > 0 && (
-          <div className="mt-4">
-            <p className="text-[11px] font-medium uppercase tracking-wider text-hub-text-muted mb-2">
-              Outputs
-            </p>
-            <ul className="space-y-1">
-              {card.outputs.map((output) => (
-                <li key={output.name} className="font-mono text-sm text-hub-text-secondary">
-                  <span className="text-hub-text-primary">{output.name}</span>
-                  <span className="text-hub-text-tertiary">: {output.type}</span>
-                  {output.description && (
-                    <span className="text-hub-text-muted ml-2 font-sans text-xs">
-                      — {output.description}
-                    </span>
-                  )}
-                </li>
-              ))}
-            </ul>
-          </div>
+            {/* Outputs */}
+            {card.outputs.length > 0 && (
+              <div className="mt-4">
+                <p className="text-[11px] font-medium uppercase tracking-wider text-hub-text-muted mb-2">
+                  Outputs
+                </p>
+                <ul className="space-y-1">
+                  {card.outputs.map((output) => (
+                    <li key={output.name} className="font-mono text-sm text-hub-text-secondary">
+                      <span className="text-hub-text-primary">{output.name}</span>
+                      <span className="text-hub-text-tertiary">: {output.type}</span>
+                      {output.description && (
+                        <span className="text-hub-text-muted ml-2 font-sans text-xs">
+                          — {output.description}
+                        </span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </>
         )}
 
         {/* Stats */}

@@ -39,6 +39,7 @@ export default function CapabilityCard({ card, onClick }: CapabilityCardProps) {
   const online = card.availability.online;
   const successRate = card.metadata?.success_rate;
   const avgLatency = card.metadata?.avg_latency_ms;
+  const isAgentTile = card.skill_count !== undefined;
 
   const tier = TIER_CONFIG[card.performance_tier ?? 0];
   const authority = AUTHORITY_CONFIG[card.authority_source ?? 'self'];
@@ -64,11 +65,17 @@ export default function CapabilityCard({ card, onClick }: CapabilityCardProps) {
               {tier.label}
             </span>
           </div>
-          {/* Row 2: owner (left) + authority source (right) */}
+          {/* Row 2: owner (left) + [skills count badge or level badge] + authority source (right) */}
           <div className="flex items-center justify-between gap-2 mt-0.5">
             <div className="flex items-center gap-1.5">
               <p className="text-[12px] text-hub-text-tertiary">@{card.owner}</p>
-              <LevelBadge level={card.level} />
+              {isAgentTile ? (
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/[0.06] border border-hub-border text-hub-text-muted">
+                  {card.skill_count} {card.skill_count === 1 ? 'skill' : 'skills'}
+                </span>
+              ) : (
+                <LevelBadge level={card.level} />
+              )}
             </div>
             <span className={`flex-shrink-0 text-[10px] ${authority.cls}`}>
               {authority.label}
@@ -109,7 +116,7 @@ export default function CapabilityCard({ card, onClick }: CapabilityCardProps) {
         )}
 
         <span className="ml-auto font-mono text-hub-accent">
-          {formatCredits(card.pricing)}
+          {card.display_price ?? formatCredits(card.pricing)}
         </span>
       </div>
     </article>

@@ -10,7 +10,8 @@
  *   - Supporting sections (CompatibleWith, FAQ, ValueProp)
  */
 import { useOutletContext } from 'react-router';
-import { Zap, BarChart3, ShieldCheck } from 'lucide-react';
+import { useNavigate } from 'react-router';
+import { Rocket, Plug } from 'lucide-react';
 import { useCards } from '../hooks/useCards.js';
 import type { AppOutletContext } from '../types.js';
 import CapabilityCard from '../components/CapabilityCard.js';
@@ -37,11 +38,14 @@ const USE_CASES = [
 
 export default function DiscoverPage(): JSX.Element {
   const { setSelectedCard } = useOutletContext<AppOutletContext>();
+  const navigate = useNavigate();
 
   const {
     cards,
     loading,
     error,
+    activeTab,
+    setActiveTab,
     query,
     setQuery,
     level,
@@ -82,43 +86,55 @@ export default function DiscoverPage(): JSX.Element {
         verifiedProviders={verifiedProviders}
       />
 
-      {/* Three Intent Entry Points */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
+      {/* Action CTAs — Quick Start + OpenClaw */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
         <button
-          onClick={() => setSort('popular')}
+          onClick={() => navigate('/genesis')}
           className="group relative flex flex-col gap-2 p-4 bg-hub-surface border border-hub-border rounded-xl text-left hover:border-emerald-500/40 hover:bg-white/[0.04] transition-all overflow-hidden"
         >
-          {/* subtle gradient fill on hover */}
           <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/0 to-emerald-500/0 group-hover:from-emerald-500/[0.06] group-hover:to-transparent transition-all rounded-xl pointer-events-none" />
-          <div className="relative w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center group-hover:bg-emerald-500/20 group-hover:border-emerald-500/40 transition-all"
-            style={{ boxShadow: '0 0 12px rgba(16,185,129,0)' }}
-          >
-            <Zap size={15} className="text-emerald-400 group-hover:text-emerald-300 transition-colors" strokeWidth={2.5} />
+          <div className="relative w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center group-hover:bg-emerald-500/20 group-hover:border-emerald-500/40 transition-all">
+            <Rocket size={15} className="text-emerald-400 group-hover:text-emerald-300 transition-colors" strokeWidth={2.5} />
           </div>
-          <span className="relative text-sm font-semibold text-hub-text-primary">Find by Capability</span>
-          <span className="relative text-xs text-hub-text-muted">Browse what agents can do</span>
+          <span className="relative text-sm font-semibold text-hub-text-primary">Quick Start</span>
+          <span className="relative text-xs text-hub-text-muted">Deploy your first agent in 2 minutes with the Genesis template</span>
+          <span className="relative text-xs text-emerald-400/70 group-hover:text-emerald-400 transition-colors mt-0.5">Get Started →</span>
         </button>
         <button
-          onClick={() => { setSort('rated'); setOnlineOnly(true); }}
+          onClick={() => navigate('/docs')}
           className="group relative flex flex-col gap-2 p-4 bg-hub-surface border border-hub-border rounded-xl text-left hover:border-blue-500/40 hover:bg-white/[0.04] transition-all overflow-hidden"
         >
           <div className="absolute inset-0 bg-gradient-to-br from-blue-500/0 to-blue-500/0 group-hover:from-blue-500/[0.06] group-hover:to-transparent transition-all rounded-xl pointer-events-none" />
           <div className="relative w-8 h-8 rounded-lg bg-blue-500/10 border border-blue-500/20 flex items-center justify-center group-hover:bg-blue-500/20 group-hover:border-blue-500/40 transition-all">
-            <BarChart3 size={15} className="text-blue-400 group-hover:text-blue-300 transition-colors" strokeWidth={2.5} />
+            <Plug size={15} className="text-blue-400 group-hover:text-blue-300 transition-colors" strokeWidth={2.5} />
           </div>
-          <span className="relative text-sm font-semibold text-hub-text-primary">Find by Performance Tier</span>
-          <span className="relative text-xs text-hub-text-muted">Active & Trusted agents first</span>
+          <span className="relative text-sm font-semibold text-hub-text-primary">Connect with OpenClaw</span>
+          <span className="relative text-xs text-hub-text-muted">Sync your SOUL.md and publish your capabilities in one command</span>
+          <span className="relative text-xs text-blue-400/70 group-hover:text-blue-400 transition-colors mt-0.5">Read the Guide →</span>
+        </button>
+      </div>
+
+      {/* By Agent / By Skill — underline tab (page-internal filter, not nav) */}
+      <div className="flex items-center gap-6 mb-5 border-b border-hub-border/40">
+        <button
+          onClick={() => setActiveTab('agents')}
+          className={`pb-2 text-sm font-medium transition-all border-b-2 -mb-px ${
+            activeTab === 'agents'
+              ? 'border-emerald-400 text-hub-text-primary'
+              : 'border-transparent text-hub-text-muted hover:text-hub-text-secondary'
+          }`}
+        >
+          By Agent
         </button>
         <button
-          onClick={() => { setQuery('verified'); setSort('rated'); }}
-          className="group relative flex flex-col gap-2 p-4 bg-hub-surface border border-hub-border rounded-xl text-left hover:border-violet-500/40 hover:bg-white/[0.04] transition-all overflow-hidden"
+          onClick={() => setActiveTab('skills')}
+          className={`pb-2 text-sm font-medium transition-all border-b-2 -mb-px ${
+            activeTab === 'skills'
+              ? 'border-emerald-400 text-hub-text-primary'
+              : 'border-transparent text-hub-text-muted hover:text-hub-text-secondary'
+          }`}
         >
-          <div className="absolute inset-0 bg-gradient-to-br from-violet-500/0 to-violet-500/0 group-hover:from-violet-500/[0.06] group-hover:to-transparent transition-all rounded-xl pointer-events-none" />
-          <div className="relative w-8 h-8 rounded-lg bg-violet-500/10 border border-violet-500/20 flex items-center justify-center group-hover:bg-violet-500/20 group-hover:border-violet-500/40 transition-all">
-            <ShieldCheck size={15} className="text-violet-400 group-hover:text-violet-300 transition-colors" strokeWidth={2.5} />
-          </div>
-          <span className="relative text-sm font-semibold text-hub-text-primary">Find by Verification Badge</span>
-          <span className="relative text-xs text-hub-text-muted">Platform-verified & org-authorized</span>
+          By Skill
         </button>
       </div>
 
@@ -182,7 +198,7 @@ export default function DiscoverPage(): JSX.Element {
         <>
           {/* Section label */}
           <p className="text-[11px] text-hub-text-muted uppercase tracking-wider mb-3">
-            {query ? `Results for "${query}"` : 'All agents'} ({filteredTotal})
+            {query ? `Results for "${query}"` : activeTab === 'agents' ? 'All agents' : 'All skills'} · {filteredTotal}
           </p>
           <CardGrid>
             {cards.map((card) => (
