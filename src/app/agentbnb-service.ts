@@ -145,6 +145,7 @@ export class AgentBnBService {
         const requestParams = {
           ...params.taskParams,
           ...(params.skillId ? { skill_id: params.skillId } : {}),
+          requester: this.config.owner,
         };
         let result: unknown;
 

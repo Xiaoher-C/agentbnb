@@ -1,13 +1,11 @@
 /**
- * Role-based team data model for Conductor team formation.
+ * Capability-first team data model for Conductor team formation.
  *
- * Roles are ROUTING HINTS ONLY — not authorization boundaries, not hierarchy levels.
+ * TeamMember.capability_type is the required_capability value this member is fulfilling.
+ * It is a direct match to SubTask.required_capability — not an abstract role hint.
  */
 
-import type { Role } from '../types/index.js';
 import type { SubTask, MatchResult } from './types.js';
-
-export type { Role };
 
 /**
  * A single team member: a SubTask matched to an agent.
@@ -15,8 +13,8 @@ export type { Role };
 export interface TeamMember {
   /** The sub-task this member handles. */
   subtask: SubTask;
-  /** Routing hint role for this member's position. */
-  role: Role;
+  /** The required_capability value this member is fulfilling (e.g. 'text_gen', 'tts'). */
+  capability_type: string;
   /** Owner ID of the matched agent. */
   agent: string;
   /** Skill ID on the agent's card for this task. */
@@ -31,7 +29,7 @@ export interface TeamMember {
 
 /**
  * A fully-formed team: matched members + unrouted subtasks.
- * Unrouted subtasks either had no role hint or no available matching agent.
+ * Unrouted subtasks had no matching agent for their required_capability.
  */
 export interface Team {
   /** Unique team identifier (UUID). */
@@ -41,8 +39,8 @@ export interface Team {
   /** Successfully matched team members. */
   matched: TeamMember[];
   /**
-   * Sub-tasks that could not be matched — either missing a role hint
-   * or no available agent found in the registry.
+   * Sub-tasks that could not be matched — no available agent found in the registry
+   * for the required_capability.
    * Callers should decide whether to fail-fast or proceed with partial teams.
    */
   unrouted: SubTask[];

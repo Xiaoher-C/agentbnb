@@ -375,8 +375,8 @@ export class AutoRequestor {
         token: peerConfig.token,
         cardId: top.card.id,
         params: top.skillId
-          ? { skill_id: top.skillId, ...need.params }
-          : need.params,
+          ? { skill_id: top.skillId, ...need.params, requester: this.owner }
+          : { ...need.params, requester: this.owner },
       });
 
       // Step 9a: Settle escrow on success

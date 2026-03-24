@@ -121,7 +121,7 @@ export async function orchestrate(opts: OrchestrateOptions): Promise<Orchestrati
   const results = new Map<string, unknown>();
   const errors: string[] = [];
   let totalCredits = 0;
-  const traceContext = new Map<string, { team_id: string | null; role: string | null }>();
+  const traceContext = new Map<string, { team_id: string | null; capability_type: string | null }>();
 
   const waves = computeWaves(subtasks);
   const subtaskMap = new Map(subtasks.map((s) => [s.id, s]));
@@ -174,7 +174,7 @@ export async function orchestrate(opts: OrchestrateOptions): Promise<Orchestrati
         // Capture team traceability context for the caller's log entry
         const teamMember = teamMemberMap.get(taskId);
         const teamId = opts.team?.team_id ?? null;
-        const taskRole = teamMember?.role ?? null;
+        const taskCapabilityType = teamMember?.capability_type ?? null;
 
         // Try primary agent
         // Use team member agent assignment if available (role-aware routing)
@@ -200,7 +200,7 @@ export async function orchestrate(opts: OrchestrateOptions): Promise<Orchestrati
               timeoutMs,
             });
           }
-          return { taskId, result: res, credits: m.credits, team_id: teamId, role: taskRole };
+          return { taskId, result: res, credits: m.credits, team_id: teamId, capability_type: taskCapabilityType };
         } catch (primaryErr) {
           // Retry with first alternative if available
           if (m.alternatives.length > 0) {
@@ -226,7 +226,7 @@ export async function orchestrate(opts: OrchestrateOptions): Promise<Orchestrati
                   timeoutMs,
                 });
               }
-              return { taskId, result: altRes, credits: alt.credits, team_id: teamId, role: taskRole };
+              return { taskId, result: altRes, credits: alt.credits, team_id: teamId, capability_type: taskCapabilityType };
             } catch (altErr) {
               throw new Error(
                 `Task ${taskId}: primary (${m.selected_agent}) failed: ${primaryErr instanceof Error ? primaryErr.message : String(primaryErr)}; ` +
@@ -244,10 +244,10 @@ export async function orchestrate(opts: OrchestrateOptions): Promise<Orchestrati
     // Collect results
     for (const settlement of waveResults) {
       if (settlement.status === 'fulfilled') {
-        const { taskId, result, credits, team_id, role } = settlement.value;
+        const { taskId, result, credits, team_id, capability_type } = settlement.value;
         results.set(taskId, result);
         totalCredits += credits;
-        traceContext.set(taskId, { team_id: team_id ?? null, role: role ?? null });
+        traceContext.set(taskId, { team_id: team_id ?? null, capability_type: capability_type ?? null });
       } else {
         errors.push(settlement.reason instanceof Error ? settlement.reason.message : String(settlement.reason));
       }

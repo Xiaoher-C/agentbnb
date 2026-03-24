@@ -91,11 +91,12 @@ export function sp(v: unknown): number {
 
 /** YoY growth rate from quarterly reports (Q0 vs Q4) */
 export function calcYoYGrowth(
-  reports: Array<Record<string, string>>,
+  reports: Array<Record<string, unknown>> | undefined,
   field: string,
 ): number {
+  if (!reports || reports.length === 0) return 0;
   const current = sp(reports[0]?.[field]);
-  const prior = sp(reports[4]?.[field]);
+  const prior = sp(reports[4]?.[field] ?? reports[Math.min(4, reports.length - 1)]?.[field]);
   if (prior === 0) return 0;
   return ((current - prior) / Math.abs(prior)) * 100;
 }

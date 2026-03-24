@@ -142,7 +142,7 @@ function crossedBelow(
 
 function determineRegime(
   composite: number,
-  trendScore: number,
+  _trendScore: number,
   strengthScore: number,
 ): TechnicalScore['regime'] {
   if (composite > 80 && strengthScore > 70) return 'strong_uptrend';

@@ -138,7 +138,6 @@ export class ConductorMode implements ExecutorMode {
           // If validation fails, fall through to Rule Engine.
           if (Array.isArray(response)) {
             const validation = validateAndNormalizeSubtasks(response, {
-              available_roles: ['researcher', 'executor', 'validator', 'coordinator'],
               max_credits: this.maxBudget,
             });
             if (validation.errors.length === 0) {
@@ -173,23 +172,20 @@ export class ConductorMode implements ExecutorMode {
     });
     onProgress?.({ step: 2, total: 5, message: `Matched ${matchResults.length} sub-tasks to agents` });
 
-    // Step 2b: Form team when subtasks have role hints (orchestrate skill only)
+    // Step 2b: Form team for orchestrate skill (capability-first — always runs)
     let team: Team | undefined;
     if (conductorSkill === 'orchestrate') {
-      const hasRoleHints = subtasks.some((s) => s.role !== undefined);
-      if (hasRoleHints) {
-        const strategy = typeof params.formation_strategy === 'string'
-          && ['cost_optimized', 'quality_optimized', 'balanced'].includes(params.formation_strategy)
-          ? (params.formation_strategy as 'cost_optimized' | 'quality_optimized' | 'balanced')
-          : 'balanced';
-        team = await formTeam({
-          subtasks,
-          strategy,
-          db: this.db,
-          conductorOwner: this.conductorOwner,
-        });
-        onProgress?.({ step: 2, total: 5, message: `Formed team: ${team.matched.length} members, ${team.unrouted.length} unrouted` });
-      }
+      const strategy = typeof params.formation_strategy === 'string'
+        && ['cost_optimized', 'quality_optimized', 'balanced'].includes(params.formation_strategy)
+        ? (params.formation_strategy as 'cost_optimized' | 'quality_optimized' | 'balanced')
+        : 'balanced';
+      team = await formTeam({
+        subtasks,
+        strategy,
+        db: this.db,
+        conductorOwner: this.conductorOwner,
+      });
+      onProgress?.({ step: 2, total: 5, message: `Formed team: ${team.matched.length} members, ${team.unrouted.length} unrouted` });
     }
 
     // Step 3: Budget check

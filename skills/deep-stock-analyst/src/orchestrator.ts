@@ -1,6 +1,6 @@
 /**
- * Orchestrator: ties together all 5 analysis modules + thesis.
- * All heavy computation happens here (no LLM until thesis step).
+ * Orchestrator: ties together all 5 analysis modules.
+ * Pure computation — no LLM. Returns structured JSON for the calling agent to interpret.
  */
 
 import { fetchAllData } from './api/alpha-vantage.js';
@@ -9,7 +9,6 @@ import { analyzeTechnicals } from './analysis/technicals.js';
 import { analyzeFinancialHealth } from './analysis/financial-health.js';
 import { analyzeSentiment } from './analysis/sentiment.js';
 import { generateCompositeSignal } from './analysis/signal.js';
-import { generateThesis } from './llm/thesis.js';
 import type { InvestmentStyle } from './analysis/signal.js';
 
 export interface AnalysisOptions {
@@ -70,16 +69,6 @@ export interface AnalysisResult {
     topic_breakdown: Record<string, number>;
   };
 
-  // LLM thesis
-  thesis: {
-    bull_case: string;
-    bear_case: string;
-    catalysts: string[];
-    risks: string[];
-    time_horizon: string;
-    entry_strategy: string;
-  };
-
   // Price levels
   support_levels: number[];
   resistance_levels: number[];
@@ -117,12 +106,7 @@ export async function runAnalysis(options: AnalysisOptions): Promise<AnalysisRes
     valuation, technicals, financials, sentiment, data.daily, style,
   );
 
-  // Step 3: LLM thesis (~200ms, Gemini Flash)
-  const thesis = await generateThesis(
-    ticker, data.overview, composite, valuation, technicals, financials, sentiment,
-  );
-
-  // Step 4: Assemble result
+  // Step 3: Assemble result
   const price = parseFloat(data.daily[0]?.adjustedClose ?? data.daily[0]?.close ?? '0');
   const analystTarget = parseFloat(data.overview.AnalystTargetPrice ?? '0');
   const marketCap = parseFloat(data.overview.MarketCapitalization ?? '0');
@@ -207,8 +191,6 @@ export async function runAnalysis(options: AnalysisOptions): Promise<AnalysisRes
       key_headlines: sentiment.key_headlines,
       topic_breakdown: sentiment.topic_breakdown,
     },
-
-    thesis,
 
     support_levels: composite.support_levels,
     resistance_levels: composite.resistance_levels,

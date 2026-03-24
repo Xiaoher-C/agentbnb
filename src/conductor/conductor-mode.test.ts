@@ -241,12 +241,13 @@ describe('ConductorMode', () => {
     const result = await mode.execute(config as any, { task: 'write a blog post' }, onProgress);
 
     expect(result.success).toBe(true);
-    // Should emit at decompose, match, budget, and after orchestration (steps 1-4)
-    expect(onProgress).toHaveBeenCalledTimes(4);
+    // Should emit: decompose (step 1), match (step 2), team-formation (step 2), budget (step 3), orchestration (step 4)
+    expect(onProgress).toHaveBeenCalledTimes(5);
     expect(onProgress).toHaveBeenNthCalledWith(1, expect.objectContaining({ step: 1, total: 5 }));
     expect(onProgress).toHaveBeenNthCalledWith(2, expect.objectContaining({ step: 2, total: 5 }));
-    expect(onProgress).toHaveBeenNthCalledWith(3, expect.objectContaining({ step: 3, total: 5 }));
-    expect(onProgress).toHaveBeenNthCalledWith(4, expect.objectContaining({ step: 4, total: 5 }));
+    expect(onProgress).toHaveBeenNthCalledWith(3, expect.objectContaining({ step: 2, total: 5 }));
+    expect(onProgress).toHaveBeenNthCalledWith(4, expect.objectContaining({ step: 3, total: 5 }));
+    expect(onProgress).toHaveBeenNthCalledWith(5, expect.objectContaining({ step: 4, total: 5 }));
   });
 
   it('Test 8: works without onProgress callback (backward compatibility)', async () => {

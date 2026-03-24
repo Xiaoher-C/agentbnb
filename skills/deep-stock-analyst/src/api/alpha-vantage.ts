@@ -21,7 +21,9 @@ import type {
 } from './types.js';
 
 const BASE_URL = 'https://www.alphavantage.co/query';
-const RATE_DELAY_MS = 200; // 5 req/min on free key → be conservative
+// Free key: 5 req/min → 13s between calls (safe)
+// Premium (75 req/min): set AV_RATE_DELAY_MS=800
+const RATE_DELAY_MS = parseInt(process.env['AV_RATE_DELAY_MS'] ?? '13000', 10);
 
 async function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));

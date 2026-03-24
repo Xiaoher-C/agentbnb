@@ -113,25 +113,33 @@ program
   .command('init')
   .description('Initialize AgentBnB config and create agent identity')
   .option('--owner <name>', 'Agent owner name')
+  .option('--agent-id <id>', 'Agent identity (alias for --owner, for genesis-template compat)')
   .option('--port <port>', 'Gateway port', '7700')
   .option('--host <ip>', 'Override gateway host IP (default: auto-detected LAN IP)')
   .option('--yes', 'Auto-confirm all draft cards (non-interactive)')
+  .option('--non-interactive', 'Non-interactive mode (alias for --yes)')
   .option('--no-detect', 'Skip API key detection')
   .option('--from <file>', 'Parse a specific file for capability detection')
   .option('--json', 'Output as JSON')
-  .action(async (opts: { owner?: string; port: string; host?: string; yes?: boolean; detect?: boolean; from?: string; json?: boolean }) => {
+  .action(async (opts: { owner?: string; agentId?: string; port: string; host?: string; yes?: boolean; nonInteractive?: boolean; detect?: boolean; from?: string; json?: boolean }) => {
     const configDir = getConfigDir();
     const dbPath = join(configDir, 'registry.db');
     const creditDbPath = join(configDir, 'credit.db');
     const port = parseInt(opts.port, 10);
     const ip = opts.host ?? getLanIp();
 
+    // --agent-id is an alias for --owner (genesis-template compatibility)
+    // --non-interactive is an alias for --yes
+    // --non-interactive is an alias for --yes
+    const yesMode = opts.yes ?? opts.nonInteractive ?? false;
+    opts.yes = yesMode;
+
     // Merge with existing config to preserve user-set values (registry, autonomy, budget, etc.)
     const existingConfig = loadConfig();
 
     // Preserve existing owner — only generate a new one for truly fresh installs.
     // Without this, every `agentbnb init` call without --owner overwrites the owner.
-    const owner = opts.owner ?? existingConfig?.owner ?? `agent-${randomBytes(4).toString('hex')}`;
+    const owner = opts.agentId ?? opts.owner ?? existingConfig?.owner ?? `agent-${randomBytes(4).toString('hex')}`;
 
     const config = {
       ...existingConfig,               // Preserve all existing keys (registry, autonomy, budget, etc.)
@@ -1007,8 +1015,8 @@ program
         db.close();
       }
 
-      if (localCard) {
-        // Local card — use local gateway
+      if (localCard && localCard.owner === config.owner) {
+        // Local card (owned by this agent) — use local gateway
         gatewayUrl = config.gateway_url;
         token = config.token;
       } else {

@@ -215,8 +215,14 @@ async function main() {
   // Register on AgentBnB if joining
   if (joinNetwork) {
     try {
+      // Step 1: init with agent identity (--agent-id is alias for --owner, --non-interactive for --yes)
       execSync(
-        `agentbnb init --agent-id ${agentId} --name "${agentName}" --card capability-card.json --non-interactive`,
+        `agentbnb init --agent-id ${agentId} --non-interactive`,
+        { cwd: OUTPUT_DIR, stdio: "pipe" }
+      );
+      // Step 2: publish the generated capability card
+      execSync(
+        `agentbnb publish capability-card.json`,
         { cwd: OUTPUT_DIR, stdio: "pipe" }
       );
     } catch {
@@ -248,7 +254,7 @@ async function main() {
   p.outro(
     joinNetwork
       ? `First heartbeat in ~30 min. Monitor: agentbnb status\nHub: ${HUB_URL}`
-      : `Run 'agentbnb init --card capability-card.json' when ready to join the network.`
+      : `Run 'agentbnb publish capability-card.json' when ready to join the network.`
   );
 }
 

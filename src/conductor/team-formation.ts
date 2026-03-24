@@ -56,16 +56,16 @@ function selectByStrategy(matches: MatchResult[], strategy: FormationStrategy): 
 }
 
 /**
- * Forms a Team from SubTask[] using role-aware agent selection.
+ * Forms a Team from SubTask[] using capability-first agent selection.
  *
  * Algorithm:
- * 1. Separate subtasks into role-hinted and role-less
- * 2. Run matchSubTasks() on all role-hinted subtasks
- * 3. Apply strategy-specific selection within the match results
- * 4. Return Team with matched members and unrouted subtasks
+ * For each subtask:
+ * 1. Run matchSubTasks() using the subtask's required_capability
+ * 2. Apply strategy-specific selection on candidates
+ * 3. Create TeamMember with capability_type = subtask.required_capability
+ * 4. If no agent found, add subtask to unrouted[]
  *
- * SubTasks without a role hint go directly to unrouted[].
- * SubTasks with a role hint but no available agent also go to unrouted[].
+ * Every subtask participates in matching — no role-hint filtering.
  *
  * @param opts - Formation options.
  * @returns Team with matched members and unrouted subtasks.
@@ -74,29 +74,24 @@ export async function formTeam(opts: FormTeamOptions): Promise<Team> {
   const { subtasks, strategy, db, conductorOwner, registryUrl } = opts;
 
   const team_id = randomUUID();
-  const roledSubtasks = subtasks.filter((s) => s.role !== undefined);
-  const rolelessSubtasks = subtasks.filter((s) => s.role === undefined);
 
-  if (roledSubtasks.length === 0) {
-    return { team_id, strategy, matched: [], unrouted: rolelessSubtasks };
+  if (subtasks.length === 0) {
+    return { team_id, strategy, matched: [], unrouted: [] };
   }
 
-  // matchSubTasks returns results in the same order as input subtasks
-  const matchResults = await matchSubTasks({
-    db,
-    subtasks: roledSubtasks,
-    conductorOwner,
-    registryUrl,
-  });
-
-  // Build a map from subtask_id to MatchResult for O(1) lookup
-  const matchMap = new Map<string, MatchResult>(matchResults.map((m) => [m.subtask_id, m]));
-
   const matched: TeamMember[] = [];
-  const unrouted: SubTask[] = [...rolelessSubtasks];
+  const unrouted: SubTask[] = [];
 
-  for (const subtask of roledSubtasks) {
-    const m = matchMap.get(subtask.id);
+  for (const subtask of subtasks) {
+    // Try matchSubTasks (FTS5 search) for this subtask
+    const matchResults = await matchSubTasks({
+      db,
+      subtasks: [subtask],
+      conductorOwner,
+      registryUrl,
+    });
+
+    const m = matchResults[0];
 
     // No match found or empty selected_agent — add to unrouted
     if (!m || m.selected_agent === '') {
@@ -104,7 +99,6 @@ export async function formTeam(opts: FormTeamOptions): Promise<Team> {
       continue;
     }
 
-    // For cost_optimized and quality_optimized, consider alternatives alongside primary
     // Build a candidate list: primary + alternatives in MatchResult format for selectByStrategy
     const allCandidates: MatchResult[] = [
       m,
@@ -122,7 +116,7 @@ export async function formTeam(opts: FormTeamOptions): Promise<Team> {
 
     matched.push({
       subtask,
-      role: subtask.role!,
+      capability_type: subtask.required_capability,
       agent: selected.selected_agent,
       skill: selected.selected_skill,
       card_id: selected === m ? m.selected_card_id : undefined,

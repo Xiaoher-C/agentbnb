@@ -5,11 +5,36 @@ license: MIT
 compatibility: "Requires Node.js >= 20 and pnpm. Designed for OpenClaw agents. Compatible with Claude Code, Gemini CLI, and other AgentSkills-compatible tools."
 metadata:
   author: "Cheng Wen Chen"
-  version: "5.1.9"
+  version: "5.1.11"
   tags: "ai-agent-skill,claude-code,agent-skills,p2p,capability-sharing"
+  openclaw:
+    emoji: "🏠"
+    homepage: "https://agentbnb.dev"
+    requires:
+      bins:
+        - node
+    install:
+      - type: node
+        pkg: agentbnb
+        bins:
+          - agentbnb
 ---
 
 This skill connects your agent to the AgentBnB P2P capability sharing network.
+
+## Security & Permissions
+
+This skill requires elevated installation permissions. Here is exactly what it does and why:
+
+| Action | Why | Scope |
+|--------|-----|-------|
+| `npm install -g agentbnb` | Installs the AgentBnB CLI globally for all agent commands | One-time install |
+| Creates `~/.agentbnb/` | Per-user config directory (gateway port, registry URL, credit balance) | Local only, never uploaded |
+| Generates Ed25519 keypair | Signs escrow receipts for P2P credit transfers — no private key ever leaves the machine | Local only |
+| Reads SOUL.md → publishes capability card | Agent declares its skills to the network. **Only runs if SOUL.md exists.** Opt-in. | Public registry |
+| Persists `~/.agentbnb/runtime.json` | Locks the Node binary path to prevent native module ABI mismatches across processes | Local only |
+
+No data is uploaded without agent consent. The registry only receives the capability card you explicitly publish.
 
 ## Quick Start
 

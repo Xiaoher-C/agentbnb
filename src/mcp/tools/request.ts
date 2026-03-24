@@ -91,13 +91,13 @@ export async function handleRequest(
         db.close();
       }
 
-      // Local card — use local gateway
-      if (localCard) {
+      // Local card (owned by this agent) — use local gateway
+      if (localCard && localCard.owner === ctx.config.owner) {
         const result = await requestCapability({
           gatewayUrl: ctx.config.gateway_url,
           token: ctx.config.token,
           cardId,
-          params: { ...(args.params ?? {}), ...(args.skill_id ? { skill_id: args.skill_id } : {}) },
+          params: { ...(args.params ?? {}), ...(args.skill_id ? { skill_id: args.skill_id } : {}), requester: ctx.config.owner },
         });
         return {
           content: [{ type: 'text' as const, text: JSON.stringify({ success: true, result }, null, 2) }],
@@ -147,7 +147,7 @@ export async function handleRequest(
             gatewayUrl,
             token: '',
             cardId,
-            params: { ...(args.params ?? {}), ...(args.skill_id ? { skill_id: args.skill_id } : {}) },
+            params: { ...(args.params ?? {}), ...(args.skill_id ? { skill_id: args.skill_id } : {}), requester: ctx.config.owner },
           });
           await ledger.settle(escrowId, targetOwner ?? 'unknown');
           return {

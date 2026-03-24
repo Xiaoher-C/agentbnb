@@ -15,7 +15,6 @@ import { createRequire } from 'node:module';
 import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, resolve } from 'node:path';
-import { homedir } from 'node:os';
 import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 
@@ -180,7 +179,7 @@ export class ServiceCoordinator {
     return {
       port: opts?.port ?? this.config.gateway_port,
       handlerUrl: opts?.handlerUrl ?? 'http://localhost:8080',
-      skillsYamlPath: opts?.skillsYamlPath ?? join(homedir(), '.agentbnb', 'skills.yaml'),
+      skillsYamlPath: opts?.skillsYamlPath ?? join(getConfigDir(), 'skills.yaml'),
       registryPort: opts?.registryPort ?? 7701,
       registryUrl: opts?.registryUrl ?? this.config.registry ?? '',
       relay: opts?.relay ?? true,

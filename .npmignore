@@ -1,0 +1,5 @@
+# Exclude deep-stock-analyst from main package (it's a separate package)
+skills/deep-stock-analyst
+
+# Exclude test files from skill bundles
+skills/agentbnb/bootstrap.test.ts

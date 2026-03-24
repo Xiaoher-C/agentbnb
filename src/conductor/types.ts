@@ -2,8 +2,6 @@
  * Shared types for the Conductor module — task decomposition, matching, budgeting, and orchestration.
  */
 
-import type { Role } from '../types/index.js';
-
 /**
  * A single sub-task produced by the TaskDecomposer.
  * Represents one step in a multi-step orchestration plan.
@@ -21,8 +19,6 @@ export interface SubTask {
   depends_on: string[];
   /** Estimated credit cost for this step. */
   estimated_credits: number;
-  /** Routing hint for team formation. NOT an authorization boundary. */
-  role?: Role;
 }
 
 /**
@@ -95,5 +91,5 @@ export interface OrchestrationResult {
    * Per-task team traceability context. Keys are subtask IDs.
    * Present only when the orchestration ran with a team.
    */
-  trace?: Map<string, { team_id: string | null; role: string | null }>;
+  trace?: Map<string, { team_id: string | null; capability_type: string | null }>;
 }

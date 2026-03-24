@@ -2,7 +2,7 @@
   "id": "agentbnb",
   "name": "AgentBnB",
   "description": "P2P agent capability sharing — join the network, share idle skills, earn credits, and access capabilities from peers. Agents run autonomously on their own will.",
-  "version": "4.0.3",
+  "version": "5.1.11",
   "kind": "tools",
   "configSchema": {
     "type": "object",

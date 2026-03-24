@@ -24,9 +24,9 @@
 
 ### TEAM — Team Formation
 
-- [ ] **TEAM-01**: Role type defines exactly 4 values as routing hints only — `researcher` | `executor` | `validator` | `coordinator`; roles are not authorization boundaries or hierarchy levels
-- [ ] **TEAM-02**: Conductor can form a Team from SubTask[] — each SubTask with a role hint maps to a TeamMember with matched agent; supports `cost_optimized`, `quality_optimized`, `balanced` formation strategies
-- [ ] **TEAM-03**: Pipeline execution schedules sub-tasks using role-aware agent selection; same role-hint subtasks may be batched to the same agent if capacity allows
+- [x] **TEAM-01**: Role type defines exactly 4 values as routing hints only — `researcher` | `executor` | `validator` | `coordinator`; roles are not authorization boundaries or hierarchy levels
+- [x] **TEAM-02**: Conductor can form a Team from SubTask[] — each SubTask with a role hint maps to a TeamMember with matched agent; supports `cost_optimized`, `quality_optimized`, `balanced` formation strategies
+- [x] **TEAM-03**: Pipeline execution schedules sub-tasks using role-aware agent selection; same role-hint subtasks may be batched to the same agent if capacity allows
 
 ### TRACE — Team Traceability
 
@@ -74,9 +74,9 @@
 | RESIL-02 | Phase 51 | Complete |
 | RESIL-03 | Phase 51 | Complete |
 | RESIL-04 | Phase 51 | Complete |
-| TEAM-01 | Phase 52 | Pending |
-| TEAM-02 | Phase 52 | Pending |
-| TEAM-03 | Phase 52 | Pending |
+| TEAM-01 | Phase 52 | Complete |
+| TEAM-02 | Phase 52 | Complete |
+| TEAM-03 | Phase 52 | Complete |
 | TRACE-01 | Phase 53 | Complete |
 | TRACE-02 | Phase 53 | Complete |
 

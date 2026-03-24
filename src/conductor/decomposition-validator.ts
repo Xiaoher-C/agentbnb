@@ -1,7 +1,4 @@
 import type { SubTask } from './types.js';
-import type { Role } from '../types/index.js';
-
-export type { Role } from '../types/index.js';
 
 /**
  * Raw external subtask input — may contain unknown/invalid fields.
@@ -11,7 +8,6 @@ export interface RawSubTask {
   description?: unknown;
   required_capability?: unknown;
   depends_on?: unknown;
-  role?: unknown;
   estimated_credits?: unknown;
   params?: unknown;
   [key: string]: unknown;
@@ -36,16 +32,15 @@ export interface ValidationResult {
  *   3. Subtask IDs are unique within the array
  *   4. depends_on references only IDs present in the array
  *   5. No circular dependencies (Kahn's algorithm topological sort)
- *   6. role (if present) is one of context.available_roles
- *   7. estimated_credits (if present) is a positive number and <= max_credits
+ *   6. estimated_credits (if present) is a positive number and <= max_credits
  *
  * @param raw - Untrusted external response (unknown shape).
- * @param context - Validation context: available_roles list + max credit ceiling.
+ * @param context - Validation context: max credit ceiling.
  * @returns { valid: SubTask[], errors: string[] } — never throws.
  */
 export function validateAndNormalizeSubtasks(
   raw: unknown,
-  context: { available_roles: Role[]; max_credits: number },
+  context: { max_credits: number },
 ): ValidationResult {
   try {
     return _validate(raw, context);
@@ -56,7 +51,7 @@ export function validateAndNormalizeSubtasks(
 
 function _validate(
   raw: unknown,
-  context: { available_roles: Role[]; max_credits: number },
+  context: { max_credits: number },
 ): ValidationResult {
   // Step 1 — Array check
   if (!Array.isArray(raw)) {
@@ -103,17 +98,6 @@ function _validate(
     if (typeof required_capability !== 'string' || required_capability.length === 0) {
       errors.push(`subtask[${i}]: required_capability must be a non-empty string`);
       itemValid = false;
-    }
-
-    // Validate role (if present)
-    const role = obj['role'];
-    if (role !== undefined) {
-      if (!context.available_roles.includes(role as Role)) {
-        errors.push(
-          `subtask[${i}]: role '${String(role)}' is not valid (must be one of: ${context.available_roles.join(', ')})`
-        );
-        itemValid = false;
-      }
     }
 
     // Validate estimated_credits (if present)
@@ -228,8 +212,6 @@ function _validate(
     const estimated_credits =
       typeof item['estimated_credits'] === 'number' ? (item['estimated_credits'] as number) : 0;
 
-    const role = item['role'];
-
     return {
       id: item['id'] as string,
       description: item['description'] as string,
@@ -237,7 +219,6 @@ function _validate(
       params,
       depends_on,
       estimated_credits,
-      ...(role !== undefined ? { role: role as Role } : {}),
     };
   });
 

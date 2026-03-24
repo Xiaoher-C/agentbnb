@@ -88,16 +88,17 @@ export function analyzeFinancialHealth(
   ]);
 
   // === Growth ===
-  const revenueGrowthPct = calcYoYGrowth(income.quarterlyReports, 'totalRevenue');
-  const earningsGrowthPct = calcYoYGrowth(income.quarterlyReports, 'netIncome');
-  const fcfGrowthPct = calcYoYGrowth(cashflow.quarterlyReports, 'operatingCashflow');
+  const revenueGrowthPct = calcYoYGrowth(income.quarterlyReports as unknown as Record<string, unknown>[], 'totalRevenue');
+  const earningsGrowthPct = calcYoYGrowth(income.quarterlyReports as unknown as Record<string, unknown>[], 'netIncome');
+  const fcfGrowthPct = calcYoYGrowth(cashflow.quarterlyReports as unknown as Record<string, unknown>[], 'operatingCashflow');
 
-  const lastEarnings = earnings.quarterlyEarnings[0];
+  const quarterlyEarnings = earnings.quarterlyEarnings ?? [];
+  const lastEarnings = quarterlyEarnings[0];
   const lastSurpisePct = sp(lastEarnings?.surprisePercentage);
   if (lastSurpisePct > 10) green_flags.push(`Last earnings beat estimates by ${lastSurpisePct.toFixed(1)}%`);
   if (lastSurpisePct < -10) red_flags.push(`Last earnings missed estimates by ${Math.abs(lastSurpisePct).toFixed(1)}%`);
 
-  const consecutiveBeats = countConsecutiveBeats(earnings.quarterlyEarnings);
+  const consecutiveBeats = countConsecutiveBeats(quarterlyEarnings);
   if (consecutiveBeats >= 4) green_flags.push(`${consecutiveBeats} consecutive quarters of earnings beats`);
   if (revenueGrowthPct > 20) green_flags.push(`Revenue growing ${revenueGrowthPct.toFixed(1)}% YoY`);
   if (revenueGrowthPct < -10) red_flags.push(`Revenue declining ${Math.abs(revenueGrowthPct).toFixed(1)}% YoY`);
@@ -112,7 +113,7 @@ export function analyzeFinancialHealth(
   // === Leverage ===
   const debtToEquity = sp(overview.DebtToEquity);
   const currentRatio = sp(overview.CurrentRatio);
-  const interestCoverage = calcInterestCoverage(income.annualReports[0]);
+  const interestCoverage = calcInterestCoverage(income.annualReports?.[0]);
 
   if (debtToEquity > 2.0) red_flags.push(`Debt/Equity ${debtToEquity.toFixed(2)} — heavily leveraged`);
   if (currentRatio < 1.0) red_flags.push(`Current ratio ${currentRatio.toFixed(2)} — potential liquidity risk`);
@@ -127,9 +128,9 @@ export function analyzeFinancialHealth(
   ]);
 
   // === Efficiency ===
-  const totalAssets = sp(balance.annualReports[0]?.totalAssets);
+  const totalAssets = sp(balance.annualReports?.[0]?.totalAssets);
   const assetTurnover = totalAssets > 0 ? revenue / totalAssets : 0;
-  const roic = calcROIC(income.annualReports[0], balance.annualReports[0]);
+  const roic = calcROIC(income.annualReports?.[0], balance.annualReports?.[0]);
 
   const efficiency_score = weightedAvg([
     [scoreMetricInverse(assetTurnover, { excellent: 1.5, good: 1.0, fair: 0.5, poor: 0.2 }), 0.50],
