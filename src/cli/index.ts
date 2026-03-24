@@ -23,7 +23,7 @@ import { loadPeers, savePeer, removePeer, findPeer } from './peers.js';
 import { detectOpenPorts, buildDraftCard } from './onboarding.js';
 import { detectCapabilities, capabilitiesToV2Card, interactiveTemplateMenu } from '../onboarding/index.js';
 import { AnyCardSchema } from '../types/index.js';
-import { openDatabase, insertCard, listCards, deleteCard } from '../registry/store.js';
+import { openDatabase, insertCard, listCards, getCard, deleteCard } from '../registry/store.js';
 import { searchCards, filterCards } from '../registry/matcher.js';
 import { getPricingStats } from '../registry/pricing.js';
 import { openCreditDb, getBalance, bootstrapAgent, getTransactions, migrateOwner } from '../credit/ledger.js';
@@ -2100,6 +2100,66 @@ feedback
         console.log(`    "${fb['quality_details']}"`);
       }
     }
+  });
+
+// ---------------------------------------------------------------------------
+// cards delete
+// ---------------------------------------------------------------------------
+
+/**
+ * agentbnb cards delete <id>
+ * Deletes a local Capability Card by ID, showing card info and requesting confirmation.
+ */
+program
+  .command('cards delete <id>')
+  .description('Delete a local Capability Card by ID')
+  .option('--force', 'Skip confirmation prompt')
+  .action(async (id: string, opts: { force?: boolean }) => {
+    const config = loadConfig();
+    if (!config) {
+      console.error('Error: not initialized. Run `agentbnb init` first.');
+      process.exit(1);
+    }
+
+    const db = openDatabase(config.db_path);
+    let card: import('../types/index.js').CapabilityCard | null;
+    try {
+      card = getCard(db, id);
+    } finally {
+      db.close();
+    }
+
+    if (!card) {
+      console.error(`Error: card not found: ${id}`);
+      process.exit(1);
+    }
+
+    const cardRaw = card as Record<string, unknown>;
+    const cardName = (cardRaw['name'] as string | undefined) ?? (cardRaw['agent_name'] as string | undefined) ?? id;
+    const skillCount = Array.isArray(cardRaw['skills']) ? (cardRaw['skills'] as unknown[]).length : 1;
+
+    console.log('Deleting card:');
+    console.log(`  Name:   "${cardName}"`);
+    console.log(`  Owner:  ${card.owner}`);
+    console.log(`  Skills: ${skillCount}`);
+    console.log(`  ID:     ${card.id}`);
+
+    if (!opts.force && process.stdin.isTTY) {
+      const confirmed = await confirm('Confirm deletion? [y/N] ');
+      if (!confirmed) {
+        console.log('Cancelled.');
+        process.exit(0);
+      }
+    }
+
+    const db2 = openDatabase(config.db_path);
+    try {
+      deleteCard(db2, id, card.owner);
+    } finally {
+      db2.close();
+    }
+
+    console.log(`Deleted: "${cardName}" (${skillCount} skill${skillCount === 1 ? '' : 's'})`);
   });
 
 // ---------------------------------------------------------------------------
