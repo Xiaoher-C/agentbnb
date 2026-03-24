@@ -34,6 +34,10 @@ export interface HubCard {
   performance_tier?: 0 | 1 | 2;
   /** Owner-level authority source — injected by /cards API */
   authority_source?: 'self' | 'platform' | 'org';
+  /** Capability types this skill provides (e.g. "analysis", "generation") */
+  capability_types?: string[];
+  /** Capability types this skill depends on from other agents */
+  requires_capabilities?: string[];
 }
 
 export interface Category {

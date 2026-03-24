@@ -37,6 +37,8 @@ export function normalizeCard(raw: Record<string, unknown>, usesMap?: Record<str
         // Pass through owner-level trust summary injected by /cards API
         performance_tier: raw.performance_tier as HubCard['performance_tier'],
         authority_source: raw.authority_source as HubCard['authority_source'],
+        capability_types: skill.capability_types as HubCard['capability_types'],
+        requires_capabilities: skill.requires_capabilities as HubCard['requires_capabilities'],
       };
     });
   }
