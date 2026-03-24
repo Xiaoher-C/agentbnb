@@ -1,8 +1,9 @@
 import { randomUUID } from 'node:crypto';
 import type Database from 'better-sqlite3';
 import { CapabilityCardSchema } from '../types/index.js';
-import type { CapabilityCard } from '../types/index.js';
+import type { CapabilityCard, Skill } from '../types/index.js';
 import { insertCard } from '../registry/store.js';
+import type { SkillConfig } from './skill-config.js';
 
 /**
  * Parsed capability entry from a SOUL.md H2 section.
@@ -219,4 +220,29 @@ export function publishFromSoul(
   insertCard(db, card);
 
   return card;
+}
+
+/**
+ * Converts a SkillConfig (execution schema from skills.yaml) to a Skill (card schema).
+ *
+ * Maps execution-first config fields to the registry Skill shape.
+ * SkillExecutor skills are treated as Pipeline level (2) by default.
+ * Input/output schemas are left empty — not declared in skills.yaml today.
+ *
+ * @param config - Parsed SkillConfig from skills.yaml.
+ * @returns A Skill object suitable for inclusion in a CapabilityCardV2.
+ */
+export function skillConfigToSkill(config: SkillConfig): Skill {
+  return {
+    id: config.id,
+    name: config.name,
+    description: config.description ?? '',
+    level: 2,
+    inputs: [],
+    outputs: [],
+    pricing: config.pricing,
+    ...(config.capability_types !== undefined && { capability_types: config.capability_types }),
+    ...(config.requires_capabilities !== undefined && { requires_capabilities: config.requires_capabilities }),
+    ...(config.visibility !== undefined && { visibility: config.visibility }),
+  };
 }
