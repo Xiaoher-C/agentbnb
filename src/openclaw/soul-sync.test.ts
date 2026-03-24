@@ -103,6 +103,122 @@ describe('parseSoulMdV2', () => {
     expect(result.skills[0]!.description).not.toContain('pricing:');
     expect(result.skills[0]!.description).toBe('Text to speech');
   });
+
+  // --- capability_types / requires_capabilities / visibility metadata ---
+
+  it('parses capability_types from skill section bullet', () => {
+    const content =
+      '# Agent\nDesc\n## Deep Stock Analyst\nAnalyzes stocks.\n- capability_types: financial_analysis, data_retrieval';
+    const result = parseSoulMdV2(content);
+    const skill = result.skills[0]!;
+    expect(skill.capability_types).toEqual(['financial_analysis', 'data_retrieval']);
+  });
+
+  it('strips capability_types bullet from description prose', () => {
+    const content =
+      '# Agent\nDesc\n## Deep Stock Analyst\nAnalyzes stocks.\n- capability_types: financial_analysis';
+    const result = parseSoulMdV2(content);
+    expect(result.skills[0]!.description).toBe('Analyzes stocks.');
+    expect(result.skills[0]!.description).not.toContain('capability_types');
+  });
+
+  it('parses requires bullet as requires_capabilities', () => {
+    const content = '# Agent\nDesc\n## Analyst\nDoes analysis.\n- requires: web_search';
+    const result = parseSoulMdV2(content);
+    expect(result.skills[0]!.requires_capabilities).toEqual(['web_search']);
+  });
+
+  it('parses requires_capabilities bullet', () => {
+    const content =
+      '# Agent\nDesc\n## Analyst\nDoes analysis.\n- requires_capabilities: web_search, data_fetch';
+    const result = parseSoulMdV2(content);
+    expect(result.skills[0]!.requires_capabilities).toEqual(['web_search', 'data_fetch']);
+  });
+
+  it('parses visibility: public', () => {
+    const content = '# Agent\nDesc\n## Analyst\nDoes analysis.\n- visibility: public';
+    const result = parseSoulMdV2(content);
+    expect(result.skills[0]!.visibility).toBe('public');
+  });
+
+  it('parses visibility: private', () => {
+    const content = '# Agent\nDesc\n## Analyst\nDoes analysis.\n- visibility: private';
+    const result = parseSoulMdV2(content);
+    expect(result.skills[0]!.visibility).toBe('private');
+  });
+
+  it('parses all three metadata bullets together', () => {
+    const content = [
+      '# Agent',
+      'Desc',
+      '## Deep Stock Analyst',
+      'Analyzes stocks using technical and fundamental data.',
+      '- capability_types: financial_analysis, data_retrieval',
+      '- requires: web_search',
+      '- visibility: public',
+    ].join('\n');
+    const result = parseSoulMdV2(content);
+    const skill = result.skills[0]!;
+    expect(skill.capability_types).toEqual(['financial_analysis', 'data_retrieval']);
+    expect(skill.requires_capabilities).toEqual(['web_search']);
+    expect(skill.visibility).toBe('public');
+    expect(skill.description).toBe('Analyzes stocks using technical and fundamental data.');
+  });
+
+  it('leaves fields undefined when metadata bullets absent', () => {
+    const content = '# Agent\nDesc\n## Analyst\nDoes analysis.';
+    const result = parseSoulMdV2(content);
+    const skill = result.skills[0]!;
+    expect(skill.capability_types).toBeUndefined();
+    expect(skill.requires_capabilities).toBeUndefined();
+    expect(skill.visibility).toBeUndefined();
+  });
+
+  it('does not treat metadata bullets in card-level preamble as skill metadata', () => {
+    // preamble should not affect skill metadata fields
+    const content =
+      '# Agent\n- capability_types: ignored\nDesc\n## Analyst\nDoes analysis.';
+    const result = parseSoulMdV2(content);
+    // The preamble line becomes the card description, skill has no metadata
+    expect(result.skills[0]!.capability_types).toBeUndefined();
+  });
+
+  it('keeps non-metadata bullet lines in the description', () => {
+    const content = '# Agent\nDesc\n## Analyst\nDoes analysis.\n- supports Python 3';
+    const result = parseSoulMdV2(content);
+    expect(result.skills[0]!.description).toContain('supports Python 3');
+  });
+
+  it('ignores unrecognised visibility value and leaves field undefined', () => {
+    const content = '# Agent\nDesc\n## Analyst\nDoes analysis.\n- visibility: restricted';
+    const result = parseSoulMdV2(content);
+    expect(result.skills[0]!.visibility).toBeUndefined();
+    // The unrecognised bullet should still be stripped from prose
+    // (it matched the key pattern but we do not set the field)
+    expect(result.skills[0]!.description).not.toContain('visibility');
+  });
+
+  it('supports metadata per-skill in multi-skill SOUL.md', () => {
+    const content = [
+      '# Agent',
+      'Desc',
+      '## TTS',
+      'Text to speech.',
+      '- capability_types: audio_gen',
+      '- visibility: public',
+      '## OCR',
+      'Optical char recognition.',
+      '- capability_types: vision',
+      '- visibility: private',
+    ].join('\n');
+    const result = parseSoulMdV2(content);
+    expect(result.skills[0]!.capability_types).toEqual(['audio_gen']);
+    expect(result.skills[0]!.visibility).toBe('public');
+    expect(result.skills[0]!.description).toBe('Text to speech.');
+    expect(result.skills[1]!.capability_types).toEqual(['vision']);
+    expect(result.skills[1]!.visibility).toBe('private');
+    expect(result.skills[1]!.description).toBe('Optical char recognition.');
+  });
 });
 
 describe('publishFromSoulV2', () => {

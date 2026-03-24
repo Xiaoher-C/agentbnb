@@ -87,6 +87,12 @@ export const SkillSchema = z.object({
   category: z.string().optional(),
   /** Exact-match capability type key for network routing (e.g. 'task_decomposition'). Optional — per-skill routing hint. */
   capability_type: z.string().optional(),
+  /** Multi-value capability type tags for routing and discovery (e.g. ['financial_analysis', 'data_retrieval']). */
+  capability_types: z.array(z.string()).optional(),
+  /** Capability types this skill depends on — used for dependency declaration and conductor routing. */
+  requires_capabilities: z.array(z.string()).optional(),
+  /** Visibility of this skill in the Hub and registry ('public' | 'private'). Defaults to public when omitted. */
+  visibility: z.enum(['public', 'private']).optional(),
   inputs: z.array(IOSchemaSchema),
   outputs: z.array(IOSchemaSchema),
   pricing: z.object({
