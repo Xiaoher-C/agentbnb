@@ -91,9 +91,36 @@ export function useCards(): UseCardsResult {
   // Derive allCards from rawItems based on active tab; filter out stub cards in both tabs
   const allCards = useMemo(() => {
     const normalize = activeTab === 'agents' ? normalizeCardAsAgent : normalizeCard;
-    return rawItems
+    const normalized = rawItems
       .flatMap((item) => normalize(item, rawUsesMap))
       .filter((card) => card.name !== STUB_CARD_NAME);
+
+    // Skills tab: one tile per skill card — no deduplication
+    if (activeTab !== 'agents') return normalized;
+
+    // Agents tab: one tile per owner — merge skills across all their cards
+    const ownerMap = new Map<string, HubCard>();
+    for (const card of normalized) {
+      const existing = ownerMap.get(card.owner);
+      if (!existing) {
+        ownerMap.set(card.owner, card);
+      } else {
+        const mergedSkills = [...(existing.skills ?? []), ...(card.skills ?? [])];
+        const minPrice = Math.min(existing.pricing.credits_per_call, card.pricing.credits_per_call);
+        ownerMap.set(card.owner, {
+          ...existing,
+          skills: mergedSkills,
+          skill_count: mergedSkills.length,
+          pricing: { credits_per_call: minPrice },
+          display_price: mergedSkills.length > 1 ? `from cr ${minPrice}` : `cr ${minPrice}`,
+          all_capability_types: Array.from(new Set([
+            ...(existing.all_capability_types ?? []),
+            ...(card.all_capability_types ?? []),
+          ])),
+        });
+      }
+    }
+    return Array.from(ownerMap.values());
   }, [rawItems, rawUsesMap, activeTab]);
 
   // Track whether this is the initial fetch
