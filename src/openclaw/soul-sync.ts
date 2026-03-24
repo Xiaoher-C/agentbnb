@@ -7,8 +7,89 @@ import { listCards } from '../registry/store.js';
 import { AgentBnBError } from '../types/index.js';
 
 /**
+ * Regex that matches a metadata bullet within the joined skill description text.
+ *
+ * parseSoulMd joins each capability's lines with a single space, so original
+ * newline-separated bullets appear as `- key: value` segments inside the
+ * description string.  We scan the full description for all such patterns.
+ *
+ * Recognised keys:
+ *   capability_types   → split on comma → skill.capability_types
+ *   requires           → split on comma → skill.requires_capabilities
+ *   requires_capabilities → same
+ *   visibility         → 'public' | 'private' → skill.visibility
+ *
+ * The pattern is anchored to a word boundary so it does not match mid-word
+ * hyphens.  The value capture runs until the next metadata bullet or end-of-string.
+ */
+const SKILL_META_GLOBAL_RE =
+  /(?:^|\s)-\s*(capability_types|requires(?:_capabilities)?|visibility)\s*:\s*([^-][^]*?)(?=\s+-\s+(?:capability_types|requires(?:_capabilities)?|visibility)\s*:|$)/gi;
+
+/**
+ * Extracts routing metadata embedded as bullet lines in a skill description
+ * (as produced by parseSoulMd joining H2 body lines with spaces) and strips
+ * those bullet lines from the description prose.
+ *
+ * @param raw - The joined description string from parseSoulMd.
+ * @returns Metadata fields and the cleaned prose description.
+ */
+function extractSkillMeta(raw: string): {
+  description: string;
+  capability_types?: string[];
+  requires_capabilities?: string[];
+  visibility?: 'public' | 'private';
+} {
+  let capability_types: string[] | undefined;
+  let requires_capabilities: string[] | undefined;
+  let visibility: 'public' | 'private' | undefined;
+
+  // Collect all matched ranges so we can remove them from the description
+  const removedRanges: Array<{ start: number; end: number }> = [];
+
+  // Reset lastIndex before use (global flag)
+  SKILL_META_GLOBAL_RE.lastIndex = 0;
+
+  let m: RegExpExecArray | null;
+  while ((m = SKILL_META_GLOBAL_RE.exec(raw)) !== null) {
+    const key = m[1]!.toLowerCase();
+    const val = m[2]!.trim();
+
+    if (key === 'capability_types') {
+      capability_types = val.split(',').map((v) => v.trim()).filter(Boolean);
+    } else if (key === 'requires' || key === 'requires_capabilities') {
+      requires_capabilities = val.split(',').map((v) => v.trim()).filter(Boolean);
+    } else if (key === 'visibility') {
+      const vis = val.toLowerCase();
+      if (vis === 'public' || vis === 'private') {
+        visibility = vis;
+      }
+    }
+
+    removedRanges.push({ start: m.index, end: m.index + m[0]!.length });
+  }
+
+  // Rebuild description by removing matched ranges
+  let description = raw;
+  // Process ranges in reverse order to preserve indices
+  for (const { start, end } of removedRanges.slice().reverse()) {
+    description = description.slice(0, start) + description.slice(end);
+  }
+  description = description.trim();
+
+  return { description, capability_types, requires_capabilities, visibility };
+}
+
+/**
  * Parses a SOUL.md markdown string into a v2.0-compatible structure,
  * mapping each H2 section to a Skill entry in the skills array.
+ *
+ * Skill H2 body lines may include optional routing metadata bullets:
+ *   - capability_types: val1, val2
+ *   - requires: val1, val2  (or requires_capabilities:)
+ *   - visibility: public
+ *
+ * These lines are stripped from the prose description and placed into the
+ * corresponding Skill fields.  Non-metadata lines remain in the description.
  *
  * @param content - Raw SOUL.md markdown content.
  * @returns Object with agentName, description, and skills[].
@@ -29,10 +110,16 @@ export function parseSoulMdV2(content: string): {
 
     const id = sanitizedId.length > 0 ? sanitizedId : randomUUID();
 
-    return {
+    // Extract routing metadata bullets embedded in the description
+    const { description: cleanDesc, capability_types, requires_capabilities, visibility } =
+      extractSkillMeta(cap.description);
+
+    const finalDescription = (cleanDesc || cap.name).slice(0, 500);
+
+    const skill: Skill = {
       id,
       name: cap.name,
-      description: (cap.description.slice(0, 500) || cap.name).slice(0, 500),
+      description: finalDescription,
       level: 2 as const,
       inputs: [
         {
@@ -53,6 +140,12 @@ export function parseSoulMdV2(content: string): {
       pricing: { credits_per_call: cap.pricing !== undefined ? cap.pricing : 10 },
       availability: { online: true },
     };
+
+    if (capability_types !== undefined) skill.capability_types = capability_types;
+    if (requires_capabilities !== undefined) skill.requires_capabilities = requires_capabilities;
+    if (visibility !== undefined) skill.visibility = visibility;
+
+    return skill;
   });
 
   return {
