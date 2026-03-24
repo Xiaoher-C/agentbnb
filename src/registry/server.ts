@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 import { existsSync } from 'node:fs';
 import { z } from 'zod';
 import type Database from 'better-sqlite3';
-import { getCard, insertCard, updateCard, listCards } from './store.js';
+import { getCard, insertCard, updateCard, listCards, getCardsBySkillCapability } from './store.js';
 import { listPendingRequests, resolvePendingRequest } from '../autonomy/pending-requests.js';
 import { searchCards, filterCards, buildReputationMap } from './matcher.js';
 import { getPricingStats } from './pricing.js';
@@ -239,6 +239,7 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
    *   min_success_rate   — Filter cards with success_rate >= value (0-1)
    *   max_latency_ms     — Filter cards with avg_latency_ms <= value
    *   min_reputation     — Filter cards with peer feedback reputation >= value (0-1)
+   *   capability_type    — Filter cards whose skills declare this capability_type
    *   sort               — Sort order: 'popular'|'rated'|'success_rate'|'cheapest'|'newest'|'latency'|'reputation_desc'|'reputation_asc'
    *   limit              — Max items per page (default 20, max 100)
    *   offset             — Pagination offset (default 0)
@@ -257,6 +258,7 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
           min_success_rate: { type: 'number', description: 'Minimum success rate (0-1)' },
           max_latency_ms: { type: 'number', description: 'Maximum average latency in ms' },
           min_reputation: { type: 'number', description: 'Minimum reputation score (0-1) based on peer feedback' },
+          capability_type: { type: 'string', description: 'Filter cards whose skills declare this capability_type (e.g. tts, code_gen)' },
           sort: { type: 'string', enum: ['popular', 'rated', 'success_rate', 'cheapest', 'newest', 'latency', 'reputation_desc', 'reputation_asc'], description: 'Sort order' },
           limit: { type: 'integer', default: 20, description: 'Max items per page (max 100)' },
           offset: { type: 'integer', default: 0, description: 'Pagination offset' },
@@ -287,6 +289,7 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
     const online =
       onlineRaw === 'true' ? true : onlineRaw === 'false' ? false : undefined;
     const tag = query.tag?.trim();
+    const capabilityType = query.capability_type?.trim() || undefined;
     const minSuccessRate =
       query.min_success_rate !== undefined ? parseFloat(query.min_success_rate) : undefined;
     const maxLatencyMs =
@@ -312,6 +315,16 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
     // Filter out ephemeral requester stub cards (owner contains ':req:').
     // These are transient relay connections, not real capability providers.
     cards = cards.filter((c) => !c.owner.includes(':req:'));
+
+    // Post-filter by capability_type — intersect with cards whose skills declare this type.
+    // getCardsBySkillCapability checks skill.capability_type (string) and
+    // skill.capability_types (string[]) so both single and multi-type skill declarations match.
+    if (capabilityType !== undefined) {
+      const capTypeIds = new Set(
+        getCardsBySkillCapability(db, capabilityType).map((c) => c.id)
+      );
+      cards = cards.filter((c) => capTypeIds.has(c.id));
+    }
 
     // Post-filter by tag — check both card-root and skill-level metadata
     if (tag !== undefined && tag.length > 0) {
