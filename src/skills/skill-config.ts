@@ -41,6 +41,18 @@ const ApiAuthSchema = z.discriminatedUnion('type', [
 ]);
 
 /**
+ * Capability declaration fields shared across all skill config types.
+ * These fields let skills declare what they do for registry publishing.
+ * Execution-first: all fields are optional — skills without them still execute normally.
+ */
+const CapabilityDeclarationSchema = {
+  description: z.string().optional(),
+  capability_types: z.array(z.string()).optional(),
+  requires_capabilities: z.array(z.string()).optional(),
+  visibility: z.enum(['public', 'private']).optional(),
+};
+
+/**
  * Schema for API wrapper skills (Mode A).
  * Wraps a REST API call with input/output mapping.
  */
@@ -58,6 +70,7 @@ export const ApiSkillConfigSchema = z.object({
   retries: z.number().nonnegative().int().default(0),
   provider: z.string().optional(),
   capacity: CapacitySchema,
+  ...CapabilityDeclarationSchema,
 });
 
 /**
@@ -87,6 +100,7 @@ export const PipelineSkillConfigSchema = z.object({
   pricing: PricingSchema,
   timeout_ms: z.number().positive().optional(),
   capacity: CapacitySchema,
+  ...CapabilityDeclarationSchema,
 });
 
 /**
@@ -102,6 +116,7 @@ export const OpenClawSkillConfigSchema = z.object({
   pricing: PricingSchema,
   timeout_ms: z.number().positive().optional(),
   capacity: CapacitySchema,
+  ...CapabilityDeclarationSchema,
 });
 
 /**
@@ -119,6 +134,7 @@ export const CommandSkillConfigSchema = z.object({
   timeout_ms: z.number().positive().default(30000),
   pricing: PricingSchema,
   capacity: CapacitySchema,
+  ...CapabilityDeclarationSchema,
 });
 
 /**
@@ -133,6 +149,7 @@ export const ConductorSkillConfigSchema = z.object({
   pricing: PricingSchema,
   timeout_ms: z.number().positive().optional(),
   capacity: CapacitySchema,
+  ...CapabilityDeclarationSchema,
 });
 
 /**

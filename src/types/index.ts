@@ -87,6 +87,12 @@ export const SkillSchema = z.object({
   category: z.string().optional(),
   /** Exact-match capability type key for network routing (e.g. 'task_decomposition'). Optional — per-skill routing hint. */
   capability_type: z.string().optional(),
+  /** One or more capability type keys declared by this skill. Used by Conductor for matching. */
+  capability_types: z.array(z.string()).optional(),
+  /** Capability type keys this skill depends on. Used for pre-flight dependency checks. */
+  requires_capabilities: z.array(z.string()).optional(),
+  /** Visibility hint — 'private' skills are excluded from registry publishing. */
+  visibility: z.enum(['public', 'private']).optional(),
   inputs: z.array(IOSchemaSchema),
   outputs: z.array(IOSchemaSchema),
   pricing: z.object({

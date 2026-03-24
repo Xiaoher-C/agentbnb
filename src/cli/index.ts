@@ -571,6 +571,89 @@ program
   });
 
 // ---------------------------------------------------------------------------
+// publish --from-skills
+// ---------------------------------------------------------------------------
+
+/**
+ * agentbnb publish --from-skills [path]
+ * Reads skills.yaml, converts each SkillConfig to a Skill, and publishes a
+ * CapabilityCardV2 to the local registry DB.
+ * Skills with visibility: 'private' are excluded.
+ */
+program
+  .command('publish-skills')
+  .description('Publish capabilities from skills.yaml to the local registry')
+  .option('--from-skills [path]', 'Path to skills.yaml', './skills.yaml')
+  .action(async (opts: { fromSkills?: string | boolean }) => {
+    const config = loadConfig();
+    if (!config) {
+      console.error('Error: not initialized. Run `agentbnb init` first.');
+      process.exit(1);
+    }
+
+    const { parseSkillsFile } = await import('../skills/skill-config.js');
+    const { skillConfigToSkill } = await import('../skills/publish-capability.js');
+
+    // Resolve skills.yaml path: boolean true means flag was passed without value → use default
+    const skillsPath = typeof opts.fromSkills === 'string' ? opts.fromSkills : './skills.yaml';
+
+    let yamlContent: string;
+    try {
+      yamlContent = readFileSync(skillsPath, 'utf-8');
+    } catch {
+      console.error(`Error: cannot read skills.yaml at ${skillsPath}`);
+      process.exit(1);
+    }
+
+    let allSkillConfigs;
+    try {
+      allSkillConfigs = parseSkillsFile(yamlContent);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`Error: failed to parse skills.yaml — ${msg}`);
+      process.exit(1);
+    }
+
+    // Filter out private skills
+    const publicSkillConfigs = allSkillConfigs.filter(
+      (sc) => sc.visibility !== 'private',
+    );
+
+    if (publicSkillConfigs.length === 0) {
+      console.log('No public skills to publish (all skills have visibility: private or no skills found).');
+      return;
+    }
+
+    const skills = publicSkillConfigs.map((sc) => skillConfigToSkill(sc));
+
+    const now = new Date().toISOString();
+    const card: import('../types/index.js').CapabilityCardV2 = {
+      spec_version: '2.0',
+      id: randomUUID(),
+      owner: config.owner,
+      agent_name: config.owner,
+      skills,
+      availability: { online: true },
+      created_at: now,
+      updated_at: now,
+    };
+
+    const db = openDatabase(config.db_path);
+    try {
+      db.prepare(
+        'INSERT OR REPLACE INTO capability_cards (id, owner, data, created_at, updated_at) VALUES (?, ?, ?, ?, ?)',
+      ).run(card.id, card.owner, JSON.stringify(card), now, now);
+    } finally {
+      db.close();
+    }
+
+    console.log(`Published ${skills.length} skill(s) to local registry`);
+    for (const skill of skills) {
+      console.log(`  - ${skill.id}: ${skill.name} (${skill.pricing.credits_per_call} cr/call)`);
+    }
+  });
+
+// ---------------------------------------------------------------------------
 // sync
 // ---------------------------------------------------------------------------
 
