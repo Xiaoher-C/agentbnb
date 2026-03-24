@@ -1811,7 +1811,8 @@ cardsCmd
 cardsCmd
   .command('delete <card-id>')
   .description('Delete a published capability card from the local registry')
-  .action((cardId: string) => {
+  .option('--force', 'Skip confirmation prompt')
+  .action(async (cardId: string, opts: { force?: boolean }) => {
     const config = loadConfig();
     if (!config) {
       console.error('Error: not initialized. Run `agentbnb init` first.');
@@ -1819,8 +1820,36 @@ cardsCmd
     }
     const db = openDatabase(config.db_path);
     try {
+      const card = getCard(db, cardId);
+      if (!card) {
+        console.error(`Error: card not found: ${cardId}`);
+        process.exit(1);
+      }
+
+      const v2 = card as Record<string, unknown>;
+      const cardName = String(v2['agent_name'] ?? v2['name'] ?? '(unnamed)');
+      const skillCount = Array.isArray(v2['skills']) ? (v2['skills'] as unknown[]).length : 0;
+
+      console.log('Deleting card:');
+      console.log(`  Name:   "${cardName}"`);
+      console.log(`  Owner:  ${card.owner}`);
+      console.log(`  Skills: ${skillCount}`);
+      console.log(`  ID:     ${card.id}`);
+
+      if (!opts.force && process.stdin.isTTY) {
+        const rl = createInterface({ input: process.stdin, output: process.stdout });
+        const answer = await new Promise<string>((resolve) => {
+          rl.question('Confirm deletion? [y/N] ', resolve);
+        });
+        rl.close();
+        if (answer.toLowerCase() !== 'y') {
+          console.log('Cancelled.');
+          process.exit(0);
+        }
+      }
+
       deleteCard(db, cardId, config.owner);
-      console.log(`Deleted card: ${cardId}`);
+      console.log(`Deleted: "${cardName}" (${skillCount} skill${skillCount !== 1 ? 's' : ''})`);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       console.error(`Error: ${msg}`);
@@ -2102,65 +2131,6 @@ feedback
     }
   });
 
-// ---------------------------------------------------------------------------
-// cards delete
-// ---------------------------------------------------------------------------
-
-/**
- * agentbnb cards delete <id>
- * Deletes a local Capability Card by ID, showing card info and requesting confirmation.
- */
-program
-  .command('cards delete <id>')
-  .description('Delete a local Capability Card by ID')
-  .option('--force', 'Skip confirmation prompt')
-  .action(async (id: string, opts: { force?: boolean }) => {
-    const config = loadConfig();
-    if (!config) {
-      console.error('Error: not initialized. Run `agentbnb init` first.');
-      process.exit(1);
-    }
-
-    const db = openDatabase(config.db_path);
-    let card: import('../types/index.js').CapabilityCard | null;
-    try {
-      card = getCard(db, id);
-    } finally {
-      db.close();
-    }
-
-    if (!card) {
-      console.error(`Error: card not found: ${id}`);
-      process.exit(1);
-    }
-
-    const cardRaw = card as Record<string, unknown>;
-    const cardName = (cardRaw['name'] as string | undefined) ?? (cardRaw['agent_name'] as string | undefined) ?? id;
-    const skillCount = Array.isArray(cardRaw['skills']) ? (cardRaw['skills'] as unknown[]).length : 1;
-
-    console.log('Deleting card:');
-    console.log(`  Name:   "${cardName}"`);
-    console.log(`  Owner:  ${card.owner}`);
-    console.log(`  Skills: ${skillCount}`);
-    console.log(`  ID:     ${card.id}`);
-
-    if (!opts.force && process.stdin.isTTY) {
-      const confirmed = await confirm('Confirm deletion? [y/N] ');
-      if (!confirmed) {
-        console.log('Cancelled.');
-        process.exit(0);
-      }
-    }
-
-    const db2 = openDatabase(config.db_path);
-    try {
-      deleteCard(db2, id, card.owner);
-    } finally {
-      db2.close();
-    }
-
-    console.log(`Deleted: "${cardName}" (${skillCount} skill${skillCount === 1 ? '' : 's'})`);
-  });
 
 // ---------------------------------------------------------------------------
 // MCP Server
