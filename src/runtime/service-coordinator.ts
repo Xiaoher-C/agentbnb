@@ -633,6 +633,16 @@ export function resolveNodeExecutable(runtime: PersistedRuntimeInfo | null): str
 }
 
 function resolveCliLaunchArgs(serveArgs: string[]): string[] {
+  // 1. Try require.resolve — works under npm, pnpm, yarn global installs
+  const require = createRequire(import.meta.url);
+  try {
+    const distCli = require.resolve('agentbnb/dist/cli/index.js');
+    return [distCli, 'serve', ...serveArgs];
+  } catch {
+    // Not installed as package — fall through to local dev paths
+  }
+
+  // 2. Local dev: walk from source/dist to project root
   const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
   const distCli = join(projectRoot, 'dist', 'cli', 'index.js');
   if (existsSync(distCli)) {
