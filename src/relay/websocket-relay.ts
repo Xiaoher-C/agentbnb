@@ -555,11 +555,18 @@ export function registerWebSocketRelay(
       })();
     });
 
+    // Ping/pong keepalive — detect zombie connections early
+    const pingInterval = setInterval(() => {
+      if (socket.readyState === 1) socket.ping();
+    }, 30_000);
+
     socket.on('close', () => {
+      clearInterval(pingInterval);
       handleDisconnect(registeredOwner);
     });
 
     socket.on('error', () => {
+      clearInterval(pingInterval);
       handleDisconnect(registeredOwner);
     });
   });
