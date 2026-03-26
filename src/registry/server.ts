@@ -128,7 +128,7 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
   // Register CORS — allow all origins for public marketplace discovery, including preflight
   void server.register(cors, {
     origin: true,
-    methods: ['GET', 'POST', 'PATCH', 'OPTIONS'],
+    methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Agent-PublicKey', 'X-Agent-Signature', 'X-Agent-Timestamp'],
   });
 
@@ -691,26 +691,40 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
   /**
    * DELETE /cards/:id — Remove a capability card from the registry.
    *
-   * Returns 200 on success, 404 if card not found.
+   * Requires Authorization: Bearer <token> header.
+   * Returns 204 on success, 403 if card belongs to different owner, 404 if not found, 401 if unauthenticated.
    */
   api.delete('/cards/:id', {
     schema: {
       tags: ['cards'],
-      summary: 'Delete a capability card',
+      summary: 'Delete a capability card (requires Bearer auth)',
+      security: [{ bearerAuth: [] }],
       params: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] },
       response: {
-        200: { type: 'object', properties: { ok: { type: 'boolean' }, id: { type: 'string' } } },
+        204: { type: 'null', description: 'Card deleted successfully' },
+        401: { type: 'object', properties: { error: { type: 'string' } } },
+        403: { type: 'object', properties: { error: { type: 'string' } } },
         404: { type: 'object', properties: { error: { type: 'string' } } },
       },
     },
   }, async (request, reply) => {
+    // Authenticate via Bearer token — reuse ownerApiKey if configured
+    const auth = request.headers.authorization;
+    const token = auth?.startsWith('Bearer ') ? auth.slice(7).trim() : null;
+    if (!token || !opts.ownerApiKey || token !== opts.ownerApiKey) {
+      return reply.code(401).send({ error: 'Unauthorized' });
+    }
+
     const { id } = request.params as { id: string };
     const card = getCard(db, id);
     if (!card) {
       return reply.code(404).send({ error: 'Not found' });
     }
+    if (opts.ownerName && card.owner !== opts.ownerName) {
+      return reply.code(403).send({ error: 'Forbidden' });
+    }
     db.prepare('DELETE FROM capability_cards WHERE id = ?').run(id);
-    return reply.send({ ok: true, id });
+    return reply.code(204).send();
   });
 
   /**
