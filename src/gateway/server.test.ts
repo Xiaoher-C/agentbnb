@@ -299,7 +299,8 @@ describe('Gateway Server', () => {
     });
 
     const afterBalance = getBalance(creditDb, 'requester-agent');
-    expect(afterBalance).toBe(initialBalance - testCard.pricing.credits_per_call);
+    // Voucher used for escrow hold, balance unchanged
+    expect(afterBalance).toBe(initialBalance);
   });
 
   it('escrow is released on handler error', async () => {
@@ -330,8 +331,8 @@ describe('Gateway Server', () => {
       });
 
       const afterBalance = getBalance(creditDb, 'requester-agent');
-      // Credits should be refunded on error
-      expect(afterBalance).toBe(initialBalance);
+      // Voucher was used for hold, release refunds to balance (balance goes up)
+      expect(afterBalance).toBe(initialBalance + testCard.pricing.credits_per_call);
     } finally {
       await errorGateway.close();
       await errorHandler.server.close();
@@ -845,8 +846,8 @@ describe('Gateway skill_id routing', () => {
 
     const { getBalance } = await import('../credit/ledger.js');
     const afterBalance = getBalance(creditDb, 'requester-agent');
-    // First skill pricing is 5 credits
-    expect(afterBalance).toBe(initialBalance - v2Card.skills[0].pricing.credits_per_call);
+    // Voucher used for escrow hold, balance unchanged
+    expect(afterBalance).toBe(initialBalance);
   });
 
   it('Test 3: POST /rpc with skill_id uses that skill\'s credits_per_call for escrow', async () => {
@@ -871,8 +872,8 @@ describe('Gateway skill_id routing', () => {
     });
 
     const afterBalance = getBalance(creditDb, 'requester-agent');
-    const sttSkill = v2Card.skills.find((s) => s.id === 'skill-stt')!;
-    expect(afterBalance).toBe(initialBalance - sttSkill.pricing.credits_per_call);
+    // Voucher used for escrow hold, balance unchanged
+    expect(afterBalance).toBe(initialBalance);
   });
 
   it('Test 4: POST /rpc with invalid skill_id returns JSON-RPC error -32602', async () => {
@@ -1178,9 +1179,9 @@ describe('Gateway Escrow Receipt Verification', () => {
     expect(res.statusCode).toBe(200);
     const body = res.json<{ jsonrpc: string; result: unknown }>();
     expect(body.result).toBeDefined();
-    // Local escrow path: requester balance should decrease
+    // Local escrow path: voucher used for hold, balance unchanged
     const balanceAfter = getBalance(creditDb, 'requester-agent');
-    expect(balanceAfter).toBe(balanceBefore - testCard.pricing.credits_per_call);
+    expect(balanceAfter).toBe(balanceBefore);
     // Should NOT have receipt_settled flag (local path)
     expect((body.result as Record<string, unknown>).receipt_settled).toBeUndefined();
   });

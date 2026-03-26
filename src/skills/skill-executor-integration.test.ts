@@ -139,14 +139,16 @@ skills:
     expect(body.result).toBe('test result');
   });
 
-  it('deducts credits from requester on success', () => {
+  it('voucher used for hold — requester balance unchanged', () => {
+    // Voucher used for hold (5 <= 50), balance unchanged
     const balance = getBalance(creditDb, REQUESTER);
-    expect(balance).toBe(100 - CREDITS_PER_CALL);
+    expect(balance).toBe(100);
   });
 
-  it('credits the owner on success', () => {
+  it('credits the owner on success with first provider bonus', () => {
+    // fee=floor(5*0.05)=0, providerAmount=5, bonus 2x: 5, total=10
     const balance = getBalance(creditDb, OWNER);
-    expect(balance).toBe(100 + CREDITS_PER_CALL);
+    expect(balance).toBe(100 + 10);
   });
 
   it('returns JSON-RPC error and releases escrow for unknown skill_id', async () => {
@@ -177,9 +179,9 @@ skills:
     expect(body.error.code).toBe(-32603);
     expect(body.error.message).toMatch(/Skill not found/);
 
-    // Escrow must be released — balance must be unchanged
+    // Voucher used for hold (5 <= remaining voucher), release refunds to balance
     const balanceAfter = getBalance(creditDb, REQUESTER);
-    expect(balanceAfter).toBe(balanceBefore);
+    expect(balanceAfter).toBe(balanceBefore + CREDITS_PER_CALL);
   });
 });
 
@@ -252,8 +254,8 @@ describe('Gateway backward compat (no skillExecutor, uses handlerUrl)', () => {
     const body = JSON.parse(res.body) as { jsonrpc: string; result: unknown };
     expect(body.result).toEqual({ compat: 'ok' });
 
-    // Credits deducted via the handlerUrl path too
+    // Voucher used for hold (3 <= 50), balance unchanged
     const balance = getBalance(creditDb, REQUESTER);
-    expect(balance).toBe(50 - CREDITS_PER_CALL);
+    expect(balance).toBe(50);
   });
 });

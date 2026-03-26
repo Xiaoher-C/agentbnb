@@ -54,10 +54,18 @@ describe('escrow-receipt', () => {
       db.close();
     });
 
-    it('throws INSUFFICIENT_CREDITS when balance is too low', () => {
+    it('throws INSUFFICIENT_CREDITS when balance and voucher are both too low', () => {
       const db = setupDb('charlie', 5);
       const keys = generateKeyPair();
 
+      // Exhaust the voucher first (50 credits)
+      createSignedEscrowReceipt(db, keys.privateKey, keys.publicKey, {
+        owner: 'charlie',
+        amount: 50,
+        cardId: '00000000-0000-4000-8000-000000000099',
+      });
+
+      // Now balance is 5 and voucher is empty — should throw
       expect(() =>
         createSignedEscrowReceipt(db, keys.privateKey, keys.publicKey, {
           owner: 'charlie',

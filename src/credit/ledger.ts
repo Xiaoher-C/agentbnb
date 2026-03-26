@@ -10,7 +10,7 @@ export interface CreditTransaction {
   owner: string;
   /** Positive = credit, negative = debit */
   amount: number;
-  reason: 'bootstrap' | 'escrow_hold' | 'escrow_release' | 'settlement' | 'refund' | 'remote_earning' | 'remote_settlement_confirmed';
+  reason: 'bootstrap' | 'escrow_hold' | 'escrow_release' | 'settlement' | 'refund' | 'remote_earning' | 'remote_settlement_confirmed' | 'network_fee' | 'provider_bonus' | 'voucher_hold' | 'voucher_settlement';
   reference_id: string | null;
   created_at: string;
 }
@@ -41,6 +41,22 @@ const CREDIT_SCHEMA = `
     settled_at TEXT
   );
 
+  CREATE TABLE IF NOT EXISTS provider_registry (
+    owner TEXT PRIMARY KEY,
+    provider_number INTEGER NOT NULL,
+    registered_at TEXT NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS demand_vouchers (
+    id TEXT PRIMARY KEY,
+    owner TEXT NOT NULL,
+    amount INTEGER NOT NULL,
+    remaining INTEGER NOT NULL,
+    created_at TEXT NOT NULL,
+    expires_at TEXT NOT NULL,
+    is_active INTEGER NOT NULL DEFAULT 1
+  );
+
   CREATE INDEX IF NOT EXISTS idx_transactions_owner ON credit_transactions(owner, created_at);
   CREATE INDEX IF NOT EXISTS idx_escrow_owner ON credit_escrow(owner);
 `;
@@ -57,6 +73,14 @@ export function openCreditDb(path: string = ':memory:'): Database.Database {
   db.pragma('journal_mode = WAL');
   db.pragma('foreign_keys = ON');
   db.exec(CREDIT_SCHEMA);
+
+  // Safe migration: add funding_source to credit_escrow if not present
+  try {
+    db.exec("ALTER TABLE credit_escrow ADD COLUMN funding_source TEXT NOT NULL DEFAULT 'balance'");
+  } catch {
+    // Column already exists — ignore
+  }
+
   return db;
 }
 
@@ -76,6 +100,7 @@ export function bootstrapAgent(
 ): void {
   const now = new Date().toISOString();
 
+  let isNew = false;
   db.transaction(() => {
     const result = db
       .prepare('INSERT OR IGNORE INTO credit_balances (owner, balance, updated_at) VALUES (?, ?, ?)')
@@ -83,11 +108,17 @@ export function bootstrapAgent(
 
     // Only record the transaction if the balance row was actually created
     if (result.changes > 0) {
+      isNew = true;
       db.prepare(
         'INSERT INTO credit_transactions (id, owner, amount, reason, reference_id, created_at) VALUES (?, ?, ?, ?, ?, ?)',
       ).run(randomUUID(), owner, amount, 'bootstrap', null, now);
     }
   })();
+
+  // Issue demand voucher for new agents
+  if (isNew) {
+    issueVoucher(db, owner, 50, 30);
+  }
 }
 
 /**
@@ -124,6 +155,109 @@ export function getTransactions(
       'SELECT id, owner, amount, reason, reference_id, created_at FROM credit_transactions WHERE owner = ? ORDER BY created_at DESC LIMIT ?',
     )
     .all(owner, limit) as CreditTransaction[];
+}
+
+/**
+ * Registers a new provider and assigns the next sequential provider_number.
+ * Returns the assigned provider_number. Idempotent — calling twice for the same
+ * owner returns the existing number.
+ *
+ * @param db - The credit database instance.
+ * @param owner - Provider agent identifier.
+ * @returns The assigned provider_number.
+ */
+export function registerProvider(db: Database.Database, owner: string): number {
+  const now = new Date().toISOString();
+  const maxRow = db.prepare('SELECT MAX(provider_number) as maxNum FROM provider_registry').get() as { maxNum: number | null };
+  const nextNum = (maxRow?.maxNum ?? 0) + 1;
+  db.prepare('INSERT OR IGNORE INTO provider_registry (owner, provider_number, registered_at) VALUES (?, ?, ?)').run(owner, nextNum, now);
+  // Return the actual number (in case INSERT OR IGNORE hit)
+  const row = db.prepare('SELECT provider_number FROM provider_registry WHERE owner = ?').get(owner) as { provider_number: number };
+  return row.provider_number;
+}
+
+/**
+ * Returns the provider_number for an owner, or null if not registered.
+ *
+ * @param db - The credit database instance.
+ * @param owner - Provider agent identifier.
+ * @returns The provider_number or null if not registered.
+ */
+export function getProviderNumber(db: Database.Database, owner: string): number | null {
+  const row = db.prepare('SELECT provider_number FROM provider_registry WHERE owner = ?').get(owner) as { provider_number: number } | undefined;
+  return row?.provider_number ?? null;
+}
+
+/**
+ * Returns the bonus multiplier based on provider_number.
+ * First 50: 2.0x, 51-200: 1.5x, 201+: 1.0x
+ *
+ * @param providerNumber - The sequential provider number.
+ * @returns The bonus multiplier (2.0, 1.5, or 1.0).
+ */
+export function getProviderBonus(providerNumber: number): number {
+  if (providerNumber <= 50) return 2.0;
+  if (providerNumber <= 200) return 1.5;
+  return 1.0;
+}
+
+/**
+ * Issues a demand voucher to an agent.
+ *
+ * @param db - The credit database instance.
+ * @param owner - Agent identifier.
+ * @param amount - Number of voucher credits. Defaults to 50.
+ * @param daysValid - Number of days until expiry. Defaults to 30.
+ * @returns The voucher ID.
+ */
+export function issueVoucher(
+  db: Database.Database,
+  owner: string,
+  amount: number = 50,
+  daysValid: number = 30,
+): string {
+  const id = randomUUID();
+  const now = new Date();
+  const expiresAt = new Date(now.getTime() + daysValid * 24 * 60 * 60 * 1000);
+  db.prepare(
+    'INSERT INTO demand_vouchers (id, owner, amount, remaining, created_at, expires_at, is_active) VALUES (?, ?, ?, ?, ?, ?, 1)',
+  ).run(id, owner, amount, amount, now.toISOString(), expiresAt.toISOString());
+  return id;
+}
+
+/**
+ * Returns the active, non-expired voucher for an owner, or null.
+ *
+ * @param db - The credit database instance.
+ * @param owner - Agent identifier.
+ * @returns The active voucher with id, remaining credits, and expiry, or null.
+ */
+export function getActiveVoucher(
+  db: Database.Database,
+  owner: string,
+): { id: string; remaining: number; expires_at: string } | null {
+  const now = new Date().toISOString();
+  const row = db.prepare(
+    'SELECT id, remaining, expires_at FROM demand_vouchers WHERE owner = ? AND is_active = 1 AND remaining > 0 AND expires_at > ? ORDER BY created_at ASC LIMIT 1',
+  ).get(owner, now) as { id: string; remaining: number; expires_at: string } | undefined;
+  return row ?? null;
+}
+
+/**
+ * Consumes credits from a voucher.
+ *
+ * @param db - The credit database instance.
+ * @param voucherId - The voucher ID.
+ * @param amount - Number of credits to consume.
+ */
+export function consumeVoucher(
+  db: Database.Database,
+  voucherId: string,
+  amount: number,
+): void {
+  db.prepare(
+    'UPDATE demand_vouchers SET remaining = remaining - ? WHERE id = ? AND remaining >= ?',
+  ).run(amount, voucherId, amount);
 }
 
 /**

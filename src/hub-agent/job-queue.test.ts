@@ -262,9 +262,9 @@ describe('HubAgentExecutor relay/queue modes with job queue', () => {
       expect(result.success).toBe(true);
       const jobId = (result.result as Record<string, unknown>).job_id as string;
 
-      // Verify escrow was held
+      // Voucher used for hold (10 <= 50), balance unchanged
       const balanceAfter = getBalance(creditDb, 'requester-3');
-      expect(balanceAfter).toBe(90); // 100 - 10
+      expect(balanceAfter).toBe(100);
 
       // Verify escrow_id stored on job
       const job = getJob(registryDb, jobId);

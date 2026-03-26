@@ -429,9 +429,9 @@ describe('hub-agent/routes', () => {
       expect(execResp.statusCode).toBe(200);
       expect(execResp.json().success).toBe(true);
 
-      // Requester should have been charged 10 credits
+      // Voucher used for hold (10 <= 50), balance unchanged
       const balance = getBalance(creditDb, 'test-requester');
-      expect(balance).toBe(90);
+      expect(balance).toBe(100);
     });
   });
 });

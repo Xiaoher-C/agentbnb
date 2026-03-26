@@ -351,10 +351,10 @@ describe('AutoRequestor.requestWithAutonomy', () => {
     });
 
     expect(result.status).toBe('failed');
-    // Verify escrow was released (balance restored)
+    // Voucher used for hold (10 <= 50), release refunds to balance: 200 + 10 = 210
     const { getBalance } = await import('../credit/ledger.js');
     const balance = getBalance(creditDb, 'alice');
-    expect(balance).toBe(200); // full balance restored
+    expect(balance).toBe(210);
   });
 
   it('all non-success outcomes write to request_log (failure logging per REQ-06)', async () => {

@@ -76,16 +76,16 @@ describe('CLI compat: createLedger in local-only mode (no registryUrl)', () => {
     expect(typeof escrowId).toBe('string');
     expect(escrowId.length).toBeGreaterThan(0);
 
-    // Balance should be reduced after hold
+    // Voucher used for hold (10 <= 50), balance unchanged
     const balanceAfterHold = await ledger.getBalance('requester');
-    expect(balanceAfterHold).toBe(90);
+    expect(balanceAfterHold).toBe(100);
 
     // Settle — transfer to provider
     await ledger.settle(escrowId, 'provider');
 
-    // Requester still at 90, provider gained 10
-    expect(await ledger.getBalance('requester')).toBe(90);
-    expect(await ledger.getBalance('provider')).toBe(60);
+    // Requester balance unchanged (voucher funded), provider: fee=floor(10*0.05)=0, providerAmount=10, bonus 2x: 10, total=20
+    expect(await ledger.getBalance('requester')).toBe(100);
+    expect(await ledger.getBalance('provider')).toBe(70);
   });
 
   it('LocalCreditLedger.hold + release flow refunds requester (COMPAT-02)', async () => {
@@ -94,14 +94,14 @@ describe('CLI compat: createLedger in local-only mode (no registryUrl)', () => {
 
     const { escrowId } = await ledger.hold('requester', 15, 'card-456');
 
-    // Balance reduced
-    expect(await ledger.getBalance('requester')).toBe(85);
+    // Voucher used for hold (15 <= 50), balance unchanged
+    expect(await ledger.getBalance('requester')).toBe(100);
 
-    // Release — refund credits
+    // Release — refund credits (voucher hold refunds to balance)
     await ledger.release(escrowId);
 
-    // Balance restored
-    expect(await ledger.getBalance('requester')).toBe(100);
+    // Balance = 100 + 15 (voucher-funded hold refunded to balance)
+    expect(await ledger.getBalance('requester')).toBe(115);
   });
 
   it('LocalCreditLedger.getHistory returns transaction list (COMPAT-03)', async () => {
@@ -133,15 +133,15 @@ describe('CLI compat: createLedger in local-only mode (no registryUrl)', () => {
     const { escrowId: escrowId2 } = await ledger.hold('ledger-agent', 20, 'card-ledger');
     await ledger.settle(escrowId2, 'recipient2');
 
-    // Both should result in balance of 80 (100 - 20 = 80, settlement goes to recipient)
+    // Voucher used for hold (20 <= 50), balance unchanged at 100
     const directBalance = require('better-sqlite3')(creditDbPath)
       .prepare('SELECT balance FROM credit_balances WHERE owner = ?')
       .get('direct-agent') as { balance: number } | undefined;
     const ledgerBalance = await ledger.getBalance('ledger-agent');
 
-    // Direct path: 100 - 20 = 80 (hold debits, settle transfers to recipient)
-    expect(directBalance?.balance).toBe(80);
-    expect(ledgerBalance).toBe(80);
+    // Both paths: voucher used for hold, balance stays at 100
+    expect(directBalance?.balance).toBe(100);
+    expect(ledgerBalance).toBe(100);
   });
 
   it('publish price validation: credits_per_call must be at least 1 (CLI-04 compat)', () => {

@@ -1,7 +1,7 @@
 import Database from 'better-sqlite3';
 import { recordEarning } from './ledger.js';
 import { confirmEscrowDebit } from './escrow.js';
-import { releaseEscrow } from './escrow.js';
+import { releaseEscrow, NETWORK_FEE_RATE } from './escrow.js';
 import type { EscrowReceipt } from '../types/index.js';
 
 /**
@@ -19,10 +19,12 @@ export function settleProviderEarning(
   providerOwner: string,
   receipt: EscrowReceipt,
 ): { settled: true } {
+  const feeAmount = Math.floor(receipt.amount * NETWORK_FEE_RATE);
+  const providerAmount = receipt.amount - feeAmount;
   recordEarning(
     providerDb,
     providerOwner,
-    receipt.amount,
+    providerAmount,
     receipt.card_id,
     receipt.nonce,
   );

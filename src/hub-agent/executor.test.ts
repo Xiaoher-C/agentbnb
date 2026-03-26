@@ -221,13 +221,13 @@ describe('HubAgentExecutor', () => {
 
       expect(result.success).toBe(true);
 
-      // Requester should have been charged 5 credits
+      // Voucher used for hold (5 <= 50), balance unchanged
       const balanceAfter = getBalance(creditDb, 'requester-owner');
-      expect(balanceAfter).toBe(95);
+      expect(balanceAfter).toBe(100);
 
-      // Agent owner should have received 5 credits (no bootstrap in executor test)
+      // Agent owner receives: fee=floor(5*0.05)=0, providerAmount=5, bonus 2x: 5, total=10
       const agentBalance = getBalance(creditDb, agent.agent_id);
-      expect(agentBalance).toBe(5); // 5 settlement only
+      expect(agentBalance).toBe(10);
     });
 
     it('releases escrow on execution failure', async () => {
@@ -254,9 +254,9 @@ describe('HubAgentExecutor', () => {
 
       expect(result.success).toBe(false);
 
-      // Credits should be refunded
+      // Voucher used for hold (5 <= 50), release refunds to balance: 100 + 5 = 105
       const balanceAfter = getBalance(creditDb, 'requester-owner');
-      expect(balanceAfter).toBe(100);
+      expect(balanceAfter).toBe(105);
     });
 
     it('skips escrow when no requesterOwner provided', async () => {

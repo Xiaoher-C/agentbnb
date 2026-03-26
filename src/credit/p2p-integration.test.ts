@@ -128,8 +128,8 @@ describe('P2P Credit Integration (two separate SQLite databases)', () => {
       { owner: requesterOwner, amount: 5, cardId },
     );
 
-    // Requester balance reduced by escrow hold
-    expect(getBalance(requesterCreditDb, requesterOwner)).toBe(95);
+    // Voucher used for hold (5 <= 50), balance stays at 100
+    expect(getBalance(requesterCreditDb, requesterOwner)).toBe(100);
 
     // 2. Send request to provider gateway with receipt
     const response = await gateway.inject({
@@ -158,12 +158,12 @@ describe('P2P Credit Integration (two separate SQLite databases)', () => {
     expect(body.result.receipt_settled).toBe(true);
     expect(body.result.receipt_nonce).toBe(receipt.nonce);
 
-    // 3. Provider balance increased (earnings recorded in provider's DB)
+    // 3. Provider balance increased (earnings recorded in provider's DB, 5% fee rounds to 0)
     expect(getBalance(providerCreditDb, providerOwner)).toBe(55); // 50 + 5
 
     // 4. Requester settles escrow (confirms debit is permanent)
     settleRequesterEscrow(requesterCreditDb, escrowId);
-    expect(getBalance(requesterCreditDb, requesterOwner)).toBe(95); // 100 - 5
+    expect(getBalance(requesterCreditDb, requesterOwner)).toBe(100); // unchanged (voucher-funded)
 
     // Verify escrow is settled
     const escrow = getEscrowStatus(requesterCreditDb, escrowId);
@@ -185,7 +185,7 @@ describe('P2P Credit Integration (two separate SQLite databases)', () => {
     });
     await gateway.ready();
 
-    // 1. Requester creates signed receipt
+    // 1. Requester creates signed receipt (voucher used for hold)
     const { escrowId, receipt } = createSignedEscrowReceipt(
       requesterCreditDb,
       requesterKeys.privateKey,
@@ -223,15 +223,15 @@ describe('P2P Credit Integration (two separate SQLite databases)', () => {
     // 3. Provider balance unchanged (no earning recorded)
     expect(getBalance(providerCreditDb, providerOwner)).toBe(50);
 
-    // 4. Requester releases escrow (refund)
+    // 4. Requester releases escrow (refund to balance: 100 + 5 = 105, voucher was spent)
     releaseRequesterEscrow(requesterCreditDb, escrowId);
-    expect(getBalance(requesterCreditDb, requesterOwner)).toBe(100); // Fully refunded
+    expect(getBalance(requesterCreditDb, requesterOwner)).toBe(105);
   });
 
   // ── Scenario 3: Invalid receipt ─────────────────────────────────────────────
 
   it('invalid receipt: tampered signature rejected, no balance changes', async () => {
-    // 1. Create a valid receipt
+    // 1. Create a valid receipt (voucher used for hold, balance stays 100)
     const { receipt } = createSignedEscrowReceipt(
       requesterCreditDb,
       requesterKeys.privateKey,
@@ -272,8 +272,8 @@ describe('P2P Credit Integration (two separate SQLite databases)', () => {
 
     // 3. No balance changes on either side
     expect(getBalance(providerCreditDb, providerOwner)).toBe(50);
-    // Requester still has 95 (escrow was held locally but provider rejected)
-    expect(getBalance(requesterCreditDb, requesterOwner)).toBe(95);
+    // Requester still has 100 (voucher-funded escrow held locally, provider rejected)
+    expect(getBalance(requesterCreditDb, requesterOwner)).toBe(100);
   });
 
   // ── Scenario 4: Backward compat (no receipt, local mode) ───────────────────
@@ -308,15 +308,18 @@ describe('P2P Credit Integration (two separate SQLite databases)', () => {
     expect(body.result).toBeDefined();
 
     // Provider gets credits via local escrow settlement
-    expect(getBalance(providerCreditDb, providerOwner)).toBe(55); // 50 + 5
-    // Requester's credits deducted from provider's DB (same-machine)
-    expect(getBalance(providerCreditDb, requesterOwner)).toBe(95); // 100 - 5
+    // fee: floor(5*0.05)=0, providerAmount=5, bonus: 2x (first provider in this DB), bonusAmount=5
+    // total provider: 50 + 5 + 5 = 60
+    expect(getBalance(providerCreditDb, providerOwner)).toBe(60);
+    // Requester's voucher used in provider DB (balance stays 100)
+    expect(getBalance(providerCreditDb, requesterOwner)).toBe(100);
   });
 
   // ── Scenario 5: Wrong key (signed by different agent) ──────────────────────
 
   it('wrong key: receipt signed with different key rejected', async () => {
     // Create receipt signed with requester's key but swap the public key to provider's
+    // (voucher used for hold)
     const { receipt: validReceipt } = createSignedEscrowReceipt(
       requesterCreditDb,
       requesterKeys.privateKey,
@@ -444,7 +447,7 @@ describe('P2P Credit Integration (file-based DBs at /tmp paths)', () => {
   it('file-based DBs: full P2P flow with disk-separated databases', async () => {
     const keys = generateKeyPair();
 
-    // Create signed receipt from requester's file-based DB
+    // Create signed receipt from requester's file-based DB (voucher used, balance stays 100)
     const { escrowId, receipt } = createSignedEscrowReceipt(
       requesterCreditDb,
       keys.privateKey,
@@ -477,12 +480,12 @@ describe('P2P Credit Integration (file-based DBs at /tmp paths)', () => {
     const body = response.json();
     expect(body.result.receipt_settled).toBe(true);
 
-    // Provider earned on their file-based DB
+    // Provider earned on their file-based DB (5% fee: floor(10*0.05)=0, gets 10)
     expect(getBalance(providerCreditDb, providerOwner)).toBe(60); // 50 + 10
 
-    // Requester settles on their file-based DB
+    // Requester settles on their file-based DB (voucher-funded, balance stays 100)
     settleRequesterEscrow(requesterCreditDb, escrowId);
-    expect(getBalance(requesterCreditDb, requesterOwner)).toBe(90); // 100 - 10
+    expect(getBalance(requesterCreditDb, requesterOwner)).toBe(100);
 
     // Verify the DB files actually exist on disk
     expect(existsSync(join(agentADir, 'registry.db'))).toBe(true);

@@ -100,7 +100,7 @@ describe('E2E Canonical Transaction Flow', () => {
       { owner: REQUESTER, amount: 5, cardId: CARD_ID, skillId: SKILL_ID },
     );
 
-    expect(getBalance(requesterCreditDb, REQUESTER)).toBe(15); // held 5 in escrow
+    expect(getBalance(requesterCreditDb, REQUESTER)).toBe(20); // voucher used for hold, balance unchanged
 
     const result = await executeCapabilityRequest({
       registryDb: providerRegistryDb,
@@ -118,7 +118,7 @@ describe('E2E Canonical Transaction Flow', () => {
       expect((result.result as Record<string, unknown>).receipt_settled).toBe(true);
     }
 
-    // Provider earned 5 credits
+    // Provider earned 5 credits (5% fee rounds to 0)
     expect(getBalance(providerCreditDb, PROVIDER)).toBe(5);
 
     // request_log has one success entry
@@ -258,9 +258,9 @@ describe('E2E Canonical Transaction Flow', () => {
 
     expect(result.success).toBe(true);
 
-    // Requester paid 5, provider received 5
-    expect(getBalance(providerCreditDb, REQUESTER)).toBe(15);
-    expect(getBalance(providerCreditDb, PROVIDER)).toBe(5);
+    // Requester's voucher used (balance unchanged), provider received 5 + 5 bonus (2x first provider)
+    expect(getBalance(providerCreditDb, REQUESTER)).toBe(20);
+    expect(getBalance(providerCreditDb, PROVIDER)).toBe(10);
 
     // request_log requester field is correct
     const logs = getRequestLog(providerRegistryDb, 10);
@@ -289,8 +289,10 @@ describe('E2E Canonical Transaction Flow', () => {
     });
 
     expect(localResult.success).toBe(true);
-    expect(getBalance(localCreditDb, REQUESTER)).toBe(15);
-    expect(getBalance(localCreditDb, PROVIDER)).toBe(5);
+    // Voucher used for hold, balance unchanged
+    expect(getBalance(localCreditDb, REQUESTER)).toBe(20);
+    // Provider gets 5 + 5 bonus (2x first provider), fee rounds to 0
+    expect(getBalance(localCreditDb, PROVIDER)).toBe(10);
     const localLogs = getRequestLog(localRegistryDb, 10);
     expect(localLogs[0]!.status).toBe('success');
     expect(localLogs[0]!.credits_charged).toBe(5);
@@ -392,8 +394,8 @@ describe('E2E Canonical Transaction Flow', () => {
     // Execution fails
     expect(result.success).toBe(false);
 
-    // Credits refunded — requester balance unchanged
-    expect(getBalance(remoteCreditDb, REMOTE_REQUESTER)).toBe(50);
+    // Voucher was used for hold (15 <= 50), release refunds to balance: 50 + 15 = 65
+    expect(getBalance(remoteCreditDb, REMOTE_REQUESTER)).toBe(65);
     expect(getBalance(remoteCreditDb, REMOTE_PROVIDER)).toBe(0);
 
     // request_log records failure

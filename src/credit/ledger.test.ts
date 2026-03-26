@@ -72,6 +72,8 @@ describe('escrow', () => {
   });
 
   it('holdEscrow deducts from balance and creates escrow record with status "held"', () => {
+    // Exhaust voucher first so hold uses balance
+    holdEscrow(db, 'agent-requester', 50, 'card-exhaust-voucher');
     const escrowId = holdEscrow(db, 'agent-requester', 30, 'card-abc');
     expect(getBalance(db, 'agent-requester')).toBe(70);
     const escrow = getEscrowStatus(db, escrowId);
@@ -91,6 +93,8 @@ describe('escrow', () => {
   });
 
   it('holdEscrow prevents double-spend (two holds exceeding balance)', () => {
+    // Exhaust voucher first so holds use balance
+    holdEscrow(db, 'agent-requester', 50, 'card-exhaust-voucher');
     holdEscrow(db, 'agent-requester', 80, 'card-abc');
     expect(() => holdEscrow(db, 'agent-requester', 40, 'card-def')).toThrowError(
       expect.objectContaining({ code: 'INSUFFICIENT_CREDITS' }),
@@ -100,14 +104,20 @@ describe('escrow', () => {
   });
 
   it('settleEscrow transfers credits to capability owner and sets status "settled"', () => {
+    // Exhaust voucher first so hold uses balance
+    holdEscrow(db, 'agent-requester', 50, 'card-exhaust-voucher');
     const escrowId = holdEscrow(db, 'agent-requester', 30, 'card-abc');
     settleEscrow(db, escrowId, 'agent-owner');
-    expect(getBalance(db, 'agent-owner')).toBe(30);
+    // fee: floor(30*0.05)=1, providerAmount=29, bonus: 2x (first provider), bonusAmount=29
+    // agent-owner had balance 0, gets 29+29=58
+    expect(getBalance(db, 'agent-owner')).toBe(58);
     const escrow = getEscrowStatus(db, escrowId);
     expect(escrow?.status).toBe('settled');
   });
 
   it('releaseEscrow refunds credits to requester and sets status "released"', () => {
+    // Exhaust voucher first so hold uses balance
+    holdEscrow(db, 'agent-requester', 50, 'card-exhaust-voucher');
     const escrowId = holdEscrow(db, 'agent-requester', 30, 'card-abc');
     releaseEscrow(db, escrowId);
     expect(getBalance(db, 'agent-requester')).toBe(100);
@@ -145,20 +155,25 @@ describe('escrow', () => {
   });
 
   it('holdEscrow logs a debit transaction', () => {
+    // Exhaust voucher first so hold uses balance
+    holdEscrow(db, 'agent-requester', 50, 'card-exhaust-voucher');
     holdEscrow(db, 'agent-requester', 30, 'card-abc');
     const txns = getTransactions(db, 'agent-requester');
-    // Should have bootstrap + escrow_hold
-    expect(txns.length).toBe(2);
+    // Should have bootstrap + voucher_hold + escrow_hold
+    expect(txns.length).toBe(3);
     const holdTxn = txns.find((t) => t.reason === 'escrow_hold');
     expect(holdTxn).toBeDefined();
     expect(holdTxn?.amount).toBe(-30);
   });
 
   it('settleEscrow logs credit transactions for both parties', () => {
+    // Exhaust voucher first so hold uses balance
+    holdEscrow(db, 'agent-requester', 50, 'card-exhaust-voucher');
     const escrowId = holdEscrow(db, 'agent-requester', 30, 'card-abc');
     settleEscrow(db, escrowId, 'agent-owner');
     const ownerTxns = getTransactions(db, 'agent-owner');
     expect(ownerTxns.some((t) => t.reason === 'settlement')).toBe(true);
-    expect(ownerTxns.find((t) => t.reason === 'settlement')?.amount).toBe(30);
+    // Settlement amount is providerAmount after 5% fee: 30 - floor(30*0.05) = 29
+    expect(ownerTxns.find((t) => t.reason === 'settlement')?.amount).toBe(29);
   });
 });

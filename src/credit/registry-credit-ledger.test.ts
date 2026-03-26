@@ -54,6 +54,8 @@ describe('RegistryCreditLedger (direct DB mode)', () => {
   describe('hold()', () => {
     it('deducts credits and returns an escrowId', async () => {
       await ledger.grant('agent-dave', 100);
+      // Exhaust voucher first so hold uses balance
+      await ledger.hold('agent-dave', 50, 'card-exhaust-voucher');
       const result = await ledger.hold('agent-dave', 30, 'card-123');
       expect(result.escrowId).toBeDefined();
       expect(typeof result.escrowId).toBe('string');
@@ -63,6 +65,8 @@ describe('RegistryCreditLedger (direct DB mode)', () => {
 
     it('throws INSUFFICIENT_CREDITS when balance is too low', async () => {
       await ledger.grant('agent-eve', 10);
+      // Exhaust voucher first
+      await ledger.hold('agent-eve', 50, 'card-exhaust-voucher');
       await expect(ledger.hold('agent-eve', 50, 'card-abc')).rejects.toMatchObject({
         code: 'INSUFFICIENT_CREDITS',
       });
@@ -78,10 +82,14 @@ describe('RegistryCreditLedger (direct DB mode)', () => {
   describe('settle()', () => {
     it('transfers held credits to recipient', async () => {
       await ledger.grant('agent-frank', 100);
+      // Exhaust voucher first so hold uses balance
+      await ledger.hold('agent-frank', 50, 'card-exhaust-voucher');
       const { escrowId } = await ledger.hold('agent-frank', 40, 'card-999');
       await ledger.settle(escrowId, 'agent-grace');
       const graceBal = await ledger.getBalance('agent-grace');
-      expect(graceBal).toBe(40);
+      // fee: floor(40*0.05)=2, providerAmount=38, bonus: 2x (first provider), bonusAmount=38
+      // total: 38+38=76
+      expect(graceBal).toBe(76);
     });
 
     it('throws ESCROW_NOT_FOUND for unknown escrowId', async () => {
@@ -103,6 +111,8 @@ describe('RegistryCreditLedger (direct DB mode)', () => {
   describe('release()', () => {
     it('refunds held credits back to original owner', async () => {
       await ledger.grant('agent-jack', 100);
+      // Exhaust voucher first so hold uses balance
+      await ledger.hold('agent-jack', 50, 'card-exhaust-voucher');
       const { escrowId } = await ledger.hold('agent-jack', 35, 'card-refund');
       await ledger.release(escrowId);
       const balance = await ledger.getBalance('agent-jack');
@@ -136,8 +146,9 @@ describe('RegistryCreditLedger (direct DB mode)', () => {
       await ledger.hold('agent-liam', 10, 'card-hist');
       const history = await ledger.getHistory('agent-liam');
       expect(history.length).toBeGreaterThanOrEqual(2);
+      // newest first — voucher_hold debit should come first (voucher used before balance)
       const reasons = history.map((t) => t.reason);
-      expect(reasons[0]).toBe('escrow_hold');
+      expect(reasons[0]).toBe('voucher_hold');
       expect(reasons[reasons.length - 1]).toBe('bootstrap');
     });
 

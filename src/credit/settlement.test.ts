@@ -75,6 +75,7 @@ describe('settlement protocol', () => {
       const result = settleProviderEarning(providerDb, 'provider', receipt);
 
       expect(result).toEqual({ settled: true });
+      // 5% network fee: floor(15 * 0.05) = 0, provider gets 15 (fee rounds to 0)
       expect(getBalance(providerDb, 'provider')).toBe(15);
     });
   });
@@ -84,13 +85,14 @@ describe('settlement protocol', () => {
       const requesterDb = makeRequesterDb();
       bootstrapAgent(requesterDb, 'requester', 100);
 
+      // Hold uses voucher (10 <= 50), so balance stays 100
       const escrowId = holdEscrow(requesterDb, 'requester', 10, 'card-001');
-      expect(getBalance(requesterDb, 'requester')).toBe(90);
+      expect(getBalance(requesterDb, 'requester')).toBe(100);
 
       settleRequesterEscrow(requesterDb, escrowId);
 
-      // Balance unchanged -- credits stay deducted
-      expect(getBalance(requesterDb, 'requester')).toBe(90);
+      // Balance unchanged -- credits stay at 100 (voucher was used)
+      expect(getBalance(requesterDb, 'requester')).toBe(100);
       // Escrow marked as settled
       const escrow = getEscrowStatus(requesterDb, escrowId);
       expect(escrow!.status).toBe('settled');
@@ -102,12 +104,14 @@ describe('settlement protocol', () => {
       const requesterDb = makeRequesterDb();
       bootstrapAgent(requesterDb, 'requester', 100);
 
+      // Hold uses voucher (10 <= 50), so balance stays 100
       const escrowId = holdEscrow(requesterDb, 'requester', 10, 'card-001');
-      expect(getBalance(requesterDb, 'requester')).toBe(90);
+      expect(getBalance(requesterDb, 'requester')).toBe(100);
 
       releaseRequesterEscrow(requesterDb, escrowId);
 
-      expect(getBalance(requesterDb, 'requester')).toBe(100);
+      // Release refunds to balance, so balance goes to 110 (100 + 10 refund from voucher-funded escrow)
+      expect(getBalance(requesterDb, 'requester')).toBe(110);
       const escrow = getEscrowStatus(requesterDb, escrowId);
       expect(escrow!.status).toBe('released');
     });
@@ -121,20 +125,20 @@ describe('settlement protocol', () => {
       bootstrapAgent(providerDb, 'provider', 0);
       bootstrapAgent(requesterDb, 'requester', 100);
 
-      // Requester holds escrow
+      // Requester holds escrow (uses voucher, balance stays 100)
       const escrowId = holdEscrow(requesterDb, 'requester', 10, 'card-001');
-      expect(getBalance(requesterDb, 'requester')).toBe(90);
+      expect(getBalance(requesterDb, 'requester')).toBe(100);
 
       // Create receipt (normally signed, here just a fake)
       const receipt = fakeReceipt({ amount: 10 });
 
-      // Provider records earning in own DB
+      // Provider records earning in own DB (5% fee: floor(10*0.05)=0, gets 10)
       settleProviderEarning(providerDb, 'provider', receipt);
       expect(getBalance(providerDb, 'provider')).toBe(10);
 
       // Requester confirms escrow debit in own DB
       settleRequesterEscrow(requesterDb, escrowId);
-      expect(getBalance(requesterDb, 'requester')).toBe(90);
+      expect(getBalance(requesterDb, 'requester')).toBe(100);
 
       // No cross-DB operations happened
       // Provider DB doesn't know about requester, requester DB doesn't know about provider
@@ -147,13 +151,13 @@ describe('settlement protocol', () => {
       bootstrapAgent(providerDb, 'provider', 0);
       bootstrapAgent(requesterDb, 'requester', 100);
 
-      // Requester holds escrow
+      // Requester holds escrow (uses voucher, balance stays 100)
       const escrowId = holdEscrow(requesterDb, 'requester', 10, 'card-001');
 
       // Execution fails -- provider does NOT record earning
-      // Requester releases escrow (refund)
+      // Requester releases escrow (refund to balance: 100 + 10 = 110)
       releaseRequesterEscrow(requesterDb, escrowId);
-      expect(getBalance(requesterDb, 'requester')).toBe(100);
+      expect(getBalance(requesterDb, 'requester')).toBe(110);
       expect(getBalance(providerDb, 'provider')).toBe(0);
     });
   });

@@ -224,13 +224,15 @@ Takes a long text input and returns a concise summary by extracting the first se
     expect(typed.summary).toBe('The quick brown fox jumped over the lazy dog');
   });
 
-  it("Agent A's balance decreased by card pricing (10 credits)", () => {
+  it("Agent A's balance unchanged (voucher used for hold)", () => {
+    // Voucher used for hold (10 <= 50), balance unchanged
     const balance = getBalance(creditDb, AGENT_A);
-    expect(balance).toBe(90); // 100 - 10
+    expect(balance).toBe(100);
   });
 
-  it("Agent B's balance increased by card pricing (10 credits)", () => {
+  it("Agent B's balance increased by card pricing + first provider bonus", () => {
+    // fee=floor(10*0.05)=0, providerAmount=10, bonus 2x: 10, total=20
     const balance = getBalance(creditDb, AGENT_B);
-    expect(balance).toBe(110); // 100 + 10
+    expect(balance).toBe(120); // 100 + 10 + 10 (2x first provider bonus)
   });
 });

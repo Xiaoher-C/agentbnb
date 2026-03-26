@@ -168,7 +168,8 @@ describe('Relay Bridge', () => {
 
     // Hold escrow manually
     const escrowId = holdEscrow(creditDb, 'requester-1', 10, 'card-1');
-    expect(getBalance(creditDb, 'requester-1')).toBe(90);
+    // Voucher used for hold (10 <= 50), balance unchanged
+    expect(getBalance(creditDb, 'requester-1')).toBe(100);
 
     // Create a queued job with escrow
     const job = insertJob(registryDb, {
@@ -195,9 +196,9 @@ describe('Relay Bridge', () => {
     expect(completed!.status).toBe('completed');
     expect(completed!.result).toBe(JSON.stringify({ answer: 42 }));
 
-    // Escrow should be settled to target-owner
+    // Escrow settled: fee=floor(10*0.05)=0, providerAmount=10, bonus 2x: 10, total=20
     const targetBalance = getBalance(creditDb, 'target-owner');
-    expect(targetBalance).toBe(10);
+    expect(targetBalance).toBe(20);
   });
 
   it('handleJobRelayResponse fails job and releases escrow on error', () => {
@@ -228,8 +229,8 @@ describe('Relay Bridge', () => {
     const failed = getJob(registryDb, job.id);
     expect(failed!.status).toBe('failed');
 
-    // Escrow should be released (refunded)
+    // Voucher used for hold (10 <= 50), release refunds to balance: 100 + 10 = 110
     const balance = getBalance(creditDb, 'requester-2');
-    expect(balance).toBe(100);
+    expect(balance).toBe(110);
   });
 });

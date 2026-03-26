@@ -144,6 +144,8 @@ describe('relay-credit module', () => {
       bootstrapAgent(creditDb, 'requester-a', 100);
       const cardId = randomUUID();
 
+      // Exhaust voucher first so hold uses balance
+      holdForRelay(creditDb, 'requester-a', 50, randomUUID());
       const escrowId = holdForRelay(creditDb, 'requester-a', 10, cardId);
 
       expect(typeof escrowId).toBe('string');
@@ -155,6 +157,8 @@ describe('relay-credit module', () => {
       bootstrapAgent(creditDb, 'requester-poor', 5);
       const cardId = randomUUID();
 
+      // Exhaust voucher first
+      holdForRelay(creditDb, 'requester-poor', 50, randomUUID());
       expect(() => holdForRelay(creditDb, 'requester-poor', 10, cardId)).toThrow('Insufficient credits');
     });
 
@@ -172,11 +176,15 @@ describe('relay-credit module', () => {
       bootstrapAgent(creditDb, 'provider-b', 0);
       const cardId = randomUUID();
 
+      // Exhaust voucher first so hold uses balance
+      holdForRelay(creditDb, 'requester-b', 50, randomUUID());
       const escrowId = holdForRelay(creditDb, 'requester-b', 20, cardId);
       settleForRelay(creditDb, escrowId, 'provider-b');
 
+      // Requester: 100 - 20 = 80 (voucher exhausted, balance used)
       expect(getBalance(creditDb, 'requester-b')).toBe(80);
-      expect(getBalance(creditDb, 'provider-b')).toBe(20);
+      // Provider: fee floor(20*0.05)=1, providerAmount=19, bonus 2x: bonusAmount=19, total=38
+      expect(getBalance(creditDb, 'provider-b')).toBe(38);
     });
   });
 
@@ -187,6 +195,8 @@ describe('relay-credit module', () => {
       bootstrapAgent(creditDb, 'requester-c', 100);
       const cardId = randomUUID();
 
+      // Exhaust voucher first so hold uses balance
+      holdForRelay(creditDb, 'requester-c', 50, randomUUID());
       const escrowId = holdForRelay(creditDb, 'requester-c', 30, cardId);
       expect(getBalance(creditDb, 'requester-c')).toBe(70);
 
@@ -247,12 +257,15 @@ describe('relay-credit module', () => {
       const fee = calculateConductorFee(totalSubTaskCost);
       expect(fee).toBe(10);
 
+      // Exhaust voucher first so hold uses balance
+      holdForRelay(creditDb, 'requester-cond', 50, randomUUID());
       const feeEscrowId = holdForRelay(creditDb, 'requester-cond', fee, cardRef);
       expect(getBalance(creditDb, 'requester-cond')).toBe(90);
 
       settleForRelay(creditDb, feeEscrowId, 'conductor-agent');
       expect(getBalance(creditDb, 'requester-cond')).toBe(90);
-      expect(getBalance(creditDb, 'conductor-agent')).toBe(10);
+      // fee=10, network_fee floor(10*0.05)=0, providerAmount=10, bonus 2x: bonusAmount=10, total=20
+      expect(getBalance(creditDb, 'conductor-agent')).toBe(20);
     });
 
     it('conductor fee release refunds requester when fee settlement fails', () => {
@@ -262,6 +275,8 @@ describe('relay-credit module', () => {
       const fee = calculateConductorFee(50); // 10% of 50 = 5
       expect(fee).toBe(5);
 
+      // Exhaust voucher first so hold uses balance
+      holdForRelay(creditDb, 'requester-cond2', 50, randomUUID());
       const feeEscrowId = holdForRelay(creditDb, 'requester-cond2', fee, cardRef);
       expect(getBalance(creditDb, 'requester-cond2')).toBe(45);
 
