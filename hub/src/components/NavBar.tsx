@@ -249,6 +249,12 @@ export default function NavBar({ apiKey, balance, onLogout }: NavBarProps): JSX.
         >
           Genesis
         </NavLink>
+        <NavLink
+          to="/credit-policy"
+          className={({ isActive }) => navTabClass(isActive)}
+        >
+          Credit Policy
+        </NavLink>
         <MyAgentDropdown />
       </nav>
 
@@ -293,6 +299,13 @@ export default function NavBar({ apiKey, balance, onLogout }: NavBarProps): JSX.
             className={({ isActive }) => `${navTabClass(isActive)} block`}
           >
             Genesis
+          </NavLink>
+          <NavLink
+            to="/credit-policy"
+            onClick={() => setMenuOpen(false)}
+            className={({ isActive }) => `${navTabClass(isActive)} block`}
+          >
+            Credit Policy
           </NavLink>
           <NavLink
             to="/myagent"

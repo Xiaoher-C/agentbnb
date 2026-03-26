@@ -21,6 +21,8 @@ import ErrorState from '../components/ErrorState.js';
 import SearchFilter from '../components/SearchFilter.js';
 import SkeletonCard from '../components/SkeletonCard.js';
 import StatsBar from '../components/StatsBar.js';
+import HeroSection from '../components/HeroSection.js';
+import ProviderValueSection from '../components/ProviderValueSection.js';
 import { CompatibleWithSection } from '../components/CompatibleWithSection.js';
 import { FAQSection } from '../components/FAQSection.js';
 import { ValuePropSection } from '../components/ValuePropSection.js';
@@ -77,6 +79,9 @@ export default function DiscoverPage(): JSX.Element {
 
   return (
     <>
+      <HeroSection />
+      <ProviderValueSection />
+
       {/* Narrative Strip — tagline + 3 live trust-oriented stats */}
       <StatsBar
         agentsOnline={agentsOnline}
