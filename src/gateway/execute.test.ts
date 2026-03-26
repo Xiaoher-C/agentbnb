@@ -303,3 +303,93 @@ describe('executeCapabilityRequest — failure_reason field', () => {
     fetchSpy.mockRestore();
   });
 });
+
+// ── Phase 54: FailureReason reputation protection ────────────────────────────
+
+describe('executeCapabilityRequest — reputation protection for non-quality failures', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+
+    vi.mocked(getCard).mockReturnValue(makeCard() as ReturnType<typeof getCard>);
+    vi.mocked(getBalance).mockReturnValue(100);
+    vi.mocked(holdEscrow).mockReturnValue('escrow-uuid');
+    vi.mocked(settleEscrow).mockReturnValue(undefined);
+    vi.mocked(updateReputation).mockReturnValue(undefined);
+  });
+
+  it('calls updateReputation on bad_execution failure', async () => {
+    const mockExecutor = makeMockExecutor({
+      execute: vi.fn().mockResolvedValue({
+        success: false,
+        error: 'Skill failed',
+        latency_ms: 20,
+      }),
+    });
+
+    await executeCapabilityRequest({
+      registryDb: fakeDb,
+      creditDb: fakeDb,
+      cardId: 'card-1',
+      skillId: 'skill-1',
+      params: {},
+      requester: 'requester-bob',
+      skillExecutor: mockExecutor as unknown as import('../skills/executor.js').SkillExecutor,
+    });
+
+    expect(updateReputation).toHaveBeenCalledWith(fakeDb, 'card-1', false, 20);
+  });
+
+  it('does NOT call updateReputation on timeout failure', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(() => {
+      const err = new Error('The operation was aborted');
+      (err as Error & { name: string }).name = 'AbortError';
+      return Promise.reject(err);
+    });
+
+    await executeCapabilityRequest({
+      registryDb: fakeDb,
+      creditDb: fakeDb,
+      cardId: 'card-1',
+      params: {},
+      requester: 'requester-bob',
+      handlerUrl: 'http://localhost:9999/handle',
+      timeoutMs: 1,
+    });
+
+    expect(updateReputation).not.toHaveBeenCalled();
+
+    fetchSpy.mockRestore();
+  });
+
+  it('does NOT call updateReputation on not_found failure', async () => {
+    const v1Card = {
+      id: 'card-1',
+      owner: 'owner-alice',
+      name: 'Test Card',
+      description: 'Test',
+      spec_version: '1.0',
+      level: 1 as const,
+      inputs: [],
+      outputs: [],
+      pricing: { credits_per_call: 5 },
+      availability: { online: true },
+    };
+    vi.mocked(getCard).mockReturnValue(v1Card as ReturnType<typeof getCard>);
+
+    const mockExecutor = {
+      execute: vi.fn(),
+      listSkills: vi.fn().mockReturnValue([]),
+    };
+
+    await executeCapabilityRequest({
+      registryDb: fakeDb,
+      creditDb: fakeDb,
+      cardId: 'card-1',
+      params: {},
+      requester: 'requester-bob',
+      skillExecutor: mockExecutor as unknown as import('../skills/executor.js').SkillExecutor,
+    });
+
+    expect(updateReputation).not.toHaveBeenCalled();
+  });
+});

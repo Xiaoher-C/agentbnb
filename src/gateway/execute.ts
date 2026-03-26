@@ -281,7 +281,11 @@ export async function executeCapabilityRequest(opts: ExecuteRequestOptions): Pro
     failureReason: FailureReason = 'bad_execution',
   ): ExecuteResult => {
     if (!isRemoteEscrow && escrowId) releaseEscrow(creditDb, escrowId);
-    updateReputation(registryDb, cardId, false, latencyMs);
+    // Only penalize reputation for quality failures (bad_execution, auth_error).
+    // Non-quality failures (overload, timeout, not_found) should not hurt provider reputation.
+    if (failureReason === 'bad_execution' || failureReason === 'auth_error') {
+      updateReputation(registryDb, cardId, false, latencyMs);
+    }
     try {
       insertRequestLog(registryDb, {
         id: randomUUID(),

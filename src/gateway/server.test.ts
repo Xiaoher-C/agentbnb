@@ -451,7 +451,7 @@ describe('Gateway Reputation Tracking', () => {
     expect(updated?.metadata?.avg_latency_ms).toBeGreaterThan(0);
   });
 
-  it('Test 4: After timeout (AbortError), success_rate reflects failure', async () => {
+  it('Test 4: After timeout (AbortError), reputation is NOT updated (Phase 54: non-quality failure)', async () => {
     const slowHandler = Fastify({ logger: false });
     slowHandler.post('/', async (_req, reply) => {
       await new Promise((resolve) => setTimeout(resolve, 2000));
@@ -484,10 +484,10 @@ describe('Gateway Reputation Tracking', () => {
         },
       });
 
+      // Phase 54: timeout is a non-quality failure → updateReputation is NOT called.
+      // The card's success_rate should remain undefined (no reputation bootstrap).
       const updated = getCard(registryDb, testCard.id);
-      expect(updated?.metadata?.success_rate).toBeDefined();
-      // Bootstrap with success=false: rate should be 0.0
-      expect(updated?.metadata?.success_rate).toBe(0.0);
+      expect(updated?.metadata?.success_rate).toBeUndefined();
     } finally {
       await timeoutGateway.close();
       await slowHandler.close();

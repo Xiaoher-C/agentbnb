@@ -217,6 +217,105 @@ describe('createRegistryServer', () => {
     await server.close();
   });
 
+  // Phase 54: Non-quality failures (overload/timeout/not_found) excluded from trust SQL
+  it('GET /cards trust SQL excludes non-quality failures from terminal_exec and success_rate', async () => {
+    const card = makeCard({ name: 'Provider Card', description: 'Test provider', owner: 'owner-p54' });
+    insertCard(db, card);
+
+    // 8 successes
+    for (let i = 0; i < 8; i++) {
+      insertRequestLog(db, {
+        id: crypto.randomUUID(), card_id: card.id, card_name: card.name,
+        requester: 'requester', status: 'success', latency_ms: 100, credits_charged: 5,
+        created_at: new Date().toISOString(),
+      });
+    }
+    // 2 bad_execution failures (quality failures — should count)
+    for (let i = 0; i < 2; i++) {
+      insertRequestLog(db, {
+        id: crypto.randomUUID(), card_id: card.id, card_name: card.name,
+        requester: 'requester', status: 'failure', latency_ms: 100, credits_charged: 0,
+        created_at: new Date().toISOString(), failure_reason: 'bad_execution',
+      });
+    }
+    // 5 overload failures (non-quality — should be excluded from denominator)
+    for (let i = 0; i < 5; i++) {
+      insertRequestLog(db, {
+        id: crypto.randomUUID(), card_id: card.id, card_name: card.name,
+        requester: 'requester', status: 'failure', latency_ms: 0, credits_charged: 0,
+        created_at: new Date().toISOString(), failure_reason: 'overload',
+      });
+    }
+    // 3 timeout failures with failure_reason='timeout' (non-quality — excluded)
+    for (let i = 0; i < 3; i++) {
+      insertRequestLog(db, {
+        id: crypto.randomUUID(), card_id: card.id, card_name: card.name,
+        requester: 'requester', status: 'timeout', latency_ms: 300000, credits_charged: 0,
+        created_at: new Date().toISOString(), failure_reason: 'timeout',
+      });
+    }
+
+    const { server } = createRegistryServer({ registryDb: db, silent: true });
+    await server.ready();
+
+    const response = await server.inject({ method: 'GET', url: '/cards' });
+    expect(response.statusCode).toBe(200);
+    const body = response.json();
+    expect(body.items).toHaveLength(1);
+
+    const item = body.items[0];
+    // terminal_exec should be 10 (8 success + 2 bad_execution), NOT 18
+    // success_rate should be 8/10 = 0.8, NOT 8/18 ≈ 0.44
+    expect(item.metadata.success_rate).toBe(0.8);
+    // performance_tier: total_exec = 18 (all rows), tier 1 requires >10 → tier 1
+    // tier 2 requires success_rate >= 0.85 → 0.8 < 0.85 → stays at tier 1
+    expect(item.performance_tier).toBe(1);
+
+    await server.close();
+  });
+
+  // Phase 54: Verify performance_tier 2 threshold uses corrected denominator
+  it('GET /cards performance_tier=2 uses corrected denominator (excludes non-quality failures)', async () => {
+    const card = makeCard({ name: 'Trusted Provider', description: 'High quality', owner: 'owner-trusted' });
+    insertCard(db, card);
+
+    // 51 successes → enough for tier 2 if success_rate >= 85%
+    for (let i = 0; i < 51; i++) {
+      insertRequestLog(db, {
+        id: crypto.randomUUID(), card_id: card.id, card_name: card.name,
+        requester: 'requester', status: 'success', latency_ms: 50, credits_charged: 5,
+        created_at: new Date().toISOString(),
+      });
+    }
+    // 5 bad_execution failures → terminal_exec=56, success_rate=51/56=91% → tier 2 ✓
+    for (let i = 0; i < 5; i++) {
+      insertRequestLog(db, {
+        id: crypto.randomUUID(), card_id: card.id, card_name: card.name,
+        requester: 'requester', status: 'failure', latency_ms: 100, credits_charged: 0,
+        created_at: new Date().toISOString(), failure_reason: 'bad_execution',
+      });
+    }
+    // 20 overload failures → excluded from terminal_exec
+    // Without fix: terminal_exec=76, success_rate=51/76=67% → tier 1 (wrong!)
+    // With fix: terminal_exec=56, success_rate=51/56=91% → tier 2 (correct!)
+    for (let i = 0; i < 20; i++) {
+      insertRequestLog(db, {
+        id: crypto.randomUUID(), card_id: card.id, card_name: card.name,
+        requester: 'requester', status: 'failure', latency_ms: 0, credits_charged: 0,
+        created_at: new Date().toISOString(), failure_reason: 'overload',
+      });
+    }
+
+    const { server } = createRegistryServer({ registryDb: db, silent: true });
+    await server.ready();
+
+    const response = await server.inject({ method: 'GET', url: '/cards' });
+    const body = response.json();
+    expect(body.items[0].performance_tier).toBe(2);
+
+    await server.close();
+  });
+
   // Test 9: GET /cards?max_latency_ms=100 returns only cards with avg_latency_ms <= 100
   it('GET /cards?max_latency_ms=100 returns cards with low latency', async () => {
     insertCard(
@@ -1354,6 +1453,65 @@ describe('createRegistryServer — GET /api/agents/:owner', () => {
     const body = response.json() as { recent_activity: Array<{ card_name: string }> };
     expect(body.recent_activity).toHaveLength(1);
     expect(body.recent_activity[0].card_name).toBe('Diana Cap');
+
+    await server.close();
+  });
+
+  // Phase 54: Agent profile metrics exclude non-quality failures
+  it('trust_metrics excludes non-quality failures from total_executions and success_rate', async () => {
+    const cardId = crypto.randomUUID();
+    insertCard(db, {
+      spec_version: '1.0',
+      id: cardId,
+      owner: 'agent-p54',
+      name: 'Phase 54 Test',
+      description: 'Tests reputation protection',
+      level: 1,
+      inputs: [],
+      outputs: [],
+      pricing: { credits_per_call: 5 },
+      availability: { online: true },
+      metadata: {},
+    });
+
+    // 6 successes
+    for (let i = 0; i < 6; i++) {
+      insertRequestLog(db, {
+        id: crypto.randomUUID(), card_id: cardId, card_name: 'Phase 54 Test',
+        requester: 'requester', status: 'success', latency_ms: 100, credits_charged: 5,
+        created_at: new Date().toISOString(),
+      });
+    }
+    // 4 bad_execution failures (quality — should count)
+    for (let i = 0; i < 4; i++) {
+      insertRequestLog(db, {
+        id: crypto.randomUUID(), card_id: cardId, card_name: 'Phase 54 Test',
+        requester: 'requester', status: 'failure', latency_ms: 100, credits_charged: 0,
+        created_at: new Date().toISOString(), failure_reason: 'bad_execution',
+      });
+    }
+    // 10 overload failures (non-quality — excluded from total)
+    for (let i = 0; i < 10; i++) {
+      insertRequestLog(db, {
+        id: crypto.randomUUID(), card_id: cardId, card_name: 'Phase 54 Test',
+        requester: 'requester', status: 'failure', latency_ms: 0, credits_charged: 0,
+        created_at: new Date().toISOString(), failure_reason: 'overload',
+      });
+    }
+
+    const { server } = createRegistryServer({ registryDb: db, silent: true });
+    await server.ready();
+
+    const response = await server.inject({ method: 'GET', url: '/api/agents/agent-p54' });
+    expect(response.statusCode).toBe(200);
+    const body = response.json() as {
+      trust_metrics: { total_executions: number; successful_executions: number; success_rate: number };
+    };
+
+    // total should be 10 (6 success + 4 bad_execution), NOT 20
+    expect(body.trust_metrics.total_executions).toBe(10);
+    expect(body.trust_metrics.successful_executions).toBe(6);
+    expect(body.trust_metrics.success_rate).toBe(0.6);
 
     await server.close();
   });

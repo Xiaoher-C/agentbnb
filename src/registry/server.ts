@@ -382,7 +382,9 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
       const trustStmt = db.prepare(`
         SELECT cc.owner,
           COUNT(rl.id) as total_exec,
-          SUM(CASE WHEN rl.status IN ('success','failure','timeout','refunded') THEN 1 ELSE 0 END) as terminal_exec,
+          SUM(CASE WHEN rl.status IN ('success','failure','timeout','refunded')
+              AND (rl.failure_reason IS NULL OR rl.failure_reason IN ('bad_execution','auth_error'))
+              THEN 1 ELSE 0 END) as terminal_exec,
           SUM(CASE WHEN rl.status = 'success' THEN 1 ELSE 0 END) as success_exec,
           AVG(CASE WHEN rl.status = 'success' THEN rl.latency_ms END) as avg_latency
         FROM capability_cards cc
@@ -834,7 +836,8 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
     // --- Trust Metrics (from request_log, all-time) ---
     const metricsStmt = db.prepare(`
       SELECT
-        COUNT(*) as total,
+        SUM(CASE WHEN rl.failure_reason IS NULL OR rl.failure_reason IN ('bad_execution','auth_error')
+            THEN 1 ELSE 0 END) as total,
         SUM(CASE WHEN rl.status = 'success' THEN 1 ELSE 0 END) as successes,
         AVG(CASE WHEN rl.status = 'success' THEN rl.latency_ms END) as avg_latency,
         COUNT(DISTINCT rl.requester) as unique_requesters,
