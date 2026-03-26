@@ -93,18 +93,43 @@ export class CommandExecutor implements ExecutorMode {
     const cmdConfig = config as CommandSkillConfig;
 
     // Step 1: Security check — validate base command against allowlist
+    // When claude_code is present, 'claude' is always implicitly allowed.
     const baseCommand = cmdConfig.command.trim().split(/\s+/)[0] ?? '';
     if (cmdConfig.allowed_commands && cmdConfig.allowed_commands.length > 0) {
-      if (!cmdConfig.allowed_commands.includes(baseCommand)) {
+      const effectiveAllowed = cmdConfig.claude_code
+        ? [...new Set([...cmdConfig.allowed_commands, 'claude'])]
+        : cmdConfig.allowed_commands;
+      const commandToCheck = cmdConfig.claude_code ? 'claude' : baseCommand;
+      if (!effectiveAllowed.includes(commandToCheck)) {
         return {
           success: false,
-          error: `Command not allowed: "${baseCommand}". Allowed: ${cmdConfig.allowed_commands.join(', ')}`,
+          error: `Command not allowed: "${commandToCheck}". Allowed: ${effectiveAllowed.join(', ')}`,
         };
       }
     }
 
     // Step 2: Interpolate command string with shell-escaped params
-    const interpolatedCommand = safeInterpolateCommand(cmdConfig.command, { params });
+    // When claude_code config is present, build a `claude --print` command
+    // using the command template as the prompt.
+    let interpolatedCommand: string;
+
+    if (cmdConfig.claude_code) {
+      const parts: string[] = ['claude', '--print'];
+      if (cmdConfig.claude_code.auto_mode) {
+        parts.push('--dangerously-skip-permissions');
+      }
+      if (cmdConfig.claude_code.model) {
+        parts.push('--model', cmdConfig.claude_code.model);
+      }
+      if (cmdConfig.claude_code.system_prompt) {
+        parts.push('-p', shellEscape(cmdConfig.claude_code.system_prompt));
+      }
+      // The command template is the prompt — interpolate it with safe escaping
+      const interpolatedPrompt = safeInterpolateCommand(cmdConfig.command, { params });
+      interpolatedCommand = parts.join(' ') + ' ' + interpolatedPrompt;
+    } else {
+      interpolatedCommand = safeInterpolateCommand(cmdConfig.command, { params });
+    }
 
     // Step 3: Execute command via /bin/sh -c (execFile avoids double shell parsing)
     const timeout = cmdConfig.timeout_ms ?? 30000;

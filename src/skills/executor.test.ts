@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { createSkillExecutor, SkillExecutor, ExecutorMode, ExecutionResult } from './executor.js';
+import { createSkillExecutor, SkillExecutor, ExecutorMode, ExecutionResult, ConcurrencyGuard } from './executor.js';
 import type { SkillConfig } from './skill-config.js';
 
 /** Create a minimal mock ExecutorMode that returns success */
@@ -244,5 +244,127 @@ describe('ExecutionResult shape', () => {
     expect(result).toHaveProperty('success', false);
     expect(result).toHaveProperty('error');
     expect(result).toHaveProperty('latency_ms');
+  });
+});
+
+describe('ConcurrencyGuard', () => {
+  it('getCurrentLoad returns 0 for unknown skill', () => {
+    const guard = new ConcurrencyGuard();
+    expect(guard.getCurrentLoad('unknown')).toBe(0);
+  });
+
+  it('acquire increments and release decrements load', () => {
+    const guard = new ConcurrencyGuard();
+    guard.acquire('s1');
+    expect(guard.getCurrentLoad('s1')).toBe(1);
+    guard.acquire('s1');
+    expect(guard.getCurrentLoad('s1')).toBe(2);
+    guard.release('s1');
+    expect(guard.getCurrentLoad('s1')).toBe(1);
+    guard.release('s1');
+    expect(guard.getCurrentLoad('s1')).toBe(0);
+  });
+
+  it('release never goes below 0', () => {
+    const guard = new ConcurrencyGuard();
+    guard.release('s1');
+    expect(guard.getCurrentLoad('s1')).toBe(0);
+  });
+
+  it('canAccept returns false when at max', () => {
+    const guard = new ConcurrencyGuard();
+    guard.acquire('s1');
+    expect(guard.canAccept('s1', 1)).toBe(false);
+    expect(guard.canAccept('s1', 2)).toBe(true);
+  });
+
+  it('rejects with failure_reason overload when at max_concurrent', async () => {
+    const guard = new ConcurrencyGuard();
+    // A slow mode that takes 100ms
+    const slowMode: ExecutorMode = {
+      execute: () => new Promise((resolve) => setTimeout(() => resolve({ success: true, result: 'done' }), 100)),
+    };
+    const skillWithCapacity: SkillConfig = {
+      ...commandConfig,
+      id: 'limited-skill',
+      capacity: { max_concurrent: 1 },
+    };
+    const modes = new Map<string, ExecutorMode>([['command', slowMode]]);
+    const executor = createSkillExecutor([skillWithCapacity], modes, guard);
+
+    // Start first execution (will hold the slot for 100ms)
+    const first = executor.execute('limited-skill', {});
+
+    // Immediately try second — should be rejected
+    const second = await executor.execute('limited-skill', {});
+
+    expect(second.success).toBe(false);
+    expect(second.failure_reason).toBe('overload');
+    expect(second.error).toMatch(/at capacity/);
+
+    // First should still succeed
+    const firstResult = await first;
+    expect(firstResult.success).toBe(true);
+  });
+
+  it('accepts next request after slot frees up', async () => {
+    const guard = new ConcurrencyGuard();
+    const fastMode: ExecutorMode = {
+      execute: vi.fn().mockResolvedValue({ success: true, result: 'ok' }),
+    };
+    const skillWithCapacity: SkillConfig = {
+      ...commandConfig,
+      id: 'limited-skill-2',
+      capacity: { max_concurrent: 1 },
+    };
+    const modes = new Map<string, ExecutorMode>([['command', fastMode]]);
+    const executor = createSkillExecutor([skillWithCapacity], modes, guard);
+
+    // First completes immediately
+    const first = await executor.execute('limited-skill-2', {});
+    expect(first.success).toBe(true);
+    expect(guard.getCurrentLoad('limited-skill-2')).toBe(0);
+
+    // Second should also succeed since first already freed
+    const second = await executor.execute('limited-skill-2', {});
+    expect(second.success).toBe(true);
+  });
+
+  it('no limit when max_concurrent is not set (default Infinity)', async () => {
+    const guard = new ConcurrencyGuard();
+    const slowMode: ExecutorMode = {
+      execute: () => new Promise((resolve) => setTimeout(() => resolve({ success: true, result: 'done' }), 50)),
+    };
+    // commandConfig has no capacity field
+    const modes = new Map<string, ExecutorMode>([['command', slowMode]]);
+    const executor = createSkillExecutor([commandConfig], modes, guard);
+
+    // Run multiple in parallel — all should succeed
+    const results = await Promise.all([
+      executor.execute('cmd-skill', {}),
+      executor.execute('cmd-skill', {}),
+      executor.execute('cmd-skill', {}),
+    ]);
+
+    results.forEach((r) => expect(r.success).toBe(true));
+  });
+
+  it('releases slot even when executor throws', async () => {
+    const guard = new ConcurrencyGuard();
+    const throwingMode: ExecutorMode = {
+      execute: () => Promise.reject(new Error('boom')),
+    };
+    const skillWithCapacity: SkillConfig = {
+      ...commandConfig,
+      id: 'throwing-skill',
+      capacity: { max_concurrent: 1 },
+    };
+    const modes = new Map<string, ExecutorMode>([['command', throwingMode]]);
+    const executor = createSkillExecutor([skillWithCapacity], modes, guard);
+
+    const result = await executor.execute('throwing-skill', {});
+    expect(result.success).toBe(false);
+    // Slot should be released despite the error
+    expect(guard.getCurrentLoad('throwing-skill')).toBe(0);
   });
 });

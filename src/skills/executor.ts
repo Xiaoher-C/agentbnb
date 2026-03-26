@@ -19,6 +19,58 @@ export interface ExecutionResult {
   error?: string;
   /** Wall-clock execution time in milliseconds. */
   latency_ms: number;
+  /** Structured failure reason (e.g. 'overload' when at max_concurrent capacity). */
+  failure_reason?: string;
+}
+
+/**
+ * Tracks in-flight concurrent executions per skill ID.
+ * Used by SkillExecutor to enforce `capacity.max_concurrent` limits.
+ *
+ * Thread-safe within a single Node.js event loop (no true parallelism).
+ * acquire/release must always be paired (use try/finally).
+ */
+export class ConcurrencyGuard {
+  private active: Map<string, number> = new Map();
+
+  /**
+   * Check whether the skill can accept another concurrent execution.
+   *
+   * @param skillId - The skill ID to check.
+   * @param maxConcurrent - The maximum allowed concurrent executions.
+   * @returns true if current load is below the limit.
+   */
+  canAccept(skillId: string, maxConcurrent: number): boolean {
+    return (this.active.get(skillId) ?? 0) < maxConcurrent;
+  }
+
+  /**
+   * Increment the in-flight counter for a skill. Call before execution starts.
+   *
+   * @param skillId - The skill ID to acquire a slot for.
+   */
+  acquire(skillId: string): void {
+    this.active.set(skillId, (this.active.get(skillId) ?? 0) + 1);
+  }
+
+  /**
+   * Decrement the in-flight counter for a skill. Call after execution completes (in finally block).
+   *
+   * @param skillId - The skill ID to release a slot for.
+   */
+  release(skillId: string): void {
+    this.active.set(skillId, Math.max(0, (this.active.get(skillId) ?? 0) - 1));
+  }
+
+  /**
+   * Returns the current number of in-flight executions for a skill.
+   *
+   * @param skillId - The skill ID to check.
+   * @returns Current in-flight count (0 if no executions tracked).
+   */
+  getCurrentLoad(skillId: string): number {
+    return this.active.get(skillId) ?? 0;
+  }
 }
 
 /**
@@ -53,14 +105,17 @@ export interface ExecutorMode {
 export class SkillExecutor {
   private readonly skillMap: Map<string, SkillConfig>;
   private readonly modeMap: Map<string, ExecutorMode>;
+  private readonly concurrencyGuard?: ConcurrencyGuard;
 
   /**
    * @param configs - Parsed SkillConfig array (from parseSkillsFile).
    * @param modes - Map from skill type string to its executor implementation.
+   * @param concurrencyGuard - Optional ConcurrencyGuard to enforce max_concurrent limits.
    */
-  constructor(configs: SkillConfig[], modes: Map<string, ExecutorMode>) {
+  constructor(configs: SkillConfig[], modes: Map<string, ExecutorMode>, concurrencyGuard?: ConcurrencyGuard) {
     this.skillMap = new Map(configs.map((c) => [c.id, c]));
     this.modeMap = modes;
+    this.concurrencyGuard = concurrencyGuard;
   }
 
   /**
@@ -101,6 +156,20 @@ export class SkillExecutor {
       };
     }
 
+    // Concurrency guard: reject if at capacity
+    const maxConcurrent = config.capacity?.max_concurrent ?? Infinity;
+    if (this.concurrencyGuard && maxConcurrent !== Infinity) {
+      if (!this.concurrencyGuard.canAccept(skillId, maxConcurrent)) {
+        return {
+          success: false,
+          error: `Skill ${skillId} at capacity (${maxConcurrent} concurrent max)`,
+          latency_ms: Date.now() - startTime,
+          failure_reason: 'overload',
+        };
+      }
+      this.concurrencyGuard.acquire(skillId);
+    }
+
     try {
       const modeResult = await mode.execute(config, params, onProgress);
       return {
@@ -114,6 +183,10 @@ export class SkillExecutor {
         error: message,
         latency_ms: Date.now() - startTime,
       };
+    } finally {
+      if (this.concurrencyGuard && maxConcurrent !== Infinity) {
+        this.concurrencyGuard.release(skillId);
+      }
     }
   }
 
@@ -142,11 +215,13 @@ export class SkillExecutor {
  *
  * @param configs - Array of parsed SkillConfig objects.
  * @param modes - Map from type key to ExecutorMode implementation.
+ * @param concurrencyGuard - Optional ConcurrencyGuard to enforce max_concurrent limits.
  * @returns A configured SkillExecutor instance.
  */
 export function createSkillExecutor(
   configs: SkillConfig[],
   modes: Map<string, ExecutorMode>,
+  concurrencyGuard?: ConcurrencyGuard,
 ): SkillExecutor {
-  return new SkillExecutor(configs, modes);
+  return new SkillExecutor(configs, modes, concurrencyGuard);
 }

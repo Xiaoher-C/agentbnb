@@ -120,6 +120,20 @@ export const OpenClawSkillConfigSchema = z.object({
 });
 
 /**
+ * Schema for Claude Code integration in command skills.
+ * When present, the executor wraps the command template as a prompt
+ * and invokes `claude --print` with the specified options.
+ */
+const ClaudeCodeConfigSchema = z.object({
+  /** Optional system prompt passed via `-p` flag. */
+  system_prompt: z.string().optional(),
+  /** Model to use (e.g. 'claude-opus-4-6', 'claude-sonnet-4-6'). */
+  model: z.string().optional(),
+  /** When true, passes `--dangerously-skip-permissions` to claude CLI. */
+  auto_mode: z.boolean().default(false),
+});
+
+/**
  * Schema for command execution skills (Mode D).
  * Runs local shell commands with parameter substitution.
  */
@@ -131,6 +145,7 @@ export const CommandSkillConfigSchema = z.object({
   output_type: z.enum(['json', 'text', 'file']),
   allowed_commands: z.array(z.string()).optional(),
   working_dir: z.string().optional(),
+  claude_code: ClaudeCodeConfigSchema.optional(),
   timeout_ms: z.number().positive().default(30000),
   pricing: PricingSchema,
   capacity: CapacitySchema,
