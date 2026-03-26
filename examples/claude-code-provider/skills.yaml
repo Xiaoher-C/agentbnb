@@ -1,0 +1,39 @@
+# Example: Claude Code as an AgentBnB provider
+# Place this file at ~/.agentbnb/skills.yaml or specify with --skills-file
+skills:
+  - id: code-review
+    type: command
+    name: Code Review Agent
+    command: '"Review this code and provide feedback: ${params.code}"'
+    output_type: text
+    timeout_ms: 300000
+    claude_code:
+      system_prompt: "You are a senior code reviewer. Be concise and actionable."
+      model: claude-sonnet-4-6
+      auto_mode: false
+    pricing:
+      credits_per_call: 10
+
+  - id: task-runner
+    type: command
+    name: General Task Runner
+    command: '"${params.prompt}"'
+    output_type: text
+    timeout_ms: 300000
+    claude_code:
+      model: claude-sonnet-4-6
+      auto_mode: true
+    pricing:
+      credits_per_call: 15
+
+  - id: summarizer
+    type: command
+    name: Text Summarizer
+    command: '"Summarize the following text into 3-5 key bullet points: ${params.text}"'
+    output_type: text
+    timeout_ms: 120000
+    claude_code:
+      system_prompt: "You are a precise summarizer. Output only bullet points, no preamble."
+      auto_mode: false
+    pricing:
+      credits_per_call: 5

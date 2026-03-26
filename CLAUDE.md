@@ -231,6 +231,32 @@ The Hub is not just a listing — it is a **trust network**. Every card shows no
 
 See `docs/hub-v2-trust-signals.md` for full design rationale.
 
+## Package Manager Rules
+
+This project uses **pnpm**. Never use npm or yarn in the project root.
+
+### Hard rules:
+- ALWAYS use `pnpm install`, `pnpm add`, `pnpm test`, `pnpm build`
+- NEVER run `npm install` in the project root — it creates
+  package-lock.json which conflicts with pnpm-lock.yaml
+- NEVER use `import.meta.url` relative path traversal (../../) to
+  find project root — pnpm global layout uses symlinks into a
+  content-addressable store, so relative paths break. Use
+  `require.resolve()` or read package.json bin field instead.
+
+### Exception — OpenClaw extensions directory:
+- `~/.openclaw/extensions/agentbnb/` uses npm-style flat layout
+  (managed by OpenClaw, not by us)
+- Native modules in that directory (e.g. better-sqlite3) must be
+  rebuilt with `npm rebuild better-sqlite3` (not pnpm)
+- This rebuild is needed after every OpenClaw plugin update
+
+### How to tell which package manager manages a directory:
+- Has `pnpm-lock.yaml` → use pnpm
+- Has `package-lock.json` → use npm
+- Has `node_modules/.pnpm/` folder → pnpm-managed
+- Has flat `node_modules/` without `.pnpm/` → npm-managed
+
 ## Important Context
 
 - v1.1 + v2.0 + v2.1 + v2.2 + v2.3 + v3.0 complete. Hub v2 trust signals live. Deployment infrastructure ready.
