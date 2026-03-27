@@ -553,6 +553,69 @@ describe('WebSocket Relay', () => {
     ws.close();
   });
 
+  // ── heartbeat tests ────────────────────────────────────────────────────────
+
+  it('heartbeat message stores capacity data in relay state', async () => {
+    await registerAgent('agent-hb');
+
+    const ws = clients[clients.length - 1]!;
+    send(ws, {
+      type: 'heartbeat',
+      owner: 'agent-hb',
+      capacity: {
+        current_load: 2,
+        max_concurrent: 5,
+        queue_depth: 1,
+      },
+      self_summary: {
+        capabilities: ['tts', 'stt'],
+        success_rate: 0.95,
+        credit_balance: 150,
+        total_completed: 42,
+        provider_number: 7,
+        reliability: {
+          current_streak: 10,
+          repeat_hire_rate: 0.3,
+          avg_feedback: 4.5,
+        },
+      },
+    });
+
+    // Wait for message processing
+    await new Promise((r) => setTimeout(r, 50));
+
+    const capacity = relayState.getAgentCapacity?.('agent-hb');
+    expect(capacity).toBeDefined();
+    expect(capacity!.current_load).toBe(2);
+    expect(capacity!.max_concurrent).toBe(5);
+    expect(capacity!.queue_depth).toBe(1);
+  });
+
+  it('heartbeat capacity data cleared on disconnect', async () => {
+    const ws = await registerAgent('agent-hb-dc');
+
+    send(ws, {
+      type: 'heartbeat',
+      owner: 'agent-hb-dc',
+      capacity: { current_load: 1, max_concurrent: 3, queue_depth: 0 },
+      self_summary: {
+        capabilities: [],
+        success_rate: 1.0,
+        credit_balance: 100,
+        total_completed: 5,
+        provider_number: 1,
+        reliability: { current_streak: 5, repeat_hire_rate: 0, avg_feedback: 0 },
+      },
+    });
+
+    await new Promise((r) => setTimeout(r, 50));
+    expect(relayState.getAgentCapacity?.('agent-hb-dc')).toBeDefined();
+
+    ws.close();
+    await new Promise((r) => setTimeout(r, 100));
+    expect(relayState.getAgentCapacity?.('agent-hb-dc')).toBeUndefined();
+  });
+
   it('relay_progress for unknown request is ignored (no crash)', async () => {
     const wsProvider = await registerAgent('provider3');
 

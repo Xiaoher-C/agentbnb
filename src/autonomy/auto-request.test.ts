@@ -534,4 +534,54 @@ describe('AutoRequestor.requestWithAutonomy', () => {
     expect(result.status).toBe('success');
     expect(result.peer).toBe('bob'); // Only bob's cheap card is eligible
   });
+
+  // ── load_factor scoring tests ──────────────────────────────────────────────
+
+  describe('scorePeers with load_factor', () => {
+    it('prefers less loaded agent when all else is equal', () => {
+      const cardA = makePeerCard({ owner: 'agent-a', metadata: { success_rate: 0.9 } });
+      const cardB = makePeerCard({ owner: 'agent-b', metadata: { success_rate: 0.9 } });
+
+      const candidates = [
+        { card: cardA, cost: 10, skillId: undefined, loadFactor: 0.2 }, // 80% loaded
+        { card: cardB, cost: 10, skillId: undefined, loadFactor: 0.9 }, // 10% loaded
+      ];
+
+      const scored = scorePeers(candidates, 'self');
+      expect(scored[0]!.card.owner).toBe('agent-b'); // Less loaded wins
+    });
+
+    it('load_factor=0 zeroes out the score (fully loaded agent)', () => {
+      const cardA = makePeerCard({ owner: 'agent-a', metadata: { success_rate: 0.9 } });
+      const cardB = makePeerCard({ owner: 'agent-b', metadata: { success_rate: 0.9 } });
+      const cardC = makePeerCard({ owner: 'agent-c', metadata: { success_rate: 0.9 } });
+
+      const candidates = [
+        { card: cardA, cost: 10, skillId: undefined, loadFactor: 0.0 }, // At capacity
+        { card: cardB, cost: 10, skillId: undefined, loadFactor: 1.0 }, // Idle
+        { card: cardC, cost: 10, skillId: undefined, loadFactor: 0.5 }, // Half loaded
+      ];
+
+      const scored = scorePeers(candidates, 'self');
+      // Agent at capacity should have score=0 (normLoad=0 zeroes the product)
+      const agentAScore = scored.find(s => s.card.owner === 'agent-a')!.rawScore;
+      expect(agentAScore).toBe(0);
+      // Idle agent should rank highest
+      expect(scored[0]!.card.owner).toBe('agent-b');
+    });
+
+    it('missing loadFactor defaults to 1.0 (fully available)', () => {
+      const cardA = makePeerCard({ owner: 'agent-a', metadata: { success_rate: 0.9 } });
+      const cardB = makePeerCard({ owner: 'agent-b', metadata: { success_rate: 0.9 } });
+
+      const candidates = [
+        { card: cardA, cost: 10, skillId: undefined }, // No loadFactor = 1.0
+        { card: cardB, cost: 10, skillId: undefined, loadFactor: 0.5 }, // Half loaded
+      ];
+
+      const scored = scorePeers(candidates, 'self');
+      // Agent-a should score higher (loadFactor 1.0 > 0.5)
+      expect(scored[0]!.card.owner).toBe('agent-a');
+    });
+  });
 });

@@ -2,6 +2,7 @@ import Database from 'better-sqlite3';
 import { randomUUID } from 'node:crypto';
 import { AgentBnBError } from '../types/index.js';
 import { registerProvider, getProviderNumber, getProviderBonus, getActiveVoucher, consumeVoucher } from './ledger.js';
+import { recordSuccessfulHire } from './reliability-metrics.js';
 
 /** Network fee rate applied to settled escrows (5%). */
 export const NETWORK_FEE_RATE = 0.05;
@@ -173,6 +174,13 @@ export function settleEscrow(
           'INSERT INTO credit_transactions (id, owner, amount, reason, reference_id, created_at) VALUES (?, ?, ?, ?, ?, ?)',
         ).run(randomUUID(), recipientOwner, bonusAmount, 'provider_bonus', escrowId, now);
       }
+    }
+
+    // Update reliability metrics — record successful hire
+    try {
+      recordSuccessfulHire(db, recipientOwner, escrow.owner);
+    } catch {
+      // Non-fatal — metrics collection should not block settlement
     }
   });
 

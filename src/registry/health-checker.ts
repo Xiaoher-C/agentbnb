@@ -1,4 +1,5 @@
 import type Database from 'better-sqlite3';
+import { recordAvailabilityCheck } from '../credit/reliability-metrics.js';
 
 /**
  * Options for configuring the HealthChecker.
@@ -14,6 +15,8 @@ export interface HealthCheckerOptions {
   pingTimeoutMs?: number;
   /** Returns owners currently connected via WebSocket (skip health check for these). */
   getWebSocketOwners?: () => string[];
+  /** Optional credit database for recording availability metrics. */
+  creditDb?: Database.Database;
 }
 
 /**
@@ -30,10 +33,12 @@ export class HealthChecker {
   private readonly checkIntervalMs: number;
   private readonly pingTimeoutMs: number;
   private readonly db: Database.Database;
+  private readonly creditDb?: Database.Database;
   private readonly getWebSocketOwners: () => string[];
 
   constructor(opts: HealthCheckerOptions) {
     this.db = opts.db;
+    this.creditDb = opts.creditDb;
     this.maxFailures = opts.maxFailures ?? 3;
     this.checkIntervalMs = opts.checkIntervalMs ?? 2 * 60 * 1000;
     this.pingTimeoutMs = opts.pingTimeoutMs ?? 5000;
@@ -75,6 +80,14 @@ export class HealthChecker {
       checked++;
 
       const reachable = await this.pingAgent(card.gateway_url);
+
+      // Record availability metric for reliability tracking
+      if (this.creditDb) {
+        try {
+          recordAvailabilityCheck(this.creditDb, card.owner, reachable);
+        } catch { /* non-fatal */ }
+      }
+
       if (!reachable) {
         const count = (this.failureCounts.get(card.id) ?? 0) + 1;
         this.failureCounts.set(card.id, count);

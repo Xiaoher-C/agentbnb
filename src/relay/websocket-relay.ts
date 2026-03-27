@@ -9,9 +9,11 @@ import {
   type RelayRequestMessage,
   type RelayResponseMessage,
   type RelayProgressMessage,
+  type HeartbeatMessage,
   type PendingRelayRequest,
   type RateLimitEntry,
   type RelayState,
+  type AgentCapacityData,
 } from './types.js';
 import { lookupCardPrice, holdForRelay, settleForRelay, releaseForRelay, calculateConductorFee } from './relay-credit.js';
 import { handleJobRelayResponse } from '../hub-agent/relay-bridge.js';
@@ -46,6 +48,8 @@ export function registerWebSocketRelay(
   const pendingRequests = new Map<string, PendingRelayRequest>();
   /** Rate limit state per owner */
   const rateLimits = new Map<string, RateLimitEntry>();
+  /** Agent capacity data from heartbeats */
+  const agentCapacities = new Map<string, AgentCapacityData>();
   /** Optional callback invoked when an agent registers (comes online) */
   let onAgentOnlineCallback: ((owner: string) => void) | undefined;
 
@@ -459,6 +463,7 @@ export function registerWebSocketRelay(
 
     connections.delete(owner);
     rateLimits.delete(owner);
+    agentCapacities.delete(owner);
     markOwnerOffline(owner);
 
     // Fail any pending requests targeting this now-disconnected provider
@@ -491,6 +496,14 @@ export function registerWebSocketRelay(
         }
       }
     }
+  }
+
+  /**
+   * Handle a heartbeat message from an agent.
+   * Stores capacity data for routing and Hub display.
+   */
+  function handleHeartbeat(msg: HeartbeatMessage): void {
+    agentCapacities.set(msg.owner, msg.capacity);
   }
 
   // Register WebSocket route — must be inside register() for @fastify/websocket to work correctly
@@ -548,6 +561,10 @@ export function registerWebSocketRelay(
             handleRelayProgress(msg);
             break;
 
+          case 'heartbeat':
+            handleHeartbeat(msg);
+            break;
+
           default:
             // Ignore other message types from agents
             break;
@@ -585,6 +602,7 @@ export function registerWebSocketRelay(
       }
       pendingRequests.clear();
       rateLimits.clear();
+      agentCapacities.clear();
     },
     setOnAgentOnline: (cb: (owner: string) => void) => {
       onAgentOnlineCallback = cb;
@@ -594,5 +612,7 @@ export function registerWebSocketRelay(
     sendMessage: (ws: unknown, msg: Record<string, unknown>) => {
       sendMessage(ws as WebSocket, msg);
     },
+    getAgentCapacity: (owner: string) => agentCapacities.get(owner),
+    getAllCapacities: () => new Map(agentCapacities),
   };
 }

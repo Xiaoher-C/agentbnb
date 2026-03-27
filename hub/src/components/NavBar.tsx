@@ -255,6 +255,12 @@ export default function NavBar({ apiKey, balance, onLogout }: NavBarProps): JSX.
         >
           Credit Policy
         </NavLink>
+        <NavLink
+          to="/fleet"
+          className={({ isActive }) => navTabClass(isActive)}
+        >
+          Fleet Console
+        </NavLink>
         <MyAgentDropdown />
       </nav>
 
@@ -306,6 +312,13 @@ export default function NavBar({ apiKey, balance, onLogout }: NavBarProps): JSX.
             className={({ isActive }) => `${navTabClass(isActive)} block`}
           >
             Credit Policy
+          </NavLink>
+          <NavLink
+            to="/fleet"
+            onClick={() => setMenuOpen(false)}
+            className={({ isActive }) => `${navTabClass(isActive)} block`}
+          >
+            Fleet Console
           </NavLink>
           <NavLink
             to="/myagent"

@@ -93,7 +93,7 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
       openapi: '3.0.3',
       info: {
         title: 'AgentBnB Registry API',
-        description: 'P2P Agent Capability Sharing Protocol — discover, publish, and exchange agent capabilities',
+        description: 'Where AI agents hire AI agents — discover, publish, and coordinate agent capabilities',
         version: '3.1.6',
       },
       servers: [{ url: '/', description: 'Registry server' }],
@@ -1639,6 +1639,135 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
       });
     });
   }
+
+  /**
+   * GET /api/providers/:owner/reliability — Provider reliability metrics.
+   */
+  api.get('/api/providers/:owner/reliability', {
+    schema: {
+      tags: ['agents'],
+      summary: 'Get provider reliability metrics',
+      params: { type: 'object', properties: { owner: { type: 'string' } }, required: ['owner'] },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            current_streak: { type: 'integer' },
+            longest_streak: { type: 'integer' },
+            total_hires: { type: 'integer' },
+            repeat_hires: { type: 'integer' },
+            repeat_hire_rate: { type: 'number' },
+            avg_feedback_score: { type: 'number' },
+            availability_rate: { type: 'number' },
+          },
+        },
+        404: { type: 'object', properties: { error: { type: 'string' } } },
+      },
+    },
+  }, async (request, reply) => {
+    const { owner } = request.params as { owner: string };
+    if (!opts.creditDb) {
+      return reply.code(404).send({ error: 'Credit system not enabled' });
+    }
+    const { getReliabilityMetrics } = await import('../credit/reliability-metrics.js');
+    const metrics = getReliabilityMetrics(opts.creditDb, owner);
+    if (!metrics) {
+      return reply.code(404).send({ error: 'No reliability data for this provider' });
+    }
+    return reply.send(metrics);
+  });
+
+  /**
+   * GET /api/fleet/:owner — Agent fleet overview for the given owner.
+   * Returns all cards owned by the account with per-agent metrics.
+   */
+  api.get('/api/fleet/:owner', {
+    schema: {
+      tags: ['agents'],
+      summary: 'Agent fleet overview for an owner',
+      params: { type: 'object', properties: { owner: { type: 'string' } }, required: ['owner'] },
+      response: {
+        200: { type: 'object', properties: { agents: { type: 'array' } } },
+      },
+    },
+  }, async (request, reply) => {
+    const { owner } = request.params as { owner: string };
+
+    // Get all cards for this owner
+    const rows = db.prepare(
+      'SELECT id, data FROM capability_cards WHERE owner = ?',
+    ).all(owner) as Array<{ id: string; data: string }>;
+
+    const agents = [];
+    for (const row of rows) {
+      try {
+        const card = JSON.parse(row.data);
+
+        // Per-agent earnings/spend from credit transactions
+        let earnings = 0;
+        let spend = 0;
+        if (opts.creditDb) {
+          const earningRow = opts.creditDb.prepare(
+            "SELECT COALESCE(SUM(amount), 0) as total FROM credit_transactions WHERE owner = ? AND reason = 'settlement' AND amount > 0",
+          ).get(owner) as { total: number };
+          earnings = earningRow.total;
+          const spendRow = opts.creditDb.prepare(
+            "SELECT COALESCE(SUM(ABS(amount)), 0) as total FROM credit_transactions WHERE owner = ? AND reason = 'escrow_hold'",
+          ).get(owner) as { total: number };
+          spend = spendRow.total;
+        }
+
+        // Per-agent request stats from request_log
+        const successCount = (db.prepare(
+          "SELECT COUNT(*) as cnt FROM request_log WHERE card_id = ? AND status = 'success' AND (action_type IS NULL OR action_type = 'auto_share')",
+        ).get(row.id) as { cnt: number }).cnt;
+
+        const failureCount = (db.prepare(
+          "SELECT COUNT(*) as cnt FROM request_log WHERE card_id = ? AND status IN ('failure', 'timeout', 'refunded') AND (action_type IS NULL OR action_type = 'auto_share')",
+        ).get(row.id) as { cnt: number }).cnt;
+
+        const totalExec = successCount + failureCount;
+        const successRate = totalExec > 0 ? successCount / totalExec : 0;
+
+        // Failure breakdown by failure_reason
+        let failureBreakdown: Record<string, number> = {};
+        try {
+          const failureRows = db.prepare(
+            "SELECT failure_reason, COUNT(*) as cnt FROM request_log WHERE card_id = ? AND status IN ('failure', 'timeout', 'refunded') AND failure_reason IS NOT NULL GROUP BY failure_reason",
+          ).all(row.id) as Array<{ failure_reason: string; cnt: number }>;
+          for (const fr of failureRows) {
+            failureBreakdown[fr.failure_reason] = fr.cnt;
+          }
+        } catch {
+          // failure_reason column may not exist in older schemas
+        }
+
+        // Reliability metrics
+        let reliability = null;
+        if (opts.creditDb) {
+          const { getReliabilityMetrics } = await import('../credit/reliability-metrics.js');
+          reliability = getReliabilityMetrics(opts.creditDb, owner);
+        }
+
+        agents.push({
+          id: row.id,
+          name: card.name ?? card.agent_name ?? owner,
+          online: card.availability?.online ?? false,
+          current_load: 0, // Will be populated from relay heartbeat data in future
+          success_rate: successRate,
+          total_executions: totalExec,
+          earnings,
+          spend,
+          failure_breakdown: failureBreakdown,
+          reliability,
+        });
+      } catch {
+        // Skip malformed cards
+      }
+    }
+
+    return reply.send({ agents });
+  });
 
   }); // end of API routes plugin
 
