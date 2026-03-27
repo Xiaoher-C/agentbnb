@@ -592,8 +592,6 @@ export interface PersistedRuntimeInfo {
   detected_at?: string;
 }
 
-const require = createRequire(import.meta.url);
-
 /**
  * Reads persisted runtime info from ~/.agentbnb/runtime.json.
  */

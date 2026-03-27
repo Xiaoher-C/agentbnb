@@ -74,15 +74,6 @@ export function recordSuccessfulHire(
   const now = new Date().toISOString();
   ensureRow(db, providerOwner);
 
-  // Check for repeat hire: same consumer hired same provider before
-  const prevHire = db.prepare(
-    `SELECT 1 FROM credit_escrow
-     WHERE owner = ? AND status = 'settled' AND card_id IN (
-       SELECT card_id FROM credit_escrow WHERE owner = ? AND status = 'settled'
-     )
-     LIMIT 1`,
-  ).get(consumerOwner, consumerOwner);
-
   // Check repeat hire by looking at settlement transactions for this provider from this consumer
   const isRepeat = db.prepare(
     `SELECT COUNT(*) as cnt FROM credit_transactions

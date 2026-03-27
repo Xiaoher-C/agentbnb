@@ -44,12 +44,9 @@ export function holdEscrow(
   const hold = db.transaction(() => {
     // Check for active voucher first
     const voucher = getActiveVoucher(db, owner);
-    let fundingSource: 'balance' | 'voucher' = 'balance';
-
     if (voucher && voucher.remaining >= amount) {
       // Use voucher instead of balance
       consumeVoucher(db, voucher.id, amount);
-      fundingSource = 'voucher';
 
       db.prepare(
         'INSERT INTO credit_escrow (id, owner, amount, card_id, status, created_at, funding_source) VALUES (?, ?, ?, ?, ?, ?, ?)',
