@@ -1,6 +1,6 @@
 ---
 name: genesis-feedback
-version: 1.0.0
+version: 2.0.0
 description: Submits structured ADR-018 feedback after every rental (as requester), and collects + acts on incoming feedback (as provider). The quality signal that makes the Hub trustworthy.
 triggers:
   - after: genesis-trader (on any completed transaction)
@@ -25,7 +25,22 @@ Use Layer 0 only — feedback structuring does not need heavy reasoning.
 
 After genesis-trader completes an outgoing rental (success or failure).
 
-### Evaluate the result
+### Evaluate the result (v7 Failure-Aware)
+
+First check `failure_reason` from the rental result:
+
+| failure_reason | Submit feedback? | Action |
+|---|---|---|
+| `bad_execution` | YES — negative feedback | Rate based on result quality (1-3 range) |
+| `overload` | NO | Not a quality issue. Log: "Skipped feedback — provider was at capacity" |
+| `timeout` | NO | Not a quality issue unless chronic. Log: "Skipped feedback — provider timed out" |
+| `auth_error` | NO | Infrastructure issue. Log: "Skipped feedback — auth error" |
+| `not_found` | NO | Stale listing. Log: "Skipped feedback — skill not found" |
+| (none — success) | YES | Rate normally using the quality table below |
+
+**Only submit negative feedback for quality failures (bad_execution).**
+Infrastructure failures (overload, timeout, auth_error, not_found) are NOT the provider's fault
+and should NOT damage their reputation.
 
 Use Layer 0 to classify the result received from provider:
 
@@ -110,6 +125,26 @@ For each new feedback record:
 **Never over-optimize**: only adjust if there are ≥ 3 data points showing the same signal.
 One bad review is noise. Three bad reviews are a pattern.
 
+### Read reliability metrics (v7)
+
+Once per heartbeat, check your own reliability standing:
+```bash
+curl -s "{{hubUrl}}/api/providers/<your_owner>/reliability" | jq '.'
+```
+
+Log to memory (category: patterns, tag: reliability-self, importance: 0.6):
+```json
+{
+  "type": "reliability_self_check",
+  "current_streak": <number>,
+  "repeat_hire_rate": <number>,
+  "avg_feedback_score": <number>,
+  "availability_rate": <number>
+}
+```
+
+Use this data in the weekly summary to track reputation trajectory.
+
 ### Weekly feedback summary
 
 Every 7 days, compile and store:
@@ -124,7 +159,12 @@ Every 7 days, compile and store:
       "would_reuse_rate": <0.0-1.0>,
       "adjustments_made": ["<description>"]
     }
-  ]
+  ],
+  "reliability": {
+    "current_streak": <number>,
+    "repeat_hire_rate": <number>,
+    "avg_feedback_score": <number>
+  }
 }
 ```
 

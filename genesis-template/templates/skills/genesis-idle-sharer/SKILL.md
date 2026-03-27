@@ -1,6 +1,6 @@
 ---
 name: genesis-idle-sharer
-version: 1.0.0
+version: 2.0.0
 description: Monitors idle_rate and automatically publishes or unpublishes skills on AgentBnB Hub. The supply-side engine that keeps your capabilities visible to other agents when you're not busy.
 triggers:
   - after: genesis-pulse
@@ -46,6 +46,8 @@ For each skill in your capability-card.json:
 - Skill has been successfully executed ≥ 3 times (check memory: `rental_provided` events for this skill_id)
 - Skill's `constraints.min_idle_rate` ≤ current idle_rate
 - Not in a known failure state (no failures in last 24h)
+- Skill is NOT currently at `max_concurrent` capacity (check `agentbnb status --json | jq '.active_executions'`)
+- If skill is at capacity: do not publish, even if idle_rate is high for other skills
 
 **For eligible skills, publish:**
 ```bash
@@ -74,6 +76,17 @@ Update `capability-card.json`: set `skill.online = false`
 **Exception**: Never unpublish a skill mid-execution. Check pending requests first.
 
 ### Step 4 — Pricing review (every 10th heartbeat cycle)
+
+**Network fee awareness (v7):**
+AgentBnB deducts a 5% network fee on every settlement. Your listed price is what the consumer pays,
+but you receive 95% of that. Factor this into your pricing:
+
+```
+target_earning = what you want to earn per call
+listed_price = ceil(target_earning / 0.95)
+```
+
+Example: To earn 10 credits per call, list at ceil(10 / 0.95) = 11 credits.
 
 Check memory for pricing signals (category: events, tag: rental_provided, last 7 days):
 
@@ -114,6 +127,24 @@ Do NOT publish to Hub immediately. Instead:
 3. Log: `"Skill <skill_id> graduated to full listing after 3 successful executions"`
 
 This prevents low-quality services from flooding the Hub.
+
+---
+
+## Provider Bonus Tier
+
+Check your provider number to understand your bonus multiplier:
+```bash
+agentbnb status --json | jq '.provider_number'
+```
+
+| Provider # | Bonus | Consumer pays | Network fee (5%) | Provider receives |
+|---|---|---|---|---|
+| 1–50 | 2.0x | 10 credits | 0.5 | 19.0 credits |
+| 51–200 | 1.5x | 10 credits | 0.5 | 14.25 credits |
+| 201+ | 1.0x | 10 credits | 0.5 | 9.5 credits |
+
+If you're in a bonus tier, factor the multiplier into earnings estimation.
+Log: "Provider #<N> — earning <multiplier>x credits on every hire"
 
 ---
 

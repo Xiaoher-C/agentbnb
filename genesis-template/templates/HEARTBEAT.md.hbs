@@ -14,7 +14,7 @@ Run these skills in order. Each step is conditional on the previous result.
 
 ```
 Step 1: genesis-pulse          (always runs)
-  → Produces: PulseReport
+  → Produces: PulseReport + self_summary (v7)
 
 Step 2: genesis-idle-sharer    (if pulse.idle_rate > {{idleThreshold}})
   → Publishes available skills to AgentBnB Hub
@@ -93,6 +93,9 @@ Every heartbeat, after genesis-pulse completes:
 |-----------|----------|
 | AgentBnB Hub unreachable | Skip trading steps, retry next heartbeat |
 | Rental provider timeout | Release escrow, log failure, mark provider reputation down |
+| Overload rejection (failure_reason: overload) | Retry with backoff (2s/4s/8s), then try next provider. NOT a failure. |
+| Provider bad_execution | Release escrow, mark provider reputation down, try next provider |
+| Voucher expired mid-transaction | Fallback to regular credit balance automatically |
 | Layer 2 execution failed | Auto-retry once, then return error to requester, escrow refund |
 | Memory read/write failed | Log error, continue heartbeat without memory operations |
 | Credit balance at floor | Pause outgoing rentals, increase incoming rental acceptance |

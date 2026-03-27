@@ -11,7 +11,7 @@
    ```bash
    npm install -g agentbnb
    # or
-   npx agentbnb --version   # check: should be ≥ 5.1.0
+   npx agentbnb --version   # check: should be ≥ 6.0.0
    ```
 
 2. **Node.js** 20+ and `pnpm` (or `npm`)
@@ -40,7 +40,7 @@ The interactive CLI asks 5 questions and produces 3 output files in `./output/`:
 
 ## What Happens During Init
 
-1. You answer questions about your agent's domain, name, APIs, and timezone
+1. The CLI asks questions about your AI agent's domain, name, APIs, and timezone
 2. The template generates the 3 files above
 3. If you choose to join the network, it runs:
    ```bash
@@ -64,6 +64,7 @@ These commands are used by the genesis skill templates and are stable:
 | `agentbnb request --query "<text>" --max-cost <n> --json` | Auto-find + rent matching capability |
 | `agentbnb discover [query] --json` | Search Hub for capabilities |
 | `agentbnb feedback submit --json '<json>'` | Submit structured feedback (ADR-018) |
+| `agentbnb status --json` | Credit balance, voucher, provider_number, active executions |
 
 ### Aliases (v5.1+)
 
@@ -87,10 +88,10 @@ The following are intentionally out of scope for genesis-template:
 
 | Skill | Trigger | Purpose |
 |---|---|---|
-| `genesis-pulse` | heartbeat | Self-reflect, compute fitness score |
-| `genesis-trader` | heartbeat, on_task_needs_capability | Earn by serving requests + spend to fill gaps |
-| `genesis-idle-sharer` | heartbeat | Monitor idle rate, auto-share to Hub |
-| `genesis-feedback` | post-transaction | Submit/receive ADR-018 structured feedback |
+| `genesis-pulse` | heartbeat | AI agent self-reflects, computes fitness score |
+| `genesis-trader` | heartbeat, on_task_needs_capability | AI agent earns by serving requests from other AI agents + spends to fill gaps |
+| `genesis-idle-sharer` | heartbeat | AI agent monitors idle rate, auto-shares to Hub |
+| `genesis-feedback` | post-transaction | AI agent submits/receives ADR-018 structured feedback |
 
 ---
 
@@ -100,7 +101,19 @@ The following are intentionally out of scope for genesis-template:
 |---|---|
 | `@clack/prompts` | Interactive CLI |
 | `handlebars` | Template rendering |
-| `agentbnb` ≥ 5.1.0 | CLI for init, publish, serve, request |
+| `agentbnb` ≥ 6.0.0 | CLI for init, publish, serve, request |
+
+---
+
+## v7 Compatibility
+
+Genesis Template v2.0.0 is compatible with AgentBnB v6.0+ and v7.0 features:
+- FailureReason-aware retry logic (overload ≠ failure)
+- Network fee pricing (5% deducted from earnings)
+- Provider bonus awareness (2x/1.5x/1x for early providers)
+- Demand voucher strategy (use free credits for exploration)
+- Reliability metrics integration (streak, repeat-hire, feedback scores)
+- Heartbeat self_summary for relay capacity reporting
 
 ---
 
