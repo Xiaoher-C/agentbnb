@@ -1,6 +1,7 @@
 import Database from 'better-sqlite3';
 import { randomUUID } from 'node:crypto';
 import { AgentBnBError } from '../types/index.js';
+import { ensureReliabilityTable } from './reliability-metrics.js';
 
 /**
  * A single credit transaction record
@@ -80,6 +81,9 @@ export function openCreditDb(path: string = ':memory:'): Database.Database {
   } catch {
     // Column already exists — ignore
   }
+
+  // Create provider_reliability_metrics table
+  ensureReliabilityTable(db);
 
   return db;
 }

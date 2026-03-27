@@ -92,6 +92,12 @@ export interface Candidate {
    * by IdleMonitor. When set, scorePeers() prefers this over card-level _internal.
    */
   skillInternal?: Record<string, unknown>;
+  /**
+   * Load factor from heartbeat capacity data.
+   * Computed as 1.0 - (current_load / max_concurrent).
+   * Range: 0.0 (fully loaded) to 1.0 (idle). Undefined = assume 1.0.
+   */
+  loadFactor?: number;
 }
 
 /**
@@ -139,6 +145,10 @@ export function minMaxNormalize(values: number[]): number[] {
  * - cost_efficiency: 1/credits_per_call (zero-cost cards get max efficiency of 1)
  * - idle_rate: from skill-level _internal.idle_rate if available (v2.0 multi-skill),
  *   otherwise falls back to card._internal.idle_rate (missing = 1.0, maximally idle)
+ * - load_factor: from heartbeat capacity data (1.0 - current_load/max_concurrent).
+ *   Missing = 1.0 (assume fully available).
+ *
+ * Composite: success_rate × cost_efficiency × idle_rate × load_factor
  *
  * Self-exclusion: candidates where card.owner === selfOwner are filtered out.
  * Results are sorted by rawScore descending (best first).
@@ -179,15 +189,19 @@ export function scorePeers(candidates: Candidate[], selfOwner: string): ScoredPe
     return typeof idleRate === 'number' ? idleRate : 1.0;
   });
 
+  // Load factor: 1.0 - (current_load / max_concurrent), default 1.0 (fully available)
+  const loadFactors = eligible.map((c) => c.loadFactor ?? 1.0);
+
   // Normalize each dimension
   const normSuccess = minMaxNormalize(successRates);
   const normCost = minMaxNormalize(costEfficiencies);
   const normIdle = minMaxNormalize(idleRates);
+  const normLoad = minMaxNormalize(loadFactors);
 
   // Combine dimensions multiplicatively
   const scored: ScoredPeer[] = eligible.map((c, i) => ({
     ...c,
-    rawScore: (normSuccess[i] ?? 0) * (normCost[i] ?? 0) * (normIdle[i] ?? 0),
+    rawScore: (normSuccess[i] ?? 0) * (normCost[i] ?? 0) * (normIdle[i] ?? 0) * (normLoad[i] ?? 0),
   }));
 
   // Sort descending by score

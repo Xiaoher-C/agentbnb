@@ -82,6 +82,29 @@ export const RelayProgressMessageSchema = z.object({
   message: z.string().optional(), // optional status message
 });
 
+/** Agent → Registry: Heartbeat with capacity data and self summary */
+export const HeartbeatMessageSchema = z.object({
+  type: z.literal('heartbeat'),
+  owner: z.string().min(1),
+  capacity: z.object({
+    current_load: z.number(),
+    max_concurrent: z.number(),
+    queue_depth: z.number(),
+  }),
+  self_summary: z.object({
+    capabilities: z.array(z.string()),
+    success_rate: z.number(),
+    credit_balance: z.number(),
+    total_completed: z.number(),
+    provider_number: z.number(),
+    reliability: z.object({
+      current_streak: z.number(),
+      repeat_hire_rate: z.number(),
+      avg_feedback: z.number(),
+    }),
+  }),
+});
+
 /** Discriminated union of all relay messages */
 export const RelayMessageSchema = z.discriminatedUnion('type', [
   RegisterMessageSchema,
@@ -92,6 +115,7 @@ export const RelayMessageSchema = z.discriminatedUnion('type', [
   ResponseMessageSchema,
   ErrorMessageSchema,
   RelayProgressMessageSchema,
+  HeartbeatMessageSchema,
 ]);
 
 // TypeScript types derived from Zod schemas
@@ -103,6 +127,7 @@ export type RelayResponseMessage = z.infer<typeof RelayResponseMessageSchema>;
 export type ResponseMessage = z.infer<typeof ResponseMessageSchema>;
 export type ErrorMessage = z.infer<typeof ErrorMessageSchema>;
 export type RelayProgressMessage = z.infer<typeof RelayProgressMessageSchema>;
+export type HeartbeatMessage = z.infer<typeof HeartbeatMessageSchema>;
 export type RelayMessage = z.infer<typeof RelayMessageSchema>;
 
 /** Rate limit state per agent */
@@ -126,6 +151,27 @@ export interface PendingRelayRequest {
   jobId?: string;
 }
 
+/** Capacity data reported by agent heartbeats */
+export interface AgentCapacityData {
+  current_load: number;
+  max_concurrent: number;
+  queue_depth: number;
+}
+
+/** Self-summary data reported by agent heartbeats */
+export interface AgentSelfSummary {
+  capabilities: string[];
+  success_rate: number;
+  credit_balance: number;
+  total_completed: number;
+  provider_number: number;
+  reliability: {
+    current_streak: number;
+    repeat_hire_rate: number;
+    avg_feedback: number;
+  };
+}
+
 /** Relay server state returned from registerWebSocketRelay */
 export interface RelayState {
   /** Number of currently connected agents */
@@ -142,4 +188,8 @@ export interface RelayState {
   getPendingRequests?(): Map<string, PendingRelayRequest>;
   /** Send a JSON message over a WebSocket */
   sendMessage?(ws: unknown, msg: Record<string, unknown>): void;
+  /** Get capacity data for an agent (from heartbeat) */
+  getAgentCapacity?(owner: string): AgentCapacityData | undefined;
+  /** Get all agent capacity data */
+  getAllCapacities?(): Map<string, AgentCapacityData>;
 }

@@ -33,6 +33,7 @@ import CreateAgentPage from './pages/CreateAgentPage.js';
 import HubAgentDashboardPage from './pages/HubAgentDashboardPage.js';
 import GenesisPage from './pages/GenesisPage.js';
 import CreditPolicyPage from './pages/CreditPolicyPage.js';
+import FleetConsolePage from './pages/FleetConsolePage.js';
 import type { AppOutletContext } from './types.js';
 
 /** Wrapper: reads apiKey from outlet context and passes it to SharePage */
@@ -87,6 +88,7 @@ const router = createHashRouter([
       },
       { path: 'genesis', element: <GenesisPage /> },
       { path: 'credit-policy', element: <CreditPolicyPage /> },
+      { path: 'fleet', element: <FleetConsolePage /> },
       { path: 'share', element: <SharePageWrapper /> },
       { path: 'myagent', element: <MyAgentWrapper /> },
       {
