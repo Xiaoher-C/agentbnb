@@ -72,10 +72,15 @@ export class ServiceCoordinator {
       if (health.ok && health.agentbnb) {
         return 'already_running';
       }
-      throw new AgentBnBError(
-        `AgentBnB lock exists but health check failed (pid=${running.pid}, port=${running.port})`,
-        'SERVICE_UNHEALTHY',
-      );
+      // In foreground mode (e.g. Docker), auto-clear stale locks from previous crashes
+      if (opts?.foreground) {
+        this.guard.release();
+      } else {
+        throw new AgentBnBError(
+          `AgentBnB lock exists but health check failed (pid=${running.pid}, port=${running.port})`,
+          'SERVICE_UNHEALTHY',
+        );
+      }
     }
 
     if (opts?.foreground) {
