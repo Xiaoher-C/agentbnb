@@ -3,7 +3,7 @@
   "workspaces": [
     "packages/*"
   ],
-  "version": "6.0.0",
+  "version": "7.0.0-beta.1",
   "description": "P2P Agent Capability Sharing Protocol — Airbnb for AI agent pipelines",
   "type": "module",
   "main": "dist/index.js",
