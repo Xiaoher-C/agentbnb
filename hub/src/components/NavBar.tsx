@@ -1,20 +1,34 @@
 /**
  * NavBar — Top navigation bar for the AgentBnB Hub SPA.
  *
- * Left: "AgentBnB" title
- * Right: if authenticated — credit balance badge + Disconnect button
- *        if not authenticated — GetStartedCTA button
- * Desktop tabs: Discover | Agents | Activity | Docs | My Agent (dropdown)
- * Mobile: Hamburger button opens a vertical drawer with all nav items flat
+ * Public (unauthenticated): Discover | Docs | For Providers
+ * Authenticated: Discover | Docs | My Agent [dropdown] | Fleet | Credit Policy | Activity
  *
- * Uses react-router NavLink for active-state styling on all link tabs.
- * My Agent is a custom dropdown on desktop (Dashboard / Share / Settings),
- * expanded inline in the mobile drawer for better UX.
+ * Mobile: Hamburger button opens a vertical drawer with all nav items flat.
  */
-import { useState, useRef, useEffect } from 'react';
-import { NavLink } from 'react-router';
+import { useState, useRef, useEffect, useCallback } from 'react';
+import { NavLink, useNavigate } from 'react-router';
 import { ChevronDown, Menu, X } from 'lucide-react';
 import GetStartedCTA from './GetStartedCTA.js';
+
+/** Scroll to an element on the Discover page. Navigates to / first if needed. */
+function useScrollTo() {
+  const navigate = useNavigate();
+  return useCallback((id: string) => {
+    const el = document.getElementById(id);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth' });
+    } else {
+      // Not on Discover page — navigate there, then scroll after render
+      navigate('/');
+      requestAnimationFrame(() => {
+        setTimeout(() => {
+          document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' });
+        }, 100);
+      });
+    }
+  }, [navigate]);
+}
 
 export interface NavBarProps {
   apiKey: string | null;
@@ -108,11 +122,13 @@ function MyAgentDropdown(): JSX.Element {
 }
 
 /**
- * Top navigation bar with title, 5 tabs, credit badge or CTA, and My Agent dropdown.
+ * Top navigation bar with public/auth split.
  * Collapses to hamburger menu on mobile (< 768px / md breakpoint).
  */
 export default function NavBar({ apiKey, balance, onLogout }: NavBarProps): JSX.Element {
   const [menuOpen, setMenuOpen] = useState(false);
+  const isAuthed = !!apiKey;
+  const scrollTo = useScrollTo();
 
   // iOS-safe scroll lock when mobile drawer is open (position-fixed technique)
   useEffect(() => {
@@ -197,7 +213,7 @@ export default function NavBar({ apiKey, balance, onLogout }: NavBarProps): JSX.
             {menuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
           </button>
 
-          {apiKey ? (
+          {isAuthed ? (
             <>
               <NavCreditBadge balance={balance} />
               <button
@@ -225,43 +241,51 @@ export default function NavBar({ apiKey, balance, onLogout }: NavBarProps): JSX.
         >
           Discover
         </NavLink>
-        <NavLink
-          to="/agents"
-          className={({ isActive }) => navTabClass(isActive)}
-        >
-          Agents
-        </NavLink>
-        <NavLink
-          to="/activity"
-          className={({ isActive }) => navTabClass(isActive)}
-        >
-          Activity
-        </NavLink>
-        <NavLink
-          to="/docs"
-          className={({ isActive }) => navTabClass(isActive)}
-        >
-          Docs
-        </NavLink>
-        <NavLink
-          to="/genesis"
-          className={({ isActive }) => navTabClass(isActive)}
-        >
-          Genesis
-        </NavLink>
-        <NavLink
-          to="/credit-policy"
-          className={({ isActive }) => navTabClass(isActive)}
-        >
-          Credit Policy
-        </NavLink>
-        <NavLink
-          to="/fleet"
-          className={({ isActive }) => navTabClass(isActive)}
-        >
-          Fleet Console
-        </NavLink>
-        <MyAgentDropdown />
+
+        {isAuthed ? (
+          <>
+            <NavLink
+              to="/docs"
+              className={({ isActive }) => navTabClass(isActive)}
+            >
+              Docs
+            </NavLink>
+            <MyAgentDropdown />
+            <NavLink
+              to="/fleet"
+              className={({ isActive }) => navTabClass(isActive)}
+            >
+              Fleet Console
+            </NavLink>
+            <NavLink
+              to="/credit-policy"
+              className={({ isActive }) => navTabClass(isActive)}
+            >
+              Credit Policy
+            </NavLink>
+            <NavLink
+              to="/activity"
+              className={({ isActive }) => navTabClass(isActive)}
+            >
+              Activity
+            </NavLink>
+          </>
+        ) : (
+          <>
+            <NavLink
+              to="/docs"
+              className={({ isActive }) => navTabClass(isActive)}
+            >
+              Docs
+            </NavLink>
+            <button
+              onClick={() => scrollTo('for-providers')}
+              className={navTabClass(false)}
+            >
+              For Providers
+            </button>
+          </>
+        )}
       </nav>
 
       {/* Mobile drawer — full-width vertical nav, shown only when menuOpen */}
@@ -278,76 +302,83 @@ export default function NavBar({ apiKey, balance, onLogout }: NavBarProps): JSX.
           >
             Discover
           </NavLink>
-          <NavLink
-            to="/agents"
-            onClick={() => setMenuOpen(false)}
-            className={({ isActive }) => `${navTabClass(isActive)} block`}
-          >
-            Agents
-          </NavLink>
-          <NavLink
-            to="/activity"
-            onClick={() => setMenuOpen(false)}
-            className={({ isActive }) => `${navTabClass(isActive)} block`}
-          >
-            Activity
-          </NavLink>
-          <NavLink
-            to="/docs"
-            onClick={() => setMenuOpen(false)}
-            className={({ isActive }) => `${navTabClass(isActive)} block`}
-          >
-            Docs
-          </NavLink>
-          <NavLink
-            to="/genesis"
-            onClick={() => setMenuOpen(false)}
-            className={({ isActive }) => `${navTabClass(isActive)} block`}
-          >
-            Genesis
-          </NavLink>
-          <NavLink
-            to="/credit-policy"
-            onClick={() => setMenuOpen(false)}
-            className={({ isActive }) => `${navTabClass(isActive)} block`}
-          >
-            Credit Policy
-          </NavLink>
-          <NavLink
-            to="/fleet"
-            onClick={() => setMenuOpen(false)}
-            className={({ isActive }) => `${navTabClass(isActive)} block`}
-          >
-            Fleet Console
-          </NavLink>
-          <NavLink
-            to="/myagent"
-            onClick={() => setMenuOpen(false)}
-            className={({ isActive }) => `${navTabClass(isActive)} block`}
-          >
-            Dashboard
-          </NavLink>
-          <NavLink
-            to="/share"
-            onClick={() => setMenuOpen(false)}
-            className={({ isActive }) => `${navTabClass(isActive)} block`}
-          >
-            Share
-          </NavLink>
-          <NavLink
-            to="/settings"
-            onClick={() => setMenuOpen(false)}
-            className={({ isActive }) => `${navTabClass(isActive)} block`}
-          >
-            Settings
-          </NavLink>
-          <NavLink
-            to="/agents/hub"
-            onClick={() => setMenuOpen(false)}
-            className={({ isActive }) => `${navTabClass(isActive)} block`}
-          >
-            Hub Agents
-          </NavLink>
+
+          {isAuthed ? (
+            <>
+              <NavLink
+                to="/docs"
+                onClick={() => setMenuOpen(false)}
+                className={({ isActive }) => `${navTabClass(isActive)} block`}
+              >
+                Docs
+              </NavLink>
+              <NavLink
+                to="/myagent"
+                onClick={() => setMenuOpen(false)}
+                className={({ isActive }) => `${navTabClass(isActive)} block`}
+              >
+                Dashboard
+              </NavLink>
+              <NavLink
+                to="/share"
+                onClick={() => setMenuOpen(false)}
+                className={({ isActive }) => `${navTabClass(isActive)} block`}
+              >
+                Share
+              </NavLink>
+              <NavLink
+                to="/settings"
+                onClick={() => setMenuOpen(false)}
+                className={({ isActive }) => `${navTabClass(isActive)} block`}
+              >
+                Settings
+              </NavLink>
+              <NavLink
+                to="/agents/hub"
+                onClick={() => setMenuOpen(false)}
+                className={({ isActive }) => `${navTabClass(isActive)} block`}
+              >
+                Hub Agents
+              </NavLink>
+              <NavLink
+                to="/fleet"
+                onClick={() => setMenuOpen(false)}
+                className={({ isActive }) => `${navTabClass(isActive)} block`}
+              >
+                Fleet Console
+              </NavLink>
+              <NavLink
+                to="/credit-policy"
+                onClick={() => setMenuOpen(false)}
+                className={({ isActive }) => `${navTabClass(isActive)} block`}
+              >
+                Credit Policy
+              </NavLink>
+              <NavLink
+                to="/activity"
+                onClick={() => setMenuOpen(false)}
+                className={({ isActive }) => `${navTabClass(isActive)} block`}
+              >
+                Activity
+              </NavLink>
+            </>
+          ) : (
+            <>
+              <NavLink
+                to="/docs"
+                onClick={() => setMenuOpen(false)}
+                className={({ isActive }) => `${navTabClass(isActive)} block`}
+              >
+                Docs
+              </NavLink>
+              <button
+                onClick={() => { setMenuOpen(false); scrollTo('for-providers'); }}
+                className={`${navTabClass(false)} block text-left w-full`}
+              >
+                For Providers
+              </button>
+            </>
+          )}
         </nav>
       )}
     </header>

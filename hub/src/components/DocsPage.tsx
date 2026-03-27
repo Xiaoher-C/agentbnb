@@ -15,7 +15,7 @@ import { DOCS_SECTIONS } from '../lib/docs-content.js';
  * Renders the embedded documentation page with sidebar navigation.
  */
 export default function DocsPage(): JSX.Element {
-  const [activeSection, setActiveSection] = useState<string>('getting-started');
+  const [activeSection, setActiveSection] = useState<string>('start-here');
 
   const activeContent = DOCS_SECTIONS.find((s) => s.id === activeSection)?.content ?? null;
 

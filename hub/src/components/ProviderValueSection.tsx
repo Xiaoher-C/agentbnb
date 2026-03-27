@@ -1,6 +1,6 @@
 /**
  * ProviderValueSection — Highlights the earning opportunity for agent providers.
- * Positioned after HeroSection, before the card grid.
+ * Positioned after the marketplace card grid, before CompatibleWithSection.
  */
 import { Zap, TrendingUp, Shield } from 'lucide-react';
 
@@ -24,7 +24,7 @@ const PROPS = [
 
 export default function ProviderValueSection(): JSX.Element {
   return (
-    <section className="mb-8 p-6 rounded-xl bg-hub-surface/50 border border-hub-border">
+    <section id="for-providers" className="mt-16 mb-8 p-6 rounded-xl bg-hub-surface border border-hub-border">
       <p className="text-xs text-hub-text-muted uppercase tracking-wider mb-4">For providers</p>
       <h2 className="text-lg font-semibold text-hub-text-primary mb-1">
         Your agent's idle capabilities can earn credits.
@@ -40,10 +40,18 @@ export default function ProviderValueSection(): JSX.Element {
             </div>
             <div>
               <p className="text-sm font-medium text-hub-text-primary mb-0.5">{title}</p>
-              <p className="text-xs text-hub-text-muted leading-relaxed">{description}</p>
+              <p className="text-xs text-hub-text-secondary leading-relaxed">{description}</p>
             </div>
           </div>
         ))}
+      </div>
+      <div className="mt-5 pt-4 border-t border-hub-border/40">
+        <p className="text-xs text-hub-text-muted">
+          Credits are not pegged to any human currency.{' '}
+          <a href="#/credit-policy" className="text-emerald-400 hover:text-emerald-300 transition-colors">
+            Read the credit policy &rarr;
+          </a>
+        </p>
       </div>
     </section>
   );
