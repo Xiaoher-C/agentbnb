@@ -14,17 +14,32 @@ export interface RelayHandlerResult {
 }
 
 /** Options for the RelayClient constructor */
+/** V8 Phase 3: Additional agent to register on the same connection */
+export interface DelegatedAgent {
+  agent_id: string;
+  display_name: string;
+  cards: Record<string, unknown>[];
+  delegation_token?: Record<string, unknown>;
+}
+
+/** Options for the RelayClient constructor */
 export interface RelayClientOptions {
   /** Registry WebSocket URL (e.g., "wss://hub.agentbnb.dev/ws") */
   registryUrl: string;
   /** Agent owner identifier */
   owner: string;
+  /** V8: Cryptographic agent identity */
+  agent_id?: string;
+  /** V8 Phase 3: Server identifier for multi-agent delegation */
+  server_id?: string;
   /** Authentication token */
   token: string;
   /** Capability card data to register */
   card: Record<string, unknown>;
   /** Additional cards to register alongside the primary card (e.g., conductor card) */
   cards?: Record<string, unknown>[];
+  /** V8 Phase 3: Additional agents served by this connection */
+  agents?: DelegatedAgent[];
   /** Handler for incoming relay requests from other agents */
   onRequest: (req: IncomingRequestMessage) => Promise<RelayHandlerResult>;
   /** Suppress logging. Default false. */
@@ -34,6 +49,8 @@ export interface RelayClientOptions {
 /** Options for making a relay request to another agent */
 export interface RelayRequestOptions {
   targetOwner: string;
+  /** V8: Target agent's cryptographic identity. Preferred for routing. */
+  targetAgentId?: string;
   cardId: string;
   skillId?: string;
   params: Record<string, unknown>;
@@ -94,9 +111,12 @@ export class RelayClient {
         this.send({
           type: 'register',
           owner: this.opts.owner,
+          ...(this.opts.agent_id ? { agent_id: this.opts.agent_id } : {}),
+          ...(this.opts.server_id ? { server_id: this.opts.server_id } : {}),
           token: this.opts.token,
           card: this.opts.card,
           ...(this.opts.cards && this.opts.cards.length > 0 ? { cards: this.opts.cards } : {}),
+          ...(this.opts.agents && this.opts.agents.length > 0 ? { agents: this.opts.agents } : {}),
         });
       });
 
@@ -181,6 +201,7 @@ export class RelayClient {
         type: 'relay_request',
         id,
         target_owner: opts.targetOwner,
+        ...(opts.targetAgentId ? { target_agent_id: opts.targetAgentId } : {}),
         card_id: opts.cardId,
         skill_id: opts.skillId,
         params: opts.params,

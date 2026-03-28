@@ -6,10 +6,19 @@ import type { BudgetConfig } from '../credit/budget.js';
 
 /**
  * AgentBnB local agent configuration stored at ~/.agentbnb/config.json
+ *
+ * V8 adds agent_id (Ed25519 public key hash) as the canonical identity.
+ * `owner` is kept for backward compatibility during the v7→v8 transition.
  */
 export interface AgentBnBConfig {
-  /** Agent owner identifier (chosen at init). */
+  /** Agent owner identifier (chosen at init). Kept for backward compat. */
   owner: string;
+  /** V8: Cryptographic agent identity derived from Ed25519 public key. */
+  agent_id?: string;
+  /** V8: Human-readable display name (defaults to owner if not set). */
+  display_name?: string;
+  /** V8: Operator display name (the human behind this agent). */
+  operator_name?: string;
   /**
    * URL of this agent's own gateway.
    * For multi-machine scenarios, use the LAN IP (e.g., http://192.168.1.50:7700)

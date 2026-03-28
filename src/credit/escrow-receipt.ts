@@ -11,6 +11,7 @@ import type { EscrowReceipt } from '../types/index.js';
  */
 export const EscrowReceiptSchema = z.object({
   requester_owner: z.string().min(1),
+  requester_agent_id: z.string().optional(),
   requester_public_key: z.string().min(1),
   amount: z.number().positive(),
   card_id: z.string().min(1),
@@ -26,6 +27,8 @@ export const EscrowReceiptSchema = z.object({
 export interface CreateReceiptOpts {
   /** Agent owner identifier (requester). */
   owner: string;
+  /** V8: Cryptographic agent identity (preferred over owner). */
+  agent_id?: string;
   /** Number of credits to commit. */
   amount: number;
   /** Capability Card ID being requested. */
@@ -59,6 +62,7 @@ export function createSignedEscrowReceipt(
   // 2. Build receipt data (everything except signature)
   const receiptData: Omit<EscrowReceipt, 'signature'> = {
     requester_owner: opts.owner,
+    ...(opts.agent_id ? { requester_agent_id: opts.agent_id } : {}),
     requester_public_key: publicKey.toString('hex'),
     amount: opts.amount,
     card_id: opts.cardId,

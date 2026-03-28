@@ -311,6 +311,7 @@ export class ServiceCoordinator {
       this.relayClient = new RelayClient({
         registryUrl: opts.registryUrl,
         owner: this.config.owner,
+        agent_id: this.config.agent_id,
         token: this.config.token,
         card: card as Record<string, unknown>,
         cards: additionalCards.length > 0 ? additionalCards : undefined,

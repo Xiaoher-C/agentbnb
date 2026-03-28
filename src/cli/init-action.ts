@@ -15,6 +15,7 @@ import { detectOpenPorts, buildDraftCard } from './onboarding.js';
 import { detectCapabilities, capabilitiesToV2Card, interactiveTemplateMenu } from '../onboarding/index.js';
 import { openDatabase, insertCard } from '../registry/store.js';
 import { openCreditDb, bootstrapAgent, migrateOwner } from '../credit/ledger.js';
+import { createAgentRecord, lookupAgent, lookupAgentByOwner } from '../identity/agent-identity.js';
 import { createLedger } from '../credit/create-ledger.js';
 import { publishFromSoulV2 } from '../openclaw/index.js';
 import type { CapabilityCard } from '../types/index.js';
@@ -191,6 +192,27 @@ export async function performInit(opts: InitOptions): Promise<InitResult> {
     if (!opts.json) {
       console.log(`Migrated local credits: ${existingConfig.owner} → ${owner}`);
     }
+  }
+
+  // Register agent record in agents table (V8 identity)
+  const existingAgent = lookupAgent(creditDb, identity.agent_id) ?? lookupAgentByOwner(creditDb, owner);
+  if (!existingAgent) {
+    try {
+      createAgentRecord(creditDb, {
+        agent_id: identity.agent_id,
+        display_name: config.display_name ?? owner,
+        public_key: identity.public_key,
+        legacy_owner: owner,
+      });
+    } catch {
+      // AGENT_EXISTS — already registered, safe to ignore
+    }
+  }
+
+  // Persist agent_id in config for fast access
+  if (!config.agent_id || config.agent_id !== identity.agent_id) {
+    config.agent_id = identity.agent_id;
+    saveConfig(config);
   }
 
   // Bootstrap credit ledger with 100 credits

@@ -32,6 +32,8 @@ export const CapabilityCardSchema = z.object({
   spec_version: z.literal('1.0').default('1.0'),
   id: z.string().uuid(),
   owner: z.string().min(1),
+  /** V8: Cryptographic agent identity (Ed25519 public key hash). */
+  agent_id: z.string().optional(),
   name: z.string().min(1).max(100),
   description: z.string().max(500),
   level: z.union([z.literal(1), z.literal(2), z.literal(3)]),
@@ -183,6 +185,8 @@ export const CapabilityCardV2Schema = z.object({
   spec_version: z.literal('2.0'),
   id: z.string().uuid(),
   owner: z.string().min(1),
+  /** V8: Cryptographic agent identity (Ed25519 public key hash). */
+  agent_id: z.string().optional(),
   /** Agent display name — was 'name' in v1.0. */
   agent_name: z.string().min(1).max(100),
   /** Short one-liner shown in Hub v2 Identity Header. */
@@ -239,6 +243,8 @@ export type Learning = z.infer<typeof LearningSchema>;
  */
 export interface AgentProfileV2 {
   owner: string;
+  /** V8: Cryptographic agent identity. */
+  agent_id?: string;
   agent_name?: string;
   short_description?: string;
   joined_at: string;
@@ -331,6 +337,8 @@ export interface AgentProfileV2 {
 export interface EscrowReceipt {
   /** Agent owner identifier of the requester. */
   requester_owner: string;
+  /** V8: Cryptographic agent identity of the requester. */
+  requester_agent_id?: string;
   /** Hex-encoded Ed25519 public key of the requester. */
   requester_public_key: string;
   /** Number of credits committed. */

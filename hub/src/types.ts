@@ -13,6 +13,8 @@ export interface PoweredByEntry {
 export interface HubCard {
   id: string;
   owner: string;
+  /** V8: Cryptographic agent identity (Ed25519 public key hash). */
+  agent_id?: string;
   name: string;
   description: string;
   level: 1 | 2 | 3;
@@ -109,6 +111,7 @@ export interface AppOutletContext {
 /** Agent profile as returned by GET /api/agents */
 export interface AgentProfile {
   owner: string;
+  agent_id?: string;
   skill_count: number;
   success_rate: number | null;
   total_earned: number;
@@ -173,6 +176,7 @@ export interface AgentLearning {
  */
 export interface AgentProfileV2 {
   owner: string;
+  agent_id?: string;
   agent_name?: string;
   short_description?: string;
   joined_at: string;

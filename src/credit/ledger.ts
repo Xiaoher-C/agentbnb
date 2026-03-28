@@ -2,6 +2,7 @@ import Database from 'better-sqlite3';
 import { randomUUID } from 'node:crypto';
 import { AgentBnBError } from '../types/index.js';
 import { ensureReliabilityTable } from './reliability-metrics.js';
+import { ensureAgentsTable } from '../identity/agent-identity.js';
 
 /**
  * A single credit transaction record
@@ -85,6 +86,9 @@ export function openCreditDb(path: string = ':memory:'): Database.Database {
   // Create provider_reliability_metrics table
   ensureReliabilityTable(db);
 
+  // V8: Create agents table
+  ensureAgentsTable(db);
+
   return db;
 }
 
@@ -163,29 +167,19 @@ export function getTransactions(
 
 /**
  * Registers a new provider and assigns the next sequential provider_number.
- * Returns the assigned provider_number. Idempotent — calling twice for the same
- * owner returns the existing number.
- *
- * @param db - The credit database instance.
- * @param owner - Provider agent identifier.
- * @returns The assigned provider_number.
+ * Idempotent — calling twice for the same owner returns the existing number.
  */
 export function registerProvider(db: Database.Database, owner: string): number {
   const now = new Date().toISOString();
   const maxRow = db.prepare('SELECT MAX(provider_number) as maxNum FROM provider_registry').get() as { maxNum: number | null };
   const nextNum = (maxRow?.maxNum ?? 0) + 1;
   db.prepare('INSERT OR IGNORE INTO provider_registry (owner, provider_number, registered_at) VALUES (?, ?, ?)').run(owner, nextNum, now);
-  // Return the actual number (in case INSERT OR IGNORE hit)
   const row = db.prepare('SELECT provider_number FROM provider_registry WHERE owner = ?').get(owner) as { provider_number: number };
   return row.provider_number;
 }
 
 /**
  * Returns the provider_number for an owner, or null if not registered.
- *
- * @param db - The credit database instance.
- * @param owner - Provider agent identifier.
- * @returns The provider_number or null if not registered.
  */
 export function getProviderNumber(db: Database.Database, owner: string): number | null {
   const row = db.prepare('SELECT provider_number FROM provider_registry WHERE owner = ?').get(owner) as { provider_number: number } | undefined;
@@ -195,9 +189,6 @@ export function getProviderNumber(db: Database.Database, owner: string): number 
 /**
  * Returns the bonus multiplier based on provider_number.
  * First 50: 2.0x, 51-200: 1.5x, 201+: 1.0x
- *
- * @param providerNumber - The sequential provider number.
- * @returns The bonus multiplier (2.0, 1.5, or 1.0).
  */
 export function getProviderBonus(providerNumber: number): number {
   if (providerNumber <= 50) return 2.0;
@@ -207,12 +198,6 @@ export function getProviderBonus(providerNumber: number): number {
 
 /**
  * Issues a demand voucher to an agent.
- *
- * @param db - The credit database instance.
- * @param owner - Agent identifier.
- * @param amount - Number of voucher credits. Defaults to 50.
- * @param daysValid - Number of days until expiry. Defaults to 30.
- * @returns The voucher ID.
  */
 export function issueVoucher(
   db: Database.Database,
@@ -231,10 +216,6 @@ export function issueVoucher(
 
 /**
  * Returns the active, non-expired voucher for an owner, or null.
- *
- * @param db - The credit database instance.
- * @param owner - Agent identifier.
- * @returns The active voucher with id, remaining credits, and expiry, or null.
  */
 export function getActiveVoucher(
   db: Database.Database,
@@ -249,10 +230,6 @@ export function getActiveVoucher(
 
 /**
  * Consumes credits from a voucher.
- *
- * @param db - The credit database instance.
- * @param voucherId - The voucher ID.
- * @param amount - Number of credits to consume.
  */
 export function consumeVoucher(
   db: Database.Database,

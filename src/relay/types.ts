@@ -9,9 +9,20 @@ import { z } from 'zod';
 export const RegisterMessageSchema = z.object({
   type: z.literal('register'),
   owner: z.string().min(1),
+  /** V8: Cryptographic agent identity. When present, used as the canonical key. */
+  agent_id: z.string().optional(),
+  /** V8 Phase 3: Server identifier for multi-agent delegation. */
+  server_id: z.string().optional(),
   token: z.string().min(1),
   card: z.record(z.unknown()), // CapabilityCard (validated separately)
   cards: z.array(z.record(z.unknown())).optional(), // Additional cards (e.g., conductor card)
+  /** V8 Phase 3: Additional agents served by this server (multi-agent registration). */
+  agents: z.array(z.object({
+    agent_id: z.string().min(1),
+    display_name: z.string().min(1),
+    cards: z.array(z.record(z.unknown())),
+    delegation_token: z.record(z.unknown()).optional(),
+  })).optional(),
 });
 
 /** Registry → Agent: Acknowledge registration */
@@ -25,6 +36,8 @@ export const RelayRequestMessageSchema = z.object({
   type: z.literal('relay_request'),
   id: z.string().uuid(),
   target_owner: z.string().min(1),
+  /** V8: Target agent's cryptographic identity. Preferred over target_owner. */
+  target_agent_id: z.string().optional(),
   card_id: z.string(),
   skill_id: z.string().optional(),
   params: z.record(z.unknown()).default({}),
@@ -105,6 +118,68 @@ export const HeartbeatMessageSchema = z.object({
   }),
 });
 
+// ---------------------------------------------------------------------------
+// V8 Phase 2: Explicit escrow messages (P2P with relay verification)
+// ---------------------------------------------------------------------------
+
+/** Consumer → Relay: Request escrow hold before P2P execution */
+export const EscrowHoldMessageSchema = z.object({
+  type: z.literal('escrow_hold'),
+  consumer_agent_id: z.string().min(1),
+  provider_agent_id: z.string().min(1),
+  skill_id: z.string().min(1),
+  amount: z.number().positive(),
+  request_id: z.string().uuid(),
+  signature: z.string().optional(),
+  public_key: z.string().optional(),
+});
+
+/** Relay → Consumer: Hold confirmed */
+export const EscrowHoldConfirmedMessageSchema = z.object({
+  type: z.literal('escrow_hold_confirmed'),
+  request_id: z.string(),
+  escrow_id: z.string(),
+  hold_amount: z.number(),
+  consumer_remaining: z.number(),
+});
+
+/** Consumer → Relay: Request escrow settlement after P2P execution */
+export const EscrowSettleMessageSchema = z.object({
+  type: z.literal('escrow_settle'),
+  escrow_id: z.string().min(1),
+  request_id: z.string().uuid(),
+  success: z.boolean(),
+  failure_reason: z.enum(['bad_execution', 'overload', 'timeout', 'auth_error', 'not_found']).optional(),
+  result_hash: z.string().optional(),
+  signature: z.string().optional(),
+  public_key: z.string().optional(),
+  consumer_agent_id: z.string().optional(),
+});
+
+/** Relay → Both: Settlement confirmed */
+export const EscrowSettledMessageSchema = z.object({
+  type: z.literal('escrow_settled'),
+  escrow_id: z.string(),
+  request_id: z.string(),
+  provider_earned: z.number(),
+  network_fee: z.number(),
+  consumer_remaining: z.number(),
+  provider_balance: z.number(),
+});
+
+/** Consumer → Relay: Sync balance from relay (source of truth) */
+export const BalanceSyncMessageSchema = z.object({
+  type: z.literal('balance_sync'),
+  agent_id: z.string().min(1),
+});
+
+/** Relay → Consumer: Balance sync response */
+export const BalanceSyncResponseMessageSchema = z.object({
+  type: z.literal('balance_sync_response'),
+  agent_id: z.string(),
+  balance: z.number(),
+});
+
 /** Discriminated union of all relay messages */
 export const RelayMessageSchema = z.discriminatedUnion('type', [
   RegisterMessageSchema,
@@ -116,6 +191,12 @@ export const RelayMessageSchema = z.discriminatedUnion('type', [
   ErrorMessageSchema,
   RelayProgressMessageSchema,
   HeartbeatMessageSchema,
+  EscrowHoldMessageSchema,
+  EscrowHoldConfirmedMessageSchema,
+  EscrowSettleMessageSchema,
+  EscrowSettledMessageSchema,
+  BalanceSyncMessageSchema,
+  BalanceSyncResponseMessageSchema,
 ]);
 
 // TypeScript types derived from Zod schemas
@@ -128,6 +209,9 @@ export type ResponseMessage = z.infer<typeof ResponseMessageSchema>;
 export type ErrorMessage = z.infer<typeof ErrorMessageSchema>;
 export type RelayProgressMessage = z.infer<typeof RelayProgressMessageSchema>;
 export type HeartbeatMessage = z.infer<typeof HeartbeatMessageSchema>;
+export type EscrowHoldMessage = z.infer<typeof EscrowHoldMessageSchema>;
+export type EscrowSettleMessage = z.infer<typeof EscrowSettleMessageSchema>;
+export type BalanceSyncMessage = z.infer<typeof BalanceSyncMessageSchema>;
 export type RelayMessage = z.infer<typeof RelayMessageSchema>;
 
 /** Rate limit state per agent */

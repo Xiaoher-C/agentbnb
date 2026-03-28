@@ -10,12 +10,17 @@ import {
   type RelayResponseMessage,
   type RelayProgressMessage,
   type HeartbeatMessage,
+  type EscrowHoldMessage,
+  type EscrowSettleMessage,
+  type BalanceSyncMessage,
   type PendingRelayRequest,
   type RateLimitEntry,
   type RelayState,
   type AgentCapacityData,
 } from './types.js';
 import { lookupCardPrice, holdForRelay, settleForRelay, releaseForRelay, calculateConductorFee } from './relay-credit.js';
+import { processEscrowHold, processEscrowSettle, settleWithNetworkFee } from './relay-escrow.js';
+import { getBalance } from '../credit/ledger.js';
 import { handleJobRelayResponse } from '../hub-agent/relay-bridge.js';
 import { AgentBnBError, AnyCardSchema } from '../types/index.js';
 
@@ -44,6 +49,8 @@ export function registerWebSocketRelay(
 ): RelayState {
   /** Active agent connections keyed by owner */
   const connections = new Map<string, WebSocket>();
+  /** V8: Reverse lookup — agent_id → owner for dual-key routing */
+  const agentIdToOwner = new Map<string, string>();
   /** Pending relay requests keyed by request ID */
   const pendingRequests = new Map<string, PendingRelayRequest>();
   /** Rate limit state per owner */
@@ -52,6 +59,16 @@ export function registerWebSocketRelay(
   const agentCapacities = new Map<string, AgentCapacityData>();
   /** Optional callback invoked when an agent registers (comes online) */
   let onAgentOnlineCallback: ((owner: string) => void) | undefined;
+
+  /**
+   * V8: Resolve a target identifier (agent_id or owner) to a connection key.
+   */
+  function resolveConnectionKey(target: string): string | undefined {
+    const ownerFromAgentId = agentIdToOwner.get(target);
+    if (ownerFromAgentId && connections.has(ownerFromAgentId)) return ownerFromAgentId;
+    if (connections.has(target)) return target;
+    return undefined;
+  }
 
   /**
    * Check and increment rate limit for an owner.
@@ -193,6 +210,26 @@ export function registerWebSocketRelay(
     // Store connection
     connections.set(owner, ws);
 
+    // V8: Register agent_id → owner mapping for dual-key routing
+    if (msg.agent_id) {
+      agentIdToOwner.set(msg.agent_id, owner);
+    }
+
+    // V8 Phase 3: Multi-agent registration — register additional agents from this server
+    if (msg.agents && msg.agents.length > 0) {
+      for (const agentEntry of msg.agents) {
+        // Map each agent_id to this connection's owner key
+        agentIdToOwner.set(agentEntry.agent_id, owner);
+
+        // Upsert each agent's cards
+        for (const agentCard of agentEntry.cards) {
+          try {
+            upsertCard(agentCard, owner);
+          } catch { /* non-fatal: skip invalid cards */ }
+        }
+      }
+    }
+
     // Ephemeral requester connections (owner contains ':req:') are used solely for
     // making outbound relay requests. They do not need a card in the registry — skip
     // persistence and activity logging to avoid polluting the card list.
@@ -256,13 +293,14 @@ export function registerWebSocketRelay(
       return;
     }
 
-    // Look up target agent's connection
-    const targetWs = connections.get(msg.target_owner);
+    // Look up target agent's connection (V8: resolve agent_id or owner)
+    const targetKey = resolveConnectionKey(msg.target_agent_id ?? msg.target_owner);
+    const targetWs = targetKey ? connections.get(targetKey) : undefined;
     if (!targetWs || targetWs.readyState !== 1) {
       sendMessage(ws, {
         type: 'response',
         id: msg.id,
-        error: { code: -32603, message: `Agent offline: ${msg.target_owner}` },
+        error: { code: -32603, message: `Agent offline: ${msg.target_agent_id ?? msg.target_owner}` },
       });
       return;
     }
@@ -403,8 +441,8 @@ export function registerWebSocketRelay(
     if (pending.escrowId && creditDb) {
       try {
         if (msg.error === undefined) {
-          // Provider succeeded — settle credits to provider
-          settleForRelay(creditDb, pending.escrowId, pending.targetOwner!);
+          // Provider succeeded — settle credits to provider (V8: with network fee)
+          settleWithNetworkFee(creditDb, pending.escrowId, pending.targetOwner!);
         } else {
           // Provider returned an error — refund requester
           releaseForRelay(creditDb, pending.escrowId);
@@ -464,6 +502,10 @@ export function registerWebSocketRelay(
     connections.delete(owner);
     rateLimits.delete(owner);
     agentCapacities.delete(owner);
+    // V8: Clean up agent_id → owner mapping
+    for (const [agentId, o] of agentIdToOwner) {
+      if (o === owner) { agentIdToOwner.delete(agentId); break; }
+    }
     markOwnerOffline(owner);
 
     // Fail any pending requests targeting this now-disconnected provider
@@ -504,6 +546,127 @@ export function registerWebSocketRelay(
    */
   function handleHeartbeat(msg: HeartbeatMessage): void {
     agentCapacities.set(msg.owner, msg.capacity);
+  }
+
+  // ---------------------------------------------------------------------------
+  // V8 Phase 2: Explicit escrow message handlers
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Handle an explicit escrow hold request (P2P with relay verification flow).
+   */
+  function handleEscrowHold(ws: WebSocket, msg: EscrowHoldMessage): void {
+    if (!creditDb) {
+      sendMessage(ws, { type: 'error', code: 'no_credit_db', message: 'Credit system not available' });
+      return;
+    }
+
+    try {
+      const result = processEscrowHold(
+        creditDb,
+        msg.consumer_agent_id,
+        msg.provider_agent_id,
+        msg.skill_id,
+        msg.amount,
+        msg.request_id,
+        msg.signature,
+        msg.public_key,
+      );
+
+      sendMessage(ws, {
+        type: 'escrow_hold_confirmed',
+        request_id: msg.request_id,
+        escrow_id: result.escrow_id,
+        hold_amount: result.hold_amount,
+        consumer_remaining: result.consumer_remaining,
+      });
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : 'Escrow hold failed';
+      const code = errMsg.includes('INSUFFICIENT_CREDITS') ? 'insufficient_credits' : 'escrow_hold_failed';
+      sendMessage(ws, { type: 'error', code, message: errMsg, request_id: msg.request_id });
+    }
+  }
+
+  /**
+   * Handle an explicit escrow settlement request.
+   */
+  function handleEscrowSettle(ws: WebSocket, msg: EscrowSettleMessage): void {
+    if (!creditDb) {
+      sendMessage(ws, { type: 'error', code: 'no_credit_db', message: 'Credit system not available' });
+      return;
+    }
+
+    try {
+      // Look up the escrow to find the provider
+      const escrow = creditDb
+        .prepare('SELECT card_id FROM credit_escrow WHERE id = ? AND status = ?')
+        .get(msg.escrow_id, 'held') as { card_id: string } | undefined;
+
+      if (!escrow) {
+        sendMessage(ws, { type: 'error', code: 'escrow_not_found', message: `Escrow not found: ${msg.escrow_id}`, request_id: msg.request_id });
+        return;
+      }
+
+      // card_id format from processEscrowHold: "provider_agent_id:skill_id"
+      const providerAgentId = escrow.card_id.split(':')[0];
+
+      const result = processEscrowSettle(
+        creditDb,
+        msg.escrow_id,
+        msg.success,
+        providerAgentId,
+        msg.signature,
+        msg.public_key,
+        msg.consumer_agent_id,
+      );
+
+      // Send settlement confirmation to consumer
+      sendMessage(ws, {
+        type: 'escrow_settled',
+        escrow_id: result.escrow_id,
+        request_id: msg.request_id,
+        provider_earned: result.provider_earned,
+        network_fee: result.network_fee,
+        consumer_remaining: result.consumer_remaining,
+        provider_balance: result.provider_balance,
+      });
+
+      // Send settlement notification to provider if connected
+      const providerKey = resolveConnectionKey(providerAgentId);
+      if (providerKey) {
+        const providerWs = connections.get(providerKey);
+        if (providerWs && providerWs.readyState === 1) {
+          sendMessage(providerWs, {
+            type: 'escrow_settled',
+            escrow_id: result.escrow_id,
+            request_id: msg.request_id,
+            provider_earned: result.provider_earned,
+            network_fee: result.network_fee,
+            consumer_remaining: result.consumer_remaining,
+            provider_balance: result.provider_balance,
+          });
+        }
+      }
+    } catch (err) {
+      sendMessage(ws, { type: 'error', code: 'escrow_settle_failed', message: err instanceof Error ? err.message : 'Settlement failed', request_id: msg.request_id });
+    }
+  }
+
+  /**
+   * Handle a balance sync request — returns authoritative balance from relay.
+   */
+  function handleBalanceSync(ws: WebSocket, msg: BalanceSyncMessage): void {
+    if (!creditDb) {
+      sendMessage(ws, { type: 'error', code: 'no_credit_db', message: 'Credit system not available' });
+      return;
+    }
+
+    const balance = getBalance(creditDb, msg.agent_id);
+    sendMessage(ws, {
+      type: 'balance_sync_response',
+      agent_id: msg.agent_id,
+      balance,
+    });
   }
 
   // Register WebSocket route — must be inside register() for @fastify/websocket to work correctly
@@ -563,6 +726,19 @@ export function registerWebSocketRelay(
 
           case 'heartbeat':
             handleHeartbeat(msg);
+            break;
+
+          // V8 Phase 2: Explicit escrow messages
+          case 'escrow_hold':
+            handleEscrowHold(socket, msg);
+            break;
+
+          case 'escrow_settle':
+            handleEscrowSettle(socket, msg);
+            break;
+
+          case 'balance_sync':
+            handleBalanceSync(socket, msg);
             break;
 
           default:
