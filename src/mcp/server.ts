@@ -8,7 +8,6 @@
  * IMPORTANT: All logging goes to stderr. stdout is reserved for MCP JSON-RPC protocol.
  */
 
-import { createRequire } from 'node:module';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { loadConfig, getConfigDir } from '../cli/config.js';
@@ -21,8 +20,8 @@ import { registerDiscoverTool } from './tools/discover.js';
 import { registerStatusTool } from './tools/status.js';
 import { registerPublishTool } from './tools/publish.js';
 
-const require = createRequire(import.meta.url);
-const pkg = require('../../package.json') as { version: string };
+/** Package version — injected at build time, falls back for dev mode. */
+const VERSION = AGENTBNB_VERSION ?? '0.0.0-dev';
 
 /**
  * Shared context passed to all MCP tool handlers.
@@ -57,7 +56,7 @@ export async function startMcpServer(): Promise<void> {
 
   const server = new McpServer({
     name: 'agentbnb',
-    version: pkg.version,
+    version: VERSION,
   });
 
   const ctx: McpServerContext = {

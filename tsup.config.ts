@@ -1,4 +1,8 @@
 import { defineConfig } from 'tsup';
+import { readFileSync } from 'node:fs';
+
+const pkg = JSON.parse(readFileSync('./package.json', 'utf-8')) as { version: string };
+const versionDefine = { AGENTBNB_VERSION: JSON.stringify(pkg.version) };
 
 export default defineConfig([
   // Library entry — no shebang needed
@@ -7,6 +11,7 @@ export default defineConfig([
     format: ['esm'],
     dts: true,
     clean: true,
+    define: versionDefine,
   },
   // CLI entry — source file already has #!/usr/bin/env node shebang
   // tsup preserves the source shebang; no additional banner needed
@@ -15,6 +20,7 @@ export default defineConfig([
     format: ['esm'],
     dts: true,
     clean: false,
+    define: versionDefine,
   },
   // OpenClaw plugin bootstrap — bundled so it's self-contained when installed via openclaw plugins install
   {
@@ -23,5 +29,6 @@ export default defineConfig([
     dts: false,
     bundle: true,
     clean: false,
+    define: versionDefine,
   },
 ]);

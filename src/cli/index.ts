@@ -2,7 +2,6 @@
 
 import { Command } from 'commander';
 import { readFileSync } from 'node:fs';
-import { createRequire } from 'node:module';
 import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
 import { networkInterfaces } from 'node:os';
@@ -37,8 +36,8 @@ import {
 import { performInit } from './init-action.js';
 import { runQuickstart } from './quickstart.js';
 
-const require = createRequire(import.meta.url);
-const pkg = require('../../package.json') as { version: string };
+/** Package version — injected at build time, falls back for dev mode. */
+const VERSION = AGENTBNB_VERSION ?? '0.0.0-dev';
 
 /**
  * Loads Ed25519 identity auth credentials, auto-generating keypair/identity if missing.
@@ -85,7 +84,7 @@ const program = new Command();
 program
   .name('agentbnb')
   .description('P2P Agent Capability Sharing Protocol — Airbnb for AI agent pipelines')
-  .version(pkg.version);
+  .version(VERSION);
 
 // ---------------------------------------------------------------------------
 // init
