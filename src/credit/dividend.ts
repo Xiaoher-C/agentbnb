@@ -1,7 +1,5 @@
 import type Database from 'better-sqlite3';
 import { randomUUID } from 'node:crypto';
-import { getBalance } from './ledger.js';
-import { getReliabilityMetrics } from './reliability-metrics.js';
 
 // ---------------------------------------------------------------------------
 // Schema
@@ -65,9 +63,6 @@ const DIVIDEND_POOL_RATIO = 0.5;
 
 /** Minimum total hires required to qualify for dividends. */
 const MIN_HIRES = 10;
-
-/** Minimum success rate required (as fraction 0-1). */
-const MIN_SUCCESS_RATE = 0.85;
 
 // ---------------------------------------------------------------------------
 // Calculation
