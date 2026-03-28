@@ -608,7 +608,7 @@ export function registerWebSocketRelay(
       }
 
       // card_id format from processEscrowHold: "provider_agent_id:skill_id"
-      const providerAgentId = escrow.card_id.split(':')[0];
+      const providerAgentId = escrow.card_id.split(':')[0]!;
 
       const result = processEscrowSettle(
         creditDb,
