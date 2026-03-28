@@ -14,7 +14,7 @@ AgentBnB is a P2P agent capability sharing protocol. Agent owners publish what t
 
 ## Current State
 
-- **Version**: 6.0.0 (package.json), v7.0 in progress
+- **Version**: 7.0.0-beta.1 (package.json)
 - **Milestones shipped**: v1.1 → v2.x → v3.0 (SkillExecutor, Conductor, Signed Escrow) → v3.1 (WebSocket Relay) → v4.0 (Agent Economy Platform) → v5.0 (Genesis Flywheel) → v5.1 (OpenClaw Hardening) → v6.0 (Team Formation Protocol, shipped 2026-03-24)
 - **v7.0 in progress**: Agent Economy Infrastructure (Phases 54-60)
   - Phase 54-55: FailureReason, Reputation Protection, Capacity Enforcement ✅
@@ -167,6 +167,35 @@ This project uses **pnpm**. Never use npm or yarn in the project root.
 - Hub at `/hub` is the recruiting tool — must be visually polished.
 - Founder (Cheng Wen Chen) is the primary developer using vibe coding with Claude Code + GSD.
 - Key v7.0 additions: FailureReason enum, capacity enforcement (max_concurrent), demand vouchers, provider bonuses.
+
+## Local Deployment Checklist
+
+After building a new version, TWO paths must be updated:
+
+### Path 1: Global CLI + SkillExecutor (pnpm-managed)
+```bash
+cd ~/Github/agentbnb
+pnpm build
+pnpm link --global
+# Restart serve:
+kill $(pgrep -f "agentbnb serve" | head -1)
+agentbnb serve --announce &
+# Verify:
+agentbnb --version  # should match package.json
+```
+
+### Path 2: OpenClaw Plugin (npm-managed, separate copy)
+```bash
+# Copy built artifacts
+cp -R ~/Github/agentbnb/dist/* ~/.openclaw/extensions/agentbnb/dist/
+cp ~/Github/agentbnb/package.json ~/.openclaw/extensions/agentbnb/package.json
+# Rebuild native modules
+cd ~/.openclaw/extensions/agentbnb && npm rebuild better-sqlite3
+# Restart daemon
+openclaw daemon restart
+```
+
+**Why both?** Path 1 runs `agentbnb serve` (gateway + relay + SkillExecutor). Path 2 runs inside OpenClaw agents (Telegram bot, genesis-bot) as a plugin. They are independent copies — updating one does NOT update the other.
 
 ## Session Protocol
 

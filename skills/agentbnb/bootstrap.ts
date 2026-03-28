@@ -9,38 +9,38 @@
  */
 
 import { join } from 'node:path';
-import { dirname, basename } from 'node:path';
 import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 
 /**
- * Walks up from `startDir` looking for a SOUL.md file.
- * Returns the absolute path to the first SOUL.md found, or null.
- */
-function findSoulMd(startDir: string): string | null {
-  let dir = startDir;
-  while (true) {
-    const candidate = join(dir, 'SOUL.md');
-    if (existsSync(candidate)) return candidate;
-    const parent = dirname(dir);
-    if (parent === dir) return null; // filesystem root
-    dir = parent;
-  }
-}
-
-/**
- * Derives a workspace-specific AGENTBNB_DIR from SOUL.md location.
- * Uses the name of the directory containing SOUL.md as the workspace identifier.
- * Falls back to the global ~/.agentbnb if SOUL.md is not found.
+ * Derives a workspace-specific AGENTBNB_DIR using a priority chain:
+ *
+ * 1. AGENTBNB_DIR env var (already works for CLI — defensive check)
+ * 2. cwd is inside ~/.openclaw/agents/<name>/ → use <agent-dir>/.agentbnb/
+ * 3. Fallback to the global ~/.agentbnb/
+ *
+ * NOTE: The primary fix for the daemon cwd bug is in activate(), which reads
+ * OpenClaw's context.workspaceDir / context.agentDir before reaching this function.
+ * This function is defense-in-depth for cases where context is not available.
  */
 function resolveWorkspaceDir(): string {
-  const soulPath = findSoulMd(process.cwd());
-  if (soulPath) {
-    const workspaceName = basename(dirname(soulPath));
-    return join(homedir(), '.agentbnb', workspaceName);
+  // 1. AGENTBNB_DIR env var (set by CLI or parent process)
+  if (process.env['AGENTBNB_DIR']) {
+    return process.env['AGENTBNB_DIR'];
   }
+
+  // 2. Check if cwd is inside an OpenClaw agent directory — derive from agent name
+  const openclawAgentsDir = join(homedir(), '.openclaw', 'agents');
+  const cwd = process.cwd();
+  if (cwd.startsWith(openclawAgentsDir + '/')) {
+    const relative = cwd.slice(openclawAgentsDir.length + 1);
+    const agentName = relative.split('/')[0];
+    return join(openclawAgentsDir, agentName, '.agentbnb');
+  }
+
+  // 3. Global fallback
   return join(homedir(), '.agentbnb');
 }
 
@@ -60,6 +60,21 @@ export interface BootstrapConfig {
   registryUrl?: string;
   /** Enable WebSocket relay. Defaults to true. */
   relay?: boolean;
+  /**
+   * Explicit agent config directory override.
+   * When set, used as AGENTBNB_DIR instead of auto-detection.
+   *
+   * Example: `~/.openclaw/agents/genesis-bot/.agentbnb`
+   */
+  agentDir?: string;
+  /**
+   * OpenClaw workspace directory passthrough.
+   * When OpenClaw calls activate(context), context.workspaceDir lands here.
+   * Derives AGENTBNB_DIR as `<workspaceDir>/.agentbnb`.
+   *
+   * Example: `~/.openclaw/agents/genesis-bot`
+   */
+  workspaceDir?: string;
 }
 
 /** Context returned by activate(). Pass to deactivate() for conditional teardown. */
@@ -165,10 +180,20 @@ function registerDecomposerCard(configDir: string, owner: string): void {
  * registered here to avoid double-handler conflicts. Track in Layer A implementation.
  */
 export async function activate(config: BootstrapConfig = {}): Promise<BootstrapContext> {
-  // Per-workspace isolation: if AGENTBNB_DIR is not already set, derive it from
-  // the SOUL.md location in the current working directory. This ensures each
-  // OpenClaw workspace uses its own isolated ~/.agentbnb/<workspace-name>/ directory.
-  if (!process.env['AGENTBNB_DIR']) {
+  // Per-workspace isolation: determine the correct config directory.
+  // Priority: config.agentDir > config.workspaceDir/.agentbnb > AGENTBNB_DIR env > resolveWorkspaceDir()
+  if (config.agentDir) {
+    process.env['AGENTBNB_DIR'] = config.agentDir;
+    process.stderr.write(
+      `[agentbnb] AGENTBNB_DIR set from config.agentDir: ${config.agentDir}\n`
+    );
+  } else if (config.workspaceDir) {
+    const derived = join(config.workspaceDir, '.agentbnb');
+    process.env['AGENTBNB_DIR'] = derived;
+    process.stderr.write(
+      `[agentbnb] AGENTBNB_DIR derived from config.workspaceDir: ${derived}\n`
+    );
+  } else if (!process.env['AGENTBNB_DIR']) {
     const workspaceDir = resolveWorkspaceDir();
     process.env['AGENTBNB_DIR'] = workspaceDir;
     process.stderr.write(

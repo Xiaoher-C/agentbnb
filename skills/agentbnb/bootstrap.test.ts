@@ -44,6 +44,15 @@ vi.mock('../../src/cli/config.js', () => ({
   getConfigDir: vi.fn(() => join(homedir(), '.agentbnb')),
 }));
 
+vi.mock('../../src/registry/store.js', () => ({
+  openDatabase: vi.fn(() => ({
+    prepare: vi.fn(() => ({
+      get: vi.fn(() => ({ id: 'existing-card' })),
+      run: vi.fn(),
+    })),
+  })),
+}));
+
 import { loadConfig } from '../../src/cli/config.js';
 import { activate, deactivate } from './bootstrap.js';
 import type { BootstrapContext } from './bootstrap.js';
