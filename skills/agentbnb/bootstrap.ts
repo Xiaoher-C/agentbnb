@@ -8,11 +8,14 @@
  * Teardown: `await deactivate(ctx);`
  */
 
-import { join } from 'node:path';
+import { join, basename, dirname } from 'node:path';
 import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { spawnSync } from 'node:child_process';
+import { spawnSync, exec } from 'node:child_process';
+import { promisify } from 'node:util';
 import { randomUUID } from 'node:crypto';
+
+const execAsync = promisify(exec);
 
 /**
  * Derives a workspace-specific AGENTBNB_DIR using a priority chain:
@@ -171,6 +174,109 @@ function registerDecomposerCard(configDir: string, owner: string): void {
 }
 
 /**
+ * Checks if the `agentbnb` CLI is available in PATH.
+ * @returns Absolute path to the CLI, or null if not found.
+ */
+export function findCli(): string | null {
+  const result = spawnSync('which', ['agentbnb'], { encoding: 'utf-8', stdio: 'pipe' });
+  if (result.status === 0 && result.stdout.trim()) {
+    return result.stdout.trim();
+  }
+  return null;
+}
+
+/**
+ * Runs a shell command asynchronously. Exported for test injection.
+ */
+export async function runCommand(cmd: string, env: Record<string, string | undefined>): Promise<{ stdout: string; stderr: string }> {
+  return execAsync(cmd, { env });
+}
+
+/**
+ * Derives a human-readable agent name from the config directory path.
+ * If configDir is `~/.openclaw/agents/genesis-bot/.agentbnb`, returns "genesis-bot".
+ * Falls back to a random identifier.
+ */
+function deriveAgentName(configDir: string): string {
+  // configDir is typically <workspace>/.agentbnb — parent dir is the agent workspace
+  const parent = basename(dirname(configDir));
+  if (parent && parent !== '.' && parent !== '.agentbnb' && parent !== homedir().split('/').pop()) {
+    return parent;
+  }
+  return `agent-${randomUUID().slice(0, 8)}`;
+}
+
+/**
+ * First-time auto-onboarding: initializes identity, publishes capabilities, and
+ * grants the Demand Voucher (50 credits). Called when activate() detects no config.json.
+ *
+ * Steps:
+ * 1. Check agentbnb CLI is available
+ * 2. Run `agentbnb init --owner <name> --yes --no-detect` (keypair + config)
+ * 3. Run `agentbnb openclaw sync` (publish SOUL.md capabilities)
+ * 4. Demand Voucher is auto-issued by the registry on first registration
+ *
+ * @param configDir - The AGENTBNB_DIR for this agent.
+ * @returns The loaded AgentBnBConfig after init.
+ * @throws {AgentBnBError} INIT_FAILED if CLI not found or init fails.
+ */
+/** Injectable dependencies for autoOnboard (test seam). */
+export interface OnboardDeps {
+  findCli: () => string | null;
+  runCommand: (cmd: string, env: Record<string, string | undefined>) => Promise<{ stdout: string; stderr: string }>;
+}
+
+/** Default production dependencies. */
+const defaultDeps: OnboardDeps = { findCli, runCommand };
+
+async function autoOnboard(configDir: string, deps: OnboardDeps = defaultDeps): Promise<import('./../../src/cli/config.js').AgentBnBConfig> {
+  process.stderr.write('[agentbnb] First-time setup: initializing agent identity...\n');
+
+  // Step 0: Check CLI exists
+  const cliPath = deps.findCli();
+  if (!cliPath) {
+    process.stderr.write('[agentbnb] CLI not found. Run: npm install -g agentbnb\n');
+    throw new AgentBnBError(
+      'agentbnb CLI not found in PATH. Install with: npm install -g agentbnb',
+      'INIT_FAILED',
+    );
+  }
+
+  const env = { ...process.env, AGENTBNB_DIR: configDir };
+  const agentName = deriveAgentName(configDir);
+
+  // Step 1: Initialize identity (keypair + config.json + credit bootstrap)
+  try {
+    await deps.runCommand(`agentbnb init --owner "${agentName}" --yes --no-detect`, env);
+    process.stderr.write(`[agentbnb] Agent "${agentName}" initialized.\n`);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    throw new AgentBnBError(`Auto-init failed: ${msg}`, 'INIT_FAILED');
+  }
+
+  // Step 2: Publish capabilities from SOUL.md (if it exists)
+  try {
+    await deps.runCommand('agentbnb openclaw sync', env);
+    process.stderr.write('[agentbnb] Capabilities published from SOUL.md.\n');
+  } catch {
+    // Non-fatal: SOUL.md may not exist yet, or sync may fail for other reasons.
+    // Agent is still initialized and can publish capabilities later.
+    process.stderr.write('[agentbnb] Note: openclaw sync skipped (SOUL.md may not exist yet).\n');
+  }
+
+  // Step 3: Demand Voucher (50 credits) is auto-issued by bootstrapAgent() during init.
+  // No action needed here.
+
+  const config = loadConfig();
+  if (!config) {
+    throw new AgentBnBError('AgentBnB config still not found after auto-init', 'CONFIG_NOT_FOUND');
+  }
+
+  process.stderr.write('[agentbnb] Agent initialized and published to AgentBnB network.\n');
+  return config;
+}
+
+/**
  * Brings an AgentBnB node online (idempotent — safe to call when already running).
  * Registers SIGTERM/SIGINT handlers that conditionally stop the node on process exit.
  *
@@ -179,7 +285,7 @@ function registerDecomposerCard(configDir: string, owner: string): void {
  * TODO: Once ServiceCoordinator gains its own signal handling, remove the handlers
  * registered here to avoid double-handler conflicts. Track in Layer A implementation.
  */
-export async function activate(config: BootstrapConfig = {}): Promise<BootstrapContext> {
+export async function activate(config: BootstrapConfig = {}, _onboardDeps?: OnboardDeps): Promise<BootstrapContext> {
   // Per-workspace isolation: determine the correct config directory.
   // Priority: config.agentDir > config.workspaceDir/.agentbnb > AGENTBNB_DIR env > resolveWorkspaceDir()
   if (config.agentDir) {
@@ -211,20 +317,8 @@ export async function activate(config: BootstrapConfig = {}): Promise<BootstrapC
 
   let agentConfig = loadConfig();
   if (!agentConfig) {
-    // Auto-init for first-time OpenClaw plugin activation
-    const result = spawnSync('agentbnb', ['init', '--yes', '--no-detect'], {
-      stdio: 'pipe',
-      env: { ...process.env },
-      encoding: 'utf-8',
-    });
-    if (result.error || result.status !== 0) {
-      const msg = result.error?.message ?? (result.stderr as string | null)?.trim() ?? 'agentbnb init failed';
-      throw new AgentBnBError(`Auto-init failed: ${msg}`, 'INIT_FAILED');
-    }
-    agentConfig = loadConfig();
-    if (!agentConfig) {
-      throw new AgentBnBError('AgentBnB config still not found after auto-init', 'CONFIG_NOT_FOUND');
-    }
+    // First-time setup: auto-onboard this agent onto the AgentBnB network.
+    agentConfig = await autoOnboard(configDir, _onboardDeps);
   }
 
   // Print startup diagnostic so it's always visible in agent logs.

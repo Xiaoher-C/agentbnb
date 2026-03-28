@@ -55,7 +55,7 @@ vi.mock('../../src/registry/store.js', () => ({
 
 import { loadConfig } from '../../src/cli/config.js';
 import { activate, deactivate } from './bootstrap.js';
-import type { BootstrapContext } from './bootstrap.js';
+import type { BootstrapContext, OnboardDeps } from './bootstrap.js';
 
 const mockLoadConfig = vi.mocked(loadConfig);
 
@@ -104,14 +104,69 @@ describe('bootstrap activate/deactivate lifecycle', () => {
   });
 
   // ---------------------------------------------------------------------------
-  // Test 1: CONFIG_NOT_FOUND when no config exists
+  // Test 1: INIT_FAILED when CLI not found and config missing
   // ---------------------------------------------------------------------------
-  it('activate() throws CONFIG_NOT_FOUND when config is missing', async () => {
+  it('activate() throws INIT_FAILED when CLI not found and config missing', async () => {
     mockLoadConfig.mockReturnValue(null);
+    const deps: OnboardDeps = {
+      findCli: () => null,
+      runCommand: vi.fn(),
+    };
 
-    await expect(activate()).rejects.toMatchObject({
-      code: 'CONFIG_NOT_FOUND',
+    await expect(activate({}, deps)).rejects.toMatchObject({
+      code: 'INIT_FAILED',
     });
+  });
+
+  // ---------------------------------------------------------------------------
+  // Test 1b: Auto-onboard runs init + openclaw sync when config missing
+  // ---------------------------------------------------------------------------
+  it('activate() auto-onboards when config missing and CLI available', async () => {
+    mockLoadConfig.mockReturnValueOnce(null).mockReturnValue(MINIMAL_CONFIG as ReturnType<typeof loadConfig>);
+    const mockRun = vi.fn().mockResolvedValue({ stdout: '', stderr: '' });
+    const deps: OnboardDeps = {
+      findCli: () => '/usr/local/bin/agentbnb',
+      runCommand: mockRun,
+    };
+
+    ctx = await activate({}, deps);
+
+    expect(mockRun).toHaveBeenCalledTimes(2);
+    expect(mockRun.mock.calls[0][0]).toMatch(/agentbnb init --owner .* --yes --no-detect/);
+    expect(mockRun.mock.calls[1][0]).toBe('agentbnb openclaw sync');
+  });
+
+  // ---------------------------------------------------------------------------
+  // Test 1c: Auto-onboard continues if openclaw sync fails
+  // ---------------------------------------------------------------------------
+  it('activate() continues if openclaw sync fails during auto-onboard', async () => {
+    mockLoadConfig.mockReturnValueOnce(null).mockReturnValue(MINIMAL_CONFIG as ReturnType<typeof loadConfig>);
+    const mockRun = vi.fn()
+      .mockResolvedValueOnce({ stdout: '', stderr: '' })
+      .mockRejectedValueOnce(new Error('SOUL.md not found'));
+    const deps: OnboardDeps = {
+      findCli: () => '/usr/local/bin/agentbnb',
+      runCommand: mockRun,
+    };
+
+    ctx = await activate({}, deps);
+
+    expect(ctx.startDisposition).toBe('started');
+  });
+
+  // ---------------------------------------------------------------------------
+  // Test 1d: Skips auto-onboard when config already exists
+  // ---------------------------------------------------------------------------
+  it('activate() skips auto-onboard when config already exists', async () => {
+    const mockRun = vi.fn();
+    const deps: OnboardDeps = {
+      findCli: () => '/usr/local/bin/agentbnb',
+      runCommand: mockRun,
+    };
+
+    ctx = await activate({}, deps);
+
+    expect(mockRun).not.toHaveBeenCalled();
   });
 
   // ---------------------------------------------------------------------------
