@@ -87,13 +87,30 @@ function registerMcpWithClaudeCode(): { registered: boolean; path?: string; reas
 
   const settingsPath = join(claudeDir, 'settings.json');
 
-  // Resolve the agentbnb command path
+  // Resolve absolute path to agentbnb binary.
+  // Claude Code may not inherit the user's full PATH (e.g. launched from macOS Dock),
+  // so an absolute path is critical for MCP server spawning to work.
   let agentbnbCommand = 'agentbnb';
   try {
     const resolved = execSync('which agentbnb', { encoding: 'utf-8' }).trim();
     if (resolved) agentbnbCommand = resolved;
   } catch {
-    // Fall back to 'agentbnb' — user may install globally later
+    // 'which' failed — likely running via npx without a global install.
+    // Try to resolve from process.argv (the running script's location).
+    try {
+      const scriptPath = process.argv[1];
+      if (scriptPath && existsSync(scriptPath)) {
+        agentbnbCommand = scriptPath;
+      }
+    } catch { /* ignore */ }
+  }
+
+  if (agentbnbCommand === 'agentbnb') {
+    console.warn(
+      'Warning: Could not resolve absolute path to agentbnb binary.\n' +
+      '  Claude Code MCP may not work. Install globally first:\n' +
+      '  npm install -g agentbnb',
+    );
   }
 
   let settings: Record<string, unknown> = {};
