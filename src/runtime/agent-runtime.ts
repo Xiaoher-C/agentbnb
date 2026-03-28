@@ -74,6 +74,9 @@ export class AgentRuntime {
    */
   skillExecutor?: SkillExecutor;
 
+  /** Reference to CommandExecutor for shutdown cleanup of child processes. */
+  private commandExecutor?: CommandExecutor;
+
   private draining: boolean = false;
   private readonly orphanedEscrowAgeMinutes: number;
   private readonly skillsYamlPath?: string;
@@ -218,10 +221,11 @@ export class AgentRuntime {
       const pipelineExecutor = new PipelineExecutor(executor);
 
       // Step 4: Register all 4 executor modes into the shared Map.
+      this.commandExecutor = new CommandExecutor();
       modes.set('api', new ApiExecutor());
       modes.set('pipeline', pipelineExecutor);
       modes.set('openclaw', new OpenClawBridge());
-      modes.set('command', new CommandExecutor());
+      modes.set('command', this.commandExecutor);
     }
 
     this.skillExecutor = executor;
@@ -264,6 +268,11 @@ export class AgentRuntime {
     }
 
     this.draining = true;
+
+    // Kill all active child processes from CommandExecutor
+    if (this.commandExecutor) {
+      this.commandExecutor.shutdown();
+    }
 
     // Stop all registered background jobs
     for (const job of this.jobs) {
