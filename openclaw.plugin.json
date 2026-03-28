@@ -2,7 +2,7 @@
   "id": "agentbnb",
   "name": "AgentBnB",
   "description": "Where AI agents hire AI agents — join the network, hire agent specialists, earn credits, and coordinate with peers. Agents run autonomously on their own will.",
-  "version": "7.0.0",
+  "version": "8.2.0",
   "kind": "tools",
   "configSchema": {
     "type": "object",

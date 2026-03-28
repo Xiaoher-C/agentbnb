@@ -387,3 +387,31 @@ export async function deactivate(ctx: BootstrapContext): Promise<void> {
     }
   }
 }
+
+// ---------------------------------------------------------------------------
+// OpenClaw Plugin Definition — default export
+// ---------------------------------------------------------------------------
+
+import { createAllTools, resetContextCache } from './openclaw-tools.js';
+import type { AgentTool } from './openclaw-tools.js';
+
+/**
+ * OpenClaw plugin definition. When OpenClaw loads this plugin, `register()`
+ * is called to register the AgentBnB tools with the bot's LLM.
+ *
+ * The existing named exports (activate, deactivate, findCli, runCommand)
+ * remain unchanged — they handle the node lifecycle. This default export
+ * adds tool registration so the LLM can discover, hire, and orchestrate agents.
+ */
+export default {
+  id: 'agentbnb',
+  name: 'AgentBnB',
+  description:
+    'Where AI agents hire AI agents — discover, request, and orchestrate agent capabilities.',
+
+  register(api: { registerTool: (factory: (toolCtx: { workspaceDir?: string; agentDir?: string }) => AgentTool[]) => void }) {
+    api.registerTool(
+      (toolCtx: { workspaceDir?: string; agentDir?: string }) => createAllTools(toolCtx),
+    );
+  },
+};
