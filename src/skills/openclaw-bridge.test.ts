@@ -141,7 +141,7 @@ describe('OpenClawBridge — process channel', () => {
     vi.restoreAllMocks();
   });
 
-  it('spawns openclaw run command with JSON input', async () => {
+  it('spawns openclaw agent command with JSON message', async () => {
     const execFileSyncSpy = vi
       .spyOn(child_process, 'execFileSync')
       .mockReturnValue(Buffer.from(JSON.stringify({ result: 'done' })));
@@ -153,20 +153,23 @@ describe('OpenClawBridge — process channel', () => {
     expect(execFileSyncSpy).toHaveBeenCalledOnce();
     const args = execFileSyncSpy.mock.calls[0]![1] as string[];
     expect(execFileSyncSpy.mock.calls[0]![0]).toBe('openclaw');
-    expect(args[0]).toBe('run');
-    expect(args[1]).toBe('my-agent');
-    expect(args[2]).toBe('--input');
+    expect(args[0]).toBe('agent');
+    expect(args[1]).toBe('--agent');
+    expect(args[2]).toBe('my-agent');
+    expect(args[3]).toBe('--message');
+    expect(args[5]).toBe('--json');
+    expect(args[6]).toBe('--local');
 
     expect(result.success).toBe(true);
     expect(result.result).toEqual({ result: 'done' });
   });
 
-  it('passes task payload as JSON in --input flag', async () => {
-    vi.spyOn(child_process, 'execFileSync').mockImplementation((cmd: unknown) => {
-      const cmdStr = cmd as string;
-      const match = cmdStr.match(/--input '(.+)'$/);
-      if (!match) throw new Error('No --input found in: ' + cmdStr);
-      const payload = JSON.parse(match[1]!) as Record<string, unknown>;
+  it('passes task payload as JSON in --message flag', async () => {
+    vi.spyOn(child_process, 'execFileSync').mockImplementation((_cmd: unknown, args: unknown) => {
+      const argArr = args as string[];
+      const msgIdx = argArr.indexOf('--message');
+      if (msgIdx === -1) throw new Error('No --message found in args');
+      const payload = JSON.parse(argArr[msgIdx + 1]!) as Record<string, unknown>;
       expect(payload.task).toBe('Test Skill');
       expect(payload.source).toBe('agentbnb');
       return Buffer.from(JSON.stringify({ output: 'ok' }));
@@ -190,15 +193,15 @@ describe('OpenClawBridge — process channel', () => {
     expect(result.error).toMatch(/Command not found/);
   });
 
-  it('returns error when stdout is invalid JSON', async () => {
+  it('returns raw text when stdout is not valid JSON', async () => {
     vi.spyOn(child_process, 'execFileSync').mockReturnValue(Buffer.from('not json'));
 
     const bridge = new OpenClawBridge();
     const config = makeConfig({ channel: 'process' });
     const result = await bridge.execute(config, {});
 
-    expect(result.success).toBe(false);
-    expect(result.error).toBeDefined();
+    expect(result.success).toBe(true);
+    expect(result.result).toEqual({ text: 'not json' });
   });
 });
 
