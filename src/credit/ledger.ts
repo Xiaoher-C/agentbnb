@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { AgentBnBError } from '../types/index.js';
 import { ensureReliabilityTable } from './reliability-metrics.js';
 import { ensureAgentsTable } from '../identity/agent-identity.js';
+import { canonicalizeCreditOwner, migrateCreditOwnerData } from './owner-normalization.js';
 
 /**
  * A single credit transaction record
@@ -106,26 +107,27 @@ export function bootstrapAgent(
   owner: string,
   amount: number = 100,
 ): void {
+  const canonicalOwner = canonicalizeCreditOwner(db, owner);
   const now = new Date().toISOString();
 
   let isNew = false;
   db.transaction(() => {
     const result = db
       .prepare('INSERT OR IGNORE INTO credit_balances (owner, balance, updated_at) VALUES (?, ?, ?)')
-      .run(owner, amount, now);
+      .run(canonicalOwner, amount, now);
 
     // Only record the transaction if the balance row was actually created
     if (result.changes > 0) {
       isNew = true;
       db.prepare(
         'INSERT INTO credit_transactions (id, owner, amount, reason, reference_id, created_at) VALUES (?, ?, ?, ?, ?, ?)',
-      ).run(randomUUID(), owner, amount, 'bootstrap', null, now);
+      ).run(randomUUID(), canonicalOwner, amount, 'bootstrap', null, now);
     }
   })();
 
   // Issue demand voucher for new agents
   if (isNew) {
-    issueVoucher(db, owner, 50, 30);
+    issueVoucher(db, canonicalOwner, 50, 30);
   }
 }
 
@@ -138,9 +140,10 @@ export function bootstrapAgent(
  * @returns Current balance in credits.
  */
 export function getBalance(db: Database.Database, owner: string): number {
+  const canonicalOwner = canonicalizeCreditOwner(db, owner);
   const row = db
     .prepare('SELECT balance FROM credit_balances WHERE owner = ?')
-    .get(owner) as { balance: number } | undefined;
+    .get(canonicalOwner) as { balance: number } | undefined;
   return row?.balance ?? 0;
 }
 
@@ -170,12 +173,13 @@ export function getTransactions(
   owner: string,
   opts: number | TransactionPage = 100,
 ): CreditTransaction[] {
+  const canonicalOwner = canonicalizeCreditOwner(db, owner);
   // Backward-compatible: accept plain number as limit
   const page: TransactionPage = typeof opts === 'number' ? { limit: opts } : opts;
   const limit = page.limit ?? 100;
 
   const conditions = ['owner = ?'];
-  const params: (string | number)[] = [owner];
+  const params: (string | number)[] = [canonicalOwner];
 
   if (page.before) {
     conditions.push('created_at < ?');
@@ -241,11 +245,12 @@ export function archiveTransactions(
  * Idempotent — calling twice for the same owner returns the existing number.
  */
 export function registerProvider(db: Database.Database, owner: string): number {
+  const canonicalOwner = canonicalizeCreditOwner(db, owner);
   const now = new Date().toISOString();
   const maxRow = db.prepare('SELECT MAX(provider_number) as maxNum FROM provider_registry').get() as { maxNum: number | null };
   const nextNum = (maxRow?.maxNum ?? 0) + 1;
-  db.prepare('INSERT OR IGNORE INTO provider_registry (owner, provider_number, registered_at) VALUES (?, ?, ?)').run(owner, nextNum, now);
-  const row = db.prepare('SELECT provider_number FROM provider_registry WHERE owner = ?').get(owner) as { provider_number: number };
+  db.prepare('INSERT OR IGNORE INTO provider_registry (owner, provider_number, registered_at) VALUES (?, ?, ?)').run(canonicalOwner, nextNum, now);
+  const row = db.prepare('SELECT provider_number FROM provider_registry WHERE owner = ?').get(canonicalOwner) as { provider_number: number };
   return row.provider_number;
 }
 
@@ -253,7 +258,8 @@ export function registerProvider(db: Database.Database, owner: string): number {
  * Returns the provider_number for an owner, or null if not registered.
  */
 export function getProviderNumber(db: Database.Database, owner: string): number | null {
-  const row = db.prepare('SELECT provider_number FROM provider_registry WHERE owner = ?').get(owner) as { provider_number: number } | undefined;
+  const canonicalOwner = canonicalizeCreditOwner(db, owner);
+  const row = db.prepare('SELECT provider_number FROM provider_registry WHERE owner = ?').get(canonicalOwner) as { provider_number: number } | undefined;
   return row?.provider_number ?? null;
 }
 
@@ -276,12 +282,13 @@ export function issueVoucher(
   amount: number = 50,
   daysValid: number = 30,
 ): string {
+  const canonicalOwner = canonicalizeCreditOwner(db, owner);
   const id = randomUUID();
   const now = new Date();
   const expiresAt = new Date(now.getTime() + daysValid * 24 * 60 * 60 * 1000);
   db.prepare(
     'INSERT INTO demand_vouchers (id, owner, amount, remaining, created_at, expires_at, is_active) VALUES (?, ?, ?, ?, ?, ?, 1)',
-  ).run(id, owner, amount, amount, now.toISOString(), expiresAt.toISOString());
+  ).run(id, canonicalOwner, amount, amount, now.toISOString(), expiresAt.toISOString());
   return id;
 }
 
@@ -292,10 +299,11 @@ export function getActiveVoucher(
   db: Database.Database,
   owner: string,
 ): { id: string; remaining: number; expires_at: string } | null {
+  const canonicalOwner = canonicalizeCreditOwner(db, owner);
   const now = new Date().toISOString();
   const row = db.prepare(
     'SELECT id, remaining, expires_at FROM demand_vouchers WHERE owner = ? AND is_active = 1 AND remaining > 0 AND expires_at > ? ORDER BY created_at ASC LIMIT 1',
-  ).get(owner, now) as { id: string; remaining: number; expires_at: string } | undefined;
+  ).get(canonicalOwner, now) as { id: string; remaining: number; expires_at: string } | undefined;
   return row ?? null;
 }
 
@@ -330,6 +338,7 @@ export function recordEarning(
   _cardId: string,
   receiptNonce: string,
 ): void {
+  const canonicalOwner = canonicalizeCreditOwner(db, owner);
   const now = new Date().toISOString();
   db.transaction(() => {
     // Idempotency: check if this nonce was already recorded
@@ -343,15 +352,15 @@ export function recordEarning(
     // Ensure balance row exists
     db.prepare(
       'INSERT OR IGNORE INTO credit_balances (owner, balance, updated_at) VALUES (?, 0, ?)',
-    ).run(owner, now);
+    ).run(canonicalOwner, now);
     // Credit the earnings
     db.prepare(
       'UPDATE credit_balances SET balance = balance + ?, updated_at = ? WHERE owner = ?',
-    ).run(amount, now, owner);
+    ).run(amount, now, canonicalOwner);
     // Log transaction with receipt nonce as reference_id
     db.prepare(
       'INSERT INTO credit_transactions (id, owner, amount, reason, reference_id, created_at) VALUES (?, ?, ?, ?, ?, ?)',
-    ).run(randomUUID(), owner, amount, 'remote_earning', receiptNonce, now);
+    ).run(randomUUID(), canonicalOwner, amount, 'remote_earning', receiptNonce, now);
   })();
 }
 
@@ -369,38 +378,8 @@ export function migrateOwner(
   newOwner: string,
 ): void {
   if (oldOwner === newOwner) return;
-
-  const now = new Date().toISOString();
-
-  db.transaction(() => {
-    // Get old balance
-    const oldRow = db.prepare('SELECT balance FROM credit_balances WHERE owner = ?').get(oldOwner) as { balance: number } | undefined;
-    if (!oldRow) return; // nothing to migrate
-
-    // Check if new owner already has a balance row
-    const newRow = db.prepare('SELECT balance FROM credit_balances WHERE owner = ?').get(newOwner) as { balance: number } | undefined;
-
-    if (newRow) {
-      // Merge: add old balance to new
-      db.prepare('UPDATE credit_balances SET balance = balance + ?, updated_at = ? WHERE owner = ?')
-        .run(oldRow.balance, now, newOwner);
-    } else {
-      // Rename: update owner in place
-      db.prepare('UPDATE credit_balances SET owner = ?, updated_at = ? WHERE owner = ?')
-        .run(newOwner, now, oldOwner);
-    }
-
-    // Delete old row if merge happened (new row existed)
-    if (newRow) {
-      db.prepare('DELETE FROM credit_balances WHERE owner = ?').run(oldOwner);
-    }
-
-    // Migrate transactions
-    db.prepare('UPDATE credit_transactions SET owner = ? WHERE owner = ?').run(newOwner, oldOwner);
-
-    // Migrate escrows
-    db.prepare('UPDATE credit_escrow SET owner = ? WHERE owner = ?').run(newOwner, oldOwner);
-  })();
+  const canonicalNewOwner = canonicalizeCreditOwner(db, newOwner);
+  migrateCreditOwnerData(db, oldOwner, canonicalNewOwner);
 }
 
 // Re-export error for use in escrow module

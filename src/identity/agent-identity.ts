@@ -175,7 +175,7 @@ export function listAgentsByOperator(
 export function updateAgentRecord(
   db: Database.Database,
   agentId: string,
-  updates: Partial<Pick<AgentRecord, 'display_name' | 'operator_id' | 'server_id'>>,
+  updates: Partial<Pick<AgentRecord, 'display_name' | 'operator_id' | 'server_id' | 'legacy_owner'>>,
 ): void {
   const fields: string[] = [];
   const values: unknown[] = [];
@@ -191,6 +191,10 @@ export function updateAgentRecord(
   if (updates.server_id !== undefined) {
     fields.push('server_id = ?');
     values.push(updates.server_id);
+  }
+  if (updates.legacy_owner !== undefined) {
+    fields.push('legacy_owner = ?');
+    values.push(updates.legacy_owner);
   }
 
   if (fields.length === 0) return;

@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url';
 import { existsSync } from 'node:fs';
 import { z } from 'zod';
 import type Database from 'better-sqlite3';
-import { getCard, insertCard, updateCard, listCards, getCardsBySkillCapability } from './store.js';
+import { getCard, insertCard, updateCard, listCards, getCardsBySkillCapability, attachCanonicalAgentId } from './store.js';
 import { listPendingRequests, resolvePendingRequest } from '../autonomy/pending-requests.js';
 import { searchCards, filterCards, buildReputationMap } from './matcher.js';
 import { getPricingStats } from './pricing.js';
@@ -62,6 +62,10 @@ export interface RegistryServerOptions {
 function stripInternal(card: CapabilityCard): Omit<CapabilityCard, '_internal'> {
   const { _internal: _, ...publicCard } = card;
   return publicCard;
+}
+
+function buildSqlPlaceholders(count: number): string {
+  return Array.from({ length: count }, () => '?').join(', ');
 }
 
 /**
@@ -659,11 +663,11 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
 
     if (card.spec_version === '2.0') {
       // v2.0 card — raw SQL INSERT OR REPLACE (insertCard only supports v1.0)
-      const cardWithTimestamps = {
+      const cardWithTimestamps = attachCanonicalAgentId(db, {
         ...card,
         created_at: card.created_at ?? now,
         updated_at: now,
-      };
+      });
       db.prepare(
         `INSERT OR REPLACE INTO capability_cards (id, owner, data, created_at, updated_at)
          VALUES (?, ?, ?, ?, ?)`
@@ -831,22 +835,26 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
       return reply.status(404).send({ error: 'Agent not found' });
     }
 
-    // member_since (joined_at) from earliest created_at in DB
-    const memberStmt = db.prepare(
-      'SELECT MIN(created_at) as earliest, MAX(created_at) as latest FROM capability_cards WHERE owner = ?'
-    );
-    const memberRow = memberStmt.get(owner) as { earliest: string; latest: string } | undefined;
-    const joinedAt = memberRow?.earliest ?? new Date().toISOString();
+    const resolvedOwner = ownerCards[0]?.owner ?? owner;
+    const ownerCardIds = ownerCards.map((card) => card.id);
+    const cardIdPlaceholders = buildSqlPlaceholders(ownerCardIds.length);
+    const joinedAt =
+      ownerCards
+        .map((card) => card.created_at)
+        .filter((value): value is string => typeof value === 'string' && value.length > 0)
+        .sort((left, right) => left.localeCompare(right))[0] ??
+      new Date().toISOString();
+    const latestCardUpdate =
+      ownerCards
+        .map((card) => card.updated_at ?? card.created_at)
+        .filter((value): value is string => typeof value === 'string' && value.length > 0)
+        .sort((left, right) => right.localeCompare(left))[0] ?? joinedAt;
 
-    // last_active: MAX of either last card update or last successful request
-    const lastActiveStmt = db.prepare(`
-      SELECT MAX(rl.created_at) as last_req
-      FROM request_log rl
-      INNER JOIN capability_cards cc ON rl.card_id = cc.id
-      WHERE cc.owner = ?
-    `);
-    const lastActiveRow = lastActiveStmt.get(owner) as { last_req: string | null } | undefined;
-    const lastActive = lastActiveRow?.last_req ?? memberRow?.latest ?? joinedAt;
+    const lastActiveStmt = db.prepare(
+      `SELECT MAX(created_at) as last_req FROM request_log WHERE card_id IN (${cardIdPlaceholders})`,
+    );
+    const lastActiveRow = lastActiveStmt.get(...ownerCardIds) as { last_req: string | null } | undefined;
+    const lastActive = lastActiveRow?.last_req ?? latestCardUpdate ?? joinedAt;
 
     // --- Trust Metrics (from request_log, all-time) ---
     const metricsStmt = db.prepare(`
@@ -858,10 +866,9 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
         COUNT(DISTINCT rl.requester) as unique_requesters,
         COUNT(DISTINCT CASE WHEN rl.status = 'success' THEN rl.requester END) as repeat_success_requesters
       FROM request_log rl
-      INNER JOIN capability_cards cc ON rl.card_id = cc.id
-      WHERE cc.owner = ? AND rl.action_type IS NULL
+      WHERE rl.card_id IN (${cardIdPlaceholders}) AND rl.action_type IS NULL
     `);
-    const metricsRow = metricsStmt.get(owner) as {
+    const metricsRow = metricsStmt.get(...ownerCardIds) as {
       total: number;
       successes: number;
       avg_latency: number | null;
@@ -888,13 +895,12 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
         COUNT(*) as count,
         SUM(CASE WHEN rl.status = 'success' THEN 1 ELSE 0 END) as success
       FROM request_log rl
-      INNER JOIN capability_cards cc ON rl.card_id = cc.id
-      WHERE cc.owner = ? AND rl.action_type IS NULL
+      WHERE rl.card_id IN (${cardIdPlaceholders}) AND rl.action_type IS NULL
         AND rl.created_at >= DATE('now', '-7 days')
       GROUP BY DATE(rl.created_at)
       ORDER BY day ASC
     `);
-    const trend_7d = (trendStmt.all(owner) as Array<{ day: string; count: number; success: number }>)
+    const trend_7d = (trendStmt.all(...ownerCardIds) as Array<{ day: string; count: number; success: number }>)
       .map((r) => ({ date: r.day, count: r.count, success: r.success }));
 
     // --- Performance Tier (metrics-only, no verification implication) ---
@@ -906,12 +912,11 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
     const proofsStmt = db.prepare(`
       SELECT rl.card_name, rl.status, rl.latency_ms, rl.id, rl.created_at
       FROM request_log rl
-      INNER JOIN capability_cards cc ON rl.card_id = cc.id
-      WHERE cc.owner = ? AND rl.action_type IS NULL
+      WHERE rl.card_id IN (${cardIdPlaceholders}) AND rl.action_type IS NULL
       ORDER BY rl.created_at DESC
       LIMIT 10
     `);
-    const proofRows = proofsStmt.all(owner) as Array<{
+    const proofRows = proofsStmt.all(...ownerCardIds) as Array<{
       card_name: string;
       status: 'success' | 'failure' | 'timeout';
       latency_ms: number;
@@ -951,25 +956,23 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
     const activityStmt = db.prepare(`
       SELECT rl.id, rl.card_name, rl.requester, rl.status, rl.credits_charged, rl.created_at
       FROM request_log rl
-      INNER JOIN capability_cards cc ON rl.card_id = cc.id
-      WHERE cc.owner = ?
+      WHERE rl.card_id IN (${cardIdPlaceholders})
       ORDER BY rl.created_at DESC
       LIMIT 10
     `);
-    const recentActivity = activityStmt.all(owner) as AgentProfileV2['recent_activity'];
+    const recentActivity = activityStmt.all(...ownerCardIds) as AgentProfileV2['recent_activity'];
 
     // --- Backwards-compat profile aggregate ---
     const skillCount = ownerCards.reduce((sum, card) => sum + ((card as unknown as CapabilityCardV2).skills?.length ?? 1), 0);
     const creditsStmt = db.prepare(`
-      SELECT SUM(CASE WHEN rl.status = 'success' THEN rl.credits_charged ELSE 0 END) as credits_earned
-      FROM capability_cards cc
-      LEFT JOIN request_log rl ON rl.card_id = cc.id
-      WHERE cc.owner = ?
+      SELECT COALESCE(SUM(CASE WHEN rl.status = 'success' THEN rl.credits_charged ELSE 0 END), 0) as credits_earned
+      FROM request_log rl
+      WHERE rl.card_id IN (${cardIdPlaceholders})
     `);
-    const creditsRow = creditsStmt.get(owner) as { credits_earned: number } | undefined;
+    const creditsRow = creditsStmt.get(...ownerCardIds) as { credits_earned: number } | undefined;
 
     const response: AgentProfileV2 = {
-      owner,
+      owner: resolvedOwner,
       agent_name: v2Card?.agent_name,
       short_description: v2Card?.short_description,
       joined_at: joinedAt,
@@ -1002,7 +1005,7 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
     return reply.send({
       ...response,
       profile: {
-        owner,
+        owner: resolvedOwner,
         skill_count: skillCount,
         success_rate: successRate > 0 ? successRate : null,
         total_earned: creditsRow?.credits_earned ?? 0,
@@ -1743,16 +1746,16 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
     },
   }, async (request, reply) => {
     const { owner } = request.params as { owner: string };
-
-    // Get all cards for this owner
-    const rows = db.prepare(
-      'SELECT id, data FROM capability_cards WHERE owner = ?',
-    ).all(owner) as Array<{ id: string; data: string }>;
+    const cards = listCards(db, owner);
 
     const agents = [];
-    for (const row of rows) {
+    for (const card of cards) {
       try {
-        const card = JSON.parse(row.data);
+        const rawCard = card as Record<string, unknown>;
+        const providerIdentity =
+          typeof card.agent_id === 'string' && card.agent_id.length > 0
+            ? card.agent_id
+            : card.owner;
 
         // Per-agent earnings/spend from credit transactions
         let earnings = 0;
@@ -1760,22 +1763,22 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
         if (opts.creditDb) {
           const earningRow = opts.creditDb.prepare(
             "SELECT COALESCE(SUM(amount), 0) as total FROM credit_transactions WHERE owner = ? AND reason = 'settlement' AND amount > 0",
-          ).get(owner) as { total: number };
+          ).get(providerIdentity) as { total: number };
           earnings = earningRow.total;
           const spendRow = opts.creditDb.prepare(
             "SELECT COALESCE(SUM(ABS(amount)), 0) as total FROM credit_transactions WHERE owner = ? AND reason = 'escrow_hold'",
-          ).get(owner) as { total: number };
+          ).get(providerIdentity) as { total: number };
           spend = spendRow.total;
         }
 
         // Per-agent request stats from request_log
         const successCount = (db.prepare(
           "SELECT COUNT(*) as cnt FROM request_log WHERE card_id = ? AND status = 'success' AND (action_type IS NULL OR action_type = 'auto_share')",
-        ).get(row.id) as { cnt: number }).cnt;
+        ).get(card.id) as { cnt: number }).cnt;
 
         const failureCount = (db.prepare(
           "SELECT COUNT(*) as cnt FROM request_log WHERE card_id = ? AND status IN ('failure', 'timeout', 'refunded') AND (action_type IS NULL OR action_type = 'auto_share')",
-        ).get(row.id) as { cnt: number }).cnt;
+        ).get(card.id) as { cnt: number }).cnt;
 
         const totalExec = successCount + failureCount;
         const successRate = totalExec > 0 ? successCount / totalExec : 0;
@@ -1785,7 +1788,7 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
         try {
           const failureRows = db.prepare(
             "SELECT failure_reason, COUNT(*) as cnt FROM request_log WHERE card_id = ? AND status IN ('failure', 'timeout', 'refunded') AND failure_reason IS NOT NULL GROUP BY failure_reason",
-          ).all(row.id) as Array<{ failure_reason: string; cnt: number }>;
+          ).all(card.id) as Array<{ failure_reason: string; cnt: number }>;
           for (const fr of failureRows) {
             failureBreakdown[fr.failure_reason] = fr.cnt;
           }
@@ -1797,12 +1800,15 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
         let reliability = null;
         if (opts.creditDb) {
           const { getReliabilityMetrics } = await import('../credit/reliability-metrics.js');
-          reliability = getReliabilityMetrics(opts.creditDb, owner);
+          reliability = getReliabilityMetrics(opts.creditDb, providerIdentity);
         }
 
         agents.push({
-          id: row.id,
-          name: card.name ?? card.agent_name ?? owner,
+          id: card.id,
+          name:
+            (typeof rawCard['name'] === 'string' ? rawCard['name'] : undefined) ??
+            (typeof rawCard['agent_name'] === 'string' ? rawCard['agent_name'] : undefined) ??
+            card.owner,
           online: card.availability?.online ?? false,
           current_load: 0, // Will be populated from relay heartbeat data in future
           success_rate: successRate,

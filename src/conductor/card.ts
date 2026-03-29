@@ -2,6 +2,7 @@ import type Database from 'better-sqlite3';
 import { createHash } from 'node:crypto';
 import { CapabilityCardV2Schema } from '../types/index.js';
 import type { CapabilityCardV2 } from '../types/index.js';
+import { attachCanonicalAgentId } from '../registry/store.js';
 
 /** Fixed owner identifier for the Conductor agent. */
 export const CONDUCTOR_OWNER = 'agentbnb-conductor';
@@ -111,7 +112,7 @@ export function buildConductorCard(owner?: string): CapabilityCardV2 {
  * @returns The registered CapabilityCardV2.
  */
 export function registerConductorCard(db: Database.Database): CapabilityCardV2 {
-  const card = buildConductorCard();
+  const card = attachCanonicalAgentId(db, buildConductorCard());
   const now = new Date().toISOString();
 
   const existing = db

@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { AgentBnBError } from '../types/index.js';
 import { registerProvider, getProviderNumber, getProviderBonus, getActiveVoucher, consumeVoucher } from './ledger.js';
 import { recordSuccessfulHire } from './reliability-metrics.js';
+import { canonicalizeCreditOwner } from './owner-normalization.js';
 
 /** Network fee rate applied to settled escrows (5%). */
 export const NETWORK_FEE_RATE = 0.05;
@@ -48,7 +49,10 @@ function getEscrowForMutation(
   if (!escrow) {
     throw new AgentBnBError(`Escrow not found: ${escrowId}`, 'ESCROW_NOT_FOUND');
   }
-  return escrow;
+  return {
+    ...escrow,
+    owner: canonicalizeCreditOwner(db, escrow.owner),
+  };
 }
 
 function updateEscrowStatus(
@@ -113,28 +117,29 @@ export function holdEscrow(
   amount: number,
   cardId: string,
 ): string {
+  const canonicalOwner = canonicalizeCreditOwner(db, owner);
   const escrowId = randomUUID();
   const now = new Date().toISOString();
 
   const hold = db.transaction(() => {
     // Check for active voucher first
-    const voucher = getActiveVoucher(db, owner);
+    const voucher = getActiveVoucher(db, canonicalOwner);
     if (voucher && voucher.remaining >= amount) {
       // Use voucher instead of balance
       consumeVoucher(db, voucher.id, amount);
 
       db.prepare(
         'INSERT INTO credit_escrow (id, owner, amount, card_id, status, created_at, funding_source) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      ).run(escrowId, owner, amount, cardId, 'held', now, 'voucher');
+      ).run(escrowId, canonicalOwner, amount, cardId, 'held', now, 'voucher');
 
       db.prepare(
         'INSERT INTO credit_transactions (id, owner, amount, reason, reference_id, created_at) VALUES (?, ?, ?, ?, ?, ?)',
-      ).run(randomUUID(), owner, -amount, 'voucher_hold', escrowId, now);
+      ).run(randomUUID(), canonicalOwner, -amount, 'voucher_hold', escrowId, now);
     } else {
       // Normal balance deduction
       const row = db
         .prepare('SELECT balance FROM credit_balances WHERE owner = ?')
-        .get(owner) as { balance: number } | undefined;
+        .get(canonicalOwner) as { balance: number } | undefined;
 
       if (!row || row.balance < amount) {
         throw new AgentBnBError('Insufficient credits', 'INSUFFICIENT_CREDITS');
@@ -142,15 +147,15 @@ export function holdEscrow(
 
       db.prepare(
         'UPDATE credit_balances SET balance = balance - ?, updated_at = ? WHERE owner = ? AND balance >= ?',
-      ).run(amount, now, owner, amount);
+      ).run(amount, now, canonicalOwner, amount);
 
       db.prepare(
         'INSERT INTO credit_escrow (id, owner, amount, card_id, status, created_at, funding_source) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      ).run(escrowId, owner, amount, cardId, 'held', now, 'balance');
+      ).run(escrowId, canonicalOwner, amount, cardId, 'held', now, 'balance');
 
       db.prepare(
         'INSERT INTO credit_transactions (id, owner, amount, reason, reference_id, created_at) VALUES (?, ?, ?, ?, ?, ?)',
-      ).run(randomUUID(), owner, -amount, 'escrow_hold', escrowId, now);
+      ).run(randomUUID(), canonicalOwner, -amount, 'escrow_hold', escrowId, now);
     }
   });
 
@@ -203,6 +208,7 @@ export function settleEscrow(
   escrowId: string,
   recipientOwner: string,
 ): void {
+  const canonicalRecipientOwner = canonicalizeCreditOwner(db, recipientOwner);
   const now = new Date().toISOString();
 
   const settle = db.transaction(() => {
@@ -216,11 +222,11 @@ export function settleEscrow(
     // Credit recipient (capability owner) — INSERT OR IGNORE in case they don't have a balance row yet
     db.prepare(
       'INSERT OR IGNORE INTO credit_balances (owner, balance, updated_at) VALUES (?, 0, ?)',
-    ).run(recipientOwner, now);
+    ).run(canonicalRecipientOwner, now);
 
     db.prepare(
       'UPDATE credit_balances SET balance = balance + ?, updated_at = ? WHERE owner = ?',
-    ).run(providerAmount, now, recipientOwner);
+    ).run(providerAmount, now, canonicalRecipientOwner);
 
     // Credit platform treasury with fee
     if (feeAmount > 0) {
@@ -243,12 +249,12 @@ export function settleEscrow(
     // Log settlement for recipient (providerAmount, not full)
     db.prepare(
       'INSERT INTO credit_transactions (id, owner, amount, reason, reference_id, created_at) VALUES (?, ?, ?, ?, ?, ?)',
-    ).run(randomUUID(), recipientOwner, providerAmount, 'settlement', escrowId, now);
+    ).run(randomUUID(), canonicalRecipientOwner, providerAmount, 'settlement', escrowId, now);
 
     // First Provider Bonus
-    let providerNum = getProviderNumber(db, recipientOwner);
+    let providerNum = getProviderNumber(db, canonicalRecipientOwner);
     if (providerNum === null) {
-      providerNum = registerProvider(db, recipientOwner);
+      providerNum = registerProvider(db, canonicalRecipientOwner);
     }
     const bonus = getProviderBonus(providerNum);
     if (bonus > 1.0) {
@@ -260,16 +266,16 @@ export function settleEscrow(
         ).run('platform_treasury', now);
         db.prepare(
           'UPDATE credit_balances SET balance = balance + ?, updated_at = ? WHERE owner = ?',
-        ).run(bonusAmount, now, recipientOwner);
+        ).run(bonusAmount, now, canonicalRecipientOwner);
         db.prepare(
           'INSERT INTO credit_transactions (id, owner, amount, reason, reference_id, created_at) VALUES (?, ?, ?, ?, ?, ?)',
-        ).run(randomUUID(), recipientOwner, bonusAmount, 'provider_bonus', escrowId, now);
+        ).run(randomUUID(), canonicalRecipientOwner, bonusAmount, 'provider_bonus', escrowId, now);
       }
     }
 
     // Update reliability metrics — record successful hire
     try {
-      recordSuccessfulHire(db, recipientOwner, escrow.owner);
+      recordSuccessfulHire(db, canonicalRecipientOwner, escrow.owner);
     } catch {
       // Non-fatal — metrics collection should not block settlement
     }
@@ -358,5 +364,9 @@ export function getEscrowStatus(db: Database.Database, escrowId: string): Escrow
       'SELECT id, owner, amount, card_id, status, created_at, settled_at FROM credit_escrow WHERE id = ?',
     )
     .get(escrowId) as EscrowRecord | undefined;
-  return row ?? null;
+  if (!row) return null;
+  return {
+    ...row,
+    owner: canonicalizeCreditOwner(db, row.owner),
+  };
 }

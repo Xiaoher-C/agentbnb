@@ -8,6 +8,11 @@ import { ensureAgentsTable, resolveCanonicalIdentity } from '../identity/agent-i
 
 export type { Database };
 
+interface AgentScopedCard {
+  owner: string;
+  agent_id?: string;
+}
+
 /**
  * SQL for the v2.0 FTS5 triggers that aggregate over skills[] using json_each.
  *
@@ -455,7 +460,11 @@ function rebuildCardsFts(db: Database.Database): void {
  */
 export function insertCard(db: Database.Database, card: CapabilityCard): void {
   const now = new Date().toISOString();
-  const withTimestamps = { ...card, created_at: card.created_at ?? now, updated_at: now };
+  const withTimestamps = attachCanonicalAgentId(db, {
+    ...card,
+    created_at: card.created_at ?? now,
+    updated_at: now,
+  });
 
   const parsed = CapabilityCardSchema.safeParse(withTimestamps);
   if (!parsed.success) {
@@ -492,6 +501,29 @@ export function getCard(db: Database.Database, id: string): CapabilityCard | nul
   if (!row) return null;
 
   return JSON.parse(row.data) as CapabilityCard;
+}
+
+/**
+ * Ensures stored cards carry the canonical top-level agent_id whenever the
+ * owner can be resolved through the local agents table.
+ */
+export function attachCanonicalAgentId<T extends AgentScopedCard>(
+  db: Database.Database,
+  card: T,
+): T {
+  const resolved = resolveCanonicalIdentity(db, card.owner);
+  if (!resolved.resolved) {
+    return card;
+  }
+
+  if (card.agent_id === resolved.agent_id) {
+    return card;
+  }
+
+  return {
+    ...card,
+    agent_id: resolved.agent_id,
+  };
 }
 
 function canManageCardByIdentifier(
@@ -541,7 +573,7 @@ export function updateCard(
   }
 
   const now = new Date().toISOString();
-  const merged = { ...existing, ...updates, updated_at: now };
+  const merged = attachCanonicalAgentId(db, { ...existing, ...updates, updated_at: now });
 
   const parsed = AnyCardSchema.safeParse(merged);
   if (!parsed.success) {

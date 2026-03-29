@@ -3,7 +3,7 @@ import type Database from 'better-sqlite3';
 import { CapabilityCardV2Schema } from '../types/index.js';
 import type { CapabilityCardV2, Skill } from '../types/index.js';
 import { parseSoulMd } from '../skills/publish-capability.js';
-import { listCards } from '../registry/store.js';
+import { listCards, attachCanonicalAgentId } from '../registry/store.js';
 import { AgentBnBError } from '../types/index.js';
 
 /**
@@ -209,21 +209,22 @@ export function publishFromSoulV2(
     created_at: existingV2?.created_at ?? now,
     updated_at: now,
   };
+  const storedCard = attachCanonicalAgentId(db, card);
 
   // Validate with Zod schema
-  CapabilityCardV2Schema.parse(card);
+  CapabilityCardV2Schema.parse(storedCard);
 
   if (existingV2) {
     // Update existing card via raw SQL (v2.0 cards bypass v1.0 Zod validation in updateCard)
     db.prepare(
       'UPDATE capability_cards SET data = ?, updated_at = ? WHERE id = ?',
-    ).run(JSON.stringify(card), now, cardId);
+    ).run(JSON.stringify(storedCard), now, cardId);
   } else {
     // Insert new card via raw SQL (insertCard only accepts v1.0 cards)
     db.prepare(
       'INSERT INTO capability_cards (id, owner, data, created_at, updated_at) VALUES (?, ?, ?, ?, ?)',
-    ).run(cardId, owner, JSON.stringify(card), now, now);
+    ).run(cardId, storedCard.owner, JSON.stringify(storedCard), now, now);
   }
 
-  return card;
+  return storedCard;
 }

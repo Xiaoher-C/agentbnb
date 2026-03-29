@@ -73,6 +73,20 @@ describe('Registry Store', () => {
       expect(retrieved?.updated_at).toBeDefined();
     });
 
+    it('insertCard auto-populates top-level agent_id from mapped owner identity', () => {
+      createAgentRecord(db, {
+        agent_id: 'eeeeeeeeeeeeeeee',
+        display_name: 'test-owner',
+        public_key: '55'.repeat(32),
+        legacy_owner: 'test-owner',
+      });
+
+      const card = makeCard();
+      insertCard(db, card);
+      const retrieved = getCard(db, card.id);
+      expect(retrieved?.agent_id).toBe('eeeeeeeeeeeeeeee');
+    });
+
     it('deleteCard by owner succeeds', () => {
       const card = makeCard();
       insertCard(db, card);

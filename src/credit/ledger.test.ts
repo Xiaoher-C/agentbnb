@@ -1,7 +1,9 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { openCreditDb, getBalance, bootstrapAgent, getTransactions } from './ledger.js';
+import { openCreditDb, getBalance, bootstrapAgent, getTransactions, getActiveVoucher, getProviderNumber, registerProvider } from './ledger.js';
 import { holdEscrow, settleEscrow, releaseEscrow, getEscrowStatus } from './escrow.js';
 import type Database from 'better-sqlite3';
+import { createAgentRecord } from '../identity/agent-identity.js';
+import { getReliabilityMetrics, recordAvailabilityCheck, recordFeedback } from './reliability-metrics.js';
 
 describe('ledger', () => {
   let db: Database.Database;
@@ -59,6 +61,47 @@ describe('ledger', () => {
     // Should only have 1 transaction (first bootstrap only)
     const txns = getTransactions(db, 'agent-alice');
     expect(txns.length).toBe(1);
+  });
+
+  it('migrates legacy owner credit rows to canonical agent_id on read/write access', () => {
+    bootstrapAgent(db, 'legacy-owner', 100);
+    const escrowId = holdEscrow(db, 'legacy-owner', 10, 'card-legacy');
+    registerProvider(db, 'legacy-owner');
+    recordFeedback(db, 'legacy-owner', 4);
+    recordAvailabilityCheck(db, 'legacy-owner', true);
+
+    createAgentRecord(db, {
+      agent_id: 'abcdefabcdefabcd',
+      display_name: 'legacy-owner',
+      public_key: '11'.repeat(32),
+      legacy_owner: 'legacy-owner',
+    });
+
+    expect(getBalance(db, 'abcdefabcdefabcd')).toBe(100);
+    expect(getTransactions(db, 'abcdefabcdefabcd').length).toBeGreaterThan(0);
+    expect(getProviderNumber(db, 'abcdefabcdefabcd')).toBe(1);
+    expect(getActiveVoucher(db, 'abcdefabcdefabcd')?.remaining).toBe(40);
+    expect(getReliabilityMetrics(db, 'abcdefabcdefabcd')?.avg_feedback_score).toBe(4);
+    expect(getEscrowStatus(db, escrowId)?.owner).toBe('abcdefabcdefabcd');
+
+    expect(
+      (db.prepare('SELECT COUNT(*) as count FROM credit_balances WHERE owner = ?').get('legacy-owner') as { count: number }).count,
+    ).toBe(0);
+    expect(
+      (db.prepare('SELECT COUNT(*) as count FROM credit_transactions WHERE owner = ?').get('legacy-owner') as { count: number }).count,
+    ).toBe(0);
+    expect(
+      (db.prepare('SELECT COUNT(*) as count FROM credit_escrow WHERE owner = ?').get('legacy-owner') as { count: number }).count,
+    ).toBe(0);
+    expect(
+      (db.prepare('SELECT COUNT(*) as count FROM provider_registry WHERE owner = ?').get('legacy-owner') as { count: number }).count,
+    ).toBe(0);
+    expect(
+      (db.prepare('SELECT COUNT(*) as count FROM demand_vouchers WHERE owner = ?').get('legacy-owner') as { count: number }).count,
+    ).toBe(0);
+    expect(
+      (db.prepare('SELECT COUNT(*) as count FROM provider_reliability_metrics WHERE owner = ?').get('legacy-owner') as { count: number }).count,
+    ).toBe(0);
   });
 });
 
