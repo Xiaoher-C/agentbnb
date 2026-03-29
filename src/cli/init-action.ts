@@ -8,9 +8,7 @@ import { networkInterfaces } from 'node:os';
 
 import { loadConfig, saveConfig, getConfigDir } from './config.js';
 import type { AgentBnBConfig } from './config.js';
-import { ensureIdentity } from '../identity/identity.js';
-import { generateKeyPair, saveKeyPair, loadKeyPair } from '../credit/signing.js';
-import type { KeyPair } from '../credit/signing.js';
+import { loadOrRepairIdentity } from '../identity/identity.js';
 import { detectOpenPorts, buildDraftCard } from './onboarding.js';
 import { detectCapabilities, capabilitiesToV2Card, interactiveTemplateMenu } from '../onboarding/index.js';
 import { openDatabase, insertCard } from '../registry/store.js';
@@ -76,16 +74,7 @@ function getLanIp(): string {
  */
 function loadIdentityAuth(owner: string): { agentId: string; publicKey: string; privateKey: Buffer } {
   const configDir = getConfigDir();
-
-  let keys: KeyPair;
-  try {
-    keys = loadKeyPair(configDir);
-  } catch {
-    keys = generateKeyPair();
-    saveKeyPair(configDir, keys);
-  }
-
-  const identity = ensureIdentity(configDir, owner);
+  const { identity, keys } = loadOrRepairIdentity(configDir, owner);
 
   return {
     agentId: identity.agent_id,
@@ -130,18 +119,10 @@ export async function performInit(opts: InitOptions): Promise<InitResult> {
 
   saveConfig(config);
 
-  // Generate Ed25519 keypair (idempotent)
-  let keypairStatus = 'existing';
-  try {
-    loadKeyPair(configDir);
-  } catch {
-    const keys = generateKeyPair();
-    saveKeyPair(configDir, keys);
-    keypairStatus = 'generated';
-  }
-
-  // Create or load agent identity (idempotent)
-  const identity = ensureIdentity(configDir, owner);
+  // Atomically load/repair identity + keypair.
+  const identityMaterial = loadOrRepairIdentity(configDir, owner);
+  const identity = identityMaterial.identity;
+  const keypairStatus = identityMaterial.status === 'generated' ? 'generated' : 'existing';
 
   // Migrate data if owner changed
   const creditDb = openCreditDb(creditDbPath);

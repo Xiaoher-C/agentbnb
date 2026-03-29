@@ -7,9 +7,9 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
-import { execSync } from 'node:child_process';
 
 import { performInit } from './init-action.js';
+import { resolveSelfCli } from '../runtime/resolve-self-cli.js';
 
 /** Skills.yaml template for Claude Code users. */
 const SKILLS_YAML_TEMPLATE = `skills:
@@ -86,31 +86,12 @@ function registerMcpWithClaudeCode(): { registered: boolean; path?: string; reas
   }
 
   const settingsPath = join(claudeDir, 'settings.json');
-
-  // Resolve absolute path to agentbnb binary.
-  // Claude Code may not inherit the user's full PATH (e.g. launched from macOS Dock),
-  // so an absolute path is critical for MCP server spawning to work.
-  let agentbnbCommand = 'agentbnb';
+  let agentbnbCommand: string;
   try {
-    const resolved = execSync('which agentbnb', { encoding: 'utf-8' }).trim();
-    if (resolved) agentbnbCommand = resolved;
-  } catch {
-    // 'which' failed — likely running via npx without a global install.
-    // Try to resolve from process.argv (the running script's location).
-    try {
-      const scriptPath = process.argv[1];
-      if (scriptPath && existsSync(scriptPath)) {
-        agentbnbCommand = scriptPath;
-      }
-    } catch { /* ignore */ }
-  }
-
-  if (agentbnbCommand === 'agentbnb') {
-    console.warn(
-      'Warning: Could not resolve absolute path to agentbnb binary.\n' +
-      '  Claude Code MCP may not work. Install globally first:\n' +
-      '  npm install -g agentbnb',
-    );
+    agentbnbCommand = resolveSelfCli();
+  } catch (err) {
+    const reason = err instanceof Error ? err.message : String(err);
+    return { registered: false, path: settingsPath, reason: `MCP registration skipped: ${reason}` };
   }
 
   let settings: Record<string, unknown> = {};
@@ -128,11 +109,14 @@ function registerMcpWithClaudeCode(): { registered: boolean; path?: string; reas
 
   // Check if already registered
   const mcpServers = (settings.mcpServers ?? {}) as Record<string, unknown>;
-  if (mcpServers.agentbnb) {
+  const existingEntry = mcpServers.agentbnb as { command?: unknown; args?: unknown } | undefined;
+  const existingCommand = typeof existingEntry?.command === 'string' ? existingEntry.command : undefined;
+  const existingArgs = Array.isArray(existingEntry?.args) ? existingEntry.args : undefined;
+  if (existingCommand === agentbnbCommand && existingArgs?.length === 1 && existingArgs[0] === 'mcp-server') {
     return { registered: false, path: settingsPath, reason: 'already registered' };
   }
 
-  // Add AgentBnB MCP entry
+  // Add or update AgentBnB MCP entry with absolute CLI path.
   mcpServers.agentbnb = {
     command: agentbnbCommand,
     args: ['mcp-server'],

@@ -10,11 +10,10 @@ import { DEFAULT_AUTONOMY_CONFIG } from '../autonomy/tiers.js';
 import { IdleMonitor } from '../autonomy/idle-monitor.js';
 import { listCards } from '../registry/store.js';
 import { announceGateway, stopAnnouncement } from '../discovery/mdns.js';
+import { resolveSelfCli } from './resolve-self-cli.js';
 import { spawn, type ChildProcess } from 'node:child_process';
-import { createRequire } from 'node:module';
 import { existsSync, readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
-import { dirname, join, resolve } from 'node:path';
+import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 
@@ -316,6 +315,7 @@ export class ServiceCoordinator {
         card: card as Record<string, unknown>,
         cards: additionalCards.length > 0 ? additionalCards : undefined,
         onRequest: async (req) => {
+          this.relayClient?.sendStarted(req.id, 'provider acknowledged');
           const onProgress: import('../skills/executor.js').ProgressCallback = (info) => {
             this.relayClient!.sendProgress(req.id, info);
           };
@@ -400,7 +400,8 @@ export class ServiceCoordinator {
   private spawnManagedProcess(opts?: ServiceOptions): ChildProcess {
     const runtime = loadPersistedRuntime(getConfigDir());
     const nodeExec = resolveNodeExecutable(runtime);
-    const cliArgs = resolveCliLaunchArgs(this.buildServeArgs(opts));
+    const cliPath = resolveSelfCli();
+    const cliArgs = [cliPath, 'serve', ...this.buildServeArgs(opts)];
     const child = spawn(nodeExec, cliArgs, {
       detached: true,
       stdio: 'ignore',
@@ -634,35 +635,6 @@ export function resolveNodeExecutable(runtime: PersistedRuntimeInfo | null): str
     return runtime.node_exec;
   }
   return process.execPath;
-}
-
-function resolveCliLaunchArgs(serveArgs: string[]): string[] {
-  // 1. Try require.resolve — works under npm, pnpm, yarn global installs
-  const require = createRequire(import.meta.url);
-  try {
-    const distCli = require.resolve('agentbnb/dist/cli/index.js');
-    return [distCli, 'serve', ...serveArgs];
-  } catch {
-    // Not installed as package — fall through to local dev paths
-  }
-
-  // 2. Local dev: walk from source/dist to project root
-  const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
-  const distCli = join(projectRoot, 'dist', 'cli', 'index.js');
-  if (existsSync(distCli)) {
-    return [distCli, 'serve', ...serveArgs];
-  }
-
-  const srcCli = join(projectRoot, 'src', 'cli', 'index.ts');
-  if (existsSync(srcCli)) {
-    const tsxCli = require.resolve('tsx/dist/cli.mjs');
-    return [tsxCli, srcCli, 'serve', ...serveArgs];
-  }
-
-  throw new AgentBnBError(
-    'Unable to locate AgentBnB CLI entry (dist/cli/index.js or src/cli/index.ts)',
-    'CLI_ENTRY_NOT_FOUND',
-  );
 }
 
 function isPidAlive(pid: number): boolean {

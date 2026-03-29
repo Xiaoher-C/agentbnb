@@ -1,6 +1,13 @@
 import type { SkillConfig } from './skill-config.js';
 
 /**
+ * Builds a timeout error message for a skill execution.
+ */
+function buildTimeoutError(skillId: string, timeoutMs: number): string {
+  return `Skill "${skillId}" timed out after ${timeoutMs}ms`;
+}
+
+/**
  * Progress callback for long-running skill executions.
  * Called between steps/sub-tasks to indicate forward progress.
  */
@@ -171,7 +178,27 @@ export class SkillExecutor {
     }
 
     try {
-      const modeResult = await mode.execute(config, params, onProgress);
+      const configuredTimeoutMs = typeof config.timeout_ms === 'number' ? config.timeout_ms : undefined;
+
+      const modeExecution = mode.execute(config, params, onProgress);
+      const modeResult = configuredTimeoutMs === undefined
+        ? await modeExecution
+        : await new Promise<Omit<ExecutionResult, 'latency_ms'>>((resolve, reject) => {
+          const timeout = setTimeout(() => {
+            reject(new Error(buildTimeoutError(skillId, configuredTimeoutMs)));
+          }, configuredTimeoutMs);
+
+          modeExecution
+            .then((value) => {
+              clearTimeout(timeout);
+              resolve(value);
+            })
+            .catch((err: unknown) => {
+              clearTimeout(timeout);
+              reject(err);
+            });
+        });
+
       return {
         ...modeResult,
         latency_ms: Date.now() - startTime,

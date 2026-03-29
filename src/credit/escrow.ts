@@ -6,6 +6,16 @@ import { recordSuccessfulHire } from './reliability-metrics.js';
 
 /** Network fee rate applied to settled escrows (5%). */
 export const NETWORK_FEE_RATE = 0.05;
+/** Escrow lifecycle statuses. */
+export type EscrowStatus = 'held' | 'started' | 'progressing' | 'abandoned' | 'settled' | 'released';
+/** Non-terminal escrow statuses that can still be finalized to settled/released. */
+const FINALIZABLE_ESCROW_STATUSES: ReadonlySet<EscrowStatus> = new Set([
+  'held',
+  'started',
+  'progressing',
+  'abandoned',
+]);
+const TERMINAL_ESCROW_STATUSES: ReadonlySet<EscrowStatus> = new Set(['settled', 'released']);
 
 /**
  * An escrow record holding credits during capability execution
@@ -15,9 +25,74 @@ export interface EscrowRecord {
   owner: string;
   amount: number;
   card_id: string;
-  status: 'held' | 'settled' | 'released';
+  status: EscrowStatus;
   created_at: string;
   settled_at: string | null;
+}
+
+interface EscrowMutationRow {
+  id: string;
+  owner: string;
+  amount: number;
+  status: string;
+  funding_source: string;
+}
+
+function getEscrowForMutation(
+  db: Database.Database,
+  escrowId: string,
+): EscrowMutationRow {
+  const escrow = db
+    .prepare('SELECT id, owner, amount, status, funding_source FROM credit_escrow WHERE id = ?')
+    .get(escrowId) as EscrowMutationRow | undefined;
+  if (!escrow) {
+    throw new AgentBnBError(`Escrow not found: ${escrowId}`, 'ESCROW_NOT_FOUND');
+  }
+  return escrow;
+}
+
+function updateEscrowStatus(
+  db: Database.Database,
+  escrowId: string,
+  fromStatuses: readonly EscrowStatus[],
+  toStatus: EscrowStatus,
+): void {
+  const now = new Date().toISOString();
+  const transition = db.transaction(() => {
+    const escrow = getEscrowForMutation(db, escrowId);
+    const current = escrow.status as EscrowStatus;
+    if (!fromStatuses.includes(current)) {
+      throw new AgentBnBError(
+        `Invalid escrow transition for ${escrowId}: ${current} -> ${toStatus}`,
+        'ESCROW_INVALID_TRANSITION',
+      );
+    }
+    if (current === toStatus) return;
+    const settledAt = TERMINAL_ESCROW_STATUSES.has(toStatus) ? now : null;
+    db.prepare('UPDATE credit_escrow SET status = ?, settled_at = ? WHERE id = ?').run(
+      toStatus,
+      settledAt,
+      escrowId,
+    );
+  });
+  transition();
+}
+
+function assertEscrowCanFinalize(escrow: EscrowMutationRow): void {
+  const status = escrow.status as EscrowStatus;
+  if (FINALIZABLE_ESCROW_STATUSES.has(status)) {
+    return;
+  }
+  if (TERMINAL_ESCROW_STATUSES.has(status)) {
+    throw new AgentBnBError(
+      `Escrow ${escrow.id} is already ${status}`,
+      'ESCROW_ALREADY_SETTLED',
+    );
+  }
+  throw new AgentBnBError(
+    `Escrow ${escrow.id} has invalid lifecycle status: ${escrow.status}`,
+    'ESCROW_INVALID_TRANSITION',
+  );
 }
 
 /**
@@ -84,6 +159,36 @@ export function holdEscrow(
 }
 
 /**
+ * Marks a held escrow as started when the provider acknowledges request receipt.
+ *
+ * @param db - The credit database instance.
+ * @param escrowId - The escrow ID to transition.
+ */
+export function markEscrowStarted(db: Database.Database, escrowId: string): void {
+  updateEscrowStatus(db, escrowId, ['held', 'started'], 'started');
+}
+
+/**
+ * Marks an escrow as progressing when provider emits progress heartbeats.
+ *
+ * @param db - The credit database instance.
+ * @param escrowId - The escrow ID to transition.
+ */
+export function markEscrowProgressing(db: Database.Database, escrowId: string): void {
+  updateEscrowStatus(db, escrowId, ['held', 'started', 'progressing'], 'progressing');
+}
+
+/**
+ * Marks an in-flight escrow as abandoned (requester disconnected after start).
+ *
+ * @param db - The credit database instance.
+ * @param escrowId - The escrow ID to transition.
+ */
+export function markEscrowAbandoned(db: Database.Database, escrowId: string): void {
+  updateEscrowStatus(db, escrowId, ['started', 'progressing', 'abandoned'], 'abandoned');
+}
+
+/**
  * Settles an escrow — transfers credits to the capability owner upon successful execution.
  * Sets escrow status to 'settled'.
  *
@@ -101,19 +206,8 @@ export function settleEscrow(
   const now = new Date().toISOString();
 
   const settle = db.transaction(() => {
-    const escrow = db
-      .prepare('SELECT id, owner, amount, status, funding_source FROM credit_escrow WHERE id = ?')
-      .get(escrowId) as { id: string; owner: string; amount: number; status: string; funding_source: string } | undefined;
-
-    if (!escrow) {
-      throw new AgentBnBError(`Escrow not found: ${escrowId}`, 'ESCROW_NOT_FOUND');
-    }
-    if (escrow.status !== 'held') {
-      throw new AgentBnBError(
-        `Escrow ${escrowId} is already ${escrow.status}`,
-        'ESCROW_ALREADY_SETTLED',
-      );
-    }
+    const escrow = getEscrowForMutation(db, escrowId);
+    assertEscrowCanFinalize(escrow);
 
     // Network fee (5%)
     const feeAmount = Math.floor(escrow.amount * NETWORK_FEE_RATE);
@@ -197,19 +291,8 @@ export function releaseEscrow(db: Database.Database, escrowId: string): void {
   const now = new Date().toISOString();
 
   const release = db.transaction(() => {
-    const escrow = db
-      .prepare('SELECT id, owner, amount, status, funding_source FROM credit_escrow WHERE id = ?')
-      .get(escrowId) as { id: string; owner: string; amount: number; status: string; funding_source: string } | undefined;
-
-    if (!escrow) {
-      throw new AgentBnBError(`Escrow not found: ${escrowId}`, 'ESCROW_NOT_FOUND');
-    }
-    if (escrow.status !== 'held') {
-      throw new AgentBnBError(
-        `Escrow ${escrowId} is already ${escrow.status}`,
-        'ESCROW_ALREADY_SETTLED',
-      );
-    }
+    const escrow = getEscrowForMutation(db, escrowId);
+    assertEscrowCanFinalize(escrow);
 
     // Refund credits to original requester (balance refund regardless of funding source)
     db.prepare(
@@ -245,19 +328,8 @@ export function confirmEscrowDebit(db: Database.Database, escrowId: string): voi
   const now = new Date().toISOString();
 
   const confirm = db.transaction(() => {
-    const escrow = db
-      .prepare('SELECT id, owner, amount, status, funding_source FROM credit_escrow WHERE id = ?')
-      .get(escrowId) as { id: string; owner: string; amount: number; status: string; funding_source: string } | undefined;
-
-    if (!escrow) {
-      throw new AgentBnBError(`Escrow not found: ${escrowId}`, 'ESCROW_NOT_FOUND');
-    }
-    if (escrow.status !== 'held') {
-      throw new AgentBnBError(
-        `Escrow ${escrowId} is already ${escrow.status}`,
-        'ESCROW_ALREADY_SETTLED',
-      );
-    }
+    const escrow = getEscrowForMutation(db, escrowId);
+    assertEscrowCanFinalize(escrow);
 
     // Mark escrow as settled — no credit transfer (provider records in their own DB)
     db.prepare(

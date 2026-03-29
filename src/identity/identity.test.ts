@@ -1,9 +1,10 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync, existsSync, readFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import {
   createIdentity,
+  loadOrRepairIdentity,
   loadIdentity,
   saveIdentity,
   ensureIdentity,
@@ -112,6 +113,89 @@ describe('identity', () => {
       createIdentity(tempDir, 'same-owner');
       const second = ensureIdentity(tempDir, 'same-owner');
       expect(second.owner).toBe('same-owner');
+    });
+  });
+
+  describe('loadOrRepairIdentity', () => {
+    it('generates identity and keypair when files are missing', () => {
+      const result = loadOrRepairIdentity(tempDir, 'fresh-owner');
+      const persisted = loadIdentity(tempDir);
+
+      expect(result.status).toBe('generated');
+      expect(existsSync(join(tempDir, 'identity.json'))).toBe(true);
+      expect(existsSync(join(tempDir, 'private.key'))).toBe(true);
+      expect(existsSync(join(tempDir, 'public.key'))).toBe(true);
+      expect(result.identity.owner).toBe('fresh-owner');
+      expect(persisted?.agent_id).toBe(result.identity.agent_id);
+      expect(persisted?.public_key).toBe(result.keys.publicKey.toString('hex'));
+    });
+
+    it('repairs mismatched identity.json from existing keypair files', () => {
+      const trustedKeys = generateKeyPair();
+      const staleKeys = generateKeyPair();
+      saveKeyPair(tempDir, trustedKeys);
+      saveIdentity(tempDir, {
+        agent_id: deriveAgentId(staleKeys.publicKey.toString('hex')),
+        owner: 'legacy-owner',
+        public_key: staleKeys.publicKey.toString('hex'),
+        created_at: new Date().toISOString(),
+      });
+
+      const repaired = loadOrRepairIdentity(tempDir);
+      const persisted = loadIdentity(tempDir);
+
+      expect(repaired.status).toBe('repaired');
+      expect(repaired.identity.public_key).toBe(trustedKeys.publicKey.toString('hex'));
+      expect(repaired.identity.agent_id).toBe(deriveAgentId(trustedKeys.publicKey.toString('hex')));
+      expect(repaired.identity.owner).toBe('legacy-owner');
+      expect(persisted?.public_key).toBe(trustedKeys.publicKey.toString('hex'));
+      expect(persisted?.agent_id).toBe(deriveAgentId(trustedKeys.publicKey.toString('hex')));
+    });
+
+    it('regenerates all identity files when one key file is missing', () => {
+      const first = loadOrRepairIdentity(tempDir, 'seed-owner');
+      rmSync(join(tempDir, 'public.key'));
+
+      const regenerated = loadOrRepairIdentity(tempDir, 'regen-owner');
+
+      expect(regenerated.status).toBe('generated');
+      expect(regenerated.identity.owner).toBe('regen-owner');
+      expect(regenerated.identity.public_key).not.toBe(first.identity.public_key);
+      expect(regenerated.identity.agent_id).not.toBe(first.identity.agent_id);
+      expect(existsSync(join(tempDir, 'public.key'))).toBe(true);
+      expect(existsSync(join(tempDir, 'private.key'))).toBe(true);
+      expect(existsSync(join(tempDir, 'identity.json'))).toBe(true);
+    });
+
+    it('is idempotent across repeated loads in the same directory', () => {
+      const first = loadOrRepairIdentity(tempDir, 'stable-owner');
+      const second = loadOrRepairIdentity(tempDir, 'stable-owner');
+
+      expect(second.status).toBe('existing');
+      expect(second.identity.agent_id).toBe(first.identity.agent_id);
+      expect(second.identity.public_key).toBe(first.identity.public_key);
+      expect(second.keys.privateKey.equals(first.keys.privateKey)).toBe(true);
+      expect(second.keys.publicKey.equals(first.keys.publicKey)).toBe(true);
+    });
+
+    it('keeps init + same-directory follow-up flows key-consistent', () => {
+      const initIdentity = ensureIdentity(tempDir, 'init-owner');
+      const durableKeys = loadKeyPair(tempDir);
+      const forgedKeys = generateKeyPair();
+      saveIdentity(tempDir, {
+        agent_id: deriveAgentId(forgedKeys.publicKey.toString('hex')),
+        owner: 'init-owner',
+        public_key: forgedKeys.publicKey.toString('hex'),
+        created_at: new Date().toISOString(),
+      });
+
+      const repaired = loadOrRepairIdentity(tempDir, 'init-owner');
+      const persisted = loadIdentity(tempDir);
+
+      expect(repaired.identity.public_key).toBe(durableKeys.publicKey.toString('hex'));
+      expect(repaired.identity.agent_id).toBe(initIdentity.agent_id);
+      expect(persisted?.public_key).toBe(durableKeys.publicKey.toString('hex'));
+      expect(persisted?.agent_id).toBe(initIdentity.agent_id);
     });
   });
 

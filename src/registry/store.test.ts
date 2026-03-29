@@ -18,6 +18,7 @@ import { AgentBnBError } from '../types/index.js';
 import type { CapabilityCard, CapabilityCardV2 } from '../types/index.js';
 import type { Database } from 'better-sqlite3';
 import { insertRequestLog, getRequestLog, createRequestLogTable } from './request-log.js';
+import { createAgentRecord } from '../identity/agent-identity.js';
 
 function makeCard(overrides: Partial<CapabilityCard> = {}): CapabilityCard {
   return {
@@ -80,6 +81,23 @@ describe('Registry Store', () => {
       expect(retrieved).toBeNull();
     });
 
+    it('deleteCard by canonical agent_id succeeds when mapped from owner', () => {
+      const owner = 'mapped-owner';
+      const agentId = 'aaaaaaaaaaaaaaaa';
+      createAgentRecord(db, {
+        agent_id: agentId,
+        display_name: owner,
+        public_key: '22'.repeat(32),
+        legacy_owner: owner,
+      });
+
+      const card = makeCard({ owner });
+      insertCard(db, card);
+      deleteCard(db, card.id, agentId);
+      const retrieved = getCard(db, card.id);
+      expect(retrieved).toBeNull();
+    });
+
     it('deleteCard by non-owner throws AgentBnBError with FORBIDDEN code', () => {
       const card = makeCard();
       insertCard(db, card);
@@ -104,6 +122,23 @@ describe('Registry Store', () => {
       expect(after?.updated_at).not.toBe(before?.updated_at);
     });
 
+    it('updateCard by canonical agent_id succeeds when mapped from owner', () => {
+      const owner = 'mapped-update-owner';
+      const agentId = 'bbbbbbbbbbbbbbbb';
+      createAgentRecord(db, {
+        agent_id: agentId,
+        display_name: owner,
+        public_key: '33'.repeat(32),
+        legacy_owner: owner,
+      });
+
+      const card = makeCard({ owner });
+      insertCard(db, card);
+      updateCard(db, card.id, agentId, { name: 'Updated by Agent ID' });
+      const updated = getCard(db, card.id);
+      expect(updated?.name).toBe('Updated by Agent ID');
+    });
+
     it('updateCard by non-owner throws AgentBnBError with FORBIDDEN code', () => {
       const card = makeCard();
       insertCard(db, card);
@@ -125,6 +160,36 @@ describe('Registry Store', () => {
       const result = listCards(db, owner);
       expect(result).toHaveLength(3);
       result.forEach((c) => expect(c.owner).toBe(owner));
+    });
+
+    it('listCards accepts canonical agent_id and returns mapped owner cards', () => {
+      const owner = 'agent-id-owner';
+      const agentId = 'cccccccccccccccc';
+      createAgentRecord(db, {
+        agent_id: agentId,
+        display_name: owner,
+        public_key: '44'.repeat(32),
+        legacy_owner: owner,
+      });
+
+      const cards = [makeCard({ owner }), makeCard({ owner })];
+      cards.forEach((c) => insertCard(db, c));
+      insertCard(db, makeCard({ owner: 'someone-else' }));
+
+      const result = listCards(db, agentId);
+      expect(result).toHaveLength(2);
+      result.forEach((c) => expect(c.owner).toBe(owner));
+    });
+
+    it('listCards by agent_id also matches cards carrying top-level card.agent_id', () => {
+      const owner = 'renamed-owner';
+      const agentId = 'dddddddddddddddd';
+      insertCard(db, makeCard({ owner, agent_id: agentId }));
+
+      const result = listCards(db, agentId);
+      expect(result).toHaveLength(1);
+      expect(result[0]?.owner).toBe(owner);
+      expect(result[0]?.agent_id).toBe(agentId);
     });
 
     it('listCards without owner filter returns all cards', () => {
@@ -258,6 +323,43 @@ describe('Registry Store', () => {
     it('searchCards returns empty array for no matches', () => {
       const results = searchCards(db, 'xyzzy-nonexistent-query-12345');
       expect(results).toEqual([]);
+    });
+
+    it('searchCards matches exact skill_id for v2 cards', () => {
+      const now = new Date().toISOString();
+      const v2CardId = randomUUID();
+      const skillId = 'skill-stock-analysis-v2';
+
+      db.prepare(
+        'INSERT INTO capability_cards (id, owner, data, created_at, updated_at) VALUES (?, ?, ?, ?, ?)',
+      ).run(
+        v2CardId,
+        'v2-owner',
+        JSON.stringify({
+          spec_version: '2.0',
+          id: v2CardId,
+          owner: 'v2-owner',
+          agent_name: 'V2 Analyst',
+          availability: { online: true },
+          skills: [
+            {
+              id: skillId,
+              name: 'Stock Analysis',
+              description: 'Analyze stocks',
+              level: 1,
+              inputs: [],
+              outputs: [],
+              pricing: { credits_per_call: 9 },
+              availability: { online: true },
+            },
+          ],
+        }),
+        now,
+        now,
+      );
+
+      const results = searchCards(db, skillId, { online: true });
+      expect(results.some((c) => c.id === v2CardId)).toBe(true);
     });
 
     it('searchCards completes in under 50ms for 100 cards', () => {
@@ -443,14 +545,14 @@ describe('v1-to-v2 migration', () => {
     });
   });
 
-  describe('Test 4: PRAGMA user_version is 2 after migration', () => {
-    it('user_version is set to 2 after runMigrations()', () => {
+  describe('Test 4: PRAGMA user_version is 3 after migration', () => {
+    it('user_version is set to 3 after runMigrations()', () => {
       const db = makePreMigrationDb([]);
       db.pragma('user_version = 0');
       runMigrations(db);
 
       const version = (db.pragma('user_version') as Array<{ user_version: number }>)[0]?.user_version ?? 0;
-      expect(version).toBe(2);
+      expect(version).toBe(3);
     });
   });
 

@@ -204,6 +204,23 @@ describe('SkillExecutor.execute', () => {
     expect(result.error).toBe('validation failed');
   });
 
+  it('enforces timeout_ms for all skill types via SkillExecutor wrapper', async () => {
+    const slowPipelineMode: ExecutorMode = {
+      execute: () => new Promise((resolve) => setTimeout(() => resolve({ success: true, result: 'late' }), 100)),
+    };
+    const timedPipelineConfig: SkillConfig = {
+      ...pipelineConfig,
+      id: 'pipeline-timeout',
+      timeout_ms: 10,
+    };
+    const modes = new Map<string, ExecutorMode>([['pipeline', slowPipelineMode]]);
+    const executor = createSkillExecutor([timedPipelineConfig], modes);
+
+    const result = await executor.execute('pipeline-timeout', {});
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('timed out');
+  });
+
   it('handles multiple skills registered with different modes', async () => {
     const apiMode = makeMockMode('api-out');
     const cmdMode = makeMockMode('cmd-out');

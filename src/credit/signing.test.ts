@@ -120,5 +120,29 @@ describe('signing', () => {
       // Same data in different key order should produce same signature
       expect(sig1).toBe(sig2);
     });
+
+    it('produces canonical JSON for nested objects at all depths', () => {
+      const keys = generateKeyPair();
+      const data1 = {
+        params: {
+          escrow: { z: 9, a: 1, nested: { y: 2, b: 3 } },
+          card_id: 'card-123',
+          requester: 'alice',
+        },
+        method: 'capability.execute',
+      };
+      const data2 = {
+        method: 'capability.execute',
+        params: {
+          requester: 'alice',
+          card_id: 'card-123',
+          escrow: { nested: { b: 3, y: 2 }, a: 1, z: 9 },
+        },
+      };
+
+      const sig1 = signEscrowReceipt(data1, keys.privateKey);
+      const sig2 = signEscrowReceipt(data2, keys.privateKey);
+      expect(sig1).toBe(sig2);
+    });
   });
 });

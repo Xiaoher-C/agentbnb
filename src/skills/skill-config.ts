@@ -50,6 +50,7 @@ const CapabilityDeclarationSchema = {
   capability_types: z.array(z.string()).optional(),
   requires_capabilities: z.array(z.string()).optional(),
   visibility: z.enum(['public', 'private']).optional(),
+  expected_duration_ms: z.number().positive().optional(),
 };
 
 /**

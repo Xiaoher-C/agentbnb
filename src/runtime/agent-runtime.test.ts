@@ -174,6 +174,46 @@ describe('AgentRuntime', () => {
     void runtime.shutdown();
   });
 
+  it('start() releases stale abandoned escrows but keeps stale started escrows', async () => {
+    const runtime = new AgentRuntime({
+      registryDbPath: ':memory:',
+      creditDbPath: ':memory:',
+      owner: 'test-agent',
+      orphanedEscrowAgeMinutes: 0.001,
+    });
+
+    const oldTimestamp = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+    runtime.creditDb
+      .prepare(
+        "INSERT INTO credit_balances (owner, balance, updated_at) VALUES ('owner3', 100, ?)",
+      )
+      .run(oldTimestamp);
+    runtime.creditDb
+      .prepare(
+        'INSERT INTO credit_escrow (id, owner, amount, card_id, status, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+      )
+      .run('escrow-abandoned-1', 'owner3', 15, 'card-1', 'abandoned', oldTimestamp);
+    runtime.creditDb
+      .prepare(
+        'INSERT INTO credit_escrow (id, owner, amount, card_id, status, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+      )
+      .run('escrow-started-1', 'owner3', 20, 'card-1', 'started', oldTimestamp);
+
+    await runtime.start();
+
+    const abandoned = runtime.creditDb
+      .prepare('SELECT status FROM credit_escrow WHERE id = ?')
+      .get('escrow-abandoned-1') as { status: string } | undefined;
+    const started = runtime.creditDb
+      .prepare('SELECT status FROM credit_escrow WHERE id = ?')
+      .get('escrow-started-1') as { status: string } | undefined;
+
+    expect(abandoned?.status).toBe('released');
+    expect(started?.status).toBe('started');
+
+    void runtime.shutdown();
+  });
+
   it('Test 4: registerJob() adds a Cron to the managed jobs list', () => {
     const runtime = new AgentRuntime({
       registryDbPath: ':memory:',

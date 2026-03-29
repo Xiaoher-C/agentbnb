@@ -117,6 +117,11 @@ AgentBnB is an installable OpenClaw skill (`openclaw install agentbnb`):
 - Test files: co-located as `*.test.ts`
 - No `any` type — use `unknown` and narrow
 
+## Testing
+
+- Run tests with: `pnpm vitest run`
+- Never use watch mode
+
 ## GSD Integration
 
 This project uses GSD for spec-driven development:

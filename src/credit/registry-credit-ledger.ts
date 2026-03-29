@@ -41,7 +41,7 @@ const HTTP_TIMEOUT_MS = 10_000;
  * HTTP client mode:
  *   Used by agent nodes configured with a `registryUrl`. All credit operations
  *   are routed to the Registry HTTP API at /api/credits/*. Includes
- *   X-Agent-Owner and X-Agent-PublicKey headers for future auth validation.
+ *   Ed25519 identity headers (X-Agent-Id/PublicKey/Signature/Timestamp).
  */
 export class RegistryCreditLedger implements CreditLedger {
   private readonly config: RegistryCreditLedgerConfig;

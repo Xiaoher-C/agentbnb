@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createHash } from 'node:crypto';
+import { createHash, createPrivateKey, createPublicKey } from 'node:crypto';
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import {
@@ -61,6 +61,39 @@ export type AgentCertificate = z.infer<typeof AgentCertificateSchema>;
 // ---------------------------------------------------------------------------
 
 const IDENTITY_FILENAME = 'identity.json';
+const PRIVATE_KEY_FILENAME = 'private.key';
+const PUBLIC_KEY_FILENAME = 'public.key';
+
+export interface IdentityLoadResult {
+  identity: AgentIdentity;
+  keys: KeyPair;
+  status: 'existing' | 'repaired' | 'generated';
+}
+
+function derivePublicKeyFromPrivate(privateKey: Buffer): Buffer {
+  const privateKeyObject = createPrivateKey({ key: privateKey, format: 'der', type: 'pkcs8' });
+  const publicKeyObject = createPublicKey(privateKeyObject);
+  const publicKey = publicKeyObject.export({ format: 'der', type: 'spki' });
+  return Buffer.from(publicKey);
+}
+
+function buildIdentityFromPublicKey(publicKey: Buffer, owner: string, createdAt?: string): AgentIdentity {
+  const publicKeyHex = publicKey.toString('hex');
+  return {
+    agent_id: deriveAgentId(publicKeyHex),
+    owner,
+    public_key: publicKeyHex,
+    created_at: createdAt ?? new Date().toISOString(),
+  };
+}
+
+function generateFreshIdentity(configDir: string, owner: string): IdentityLoadResult {
+  const keys = generateKeyPair();
+  saveKeyPair(configDir, keys);
+  const identity = buildIdentityFromPublicKey(keys.publicKey, owner);
+  saveIdentity(configDir, identity);
+  return { identity, keys, status: 'generated' };
+}
 
 /**
  * Derives a deterministic agent_id from a hex-encoded public key.
@@ -138,6 +171,87 @@ export function saveIdentity(configDir: string, identity: AgentIdentity): void {
   writeFileSync(filePath, JSON.stringify(identity, null, 2), 'utf-8');
 }
 
+/**
+ * Atomically loads and repairs identity material (`identity.json`, `public.key`,
+ * `private.key`) from disk.
+ *
+ * Rules:
+ * - If any required file is missing, regenerate all three consistently.
+ * - If keypair and identity mismatch, key material is the source of truth and
+ *   identity is repaired to match.
+ * - If ownerHint is provided and differs from on-disk identity owner, owner is
+ *   updated while preserving agent_id/public_key.
+ *
+ * @param configDir - Config directory path.
+ * @param ownerHint - Optional owner name to enforce in identity.json.
+ * @returns Loaded/repaired identity + keypair with status indicator.
+ */
+export function loadOrRepairIdentity(configDir: string, ownerHint?: string): IdentityLoadResult {
+  if (!existsSync(configDir)) {
+    mkdirSync(configDir, { recursive: true });
+  }
+
+  const identityPath = join(configDir, IDENTITY_FILENAME);
+  const privateKeyPath = join(configDir, PRIVATE_KEY_FILENAME);
+  const publicKeyPath = join(configDir, PUBLIC_KEY_FILENAME);
+
+  const hasIdentity = existsSync(identityPath);
+  const hasPrivateKey = existsSync(privateKeyPath);
+  const hasPublicKey = existsSync(publicKeyPath);
+
+  if (!hasIdentity || !hasPrivateKey || !hasPublicKey) {
+    return generateFreshIdentity(configDir, ownerHint ?? 'agent');
+  }
+
+  let keys: KeyPair;
+  try {
+    keys = loadKeyPair(configDir);
+  } catch {
+    return generateFreshIdentity(configDir, ownerHint ?? 'agent');
+  }
+
+  let derivedPublicKey: Buffer;
+  try {
+    derivedPublicKey = derivePublicKeyFromPrivate(keys.privateKey);
+  } catch {
+    return generateFreshIdentity(configDir, ownerHint ?? 'agent');
+  }
+
+  let keypairRepaired = false;
+  if (!keys.publicKey.equals(derivedPublicKey)) {
+    keypairRepaired = true;
+    keys = { privateKey: keys.privateKey, publicKey: derivedPublicKey };
+    saveKeyPair(configDir, keys);
+  }
+
+  const loadedIdentity = loadIdentity(configDir);
+  const expectedAgentId = deriveAgentId(derivedPublicKey.toString('hex'));
+  const expectedPublicKeyHex = derivedPublicKey.toString('hex');
+
+  const identityMismatch =
+    !loadedIdentity
+    || loadedIdentity.public_key !== expectedPublicKeyHex
+    || loadedIdentity.agent_id !== expectedAgentId;
+
+  if (identityMismatch) {
+    const repairedIdentity = buildIdentityFromPublicKey(
+      derivedPublicKey,
+      loadedIdentity?.owner ?? ownerHint ?? 'agent',
+      loadedIdentity?.created_at,
+    );
+    saveIdentity(configDir, repairedIdentity);
+    return { identity: repairedIdentity, keys, status: 'repaired' };
+  }
+
+  if (ownerHint && loadedIdentity.owner !== ownerHint) {
+    const updatedIdentity = { ...loadedIdentity, owner: ownerHint };
+    saveIdentity(configDir, updatedIdentity);
+    return { identity: updatedIdentity, keys, status: 'repaired' };
+  }
+
+  return { identity: loadedIdentity, keys, status: keypairRepaired ? 'repaired' : 'existing' };
+}
+
 // ---------------------------------------------------------------------------
 // Agent Certificates
 // ---------------------------------------------------------------------------
@@ -208,14 +322,5 @@ export function verifyAgentCertificate(cert: AgentCertificate): boolean {
  * @returns The loaded or newly created AgentIdentity.
  */
 export function ensureIdentity(configDir: string, owner: string): AgentIdentity {
-  const existing = loadIdentity(configDir);
-  if (existing) {
-    // Sync owner if it changed (e.g. re-init with different --owner)
-    if (existing.owner !== owner) {
-      existing.owner = owner;
-      saveIdentity(configDir, existing);
-    }
-    return existing;
-  }
-  return createIdentity(configDir, owner);
+  return loadOrRepairIdentity(configDir, owner).identity;
 }

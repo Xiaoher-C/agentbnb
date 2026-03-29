@@ -5,6 +5,7 @@ import swaggerUi from '@fastify/swagger-ui';
 import fastifyStatic from '@fastify/static';
 import fastifyWebsocket from '@fastify/websocket';
 import { join, dirname } from 'node:path';
+import { randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { existsSync } from 'node:fs';
 import { z } from 'zod';
@@ -113,7 +114,7 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
             type: 'apiKey',
             in: 'header',
             name: 'X-Agent-PublicKey',
-            description: 'Ed25519 public key (hex). Also requires X-Agent-Signature and X-Agent-Timestamp headers.',
+            description: 'Ed25519 public key (hex). Also requires X-Agent-Id, X-Agent-Signature, and X-Agent-Timestamp headers.',
           },
         },
       },
@@ -129,7 +130,7 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
   void server.register(cors, {
     origin: true,
     methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Agent-PublicKey', 'X-Agent-Signature', 'X-Agent-Timestamp'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Agent-Id', 'X-Agent-PublicKey', 'X-Agent-Signature', 'X-Agent-Timestamp'],
   });
 
   // Register WebSocket support for relay
@@ -1341,17 +1342,67 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
     }
 
     const { requests, strategy, total_budget } = parseResult.data;
+    const host = request.headers.host ?? request.hostname;
+    const relayRegistryUrl = `${request.protocol}://${host}`;
+    const relayRequesterOwner = `${owner}:batch:${Date.now()}`;
 
-    const batchResult = await executeCapabilityBatch({
-      requests,
-      strategy,
-      total_budget,
-      registryDb: db,
-      creditDb: opts.creditDb,
-      owner,
-    });
+    let relayClient: import('../relay/websocket-client.js').RelayClient | undefined;
 
-    return reply.send(batchResult);
+    try {
+      const batchResult = await executeCapabilityBatch({
+        requests,
+        strategy,
+        total_budget,
+        registryDb: db,
+        creditDb: opts.creditDb,
+        owner,
+        registryUrl: relayRegistryUrl,
+        dispatchRequest: async ({ target, params, requester }) => {
+          // For direct targets we keep compatibility with legacy batch behavior.
+          // Relay execution is used when the target has no gateway_url.
+          if (!target.via_relay) {
+            return { card_id: target.cardId, skill_id: target.skillId };
+          }
+
+          if (!relayClient) {
+            const { RelayClient } = await import('../relay/websocket-client.js');
+            relayClient = new RelayClient({
+              registryUrl: relayRegistryUrl,
+              owner: relayRequesterOwner,
+              token: 'batch-token',
+              card: {
+                spec_version: '1.0',
+                id: randomUUID(),
+                owner: relayRequesterOwner,
+                name: relayRequesterOwner,
+                description: 'Batch requester',
+                level: 1,
+                inputs: [],
+                outputs: [],
+                pricing: { credits_per_call: 1 },
+                availability: { online: false },
+              },
+              onRequest: async () => ({ error: { code: -32601, message: 'Batch requester does not serve capabilities' } }),
+              silent: true,
+            });
+            await relayClient.connect();
+          }
+
+          const { requestViaRelay } = await import('../gateway/client.js');
+          return requestViaRelay(relayClient, {
+            targetOwner: target.owner,
+            cardId: target.cardId,
+            skillId: target.skillId,
+            params: { ...params, requester },
+            requester,
+          });
+        },
+      });
+
+      return reply.send(batchResult);
+    } finally {
+      relayClient?.disconnect();
+    }
   });
 
   // Register owner routes as a scoped plugin (NOT fastify-plugin) so the auth hook

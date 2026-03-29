@@ -358,6 +358,27 @@ skills:
   });
 });
 
+describe('parseSkillsFile — expected_duration_ms', () => {
+  it('parses expected_duration_ms for public timeout metadata publication', () => {
+    const yaml = `
+skills:
+  - id: timed-api
+    type: api
+    name: "Timed API"
+    endpoint: "https://api.example.com/run"
+    method: POST
+    input_mapping: {}
+    output_mapping: {}
+    expected_duration_ms: 4500
+    pricing:
+      credits_per_call: 5
+`;
+    const skills = parseSkillsFile(yaml);
+    expect(skills).toHaveLength(1);
+    expect(skills[0]?.expected_duration_ms).toBe(4500);
+  });
+});
+
 describe('expandEnvVars', () => {
   beforeEach(() => {
     process.env['MY_TOKEN'] = 'secret123';

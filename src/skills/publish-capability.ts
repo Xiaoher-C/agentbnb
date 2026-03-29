@@ -233,6 +233,7 @@ export function publishFromSoul(
  * @returns A Skill object suitable for inclusion in a CapabilityCardV2.
  */
 export function skillConfigToSkill(config: SkillConfig): Skill {
+  const hardTimeoutMs = typeof config.timeout_ms === 'number' ? config.timeout_ms : undefined;
   return {
     id: config.id,
     name: config.name,
@@ -241,6 +242,8 @@ export function skillConfigToSkill(config: SkillConfig): Skill {
     inputs: [],
     outputs: [],
     pricing: config.pricing,
+    ...(config.expected_duration_ms !== undefined && { expected_duration_ms: config.expected_duration_ms }),
+    ...(hardTimeoutMs !== undefined && { hard_timeout_ms: hardTimeoutMs }),
     ...(config.capability_types !== undefined && { capability_types: config.capability_types }),
     ...(config.requires_capabilities !== undefined && { requires_capabilities: config.requires_capabilities }),
     ...(config.visibility !== undefined && { visibility: config.visibility }),

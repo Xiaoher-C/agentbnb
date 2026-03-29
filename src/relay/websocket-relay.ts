@@ -9,6 +9,7 @@ import {
   type RelayRequestMessage,
   type RelayResponseMessage,
   type RelayProgressMessage,
+  type RelayStartedMessage,
   type HeartbeatMessage,
   type EscrowHoldMessage,
   type EscrowSettleMessage,
@@ -21,6 +22,7 @@ import {
 import { lookupCardPrice, holdForRelay, settleForRelay, releaseForRelay, calculateConductorFee } from './relay-credit.js';
 import { processEscrowHold, processEscrowSettle, settleWithNetworkFee } from './relay-escrow.js';
 import { getBalance } from '../credit/ledger.js';
+import { markEscrowAbandoned, markEscrowProgressing, markEscrowStarted } from '../credit/escrow.js';
 import { handleJobRelayResponse } from '../hub-agent/relay-bridge.js';
 import { AgentBnBError, AnyCardSchema } from '../types/index.js';
 
@@ -28,8 +30,20 @@ import { AgentBnBError, AnyCardSchema } from '../types/index.js';
 const RATE_LIMIT_MAX = 60;
 /** Rate limit window in milliseconds (1 minute) */
 const RATE_LIMIT_WINDOW_MS = 60_000;
-/** Relay request timeout in milliseconds (5 minutes for long-running skills) */
-const RELAY_TIMEOUT_MS = 300_000;
+/** Relay idle timeout before provider start acknowledgment. */
+const RELAY_IDLE_TIMEOUT_MS = 30_000;
+/** Relay hard timeout once provider has started work. */
+const RELAY_HARD_TIMEOUT_MS = 300_000;
+/** Grace period after requester disconnects post-start. */
+const RELAY_DISCONNECT_GRACE_MS = RELAY_HARD_TIMEOUT_MS + 30_000;
+
+function readTimeoutOverride(envKey: string, fallbackMs: number): number {
+  const raw = process.env[envKey];
+  if (!raw) return fallbackMs;
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed <= 0) return fallbackMs;
+  return Math.floor(parsed);
+}
 
 /**
  * Registers WebSocket relay on an existing Fastify instance.
@@ -68,6 +82,148 @@ export function registerWebSocketRelay(
     if (ownerFromAgentId && connections.has(ownerFromAgentId)) return ownerFromAgentId;
     if (connections.has(target)) return target;
     return undefined;
+  }
+
+  function clearPendingTimers(pending: PendingRelayRequest): void {
+    clearTimeout(pending.timeout);
+    if (pending.idleTimeout) clearTimeout(pending.idleTimeout);
+    if (pending.hardTimeout) clearTimeout(pending.hardTimeout);
+    if (pending.graceTimeout) clearTimeout(pending.graceTimeout);
+  }
+
+  function setPendingTimer(
+    pending: PendingRelayRequest,
+    timerType: 'idleTimeout' | 'hardTimeout' | 'graceTimeout',
+    timer: ReturnType<typeof setTimeout>,
+  ): void {
+    const existing = pending[timerType];
+    if (existing) clearTimeout(existing);
+    pending[timerType] = timer;
+    pending.timeout = timer;
+  }
+
+  function scheduleIdleTimeout(requestId: string, pending: PendingRelayRequest): void {
+    const timeoutMs = readTimeoutOverride('AGENTBNB_RELAY_IDLE_TIMEOUT_MS', RELAY_IDLE_TIMEOUT_MS);
+    const timer = setTimeout(() => {
+      const current = pendingRequests.get(requestId);
+      if (!current || (current.lifecycle ?? 'held') !== 'held') return;
+      pendingRequests.delete(requestId);
+      clearPendingTimers(current);
+      if (current.escrowId && creditDb) {
+        try {
+          releaseForRelay(creditDb, current.escrowId);
+        } catch (e) {
+          console.error('[relay] escrow release on idle timeout failed:', e);
+        }
+      }
+      const originWs = connections.get(current.originOwner);
+      if (originWs && originWs.readyState === 1) {
+        sendMessage(originWs, {
+          type: 'response',
+          id: requestId,
+          error: { code: -32603, message: 'Relay request timeout' },
+        });
+      }
+    }, timeoutMs);
+    setPendingTimer(pending, 'idleTimeout', timer);
+  }
+
+  function scheduleHardTimeout(requestId: string, pending: PendingRelayRequest): void {
+    const timeoutMs = readTimeoutOverride('AGENTBNB_RELAY_HARD_TIMEOUT_MS', RELAY_HARD_TIMEOUT_MS);
+    const timer = setTimeout(() => {
+      const current = pendingRequests.get(requestId);
+      if (!current || current.lifecycle === 'abandoned') return;
+      pendingRequests.delete(requestId);
+      clearPendingTimers(current);
+      if (current.escrowId && creditDb) {
+        try {
+          releaseForRelay(creditDb, current.escrowId);
+        } catch (e) {
+          console.error('[relay] escrow release on hard timeout failed:', e);
+        }
+      }
+      const originWs = connections.get(current.originOwner);
+      if (originWs && originWs.readyState === 1) {
+        sendMessage(originWs, {
+          type: 'response',
+          id: requestId,
+          error: { code: -32603, message: 'Relay request timeout' },
+        });
+      }
+    }, timeoutMs);
+    setPendingTimer(pending, 'hardTimeout', timer);
+  }
+
+  function scheduleGraceTimeout(requestId: string, pending: PendingRelayRequest): void {
+    const timeoutMs = readTimeoutOverride(
+      'AGENTBNB_RELAY_DISCONNECT_GRACE_MS',
+      RELAY_DISCONNECT_GRACE_MS,
+    );
+    const timer = setTimeout(() => {
+      const current = pendingRequests.get(requestId);
+      if (!current || current.lifecycle !== 'abandoned') return;
+      pendingRequests.delete(requestId);
+      clearPendingTimers(current);
+      if (current.escrowId && creditDb) {
+        try {
+          releaseForRelay(creditDb, current.escrowId);
+        } catch (e) {
+          console.error('[relay] escrow release after grace timeout failed:', e);
+        }
+      }
+    }, timeoutMs);
+    setPendingTimer(pending, 'graceTimeout', timer);
+  }
+
+  function transitionPendingToStarted(requestId: string, pending: PendingRelayRequest): void {
+    if (pending.lifecycle === 'started' || pending.lifecycle === 'progressing' || pending.lifecycle === 'abandoned') {
+      return;
+    }
+    pending.lifecycle = 'started';
+    pending.startedAt = Date.now();
+    if (pending.idleTimeout) clearTimeout(pending.idleTimeout);
+    if (pending.graceTimeout) clearTimeout(pending.graceTimeout);
+    if (pending.escrowId && creditDb) {
+      try {
+        markEscrowStarted(creditDb, pending.escrowId);
+      } catch (e) {
+        console.error('[relay] escrow transition to started failed:', e);
+      }
+    }
+    scheduleHardTimeout(requestId, pending);
+  }
+
+  function transitionPendingToProgressing(requestId: string, pending: PendingRelayRequest): void {
+    if (pending.lifecycle === 'abandoned') {
+      return;
+    }
+    if ((pending.lifecycle ?? 'held') === 'held') {
+      transitionPendingToStarted(requestId, pending);
+    }
+    pending.lifecycle = 'progressing';
+    if (pending.escrowId && creditDb) {
+      try {
+        markEscrowProgressing(creditDb, pending.escrowId);
+      } catch (e) {
+        console.error('[relay] escrow transition to progressing failed:', e);
+      }
+    }
+  }
+
+  function transitionPendingToAbandoned(requestId: string, pending: PendingRelayRequest): void {
+    if (pending.lifecycle === 'abandoned') return;
+    pending.lifecycle = 'abandoned';
+    pending.abandonedAt = Date.now();
+    if (pending.idleTimeout) clearTimeout(pending.idleTimeout);
+    if (pending.hardTimeout) clearTimeout(pending.hardTimeout);
+    if (pending.escrowId && creditDb) {
+      try {
+        markEscrowAbandoned(creditDb, pending.escrowId);
+      } catch (e) {
+        console.error('[relay] escrow transition to abandoned failed:', e);
+      }
+    }
+    scheduleGraceTimeout(requestId, pending);
   }
 
   /**
@@ -332,24 +488,20 @@ export function registerWebSocketRelay(
       }
     }
 
-    // Set up timeout — release escrow on timeout
-    const timeout = setTimeout(() => {
-      const pending = pendingRequests.get(msg.id);
-      pendingRequests.delete(msg.id);
-      if (pending?.escrowId && creditDb) {
-        try { releaseForRelay(creditDb, pending.escrowId); } catch (e) { console.error('[relay] escrow release on timeout failed:', e); }
-      }
-      sendMessage(ws, {
-        type: 'response',
-        id: msg.id,
-        error: { code: -32603, message: 'Relay request timeout' },
-      });
-    }, RELAY_TIMEOUT_MS);
-
     // Track pending request with escrowId and targetOwner.
     // originOwner is the connection key for routing; creditOwner is used for
     // conductor fee settlement and is stored as originOwner when they differ.
-    pendingRequests.set(msg.id, { originOwner: fromOwner, creditOwner, timeout, escrowId, targetOwner: msg.target_owner });
+    const pending: PendingRelayRequest = {
+      originOwner: fromOwner,
+      creditOwner,
+      timeout: setTimeout(() => undefined, 1),
+      escrowId,
+      targetOwner: targetKey ?? msg.target_owner,
+      lifecycle: 'held',
+      createdAt: Date.now(),
+    };
+    pendingRequests.set(msg.id, pending);
+    scheduleIdleTimeout(msg.id, pending);
 
     // Forward to target agent
     sendMessage(targetWs, {
@@ -365,31 +517,34 @@ export function registerWebSocketRelay(
   }
 
   /**
+   * Handle a relay started message from Agent B.
+   * Switches request timeout semantics from idle timeout to hard timeout.
+   */
+  function handleRelayStarted(msg: RelayStartedMessage): void {
+    const pending = pendingRequests.get(msg.id);
+    if (!pending) return;
+
+    transitionPendingToStarted(msg.id, pending);
+
+    const originWs = connections.get(pending.originOwner);
+    if (originWs && originWs.readyState === 1) {
+      sendMessage(originWs, {
+        type: 'relay_started',
+        id: msg.id,
+        message: msg.message,
+      });
+    }
+  }
+
+  /**
    * Handle a relay progress message from Agent B.
-   * Resets the pending request timeout and forwards the progress to the origin requester.
+   * Marks the request as progressing and forwards the progress to the origin requester.
    */
   function handleRelayProgress(msg: RelayProgressMessage): void {
     const pending = pendingRequests.get(msg.id);
     if (!pending) return; // Unknown request ID — ignore
 
-    // Reset the relay timeout so a slow but alive provider doesn't get cut off
-    clearTimeout(pending.timeout);
-    const newTimeout = setTimeout(() => {
-      const p = pendingRequests.get(msg.id);
-      pendingRequests.delete(msg.id);
-      if (p?.escrowId && creditDb) {
-        try { releaseForRelay(creditDb, p.escrowId); } catch (e) { console.error('[relay] escrow release on progress timeout failed:', e); }
-      }
-      const originWs = connections.get(pending.originOwner);
-      if (originWs && originWs.readyState === 1) {
-        sendMessage(originWs, {
-          type: 'response',
-          id: msg.id,
-          error: { code: -32603, message: 'Relay request timeout' },
-        });
-      }
-    }, RELAY_TIMEOUT_MS);
-    pending.timeout = newTimeout;
+    transitionPendingToProgressing(msg.id, pending);
 
     // Forward progress to the origin requester
     const originWs = connections.get(pending.originOwner);
@@ -410,8 +565,8 @@ export function registerWebSocketRelay(
     const pending = pendingRequests.get(msg.id);
     if (!pending) return; // Already timed out or duplicate
 
-    // Clear timeout
-    clearTimeout(pending.timeout);
+    // Clear all lifecycle timers
+    clearPendingTimers(pending);
     pendingRequests.delete(msg.id);
 
     // If this is a job-dispatched request, delegate to job relay response handler
@@ -513,7 +668,7 @@ export function registerWebSocketRelay(
     for (const [reqId, pending] of pendingRequests) {
       if (pending.targetOwner === owner) {
         // This request was forwarded to the disconnected provider — release escrow and notify requester
-        clearTimeout(pending.timeout);
+        clearPendingTimers(pending);
         pendingRequests.delete(reqId);
 
         if (pending.escrowId && creditDb) {
@@ -529,12 +684,17 @@ export function registerWebSocketRelay(
           });
         }
       } else if (pending.originOwner === owner) {
-        // Request originated from this agent — clean up without notifying (requester is gone)
-        clearTimeout(pending.timeout);
-        pendingRequests.delete(reqId);
-        // Release escrow so provider doesn't wait for a settlement that won't come
-        if (pending.escrowId && creditDb) {
-          try { releaseForRelay(creditDb, pending.escrowId); } catch (e) { console.error('[relay] escrow release on requester disconnect failed:', e); }
+        const lifecycle = pending.lifecycle ?? 'held';
+        if (lifecycle === 'held') {
+          // Requester disconnected before provider started — refund immediately.
+          clearPendingTimers(pending);
+          pendingRequests.delete(reqId);
+          if (pending.escrowId && creditDb) {
+            try { releaseForRelay(creditDb, pending.escrowId); } catch (e) { console.error('[relay] escrow release on requester disconnect failed:', e); }
+          }
+        } else {
+          // Requester disconnected after provider started — keep escrow pending during grace.
+          transitionPendingToAbandoned(reqId, pending);
         }
       }
     }
@@ -599,8 +759,10 @@ export function registerWebSocketRelay(
     try {
       // Look up the escrow to find the provider
       const escrow = creditDb
-        .prepare('SELECT card_id FROM credit_escrow WHERE id = ? AND status = ?')
-        .get(msg.escrow_id, 'held') as { card_id: string } | undefined;
+        .prepare(
+          "SELECT card_id FROM credit_escrow WHERE id = ? AND status IN ('held', 'started', 'progressing', 'abandoned')",
+        )
+        .get(msg.escrow_id) as { card_id: string } | undefined;
 
       if (!escrow) {
         sendMessage(ws, { type: 'error', code: 'escrow_not_found', message: `Escrow not found: ${msg.escrow_id}`, request_id: msg.request_id });
@@ -720,6 +882,10 @@ export function registerWebSocketRelay(
             handleRelayResponse(msg);
             break;
 
+          case 'relay_started':
+            handleRelayStarted(msg);
+            break;
+
           case 'relay_progress':
             handleRelayProgress(msg);
             break;
@@ -774,7 +940,7 @@ export function registerWebSocketRelay(
       }
       connections.clear();
       for (const [, pending] of pendingRequests) {
-        clearTimeout(pending.timeout);
+        clearPendingTimers(pending);
       }
       pendingRequests.clear();
       rateLimits.clear();

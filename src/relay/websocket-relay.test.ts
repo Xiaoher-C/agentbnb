@@ -10,17 +10,46 @@ import type { AddressInfo } from 'node:net';
 /** Helpers */
 function waitForOpen(ws: WebSocket): Promise<void> {
   return new Promise((resolve, reject) => {
-    if (ws.readyState === WebSocket.OPEN) return resolve();
-    ws.on('open', resolve);
-    ws.on('error', reject);
+    if (ws.readyState === WebSocket.OPEN) {
+      resolve();
+      return;
+    }
+
+    const handleOpen = () => {
+      cleanup();
+      resolve();
+    };
+    const handleError = (error: Error) => {
+      cleanup();
+      reject(error);
+    };
+    const cleanup = () => {
+      ws.off('open', handleOpen);
+      ws.off('error', handleError);
+    };
+
+    ws.on('open', handleOpen);
+    ws.on('error', handleError);
   });
 }
 
 function waitForMessage(ws: WebSocket): Promise<Record<string, unknown>> {
-  return new Promise((resolve) => {
-    ws.once('message', (raw) => {
+  return new Promise((resolve, reject) => {
+    const handleMessage = (raw: WebSocket.RawData) => {
+      cleanup();
       resolve(JSON.parse(raw.toString()) as Record<string, unknown>);
-    });
+    };
+    const handleError = (error: Error) => {
+      cleanup();
+      reject(error);
+    };
+    const cleanup = () => {
+      ws.off('message', handleMessage);
+      ws.off('error', handleError);
+    };
+
+    ws.on('message', handleMessage);
+    ws.on('error', handleError);
   });
 }
 
@@ -45,9 +74,30 @@ describe('WebSocket Relay', () => {
   });
 
   afterEach(async () => {
-    for (const ws of clients) {
-      try { ws.close(); } catch { /* ignore */ }
-    }
+    await Promise.all(
+      clients.map(
+        (ws) =>
+          new Promise<void>((resolve) => {
+            if (ws.readyState === WebSocket.CLOSED) {
+              resolve();
+              return;
+            }
+
+            const timeout = setTimeout(resolve, 500);
+            const finish = () => resolve();
+            ws.once('close', () => {
+              clearTimeout(timeout);
+              finish();
+            });
+            try {
+              ws.close();
+            } catch {
+              clearTimeout(timeout);
+              resolve();
+            }
+          }),
+      ),
+    );
     clients.length = 0;
     relayState.shutdown();
     await server.close();

@@ -110,7 +110,9 @@ describe('bootstrap activate/deactivate lifecycle', () => {
   it('activate() throws INIT_FAILED when CLI not found and config missing', async () => {
     mockLoadConfig.mockReturnValue(null);
     const deps: OnboardDeps = {
-      findCli: () => null,
+      resolveSelfCli: () => {
+        throw new Error('not found');
+      },
       runCommand: vi.fn(),
     };
 
@@ -126,15 +128,15 @@ describe('bootstrap activate/deactivate lifecycle', () => {
     mockLoadConfig.mockReturnValueOnce(null).mockReturnValue(MINIMAL_CONFIG as ReturnType<typeof loadConfig>);
     const mockRun = vi.fn().mockResolvedValue({ stdout: '', stderr: '' });
     const deps: OnboardDeps = {
-      findCli: () => '/usr/local/bin/agentbnb',
+      resolveSelfCli: () => '/usr/local/bin/agentbnb',
       runCommand: mockRun,
     };
 
     ctx = await activate({}, deps);
 
     expect(mockRun).toHaveBeenCalledTimes(2);
-    expect(mockRun.mock.calls[0][0]).toMatch(/agentbnb init --owner .* --yes --no-detect/);
-    expect(mockRun.mock.calls[1][0]).toBe('agentbnb openclaw sync');
+    expect(mockRun.mock.calls[0][0]).toMatch(/^'\/usr\/local\/bin\/agentbnb' init --owner .* --yes --no-detect$/);
+    expect(mockRun.mock.calls[1][0]).toBe('\'/usr/local/bin/agentbnb\' openclaw sync');
   });
 
   // ---------------------------------------------------------------------------
@@ -146,7 +148,7 @@ describe('bootstrap activate/deactivate lifecycle', () => {
       .mockResolvedValueOnce({ stdout: '', stderr: '' })
       .mockRejectedValueOnce(new Error('SOUL.md not found'));
     const deps: OnboardDeps = {
-      findCli: () => '/usr/local/bin/agentbnb',
+      resolveSelfCli: () => '/usr/local/bin/agentbnb',
       runCommand: mockRun,
     };
 
@@ -161,7 +163,7 @@ describe('bootstrap activate/deactivate lifecycle', () => {
   it('activate() skips auto-onboard when config already exists', async () => {
     const mockRun = vi.fn();
     const deps: OnboardDeps = {
-      findCli: () => '/usr/local/bin/agentbnb',
+      resolveSelfCli: () => '/usr/local/bin/agentbnb',
       runCommand: mockRun,
     };
 

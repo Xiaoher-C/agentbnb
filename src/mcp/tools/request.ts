@@ -13,11 +13,9 @@ import { DEFAULT_AUTONOMY_CONFIG } from '../../autonomy/tiers.js';
 import { openDatabase } from '../../registry/store.js';
 import { openCreditDb } from '../../credit/ledger.js';
 import { loadKeyPair } from '../../credit/signing.js';
-import { createSignedEscrowReceipt } from '../../credit/escrow-receipt.js';
-import { confirmEscrowDebit, releaseEscrow } from '../../credit/escrow.js';
-import { RelayClient } from '../../relay/websocket-client.js';
 import { requestCapability } from '../../gateway/client.js';
-import type { IdentityAuth } from '../../gateway/client.js';
+import type { IdentityAuth, RequestTimeoutHint } from '../../gateway/client.js';
+import { requestViaTemporaryRelay } from '../../gateway/relay-dispatch.js';
 import type { CapabilityCard } from '../../types/index.js';
 import type { McpServerContext } from '../server.js';
 
@@ -28,13 +26,55 @@ const requestInputSchema = {
   skill_id: z.string().optional().describe('Specific skill within a v2.0 card'),
   params: z.record(z.unknown()).optional().describe('Input parameters for the capability'),
   max_cost: z.number().optional().default(50).describe('Maximum credits to spend'),
+  timeout_ms: z.number().positive().optional().describe('Requester timeout override in milliseconds'),
 };
+
+function parsePositiveNumber(value: unknown): number | undefined {
+  return typeof value === 'number' && value > 0 ? value : undefined;
+}
+
+function deriveTimeoutHintFromCard(remoteCard: Record<string, unknown>, skillId?: string): RequestTimeoutHint | undefined {
+  const topLevelHint: RequestTimeoutHint = {
+    expected_duration_ms: parsePositiveNumber(remoteCard['expected_duration_ms']),
+    hard_timeout_ms: parsePositiveNumber(remoteCard['hard_timeout_ms']),
+  };
+
+  const skills = remoteCard['skills'];
+  if (!Array.isArray(skills)) {
+    return topLevelHint.expected_duration_ms !== undefined || topLevelHint.hard_timeout_ms !== undefined
+      ? topLevelHint
+      : undefined;
+  }
+
+  const selectedSkill = skillId
+    ? skills.find((candidate) => {
+      if (!candidate || typeof candidate !== 'object') return false;
+      return (candidate as Record<string, unknown>)['id'] === skillId;
+    })
+    : skills[0];
+
+  if (!selectedSkill || typeof selectedSkill !== 'object') {
+    return topLevelHint.expected_duration_ms !== undefined || topLevelHint.hard_timeout_ms !== undefined
+      ? topLevelHint
+      : undefined;
+  }
+
+  const skillRecord = selectedSkill as Record<string, unknown>;
+  const skillHint: RequestTimeoutHint = {
+    expected_duration_ms: parsePositiveNumber(skillRecord['expected_duration_ms']) ?? topLevelHint.expected_duration_ms,
+    hard_timeout_ms: parsePositiveNumber(skillRecord['hard_timeout_ms']) ?? topLevelHint.hard_timeout_ms,
+  };
+
+  return skillHint.expected_duration_ms !== undefined || skillHint.hard_timeout_ms !== undefined
+    ? skillHint
+    : undefined;
+}
 
 /**
  * Handler logic for agentbnb_request. Exported for direct testing.
  */
 export async function handleRequest(
-  args: { query?: string; card_id?: string; skill_id?: string; params?: Record<string, unknown>; max_cost?: number },
+  args: { query?: string; card_id?: string; skill_id?: string; params?: Record<string, unknown>; max_cost?: number; timeout_ms?: number },
   ctx: McpServerContext,
 ): Promise<{ content: Array<{ type: 'text'; text: string }> }> {
   try {
@@ -113,6 +153,7 @@ export async function handleRequest(
           token: ctx.config.token,
           cardId,
           params: { ...(args.params ?? {}), ...(args.skill_id ? { skill_id: args.skill_id } : {}), requester: ctx.config.owner },
+          timeoutMs: args.timeout_ms,
           identity: identityAuth,
         });
         return {
@@ -147,6 +188,7 @@ export async function handleRequest(
 
       const targetOwner = (remoteCard['owner'] ?? remoteCard['agent_name']) as string | undefined;
       const gatewayUrl = remoteCard['gateway_url'] as string | undefined;
+      const timeoutHint = deriveTimeoutHintFromCard(remoteCard, args.skill_id);
 
       // Direct HTTP request to provider gateway.
       // Match CLI behavior: local SQLite escrow + signed receipt for cross-machine
@@ -167,38 +209,26 @@ export async function handleRequest(
         }
 
         if (remoteCost > 0) {
-          // Paid skill: create local escrow + signed receipt (same as CLI line 921-930)
-          const creditDb = openCreditDb(ctx.config.credit_db_path);
-          creditDb.pragma('busy_timeout = 5000');
-          try {
-            const keys = loadKeyPair(ctx.configDir);
-            const { escrowId, receipt } = createSignedEscrowReceipt(creditDb, keys.privateKey, keys.publicKey, {
-              owner: ctx.config.owner,
-              agent_id: ctx.identity.agent_id,
-              amount: remoteCost,
-              cardId,
-              skillId: args.skill_id,
-            });
-            try {
-              const result = await requestCapability({
-                gatewayUrl,
-                token: ctx.config.token ?? '',
-                cardId,
-                params: { ...(args.params ?? {}), ...(args.skill_id ? { skill_id: args.skill_id } : {}), requester: ctx.config.owner },
-                identity: identityAuth,
-                escrowReceipt: receipt,
-              });
-              confirmEscrowDebit(creditDb, escrowId);
-              return {
-                content: [{ type: 'text' as const, text: JSON.stringify({ success: true, result }, null, 2) }],
-              };
-            } catch (execErr) {
-              releaseEscrow(creditDb, escrowId);
-              throw execErr;
-            }
-          } finally {
-            creditDb.close();
+          // Paid skill: route via relay so the Hub handles escrow + network fee.
+          // This avoids the fee bypass bug in the signed receipt path (see settlement.ts).
+          if (!targetOwner) {
+            return {
+              content: [{ type: 'text' as const, text: JSON.stringify({ success: false, error: 'Paid remote request requires a target owner for relay routing' }) }],
+            };
           }
+          const result = await requestViaTemporaryRelay({
+            registryUrl: ctx.config.registry,
+            owner: ctx.config.owner,
+            token: ctx.config.token ?? '',
+            targetOwner,
+            cardId,
+            skillId: args.skill_id,
+            params: { ...(args.params ?? {}), ...(args.skill_id ? { skill_id: args.skill_id } : {}), requester: ctx.config.owner },
+            timeoutMs: args.timeout_ms,
+          });
+          return {
+            content: [{ type: 'text' as const, text: JSON.stringify({ success: true, result }, null, 2) }],
+          };
         } else {
           // Free skill: no escrow needed
           const result = await requestCapability({
@@ -206,6 +236,8 @@ export async function handleRequest(
             token: ctx.config.token ?? '',
             cardId,
             params: { ...(args.params ?? {}), ...(args.skill_id ? { skill_id: args.skill_id } : {}), requester: ctx.config.owner },
+            timeoutMs: args.timeout_ms,
+            timeoutHint,
             identity: identityAuth,
           });
           return {
@@ -216,31 +248,19 @@ export async function handleRequest(
 
       // Relay-only: no gateway_url, relay handles credits server-side
       if (targetOwner) {
-        const relay = new RelayClient({
+        const result = await requestViaTemporaryRelay({
           registryUrl: ctx.config.registry,
           owner: ctx.config.owner,
           token: ctx.config.token ?? '',
-          card: { id: ctx.config.owner, owner: ctx.config.owner, name: 'mcp-requester' },
-          onRequest: async () => ({ error: { code: -32601, message: 'MCP client does not accept requests' } }),
-          silent: true,
+          targetOwner,
+          cardId,
+          skillId: args.skill_id,
+          params: { ...(args.params ?? {}), ...(args.skill_id ? { skill_id: args.skill_id } : {}) },
+          timeoutMs: args.timeout_ms,
         });
-
-        try {
-          await relay.connect();
-          const result = await relay.request({
-            targetOwner,
-            cardId,
-            skillId: args.skill_id,
-            params: args.params ?? {},
-            requester: ctx.config.owner,
-            timeoutMs: 300_000,
-          });
-          return {
-            content: [{ type: 'text' as const, text: JSON.stringify({ success: true, result }, null, 2) }],
-          };
-        } finally {
-          relay.disconnect();
-        }
+        return {
+          content: [{ type: 'text' as const, text: JSON.stringify({ success: true, result }, null, 2) }],
+        };
       }
 
       return {

@@ -99,6 +99,8 @@ export class PipelineExecutor implements ExecutorMode {
   ): Promise<Omit<ExecutionResult, 'latency_ms'>> {
     const pipelineConfig = config as PipelineSkillConfig;
     const steps = pipelineConfig.steps ?? [];
+    const pipelineTimeoutMs = pipelineConfig.timeout_ms;
+    const deadline = typeof pipelineTimeoutMs === 'number' ? Date.now() + pipelineTimeoutMs : undefined;
 
     if (steps.length === 0) {
       return { success: true, result: null };
@@ -128,12 +130,48 @@ export class PipelineExecutor implements ExecutorMode {
 
       let stepResult: unknown;
 
+      const runWithRemainingDeadline = async <T>(operation: () => Promise<T>): Promise<T> => {
+        if (deadline === undefined) {
+          return operation();
+        }
+
+        const remainingMs = deadline - Date.now();
+        if (remainingMs <= 0) {
+          throw new Error(`pipeline timed out after ${pipelineTimeoutMs}ms`);
+        }
+
+        return new Promise<T>((resolve, reject) => {
+          const timeout = setTimeout(() => {
+            reject(new Error(`pipeline timed out after ${pipelineTimeoutMs}ms`));
+          }, remainingMs);
+
+          operation()
+            .then((value) => {
+              clearTimeout(timeout);
+              resolve(value);
+            })
+            .catch((err: unknown) => {
+              clearTimeout(timeout);
+              reject(err);
+            });
+        });
+      };
+
       if ('skill_id' in step && step.skill_id) {
         // Sub-skill dispatch
-        const subResult = await this.skillExecutor.execute(
-          step.skill_id,
-          resolvedInputs as Record<string, unknown>,
-        );
+        let subResult;
+        try {
+          subResult = await runWithRemainingDeadline(() => this.skillExecutor.execute(
+            step.skill_id,
+            resolvedInputs as Record<string, unknown>,
+          ));
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          return {
+            success: false,
+            error: `Step ${i} failed: ${message}`,
+          };
+        }
         if (!subResult.success) {
           return {
             success: false,
@@ -149,7 +187,14 @@ export class PipelineExecutor implements ExecutorMode {
         );
 
         try {
-          const { stdout } = await execFileAsync('/bin/sh', ['-c', interpolatedCommand], { timeout: 30000 });
+          const remainingMs = deadline === undefined ? undefined : deadline - Date.now();
+          if (remainingMs !== undefined && remainingMs <= 0) {
+            throw new Error(`pipeline timed out after ${pipelineTimeoutMs}ms`);
+          }
+
+          const { stdout } = await execFileAsync('/bin/sh', ['-c', interpolatedCommand], {
+            timeout: remainingMs !== undefined ? remainingMs : 30000,
+          });
           stepResult = stdout.trim();
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);

@@ -11,6 +11,8 @@ import { openCreditDb, bootstrapAgent } from '../credit/ledger.js';
 import * as gatewayClient from '../gateway/client.js';
 import { RelayClient } from '../relay/websocket-client.js';
 import { AgentBnBError } from '../types/index.js';
+import { deriveAgentId, loadIdentity, saveIdentity } from '../identity/identity.js';
+import { generateKeyPair, saveKeyPair } from '../credit/signing.js';
 
 function makeConfig(tmpDir: string, overrides: Partial<AgentBnBConfig> = {}): AgentBnBConfig {
   return {
@@ -100,6 +102,32 @@ describe('AgentBnBService', () => {
     expect(stop).toHaveBeenCalledTimes(1);
     expect(restart).toHaveBeenCalledTimes(1);
     expect(healthCheck).toHaveBeenCalledTimes(1);
+  });
+
+  it('loadIdentityAuth repairs stale identity using local keypair as source of truth', async () => {
+    const durableKeys = generateKeyPair();
+    const forgedKeys = generateKeyPair();
+    saveKeyPair(tmpDir, durableKeys);
+    saveIdentity(tmpDir, {
+      agent_id: deriveAgentId(forgedKeys.publicKey.toString('hex')),
+      owner: 'test-owner',
+      public_key: forgedKeys.publicKey.toString('hex'),
+      created_at: new Date().toISOString(),
+    });
+
+    const service = new AgentBnBService({} as ServiceCoordinator, makeConfig(tmpDir));
+    const auth = (service as unknown as {
+      loadIdentityAuth: () => { agentId: string; publicKey: string; privateKey: Buffer };
+    }).loadIdentityAuth();
+
+    const repaired = loadIdentity(tmpDir);
+    const expectedPublic = durableKeys.publicKey.toString('hex');
+
+    expect(auth.publicKey).toBe(expectedPublic);
+    expect(auth.agentId).toBe(deriveAgentId(expectedPublic));
+    expect(repaired?.public_key).toBe(expectedPublic);
+    expect(repaired?.agent_id).toBe(deriveAgentId(expectedPublic));
+    expect(auth.privateKey.equals(durableKeys.privateKey)).toBe(true);
   });
 
   it('discoverCapabilities returns local-first then appends deduped remote cards', async () => {

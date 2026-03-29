@@ -13,6 +13,7 @@ vi.mock('better-sqlite3');
 vi.mock('../registry/store.js', () => ({
   getCard: vi.fn(),
   updateReputation: vi.fn(),
+  listCards: vi.fn(() => []),
 }));
 
 vi.mock('../credit/ledger.js', () => ({
@@ -176,6 +177,46 @@ describe('executeCapabilityRequest — onProgress wiring', () => {
     expect(onProgress).not.toHaveBeenCalled();
 
     fetchSpy.mockRestore();
+  });
+});
+
+describe('executeCapabilityRequest — direct HTTP paid remote handling', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(getCard).mockReturnValue(makeCard() as ReturnType<typeof getCard>);
+    vi.mocked(getBalance).mockReturnValue(100);
+    vi.mocked(holdEscrow).mockReturnValue('escrow-uuid');
+    vi.mocked(settleEscrow).mockReturnValue(undefined);
+    vi.mocked(updateReputation).mockReturnValue(undefined);
+  });
+
+  it('rejects paid remote escrow_receipt path to prevent split-brain settlement', async () => {
+    const result = await executeCapabilityRequest({
+      registryDb: fakeDb,
+      creditDb: fakeDb,
+      cardId: 'card-1',
+      skillId: 'skill-1',
+      params: {},
+      requester: 'requester-bob',
+      escrowReceipt: {
+        requester_owner: 'requester-bob',
+        requester_public_key: 'deadbeef',
+        amount: 5,
+        card_id: 'card-1',
+        timestamp: new Date().toISOString(),
+        nonce: 'nonce-1',
+        signature: 'sig',
+      },
+      handlerUrl: 'http://localhost:9999/handle',
+    });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.message).toMatch(/disabled/i);
+      expect(result.error.message).toMatch(/relay/i);
+    }
+    expect(holdEscrow).not.toHaveBeenCalled();
+    expect(settleEscrow).not.toHaveBeenCalled();
   });
 });
 

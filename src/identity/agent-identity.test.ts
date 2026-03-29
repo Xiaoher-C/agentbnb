@@ -8,6 +8,8 @@ import {
   listAgentsByOperator,
   updateAgentRecord,
   resolveIdentifier,
+  resolveCanonicalIdentity,
+  sameAgentIdentity,
 } from './agent-identity.js';
 import { deriveAgentId } from './identity.js';
 import { generateKeyPair } from '../credit/signing.js';
@@ -225,6 +227,52 @@ describe('agent-identity', () => {
 
       // Should resolve to the direct agent_id match
       expect(resolveIdentifier(db, agent.agent_id)).toBe(agent.agent_id);
+    });
+  });
+
+  describe('resolveCanonicalIdentity', () => {
+    it('returns resolved canonical identity for agent_id input', () => {
+      const agent = makeAgent('canonical-bot');
+      createAgentRecord(db, { ...agent, legacy_owner: 'legacy-canonical' });
+
+      const resolved = resolveCanonicalIdentity(db, agent.agent_id);
+      expect(resolved.resolved).toBe(true);
+      expect(resolved.agent_id).toBe(agent.agent_id);
+      expect(resolved.legacy_owner).toBe('legacy-canonical');
+      expect(resolved.source).toBe('agent_id');
+    });
+
+    it('returns resolved canonical identity for legacy owner input', () => {
+      const agent = makeAgent('legacy-canonical-bot');
+      createAgentRecord(db, { ...agent, legacy_owner: 'legacy-owner-x' });
+
+      const resolved = resolveCanonicalIdentity(db, 'legacy-owner-x');
+      expect(resolved.resolved).toBe(true);
+      expect(resolved.agent_id).toBe(agent.agent_id);
+      expect(resolved.source).toBe('legacy_owner');
+    });
+
+    it('returns unresolved identity for unknown identifier', () => {
+      const resolved = resolveCanonicalIdentity(db, 'unknown-owner');
+      expect(resolved.resolved).toBe(false);
+      expect(resolved.agent_id).toBe('unknown-owner');
+      expect(resolved.source).toBe('unresolved');
+    });
+  });
+
+  describe('sameAgentIdentity', () => {
+    it('matches canonical agent_id and legacy owner as same identity', () => {
+      const agent = makeAgent('same-agent-bot');
+      createAgentRecord(db, { ...agent, legacy_owner: 'legacy-same' });
+
+      expect(sameAgentIdentity(db, agent.agent_id, 'legacy-same')).toBe(true);
+    });
+
+    it('does not match unrelated identifiers', () => {
+      const agent = makeAgent('diff-agent-bot');
+      createAgentRecord(db, { ...agent, legacy_owner: 'legacy-diff' });
+
+      expect(sameAgentIdentity(db, agent.agent_id, 'other-owner')).toBe(false);
     });
   });
 

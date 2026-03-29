@@ -45,9 +45,9 @@ export interface RuntimeOptions {
 }
 
 /**
- * Represents a held escrow row from the credit_escrow table.
+ * Represents an escrow row selected for orphan recovery.
  */
-interface HeldEscrowRow {
+interface RecoverableEscrowRow {
   id: string;
 }
 
@@ -233,7 +233,8 @@ export class AgentRuntime {
 
   /**
    * Recovers orphaned escrows by releasing them.
-   * Orphaned escrows are 'held' escrows older than the configured age threshold.
+   * Orphaned escrows are stale 'held' or 'abandoned' escrows older than the
+   * configured age threshold. In-flight started/progressing escrows are not touched.
    * Errors during individual release are swallowed (escrow may have settled between query and release).
    */
   private async recoverOrphanedEscrows(): Promise<void> {
@@ -243,9 +244,9 @@ export class AgentRuntime {
 
     const orphaned = this.creditDb
       .prepare(
-        "SELECT id FROM credit_escrow WHERE status = 'held' AND created_at < ?",
+        "SELECT id FROM credit_escrow WHERE status IN ('held', 'abandoned') AND created_at < ?",
       )
-      .all(cutoff) as HeldEscrowRow[];
+      .all(cutoff) as RecoverableEscrowRow[];
 
     for (const row of orphaned) {
       try {
