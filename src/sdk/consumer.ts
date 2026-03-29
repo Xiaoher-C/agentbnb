@@ -106,7 +106,6 @@ export class AgentBnBConsumer {
     registryUrl: string;
     targetOwner: string;
     targetAgentId?: string;
-    targetAgentId?: string;
     cardId: string;
     skillId?: string;
     params?: Record<string, unknown>;
@@ -121,7 +120,6 @@ export class AgentBnBConsumer {
       owner: identity.owner,
       token,
       targetOwner: opts.targetOwner,
-      targetAgentId: opts.targetAgentId,
       targetAgentId: opts.targetAgentId,
       cardId: opts.cardId,
       skillId: opts.skillId,

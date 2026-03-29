@@ -17,8 +17,6 @@ export interface TemporaryRelayRequestOptions {
   targetOwner: string;
   /** Canonical target agent identity. Preferred over owner when available. */
   targetAgentId?: string;
-  /** Canonical target agent identity. Preferred over owner when available. */
-  targetAgentId?: string;
   /** Capability Card ID to execute. */
   cardId: string;
   /** Optional skill ID within the card. */
@@ -49,7 +47,6 @@ export async function requestViaTemporaryRelay(opts: TemporaryRelayRequestOption
     owner,
     token,
     targetOwner,
-    targetAgentId,
     targetAgentId,
     cardId,
     skillId,
@@ -92,7 +89,6 @@ export async function requestViaTemporaryRelay(opts: TemporaryRelayRequestOption
   try {
     return await requestViaRelay(relay, {
       targetOwner,
-      targetAgentId,
       targetAgentId,
       cardId,
       skillId,
