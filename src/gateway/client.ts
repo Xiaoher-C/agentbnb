@@ -1,7 +1,20 @@
 import { randomUUID } from 'node:crypto';
+import { Agent } from 'undici';
 import { AgentBnBError } from '../types/index.js';
 import type { EscrowReceipt } from '../types/index.js';
 import { signEscrowReceipt } from '../credit/signing.js';
+
+/**
+ * Shared HTTP connection pool for gateway requests.
+ * Reuses TCP connections across requests to the same host, eliminating
+ * repeated TLS/TCP handshake overhead for Conductor multi-hop scenarios.
+ */
+const gatewayAgent = new Agent({
+  keepAliveTimeout: 30_000,
+  keepAliveMaxTimeout: 60_000,
+  connections: 10,
+  pipelining: 1,
+});
 
 /**
  * Identity credentials for Ed25519-based authentication.
@@ -22,7 +35,7 @@ export interface IdentityAuth {
 export interface RequestOptions {
   /** Base URL of the remote gateway (e.g. http://localhost:7700). */
   gatewayUrl: string;
-  /** Bearer token for authentication (used for local requests). */
+  /** Bearer token for authentication fallback. */
   token: string;
   /** Capability Card ID to execute. */
   cardId: string;
@@ -32,15 +45,43 @@ export interface RequestOptions {
   timeoutMs?: number;
   /** Signed escrow receipt for cross-machine credit verification. */
   escrowReceipt?: EscrowReceipt;
-  /** Identity credentials for Ed25519-based auth (replaces token for remote). */
+  /** Identity credentials for Ed25519-based auth. */
   identity?: IdentityAuth;
+}
+
+/**
+ * Builds gateway auth headers.
+ *
+ * When identity credentials are provided, signed Ed25519 headers are attached.
+ * If a bearer token is also provided, it is sent alongside signature headers
+ * for backward compatibility with token-based gateways.
+ */
+function buildGatewayAuthHeaders(
+  payload: unknown,
+  token: string,
+  identity?: IdentityAuth,
+): Record<string, string> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+
+  if (identity) {
+    const signature = signEscrowReceipt(payload as Record<string, unknown>, identity.privateKey);
+    headers['X-Agent-Id'] = identity.agentId;
+    headers['X-Agent-Public-Key'] = identity.publicKey;
+    headers['X-Agent-Signature'] = signature;
+  }
+
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  return headers;
 }
 
 /**
  * Sends a capability.execute JSON-RPC request to a remote gateway.
  *
- * Authentication: uses Bearer token if provided, otherwise signs
- * the request payload with Ed25519 identity credentials.
+ * Authentication: signs with Ed25519 identity credentials when available.
+ * Bearer token is sent as backward-compatible fallback when provided.
  *
  * @param opts - Request options.
  * @returns The result from the capability execution.
@@ -61,19 +102,7 @@ export async function requestCapability(opts: RequestOptions): Promise<unknown> 
     },
   };
 
-  // Build auth headers
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-
-  if (identity) {
-    // Ed25519 identity auth: sign the payload, include agent_id + public_key + signature
-    const signature = signEscrowReceipt(payload as unknown as Record<string, unknown>, identity.privateKey);
-    headers['X-Agent-Id'] = identity.agentId;
-    headers['X-Agent-Public-Key'] = identity.publicKey;
-    headers['X-Agent-Signature'] = signature;
-  } else if (token) {
-    // Legacy Bearer token auth
-    headers['Authorization'] = `Bearer ${token}`;
-  }
+  const headers = buildGatewayAuthHeaders(payload, token, identity);
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -85,7 +114,9 @@ export async function requestCapability(opts: RequestOptions): Promise<unknown> 
       headers,
       body: JSON.stringify(payload),
       signal: controller.signal,
-    });
+      // undici dispatcher for connection pooling (Node.js 20+)
+      dispatcher: gatewayAgent,
+    } as RequestInit);
   } catch (err) {
     clearTimeout(timer);
     const isTimeout = err instanceof Error && err.name === 'AbortError';
@@ -109,6 +140,110 @@ export async function requestCapability(opts: RequestOptions): Promise<unknown> 
   }
 
   return body.result;
+}
+
+/**
+ * A single request within a batch.
+ */
+export interface BatchRequestItem {
+  /** JSON-RPC request ID (for correlating responses). */
+  id: string;
+  /** Capability Card ID to execute. */
+  cardId: string;
+  /** Input parameters for the capability. */
+  params?: Record<string, unknown>;
+  /** Signed escrow receipt for cross-machine credit verification. */
+  escrowReceipt?: EscrowReceipt;
+}
+
+/**
+ * Sends a batch of capability.execute JSON-RPC requests to a single gateway.
+ *
+ * Uses JSON-RPC 2.0 batch format (array of requests) to reduce network
+ * round-trips when multiple sub-tasks target the same agent in a Conductor wave.
+ *
+ * @param gatewayUrl - Base URL of the remote gateway.
+ * @param token - Bearer token for authentication.
+ * @param items - Array of batch request items.
+ * @param opts - Optional timeout and identity.
+ * @returns Map of request ID to result (or Error for failures).
+ */
+export async function requestCapabilityBatch(
+  gatewayUrl: string,
+  token: string,
+  items: BatchRequestItem[],
+  opts: { timeoutMs?: number; identity?: IdentityAuth } = {},
+): Promise<Map<string, unknown>> {
+  if (items.length === 0) return new Map();
+  if (items.length === 1) {
+    // Single item — use regular path to avoid batch overhead
+    const item = items[0]!;
+    const result = await requestCapability({
+      gatewayUrl,
+      token,
+      cardId: item.cardId,
+      params: item.params,
+      escrowReceipt: item.escrowReceipt,
+      timeoutMs: opts.timeoutMs,
+      identity: opts.identity,
+    });
+    return new Map([[item.id, result]]);
+  }
+
+  const { timeoutMs = 300_000, identity } = opts;
+
+  const batchPayload = items.map((item) => ({
+    jsonrpc: '2.0',
+    id: item.id,
+    method: 'capability.execute',
+    params: {
+      card_id: item.cardId,
+      ...item.params,
+      ...(item.escrowReceipt ? { escrow_receipt: item.escrowReceipt } : {}),
+    },
+  }));
+
+  const headers = buildGatewayAuthHeaders(batchPayload, token, identity);
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  let response: Response;
+  try {
+    response = await fetch(`${gatewayUrl}/rpc`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(batchPayload),
+      signal: controller.signal,
+      dispatcher: gatewayAgent,
+    } as RequestInit);
+  } catch (err) {
+    clearTimeout(timer);
+    const isTimeout = err instanceof Error && err.name === 'AbortError';
+    throw new AgentBnBError(
+      isTimeout ? 'Batch request timed out' : `Network error: ${String(err)}`,
+      isTimeout ? 'TIMEOUT' : 'NETWORK_ERROR'
+    );
+  } finally {
+    clearTimeout(timer);
+  }
+
+  const body = (await response.json()) as Array<{
+    jsonrpc: string;
+    id: string;
+    result?: unknown;
+    error?: { code: number; message: string };
+  }>;
+
+  const results = new Map<string, unknown>();
+  for (const resp of body) {
+    if (resp.error) {
+      results.set(resp.id, new AgentBnBError(resp.error.message, `RPC_ERROR_${resp.error.code}`));
+    } else {
+      results.set(resp.id, resp.result);
+    }
+  }
+  return results;
 }
 
 /**

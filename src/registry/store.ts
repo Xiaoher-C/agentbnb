@@ -34,7 +34,10 @@ const V2_FTS_TRIGGERS = `
       new.id,
       new.owner,
       COALESCE(
-        (SELECT group_concat(json_extract(value, '$.name'), ' ')
+        (SELECT group_concat(
+            COALESCE(json_extract(value, '$.id'), '') || ' ' || COALESCE(json_extract(value, '$.name'), ''),
+            ' '
+         )
          FROM json_each(json_extract(new.data, '$.skills'))),
         json_extract(new.data, '$.name'),
         ''
@@ -74,7 +77,10 @@ const V2_FTS_TRIGGERS = `
       old.id,
       old.owner,
       COALESCE(
-        (SELECT group_concat(json_extract(value, '$.name'), ' ')
+        (SELECT group_concat(
+            COALESCE(json_extract(value, '$.id'), '') || ' ' || COALESCE(json_extract(value, '$.name'), ''),
+            ' '
+         )
          FROM json_each(json_extract(old.data, '$.skills'))),
         json_extract(old.data, '$.name'),
         ''
@@ -110,7 +116,10 @@ const V2_FTS_TRIGGERS = `
       new.id,
       new.owner,
       COALESCE(
-        (SELECT group_concat(json_extract(value, '$.name'), ' ')
+        (SELECT group_concat(
+            COALESCE(json_extract(value, '$.id'), '') || ' ' || COALESCE(json_extract(value, '$.name'), ''),
+            ' '
+         )
          FROM json_each(json_extract(new.data, '$.skills'))),
         json_extract(new.data, '$.name'),
         ''
@@ -150,7 +159,10 @@ const V2_FTS_TRIGGERS = `
       old.id,
       old.owner,
       COALESCE(
-        (SELECT group_concat(json_extract(value, '$.name'), ' ')
+        (SELECT group_concat(
+            COALESCE(json_extract(value, '$.id'), '') || ' ' || COALESCE(json_extract(value, '$.name'), ''),
+            ' '
+         )
          FROM json_each(json_extract(old.data, '$.skills'))),
         json_extract(old.data, '$.name'),
         ''
@@ -232,6 +244,15 @@ export function openDatabase(path = ':memory:'): Database.Database {
       tags,
       content=""
     );
+
+    -- Expression index for capability_type lookups (used by Conductor routing).
+    -- Turns json_extract full-table-scan into O(log n) B-tree lookup.
+    CREATE INDEX IF NOT EXISTS idx_cards_capability_type
+      ON capability_cards(json_extract(data, '$.capability_type'));
+
+    -- Owner index for listCards(owner) and other owner-scoped queries.
+    CREATE INDEX IF NOT EXISTS idx_cards_owner
+      ON capability_cards(owner);
   `);
 
   // Create request_log table (adds skill_id column idempotently)
@@ -252,9 +273,9 @@ export function openDatabase(path = ':memory:'): Database.Database {
 /**
  * Runs all pending SQLite schema migrations.
  *
- * Currently applies one migration:
- * - Version 0→2: Install v2.0 FTS5 triggers (json_each over skills[]).
- *   If cards exist and are in v1.0 format, migrate them to v2.0 shape first.
+ * Currently applies:
+ * - Version 0→2: migrate v1.0 cards to v2.0 shape (skills[]).
+ * - Version 2→3: rebuild FTS index to include skills[].id tokens.
  *
  * Uses PRAGMA user_version as a guard to ensure migrations run only once.
  *
@@ -266,6 +287,11 @@ export function runMigrations(db: Database.Database): void {
 
   if (version < 2) {
     migrateV1toV2(db);
+    return;
+  }
+
+  if (version < 3) {
+    migrateV2toV3(db);
   }
 }
 
@@ -277,7 +303,7 @@ export function runMigrations(db: Database.Database): void {
  * 2. Converts each to v2.0 shape (skills[] wrapping original fields)
  * 3. Drops old v1.0 FTS triggers and installs v2.0 triggers (json_each over skills[])
  * 4. Clears FTS index via 'delete-all' command then repopulates from migrated card data
- * 5. Sets PRAGMA user_version = 2 to prevent re-running
+ * 5. Sets PRAGMA user_version = 3 to prevent re-running
  *
  * @param db - Open database instance.
  */
@@ -334,65 +360,86 @@ function migrateV1toV2(db: Database.Database): void {
     // 3. Drop old triggers and install v2.0 FTS triggers
     db.exec(V2_FTS_TRIGGERS);
 
-    // 4. Rebuild FTS index for contentless FTS5 table:
-    //    Use the FTS5 'delete-all' special command to clear all existing index entries,
-    //    then manually re-insert from the now-migrated card data.
-    //    NOTE: 'rebuild' is only valid for content= tables; 'delete-all' works on content="".
-    db.exec(`INSERT INTO cards_fts(cards_fts) VALUES('delete-all')`);
+    // 4. Rebuild FTS index for contentless FTS5 table.
+    rebuildCardsFts(db);
 
-    const allRows = db.prepare('SELECT rowid, id, owner, data FROM capability_cards').all() as Array<{
-      rowid: number;
-      id: string;
-      owner: string;
-      data: string;
-    }>;
-
-    const ftsInsert = db.prepare(
-      'INSERT INTO cards_fts(rowid, id, owner, name, description, tags) VALUES (?, ?, ?, ?, ?, ?)'
-    );
-
-    for (const row of allRows) {
-      const data = JSON.parse(row.data) as Record<string, unknown>;
-      const skills = (data['skills'] as Array<Record<string, unknown>> | undefined) ?? [];
-
-      let name: string;
-      let description: string;
-      let tags: string;
-
-      if (skills.length > 0) {
-        // v2.0 card — aggregate from skills[]
-        name = skills.map((s) => String(s['name'] ?? '')).join(' ');
-        description = skills.map((s) => String(s['description'] ?? '')).join(' ');
-        tags = [
-          // tags from metadata.tags[]
-          ...skills.flatMap((s) => {
-            const meta = s['metadata'] as Record<string, unknown> | undefined;
-            return (meta?.['tags'] as string[] | undefined) ?? [];
-          }),
-          // capability_type (singular)
-          ...skills
-            .map((s) => s['capability_type'] as string | undefined)
-            .filter((v): v is string => typeof v === 'string' && v.length > 0),
-          // capability_types[] (plural)
-          ...skills.flatMap((s) => (s['capability_types'] as string[] | undefined) ?? []),
-        ].join(' ');
-      } else {
-        // v1.0 card still in flat format (fallback)
-        name = String(data['name'] ?? '');
-        description = String(data['description'] ?? '');
-        const meta = data['metadata'] as Record<string, unknown> | undefined;
-        const rawTags = (meta?.['tags'] as string[] | undefined) ?? [];
-        tags = rawTags.join(' ');
-      }
-
-      ftsInsert.run(row.rowid, row.id, row.owner, name, description, tags);
-    }
-
-    // 5. Mark migration complete — MUST be last step inside the transaction
-    db.pragma('user_version = 2');
+    // 5. Mark migration complete — MUST be last step inside the transaction.
+    db.pragma('user_version = 3');
   });
 
   migrate();
+}
+
+/**
+ * Migration: v2.0 -> v3.0
+ *
+ * Re-installs v2 FTS triggers and rebuilds FTS rows so skills[].id tokens are
+ * indexed for exact skill_id discovery in search.
+ *
+ * @param db - Open database instance.
+ */
+function migrateV2toV3(db: Database.Database): void {
+  const migrate = db.transaction(() => {
+    db.exec(V2_FTS_TRIGGERS);
+    rebuildCardsFts(db);
+    db.pragma('user_version = 3');
+  });
+  migrate();
+}
+
+function rebuildCardsFts(db: Database.Database): void {
+  // Use FTS5 'delete-all' to clear existing index rows on contentless FTS table.
+  db.exec(`INSERT INTO cards_fts(cards_fts) VALUES('delete-all')`);
+
+  const allRows = db.prepare('SELECT rowid, id, owner, data FROM capability_cards').all() as Array<{
+    rowid: number;
+    id: string;
+    owner: string;
+    data: string;
+  }>;
+
+  const ftsInsert = db.prepare(
+    'INSERT INTO cards_fts(rowid, id, owner, name, description, tags) VALUES (?, ?, ?, ?, ?, ?)'
+  );
+
+  for (const row of allRows) {
+    const data = JSON.parse(row.data) as Record<string, unknown>;
+    const skills = (data['skills'] as Array<Record<string, unknown>> | undefined) ?? [];
+
+    let name: string;
+    let description: string;
+    let tags: string;
+
+    if (skills.length > 0) {
+      // v2.0 card — aggregate from skills[]
+      name = skills
+        .map((s) => `${String(s['id'] ?? '')} ${String(s['name'] ?? '')}`.trim())
+        .join(' ');
+      description = skills.map((s) => String(s['description'] ?? '')).join(' ');
+      tags = [
+        // tags from metadata.tags[]
+        ...skills.flatMap((s) => {
+          const meta = s['metadata'] as Record<string, unknown> | undefined;
+          return (meta?.['tags'] as string[] | undefined) ?? [];
+        }),
+        // capability_type (singular)
+        ...skills
+          .map((s) => s['capability_type'] as string | undefined)
+          .filter((v): v is string => typeof v === 'string' && v.length > 0),
+        // capability_types[] (plural)
+        ...skills.flatMap((s) => (s['capability_types'] as string[] | undefined) ?? []),
+      ].join(' ');
+    } else {
+      // v1.0 card still in flat format (fallback)
+      name = String(data['name'] ?? '');
+      description = String(data['description'] ?? '');
+      const meta = data['metadata'] as Record<string, unknown> | undefined;
+      const rawTags = (meta?.['tags'] as string[] | undefined) ?? [];
+      tags = rawTags.join(' ');
+    }
+
+    ftsInsert.run(row.rowid, row.id, row.owner, name, description, tags);
+  }
 }
 
 /**

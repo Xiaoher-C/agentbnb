@@ -126,9 +126,52 @@ export function createGatewayServer(opts: GatewayOptions): FastifyInstance {
     return { status: 'ok', version: VERSION, uptime: process.uptime() };
   });
 
-  // POST /rpc — JSON-RPC 2.0 capability execution endpoint
+  // POST /rpc — JSON-RPC 2.0 capability execution endpoint (supports batch)
   fastify.post('/rpc', async (request, reply) => {
-    const body = request.body as Record<string, unknown>;
+    const rawBody = request.body;
+
+    // JSON-RPC 2.0 batch support: if body is an array, process each request
+    if (Array.isArray(rawBody)) {
+      const responses = await Promise.all(
+        (rawBody as Array<Record<string, unknown>>).map(async (single) => {
+          if (single.jsonrpc !== '2.0' || !single.method) {
+            return { jsonrpc: '2.0', id: single.id ?? null, error: { code: -32600, message: 'Invalid Request' } };
+          }
+          if (single.method !== 'capability.execute') {
+            return { jsonrpc: '2.0', id: single.id ?? null, error: { code: -32601, message: 'Method not found' } };
+          }
+          const params = (single.params ?? {}) as Record<string, unknown>;
+          const cardId = params.card_id as string | undefined;
+          if (!cardId) {
+            return { jsonrpc: '2.0', id: single.id ?? null, error: { code: -32602, message: 'Invalid params: card_id required' } };
+          }
+          const requester = (params.requester as string | undefined) ?? 'unknown';
+          const receipt = params.escrow_receipt as EscrowReceipt | undefined;
+          const batchSkillId = params.skill_id as string | undefined;
+
+          const trackKey = batchSkillId ?? cardId;
+          inFlight.set(trackKey, (inFlight.get(trackKey) ?? 0) + 1);
+          try {
+            const result = await executeCapabilityRequest({
+              registryDb, creditDb, cardId, skillId: batchSkillId, params,
+              requester, escrowReceipt: receipt, skillExecutor, handlerUrl, timeoutMs,
+            });
+            if (result.success) {
+              return { jsonrpc: '2.0', id: single.id ?? null, result: result.result };
+            } else {
+              return { jsonrpc: '2.0', id: single.id ?? null, error: result.error };
+            }
+          } finally {
+            const next = (inFlight.get(trackKey) ?? 1) - 1;
+            if (next <= 0) inFlight.delete(trackKey);
+            else inFlight.set(trackKey, next);
+          }
+        }),
+      );
+      return reply.send(responses);
+    }
+
+    const body = rawBody as Record<string, unknown>;
 
     // Validate JSON-RPC structure
     if (body.jsonrpc !== '2.0' || !body.method) {
