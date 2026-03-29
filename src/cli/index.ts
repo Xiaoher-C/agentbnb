@@ -10,8 +10,7 @@ import { createInterface } from 'node:readline';
 import { loadConfig, saveConfig, getConfigDir } from './config.js';
 import { ensureIdentity } from '../identity/identity.js';
 import { generateKeyPair, saveKeyPair, loadKeyPair } from '../credit/signing.js';
-import { createSignedEscrowReceipt } from '../credit/escrow-receipt.js';
-import { settleRequesterEscrow, releaseRequesterEscrow } from '../credit/settlement.js';
+import { requestViaTemporaryRelay } from '../gateway/relay-dispatch.js';
 import { DEFAULT_AUTONOMY_CONFIG } from '../autonomy/tiers.js';
 import { BudgetManager, DEFAULT_BUDGET_CONFIG } from '../credit/budget.js';
 import { AutoRequestor } from '../autonomy/auto-request.js';
@@ -25,6 +24,7 @@ import { getPricingStats } from '../registry/pricing.js';
 import { openCreditDb, getBalance, getTransactions } from '../credit/ledger.js';
 import { createLedger } from '../credit/create-ledger.js';
 import { requestCapability } from '../gateway/client.js';
+import type { RequestTimeoutHint } from '../gateway/client.js';
 import { discoverLocalAgents } from '../discovery/mdns.js';
 import type { CapabilityCard } from '../types/index.js';
 import {
@@ -63,6 +63,47 @@ function loadIdentityAuth(owner: string): import('../gateway/client.js').Identit
     publicKey: identity.public_key,
     privateKey: keys.privateKey,
   };
+}
+
+function parsePositiveNumber(value: unknown): number | undefined {
+  return typeof value === 'number' && value > 0 ? value : undefined;
+}
+
+function buildTimeoutHintFromCard(card: Record<string, unknown>, skillId?: string): RequestTimeoutHint | undefined {
+  const cardHint: RequestTimeoutHint = {
+    expected_duration_ms: parsePositiveNumber(card['expected_duration_ms']),
+    hard_timeout_ms: parsePositiveNumber(card['hard_timeout_ms']),
+  };
+
+  const skills = card['skills'];
+  if (!Array.isArray(skills)) {
+    return cardHint.expected_duration_ms !== undefined || cardHint.hard_timeout_ms !== undefined
+      ? cardHint
+      : undefined;
+  }
+
+  const selected = skillId
+    ? skills.find((candidate) => {
+      if (!candidate || typeof candidate !== 'object') return false;
+      return (candidate as Record<string, unknown>)['id'] === skillId;
+    })
+    : skills[0];
+
+  if (!selected || typeof selected !== 'object') {
+    return cardHint.expected_duration_ms !== undefined || cardHint.hard_timeout_ms !== undefined
+      ? cardHint
+      : undefined;
+  }
+
+  const selectedRecord = selected as Record<string, unknown>;
+  const hint: RequestTimeoutHint = {
+    expected_duration_ms: parsePositiveNumber(selectedRecord['expected_duration_ms']) ?? cardHint.expected_duration_ms,
+    hard_timeout_ms: parsePositiveNumber(selectedRecord['hard_timeout_ms']) ?? cardHint.hard_timeout_ms,
+  };
+
+  return hint.expected_duration_ms !== undefined || hint.hard_timeout_ms !== undefined
+    ? hint
+    : undefined;
 }
 
 /**
@@ -641,10 +682,11 @@ program
   .option('--cost <credits>', 'Credits to commit (required for cross-machine peer requests)')
   .option('--query <text>', 'Search query for capability gap (triggers auto-request flow)')
   .option('--max-cost <credits>', 'Maximum credits to spend on auto-request (default: 50)')
+  .option('--timeout <ms>', 'Request timeout override in milliseconds')
   .option('--no-receipt', 'Skip signed escrow receipt (local-only mode)')
   .option('--batch <file>', 'Path to JSON file with batch request payload { requests, strategy, total_budget }')
   .option('--json', 'Output as JSON')
-  .action(async (cardId: string | undefined, opts: { params: string; peer?: string; skill?: string; cost?: string; query?: string; maxCost?: string; receipt: boolean; batch?: string; json?: boolean }) => {
+  .action(async (cardId: string | undefined, opts: { params: string; peer?: string; skill?: string; cost?: string; query?: string; maxCost?: string; timeout?: string; receipt: boolean; batch?: string; json?: boolean }) => {
     const config = loadConfig();
     if (!config) {
       console.error('Error: not initialized. Run `agentbnb init` first.');
@@ -772,6 +814,14 @@ program
       console.error('Error: --params must be valid JSON.');
       process.exit(1);
     }
+    let timeoutOverrideMs: number | undefined;
+    if (opts.timeout !== undefined) {
+      timeoutOverrideMs = Number(opts.timeout);
+      if (!Number.isFinite(timeoutOverrideMs) || timeoutOverrideMs <= 0) {
+        console.error('Error: --timeout <ms> must be a positive number.');
+        process.exit(1);
+      }
+    }
 
     // Resolve gateway URL and auth
     // Priority: --peer > remote card gateway_url > local config
@@ -779,6 +829,7 @@ program
     let token: string;
     let isRemoteRequest = false;
     let targetOwner: string | undefined; // For relay routing
+    let timeoutHint: RequestTimeoutHint | undefined;
     // Always load identity auth — used for remote requests, harmless for local
     const identityAuth = loadIdentityAuth(config.owner);
 
@@ -810,6 +861,7 @@ program
         // Local card (owned by this agent) — use local gateway
         gatewayUrl = config.gateway_url;
         token = config.token;
+        timeoutHint = buildTimeoutHintFromCard(localCard as unknown as Record<string, unknown>, opts.skill);
       } else {
         // Card not local — try fetching from remote registry
         const registryUrl = config.registry;
@@ -834,6 +886,7 @@ program
         }
 
         targetOwner = (remoteCard.owner ?? remoteCard.agent_name) as string | undefined;
+        timeoutHint = buildTimeoutHintFromCard(remoteCard, opts.skill);
 
         if (remoteCard.gateway_url && typeof remoteCard.gateway_url === 'string') {
           gatewayUrl = remoteCard.gateway_url;
@@ -861,130 +914,7 @@ program
       }
     }
 
-    // Cross-machine requests use signed escrow receipts
-    const useReceipt = isRemoteRequest && opts.receipt !== false;
-
-    // relay-only requests (no gatewayUrl) skip CLI-side escrow — relay handles credits.
-    // Direct HTTP requests (gatewayUrl present) always use local SQLite escrow + signed receipt,
-    // because the provider gateway verifies the receipt locally without hitting the registry.
-    const isRelayOnly = isRemoteRequest && !gatewayUrl;
-    const useRegistryLedger = false; // Registry CreditLedger only for future relay-server-side billing
-
-    // --cost is required for direct remote requests (registry or local escrow).
-    // Relay-only requests skip CLI-side escrow — the relay handles credits, so --cost is optional.
-    if (useReceipt && !opts.cost && !isRelayOnly) {
-      console.error('Error: --cost <credits> is required for remote requests. Specify the credits to commit.');
-      process.exit(1);
-    }
-
-    let escrowId: string | undefined;
-    let escrowReceipt: import('../types/index.js').EscrowReceipt | undefined;
-    // Track which ledger was used so settle/release use the same ledger
-    let requestLedger: import('../credit/create-ledger.js').CreditLedger | undefined;
-
-    if (useReceipt) {
-      const amount = Number(opts.cost);
-      if (isNaN(amount) || amount <= 0) {
-        console.error('Error: --cost must be a positive number.');
-        process.exit(1);
-      }
-
-      if (useRegistryLedger) {
-        // Use CreditLedger (Registry HTTP mode) for direct remote requests
-        const reqIdentityAuth = loadIdentityAuth(config.owner);
-        requestLedger = createLedger({
-          registryUrl: config.registry!,
-          ownerPublicKey: reqIdentityAuth.publicKey,
-          privateKey: reqIdentityAuth.privateKey,
-        });
-        try {
-          const { escrowId: heldId } = await requestLedger.hold(config.owner, amount, cardId);
-          escrowId = heldId;
-          if (!opts.json) {
-            console.log(`Escrow: ${amount} credits held via Registry (ID: ${escrowId.slice(0, 8)}...)`);
-          }
-        } catch (err) {
-          const msg = err instanceof Error ? err.message : String(err);
-          if (opts.json) {
-            console.log(JSON.stringify({ success: false, error: msg }, null, 2));
-          } else {
-            console.error(`Error creating escrow via Registry: ${msg}`);
-          }
-          process.exit(1);
-        }
-      } else if (gatewayUrl) {
-        // Local SQLite escrow for non-Registry direct requests
-        const configDir = getConfigDir();
-        const creditDb = openCreditDb(join(configDir, 'credit.db'));
-        creditDb.pragma('busy_timeout = 5000');
-
-        try {
-          const keys = loadKeyPair(configDir);
-          const receiptResult = createSignedEscrowReceipt(creditDb, keys.privateKey, keys.publicKey, {
-            owner: config.owner,
-            amount,
-            cardId,
-            skillId: opts.skill,
-          });
-          escrowId = receiptResult.escrowId;
-          escrowReceipt = receiptResult.receipt;
-
-          if (!opts.json) {
-            console.log(`Escrow: ${amount} credits held (ID: ${escrowId.slice(0, 8)}...)`);
-          }
-        } catch (err) {
-          creditDb.close();
-          const msg = err instanceof Error ? err.message : String(err);
-          if (opts.json) {
-            console.log(JSON.stringify({ success: false, error: msg }, null, 2));
-          } else {
-            console.error(`Error creating escrow receipt: ${msg}`);
-          }
-          process.exit(1);
-        }
-        // Note: creditDb intentionally not closed here — used by settle/release helpers below
-        creditDb.close();
-      }
-      // else: relay-only path (no gatewayUrl) — relay handles escrow, skip CLI-side hold
-    }
-
-    // Helpers to settle/release escrow and print result
-    const settleEscrow = async () => {
-      if (useReceipt && escrowId) {
-        if (requestLedger) {
-          // Registry CreditLedger path
-          await requestLedger.settle(escrowId, targetOwner ?? config.owner);
-          if (!opts.json) console.log(`Escrow settled: ${opts.cost} credits deducted.`);
-        } else if (escrowReceipt) {
-          // Local SQLite path
-          const configDir = getConfigDir();
-          const creditDb = openCreditDb(join(configDir, 'credit.db'));
-          creditDb.pragma('busy_timeout = 5000');
-          try {
-            settleRequesterEscrow(creditDb, escrowId);
-            if (!opts.json) console.log(`Escrow settled: ${opts.cost} credits deducted.`);
-          } finally { creditDb.close(); }
-        }
-      }
-    };
-    const releaseEscrow = async () => {
-      if (useReceipt && escrowId) {
-        if (requestLedger) {
-          // Registry CreditLedger path
-          await requestLedger.release(escrowId);
-          if (!opts.json) console.log('Escrow released: credits refunded.');
-        } else if (escrowReceipt) {
-          // Local SQLite path
-          const configDir = getConfigDir();
-          const creditDb = openCreditDb(join(configDir, 'credit.db'));
-          creditDb.pragma('busy_timeout = 5000');
-          try {
-            releaseRequesterEscrow(creditDb, escrowId);
-            if (!opts.json) console.log('Escrow released: credits refunded.');
-          } finally { creditDb.close(); }
-        }
-      }
-    };
+    // Helper to print result
     const printResult = (result: unknown) => {
       if (opts.json) {
         console.log(JSON.stringify({ success: true, result }, null, 2));
@@ -993,83 +923,64 @@ program
         console.log(typeof result === 'string' ? result : JSON.stringify(result, null, 2));
       }
     };
-    const isNetworkError = (err: unknown): boolean => {
-      const msg = err instanceof Error ? err.message : String(err);
-      return msg.includes('NETWORK_ERROR') || msg.includes('ECONNREFUSED')
-        || msg.includes('fetch failed') || msg.includes('Network error');
-    };
-
-    // Relay fallback: try via WebSocket relay when direct connection fails
-    const tryViaRelay = async (): Promise<unknown> => {
-      const { RelayClient } = await import('../relay/websocket-client.js');
-      const { requestViaRelay } = await import('../gateway/client.js');
-
-      // Use a unique requester ID so the temp connection does not kick out
-      // the provider's serve connection when both share the same owner name.
-      const requesterId = `${config.owner}:req:${randomUUID()}`;
-      const tempRelay = new RelayClient({
-        registryUrl: config.registry!,
-        owner: requesterId,
-        token: config.token,
-        card: { id: randomUUID(), owner: requesterId, name: requesterId, description: 'Requester', level: 1, spec_version: '1.0', inputs: [], outputs: [], pricing: { credits_per_call: 1 }, availability: { online: false } },
-        onRequest: async () => ({ error: { code: -32601, message: 'Not serving' } }),
-        silent: true,
-      });
-
-      try {
-        await tempRelay.connect();
-        const result = await requestViaRelay(tempRelay, {
-          targetOwner: targetOwner!,
-          cardId,
-          skillId: opts.skill,
-          params: { ...params, ...(opts.skill ? { skill_id: opts.skill } : {}) },
-          requester: config.owner, // actual owner for credit tracking on relay server
-          escrowReceipt,
-        });
-        return result;
-      } finally {
-        tempRelay.disconnect();
-      }
-    };
-
     try {
       let result: unknown;
 
-      // If no gateway_url, go straight to relay
-      if (!gatewayUrl && isRemoteRequest && config.registry && targetOwner) {
-        if (!opts.json) console.log('No gateway URL, requesting via relay...');
-        result = await tryViaRelay();
+      if (!isRemoteRequest) {
+        // Local request — direct HTTP to local gateway
+        result = await requestCapability({
+          gatewayUrl,
+          token,
+          cardId,
+          params: {
+            ...params,
+            ...(opts.skill ? { skill_id: opts.skill } : {}),
+            requester: config.owner,
+          },
+          timeoutMs: timeoutOverrideMs,
+          timeoutHint,
+          identity: identityAuth,
+        });
+      } else if (isRemoteRequest && config.registry && targetOwner) {
+        // Remote paid/free: all remote requests with registry go via relay.
+        // Relay handles escrow + network fee server-side, no local escrow needed.
+        // --cost is ignored for relay path (relay determines price from card).
+        if (!opts.json) console.log('Requesting via relay...');
+        result = await requestViaTemporaryRelay({
+          registryUrl: config.registry,
+          owner: config.owner,
+          token: config.token,
+          targetOwner,
+          cardId,
+          skillId: opts.skill,
+          params: {
+            ...params,
+            ...(opts.skill ? { skill_id: opts.skill } : {}),
+            requester: config.owner,
+          },
+          timeoutMs: timeoutOverrideMs,
+        });
+      } else if (gatewayUrl) {
+        // Remote free with gateway_url but no registry — direct HTTP, no escrow
+        result = await requestCapability({
+          gatewayUrl,
+          token,
+          cardId,
+          params: {
+            ...params,
+            ...(opts.skill ? { skill_id: opts.skill } : {}),
+            requester: config.owner,
+          },
+          timeoutMs: timeoutOverrideMs,
+          timeoutHint,
+          identity: identityAuth,
+        });
       } else {
-        // Try direct connection first
-        try {
-          result = await requestCapability({
-            gatewayUrl,
-            token,
-            cardId,
-            params: {
-              ...params,
-              ...(opts.skill ? { skill_id: opts.skill } : {}),
-              requester: config.owner,
-            },
-            escrowReceipt,
-            identity: identityAuth,
-          });
-        } catch (directErr) {
-          // Fallback to relay on network error for remote requests
-          if (isNetworkError(directErr) && isRemoteRequest && config.registry && targetOwner) {
-            if (!opts.json) console.log('Direct connection failed, trying relay...');
-            result = await tryViaRelay();
-          } else {
-            throw directErr;
-          }
-        }
+        throw new Error('Remote request requires a registry URL and target owner. Configure registry with: agentbnb config set registry <url>');
       }
 
-      await settleEscrow();
       printResult(result);
     } catch (err) {
-      await releaseEscrow();
-
       const msg = err instanceof Error ? err.message : String(err);
       if (opts.json) {
         console.log(JSON.stringify({ success: false, error: msg }, null, 2));

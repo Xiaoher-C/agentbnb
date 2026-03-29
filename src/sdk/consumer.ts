@@ -5,6 +5,7 @@ import { loadKeyPair, type KeyPair } from '../credit/signing.js';
 import { createSignedEscrowReceipt } from '../credit/escrow-receipt.js';
 import { settleRequesterEscrow, releaseRequesterEscrow } from '../credit/settlement.js';
 import { requestCapability } from '../gateway/client.js';
+import { requestViaTemporaryRelay } from '../gateway/relay-dispatch.js';
 import { openCreditDb, getBalance } from '../credit/ledger.js';
 import { AgentBnBError } from '../types/index.js';
 
@@ -34,6 +35,10 @@ export interface ConsumerRequestOptions {
   credits: number;
   /** Timeout in milliseconds. Default 30000. */
   timeoutMs?: number;
+  /** Provider-published expected duration used to derive timeout when timeoutMs is omitted. */
+  expectedDurationMs?: number;
+  /** Provider-published hard timeout used as fallback timeout hint. */
+  providerHardTimeoutMs?: number;
 }
 
 /**
@@ -90,6 +95,42 @@ export class AgentBnBConsumer {
   }
 
   /**
+   * Requests a paid capability via the relay. The relay handles escrow + network fee
+   * server-side, avoiding the fee bypass bug in the signed receipt path.
+   *
+   * @param opts - Relay request options.
+   * @returns The result from the capability execution.
+   * @throws {AgentBnBError} on relay connection failure or execution error.
+   */
+  async requestViaRelay(opts: {
+    registryUrl: string;
+    targetOwner: string;
+    cardId: string;
+    skillId?: string;
+    params?: Record<string, unknown>;
+    timeoutMs?: number;
+  }): Promise<unknown> {
+    const identity = this.getIdentity();
+    const config = loadConfig();
+    const token = config?.token ?? '';
+
+    return requestViaTemporaryRelay({
+      registryUrl: opts.registryUrl,
+      owner: identity.owner,
+      token,
+      targetOwner: opts.targetOwner,
+      cardId: opts.cardId,
+      skillId: opts.skillId,
+      params: opts.params ?? {},
+      timeoutMs: opts.timeoutMs,
+    });
+  }
+
+  /**
+   * @deprecated Use `requestViaRelay()` for paid remote requests. This method uses
+   * local escrow + signed receipts which bypass the network fee. Still works for
+   * free/local requests.
+   *
    * Requests a capability from a remote agent with full escrow lifecycle.
    *
    * 1. Creates a signed escrow receipt (holds credits locally)
@@ -129,7 +170,16 @@ export class AgentBnBConsumer {
         cardId: opts.cardId,
         params: opts.params,
         timeoutMs: opts.timeoutMs,
+        timeoutHint: {
+          expected_duration_ms: opts.expectedDurationMs,
+          hard_timeout_ms: opts.providerHardTimeoutMs,
+        },
         escrowReceipt: receipt,
+        identity: {
+          agentId: identity.agent_id,
+          publicKey: identity.public_key,
+          privateKey: this.keys.privateKey,
+        },
       });
 
       // 3a. Success — settle escrow

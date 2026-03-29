@@ -3,6 +3,7 @@ import { searchCards } from '../registry/matcher.js';
 import { BudgetManager } from '../credit/budget.js';
 import { holdEscrow, settleEscrow, releaseEscrow } from '../credit/escrow.js';
 import { requestCapability } from '../gateway/client.js';
+import { requestViaTemporaryRelay } from '../gateway/relay-dispatch.js';
 import {
   getAutonomyTier,
   insertAuditEvent,
@@ -13,6 +14,8 @@ import { createPendingRequest } from '../autonomy/pending-requests.js';
 import { findPeer } from '../cli/peers.js';
 import type { CapabilityCard } from '../types/index.js';
 import { fetchRemoteCards } from '../cli/remote-registry.js';
+import { resolveTargetCapability } from '../gateway/resolve-target-capability.js';
+import { resolveCanonicalIdentity } from '../identity/agent-identity.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -150,16 +153,37 @@ export function minMaxNormalize(values: number[]): number[] {
  *
  * Composite: success_rate × cost_efficiency × idle_rate × load_factor
  *
- * Self-exclusion: candidates where card.owner === selfOwner are filtered out.
+ * Self-exclusion:
+ * - Always excludes candidates where card.owner === selfOwner.
+ * - When registryDb is provided, also excludes candidates whose canonical
+ *   agent_id matches selfOwner's canonical agent_id.
  * Results are sorted by rawScore descending (best first).
  *
  * @param candidates - All candidate peers to score.
  * @param selfOwner - The requesting agent's owner ID (excluded from results).
+ * @param registryDb - Optional registry DB for owner->agent_id canonicalization.
  * @returns Sorted array of ScoredPeer objects, best match first.
  */
-export function scorePeers(candidates: Candidate[], selfOwner: string): ScoredPeer[] {
+export function scorePeers(
+  candidates: Candidate[],
+  selfOwner: string,
+  registryDb?: Database.Database,
+): ScoredPeer[] {
+  const selfIdentity = registryDb ? resolveCanonicalIdentity(registryDb, selfOwner) : null;
+
   // Self-exclusion
-  const eligible = candidates.filter((c) => c.card.owner !== selfOwner);
+  const eligible = candidates.filter((c) => {
+    if (c.card.owner === selfOwner) return false;
+
+    if (!registryDb || !selfIdentity?.resolved) return true;
+
+    if (typeof c.card.agent_id === 'string' && c.card.agent_id.length > 0) {
+      return c.card.agent_id !== selfIdentity.agent_id;
+    }
+
+    const peerIdentity = resolveCanonicalIdentity(registryDb, c.card.owner);
+    return !peerIdentity.resolved || peerIdentity.agent_id !== selfIdentity.agent_id;
+  });
 
   if (eligible.length === 0) return [];
 
@@ -263,6 +287,18 @@ export class AutoRequestor {
    * @returns The result of the auto-request attempt.
    */
   async requestWithAutonomy(need: CapabilityNeed): Promise<AutoRequestResult> {
+    const selfIdentity = resolveCanonicalIdentity(this.registryDb, this.owner);
+    const isSelfTarget = (targetOwner: string, targetAgentId?: string): boolean => {
+      if (targetOwner === this.owner) return true;
+
+      if (!selfIdentity.resolved) return false;
+
+      if (targetAgentId && targetAgentId === selfIdentity.agent_id) return true;
+
+      const targetOwnerIdentity = resolveCanonicalIdentity(this.registryDb, targetOwner);
+      return targetOwnerIdentity.resolved && targetOwnerIdentity.agent_id === selfIdentity.agent_id;
+    };
+
     // Step 1: Search for matching cards (local first, remote fallback)
     let cards = searchCards(this.registryDb, need.query, { online: true });
 
@@ -325,96 +361,253 @@ export class AutoRequestor {
     }
 
     // Step 3: Score with self-exclusion
-    const scored = scorePeers(candidates, this.owner);
+    const scored = scorePeers(candidates, this.owner, this.registryDb);
 
+    const resolverOptions = {
+      registryDb: this.registryDb,
+      registryUrl: this.registryUrl,
+      onlineOnly: true,
+    } as const;
+
+    let resolvedTarget = null as Awaited<ReturnType<typeof resolveTargetCapability>> | null;
+
+    // Unified routing: even when scoring returns no candidates, try the shared
+    // resolver path (local -> remote -> relay) so --query can find relay peers.
     if (scored.length === 0) {
+      resolvedTarget = await resolveTargetCapability(need.query, resolverOptions);
+      if (
+        !resolvedTarget ||
+        isSelfTarget(resolvedTarget.owner, resolvedTarget.agent_id) ||
+        resolvedTarget.credits_per_call > need.maxCostCredits
+      ) {
+        this.logFailure('auto_request_failed', 'system', 'none', 3, 0, 'none', 'No eligible peer found');
+        return { status: 'no_peer', reason: 'No eligible peer found' };
+      }
+    } else {
+      // scored.length > 0 is guaranteed here.
+      const top: ScoredPeer = scored[0] as ScoredPeer;
+      const targetKey = top.skillId ?? top.card.id;
+      resolvedTarget =
+        await resolveTargetCapability(targetKey, resolverOptions) ??
+        await resolveTargetCapability(need.query, resolverOptions);
+      if (!resolvedTarget || isSelfTarget(resolvedTarget.owner, resolvedTarget.agent_id)) {
+        this.logFailure('auto_request_failed', top.card.id, top.skillId ?? 'none', 3, top.cost, top.card.owner, 'No eligible peer found');
+        return { status: 'no_peer', reason: 'No eligible peer found' };
+      }
+    }
+
+    if (!resolvedTarget) {
       this.logFailure('auto_request_failed', 'system', 'none', 3, 0, 'none', 'No eligible peer found');
       return { status: 'no_peer', reason: 'No eligible peer found' };
     }
 
-    // Step 4: Pick top scorer and resolve peer gateway
-    // scored.length > 0 is guaranteed by the guard above, but TypeScript doesn't know scored[0] is defined
-    const top: ScoredPeer = scored[0] as ScoredPeer;
-    const peerConfig = findPeer(top.card.owner);
-
-    if (!peerConfig) {
-      this.logFailure('auto_request_failed', top.card.id, top.skillId ?? 'none', 3, top.cost, top.card.owner, 'No gateway config for peer');
-      return { status: 'no_peer', reason: 'No gateway config for peer' };
-    }
+    const selectedCardId = resolvedTarget.cardId;
+    const selectedSkillId = resolvedTarget.skillId;
+    const selectedPeer = resolvedTarget.owner;
+    const selectedCost = resolvedTarget.credits_per_call;
+    const selectedViaRelay = resolvedTarget.via_relay;
 
     // Step 5: Check autonomy tier
-    const tier = getAutonomyTier(top.cost, this.autonomyConfig);
+    const tier = getAutonomyTier(selectedCost, this.autonomyConfig);
 
     if (tier === 3) {
       // Queue to pending_requests — do not execute
       createPendingRequest(this.registryDb, {
         skill_query: need.query,
         max_cost_credits: need.maxCostCredits,
-        credits: top.cost,
-        selected_peer: top.card.owner,
-        selected_card_id: top.card.id,
-        selected_skill_id: top.skillId,
+        credits: selectedCost,
+        selected_peer: selectedPeer,
+        selected_card_id: selectedCardId,
+        selected_skill_id: selectedSkillId,
         params: need.params,
       });
 
       insertAuditEvent(this.registryDb, {
         type: 'auto_request_pending',
-        card_id: top.card.id,
-        skill_id: top.skillId ?? top.card.id,
+        card_id: selectedCardId,
+        skill_id: selectedSkillId ?? selectedCardId,
         tier_invoked: 3,
-        credits: top.cost,
-        peer: top.card.owner,
+        credits: selectedCost,
+        peer: selectedPeer,
       });
 
       return {
         status: 'tier_blocked',
         reason: 'Tier 3: owner approval required',
-        peer: top.card.owner,
+        peer: selectedPeer,
       };
     }
 
     // Step 6: Budget check
-    if (!this.budgetManager.canSpend(top.cost)) {
-      this.logFailure('auto_request_failed', top.card.id, top.skillId ?? 'none', tier, top.cost, top.card.owner, 'Budget reserve would be breached');
+    if (!this.budgetManager.canSpend(selectedCost)) {
+      this.logFailure(
+        'auto_request_failed',
+        selectedCardId,
+        selectedSkillId ?? 'none',
+        tier,
+        selectedCost,
+        selectedPeer,
+        'Budget reserve would be breached'
+      );
       return { status: 'budget_blocked', reason: 'Insufficient credits — reserve floor would be breached' };
     }
 
+    const requestParams = selectedSkillId
+      ? { skill_id: selectedSkillId, ...need.params, requester: this.owner }
+      : { ...need.params, requester: this.owner };
+
+    // Paid relay path: skip local escrow — relay holds escrow server-side.
+    // This fixes the double-escrow bug where local holdEscrow + relay escrow
+    // both reserved credits for the same request.
+    if (selectedViaRelay && selectedCost > 0) {
+      if (!this.registryUrl) {
+        this.logFailure(
+          'auto_request_failed',
+          selectedCardId,
+          selectedSkillId ?? 'none',
+          tier,
+          selectedCost,
+          selectedPeer,
+          'Relay target found but registryUrl is not configured'
+        );
+        return { status: 'no_peer', reason: 'Relay target found but registryUrl is not configured' };
+      }
+
+      try {
+        const execResult = await requestViaTemporaryRelay({
+          registryUrl: this.registryUrl,
+          owner: this.owner,
+          token: 'auto-request-token',
+          targetOwner: selectedPeer,
+          cardId: selectedCardId,
+          skillId: selectedSkillId,
+          params: requestParams,
+        });
+
+        // Tier 2 notification audit event
+        if (tier === 2) {
+          insertAuditEvent(this.registryDb, {
+            type: 'auto_request_notify',
+            card_id: selectedCardId,
+            skill_id: selectedSkillId ?? selectedCardId,
+            tier_invoked: 2,
+            credits: selectedCost,
+            peer: selectedPeer,
+          });
+        } else {
+          insertAuditEvent(this.registryDb, {
+            type: 'auto_request',
+            card_id: selectedCardId,
+            skill_id: selectedSkillId ?? selectedCardId,
+            tier_invoked: 1,
+            credits: selectedCost,
+            peer: selectedPeer,
+          });
+        }
+
+        return {
+          status: 'success',
+          result: execResult,
+          peer: selectedPeer,
+          creditsSpent: selectedCost,
+        };
+      } catch (err) {
+        const reason = err instanceof Error ? err.message : String(err);
+        this.logFailure(
+          'auto_request_failed',
+          selectedCardId,
+          selectedSkillId ?? 'none',
+          tier,
+          selectedCost,
+          selectedPeer,
+          `Execution failed: ${reason}`
+        );
+        return {
+          status: 'failed',
+          reason: `Execution failed: ${reason}`,
+          peer: selectedPeer,
+        };
+      }
+    }
+
+    // Free/local path: use local escrow + direct HTTP
     // Step 7: Hold escrow
-    const escrowId = holdEscrow(this.creditDb, this.owner, top.cost, top.card.id);
+    const escrowId = holdEscrow(this.creditDb, this.owner, selectedCost, selectedCardId);
 
     // Step 8: Execute via peer gateway
     try {
-      const execResult = await requestCapability({
-        gatewayUrl: peerConfig.url,
-        token: peerConfig.token,
-        cardId: top.card.id,
-        params: top.skillId
-          ? { skill_id: top.skillId, ...need.params, requester: this.owner }
-          : { ...need.params, requester: this.owner },
-      });
+      let execResult: unknown;
+      if (selectedViaRelay) {
+        // Free relay request (selectedCost === 0)
+        if (!this.registryUrl) {
+          this.logFailure(
+            'auto_request_failed',
+            selectedCardId,
+            selectedSkillId ?? 'none',
+            tier,
+            selectedCost,
+            selectedPeer,
+            'Relay target found but registryUrl is not configured'
+          );
+          releaseEscrow(this.creditDb, escrowId);
+          return { status: 'no_peer', reason: 'Relay target found but registryUrl is not configured' };
+        }
+
+        execResult = await requestViaTemporaryRelay({
+          registryUrl: this.registryUrl,
+          owner: this.owner,
+          token: 'auto-request-token',
+          targetOwner: selectedPeer,
+          cardId: selectedCardId,
+          skillId: selectedSkillId,
+          params: requestParams,
+        });
+      } else {
+        const peerConfig = findPeer(selectedPeer);
+        if (!peerConfig) {
+          this.logFailure(
+            'auto_request_failed',
+            selectedCardId,
+            selectedSkillId ?? 'none',
+            tier,
+            selectedCost,
+            selectedPeer,
+            'No gateway config for peer'
+          );
+          releaseEscrow(this.creditDb, escrowId);
+          return { status: 'no_peer', reason: 'No gateway config for peer' };
+        }
+
+        execResult = await requestCapability({
+          gatewayUrl: peerConfig.url,
+          token: peerConfig.token,
+          cardId: selectedCardId,
+          params: requestParams,
+        });
+      }
 
       // Step 9a: Settle escrow on success
-      settleEscrow(this.creditDb, escrowId, top.card.owner);
+      settleEscrow(this.creditDb, escrowId, selectedPeer);
 
       // Step 10: Tier 2 notification audit event
       if (tier === 2) {
         insertAuditEvent(this.registryDb, {
           type: 'auto_request_notify',
-          card_id: top.card.id,
-          skill_id: top.skillId ?? top.card.id,
+          card_id: selectedCardId,
+          skill_id: selectedSkillId ?? selectedCardId,
           tier_invoked: 2,
-          credits: top.cost,
-          peer: top.card.owner,
+          credits: selectedCost,
+          peer: selectedPeer,
         });
       } else {
         // Tier 1: log successful auto_request event
         insertAuditEvent(this.registryDb, {
           type: 'auto_request',
-          card_id: top.card.id,
-          skill_id: top.skillId ?? top.card.id,
+          card_id: selectedCardId,
+          skill_id: selectedSkillId ?? selectedCardId,
           tier_invoked: 1,
-          credits: top.cost,
-          peer: top.card.owner,
+          credits: selectedCost,
+          peer: selectedPeer,
         });
       }
 
@@ -422,20 +615,28 @@ export class AutoRequestor {
         status: 'success',
         result: execResult,
         escrowId,
-        peer: top.card.owner,
-        creditsSpent: top.cost,
+        peer: selectedPeer,
+        creditsSpent: selectedCost,
       };
     } catch (err) {
       // Step 9b: Release escrow on failure
       releaseEscrow(this.creditDb, escrowId);
 
       const reason = err instanceof Error ? err.message : String(err);
-      this.logFailure('auto_request_failed', top.card.id, top.skillId ?? 'none', tier, top.cost, top.card.owner, `Execution failed: ${reason}`);
+      this.logFailure(
+        'auto_request_failed',
+        selectedCardId,
+        selectedSkillId ?? 'none',
+        tier,
+        selectedCost,
+        selectedPeer,
+        `Execution failed: ${reason}`
+      );
 
       return {
         status: 'failed',
         reason: `Execution failed: ${reason}`,
-        peer: top.card.owner,
+        peer: selectedPeer,
       };
     }
   }

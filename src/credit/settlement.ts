@@ -5,6 +5,11 @@ import { releaseEscrow, NETWORK_FEE_RATE } from './escrow.js';
 import type { EscrowReceipt } from '../types/index.js';
 
 /**
+ * @deprecated Use relay-based settlement instead. This function deducts a 5% network
+ * fee from the provider amount but does NOT credit `platform_treasury`, so the fee
+ * effectively vanishes. The relay's `settleEscrow()` correctly handles the fee.
+ * Kept for backward compatibility and audit trail.
+ *
  * Provider-side settlement: records earnings from a signed escrow receipt.
  * The provider calls this after successfully executing a capability.
  * Credits are recorded in the provider's own local DB.
