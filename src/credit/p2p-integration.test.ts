@@ -9,7 +9,7 @@ import { openDatabase } from '../registry/store.js';
 import { openCreditDb, bootstrapAgent, getBalance } from './ledger.js';
 import { generateKeyPair } from './signing.js';
 import { createSignedEscrowReceipt } from './escrow-receipt.js';
-import { settleRequesterEscrow, releaseRequesterEscrow } from './settlement.js';
+import { releaseRequesterEscrow } from './settlement.js';
 import { getEscrowStatus } from './escrow.js';
 import type { CapabilityCardV2, EscrowReceipt } from '../types/index.js';
 import type { SkillExecutor, ExecutionResult } from '../skills/executor.js';
@@ -117,9 +117,9 @@ describe('P2P Credit Integration (two separate SQLite databases)', () => {
     requesterCreditDb.close();
   });
 
-  // ── Scenario 1: Success flow ────────────────────────────────────────────────
+  // ── Scenario 1: Direct paid remote HTTP is disabled ────────────────────────
 
-  it('success: requester pays via receipt, provider earns, separate DBs', async () => {
+  it('rejects paid direct HTTP receipt flow and leaves settlement on the requester side', async () => {
     // 1. Requester creates signed receipt on OWN DB
     const { escrowId, receipt } = createSignedEscrowReceipt(
       requesterCreditDb,
@@ -154,25 +154,24 @@ describe('P2P Credit Integration (two separate SQLite databases)', () => {
 
     expect(response.statusCode).toBe(200);
     const body = response.json();
-    expect(body.result).toBeDefined();
-    expect(body.result.receipt_settled).toBe(true);
-    expect(body.result.receipt_nonce).toBe(receipt.nonce);
+    expect(body.error).toBeDefined();
+    expect(body.error.message).toMatch(/disabled/i);
+    expect(body.error.message).toMatch(/relay/i);
 
-    // 3. Provider balance increased (earnings recorded in provider's DB, 5% fee rounds to 0)
-    expect(getBalance(providerCreditDb, providerOwner)).toBe(55); // 50 + 5
+    // 3. Provider balance is unchanged because direct paid remote execution never starts.
+    expect(getBalance(providerCreditDb, providerOwner)).toBe(50);
 
-    // 4. Requester settles escrow (confirms debit is permanent)
-    settleRequesterEscrow(requesterCreditDb, escrowId);
-    expect(getBalance(requesterCreditDb, requesterOwner)).toBe(100); // unchanged (voucher-funded)
+    // 4. Requester must release its own local hold after the provider rejects direct HTTP.
+    const escrowBeforeRelease = getEscrowStatus(requesterCreditDb, escrowId);
+    expect(escrowBeforeRelease?.status).toBe('held');
 
-    // Verify escrow is settled
-    const escrow = getEscrowStatus(requesterCreditDb, escrowId);
-    expect(escrow?.status).toBe('settled');
+    releaseRequesterEscrow(requesterCreditDb, escrowId);
+    expect(getBalance(requesterCreditDb, requesterOwner)).toBe(105);
   });
 
-  // ── Scenario 2: Failure flow ────────────────────────────────────────────────
+  // ── Scenario 2: Rejection happens before provider execution ─────────────────
 
-  it('failure: execution fails, requester gets refund, provider unchanged', async () => {
+  it('rejects paid direct HTTP before provider execution runs', async () => {
     // Create gateway with failing executor
     await gateway.close();
     gateway = createGatewayServer({
@@ -217,8 +216,8 @@ describe('P2P Credit Integration (two separate SQLite databases)', () => {
     expect(response.statusCode).toBe(200);
     const body = response.json();
     expect(body.error).toBeDefined();
-    expect(body.error.message).toBe('mock failure');
-    expect(body.error.data?.receipt_released).toBe(true);
+    expect(body.error.message).toMatch(/disabled/i);
+    expect(body.error.message).toMatch(/relay/i);
 
     // 3. Provider balance unchanged (no earning recorded)
     expect(getBalance(providerCreditDb, providerOwner)).toBe(50);
@@ -228,9 +227,9 @@ describe('P2P Credit Integration (two separate SQLite databases)', () => {
     expect(getBalance(requesterCreditDb, requesterOwner)).toBe(105);
   });
 
-  // ── Scenario 3: Invalid receipt ─────────────────────────────────────────────
+  // ── Scenario 3: Invalid receipt is still blocked by the relay-only rule ────
 
-  it('invalid receipt: tampered signature rejected, no balance changes', async () => {
+  it('invalid receipt: direct paid HTTP is still rejected before settlement', async () => {
     // 1. Create a valid receipt (voucher used for hold, balance stays 100)
     const { receipt } = createSignedEscrowReceipt(
       requesterCreditDb,
@@ -268,7 +267,8 @@ describe('P2P Credit Integration (two separate SQLite databases)', () => {
 
     const body = response.json();
     expect(body.error).toBeDefined();
-    expect(body.error.message).toBe('Invalid escrow receipt signature');
+    expect(body.error.message).toMatch(/disabled/i);
+    expect(body.error.message).toMatch(/relay/i);
 
     // 3. No balance changes on either side
     expect(getBalance(providerCreditDb, providerOwner)).toBe(50);
@@ -317,7 +317,7 @@ describe('P2P Credit Integration (two separate SQLite databases)', () => {
 
   // ── Scenario 5: Wrong key (signed by different agent) ──────────────────────
 
-  it('wrong key: receipt signed with different key rejected', async () => {
+  it('wrong key: direct paid HTTP is still rejected before provider settlement', async () => {
     // Create receipt signed with requester's key but swap the public key to provider's
     // (voucher used for hold)
     const { receipt: validReceipt } = createSignedEscrowReceipt(
@@ -355,7 +355,8 @@ describe('P2P Credit Integration (two separate SQLite databases)', () => {
 
     const body = response.json();
     expect(body.error).toBeDefined();
-    expect(body.error.message).toBe('Invalid escrow receipt signature');
+    expect(body.error.message).toMatch(/disabled/i);
+    expect(body.error.message).toMatch(/relay/i);
 
     // No balance changes
     expect(getBalance(providerCreditDb, providerOwner)).toBe(50);
@@ -444,7 +445,7 @@ describe('P2P Credit Integration (file-based DBs at /tmp paths)', () => {
     }
   });
 
-  it('file-based DBs: full P2P flow with disk-separated databases', async () => {
+  it('file-based DBs: paid direct HTTP receipt flow is rejected across disk-separated databases', async () => {
     const keys = generateKeyPair();
 
     // Create signed receipt from requester's file-based DB (voucher used, balance stays 100)
@@ -478,14 +479,15 @@ describe('P2P Credit Integration (file-based DBs at /tmp paths)', () => {
 
     expect(response.statusCode).toBe(200);
     const body = response.json();
-    expect(body.result.receipt_settled).toBe(true);
+    expect(body.error.message).toMatch(/disabled/i);
+    expect(body.error.message).toMatch(/relay/i);
 
-    // Provider earned on their file-based DB (5% fee: floor(10*0.05)=0, gets 10)
-    expect(getBalance(providerCreditDb, providerOwner)).toBe(60); // 50 + 10
+    // Provider never settles direct paid remote execution.
+    expect(getBalance(providerCreditDb, providerOwner)).toBe(50);
 
-    // Requester settles on their file-based DB (voucher-funded, balance stays 100)
-    settleRequesterEscrow(requesterCreditDb, escrowId);
-    expect(getBalance(requesterCreditDb, requesterOwner)).toBe(100);
+    // Requester releases its own local hold after the rejection.
+    releaseRequesterEscrow(requesterCreditDb, escrowId);
+    expect(getBalance(requesterCreditDb, requesterOwner)).toBe(110);
 
     // Verify the DB files actually exist on disk
     expect(existsSync(join(agentADir, 'registry.db'))).toBe(true);

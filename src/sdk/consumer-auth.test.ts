@@ -4,7 +4,6 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createIdentity } from '../identity/identity.js';
 import { generateKeyPair, saveKeyPair } from '../credit/signing.js';
-import { openCreditDb, bootstrapAgent } from '../credit/ledger.js';
 
 describe('AgentBnBConsumer auth headers', () => {
   let tempDir: string;
@@ -16,10 +15,6 @@ describe('AgentBnBConsumer auth headers', () => {
     const keys = generateKeyPair();
     saveKeyPair(tempDir, keys);
     createIdentity(tempDir, owner);
-
-    const db = openCreditDb(join(tempDir, 'credit.db'));
-    bootstrapAgent(db, owner, 100);
-    db.close();
 
     writeFileSync(join(tempDir, 'config.json'), JSON.stringify({
       owner,
@@ -42,9 +37,37 @@ describe('AgentBnBConsumer auth headers', () => {
 
   it('passes identity and bearer token together to gateway client', async () => {
     const requestCapabilityMock = vi.fn().mockResolvedValue({ ok: true });
+    const openCreditDbMock = vi.fn(() => ({ close: vi.fn() }));
+    const settleRequesterEscrowMock = vi.fn();
+    const releaseRequesterEscrowMock = vi.fn();
 
     vi.doMock('../gateway/client.js', () => ({
       requestCapability: requestCapabilityMock,
+    }));
+
+    vi.doMock('../credit/ledger.js', () => ({
+      openCreditDb: openCreditDbMock,
+      getBalance: vi.fn(() => 100),
+    }));
+
+    vi.doMock('../credit/escrow-receipt.js', () => ({
+      createSignedEscrowReceipt: vi.fn(() => ({
+        escrowId: 'escrow-1',
+        receipt: {
+          requester_owner: owner,
+          requester_public_key: 'ab'.repeat(44),
+          amount: 5,
+          card_id: 'card-123',
+          timestamp: new Date().toISOString(),
+          nonce: 'nonce-1',
+          signature: 'sig-1',
+        },
+      })),
+    }));
+
+    vi.doMock('../credit/settlement.js', () => ({
+      settleRequesterEscrow: settleRequesterEscrowMock,
+      releaseRequesterEscrow: releaseRequesterEscrowMock,
     }));
 
     const { AgentBnBConsumer } = await import('./consumer.js');
@@ -75,15 +98,44 @@ describe('AgentBnBConsumer auth headers', () => {
         privateKey: expect.any(Buffer),
       },
     }));
+    expect(openCreditDbMock).toHaveBeenCalledTimes(1);
+    expect(settleRequesterEscrowMock).toHaveBeenCalledWith(expect.anything(), 'escrow-1');
+    expect(releaseRequesterEscrowMock).not.toHaveBeenCalled();
 
     consumer.close();
   });
 
   it('passes provider timeout metadata and preserves explicit timeout override', async () => {
     const requestCapabilityMock = vi.fn().mockResolvedValue({ ok: true });
+    const openCreditDbMock = vi.fn(() => ({ close: vi.fn() }));
 
     vi.doMock('../gateway/client.js', () => ({
       requestCapability: requestCapabilityMock,
+    }));
+
+    vi.doMock('../credit/ledger.js', () => ({
+      openCreditDb: openCreditDbMock,
+      getBalance: vi.fn(() => 100),
+    }));
+
+    vi.doMock('../credit/escrow-receipt.js', () => ({
+      createSignedEscrowReceipt: vi.fn(() => ({
+        escrowId: 'escrow-2',
+        receipt: {
+          requester_owner: owner,
+          requester_public_key: 'ab'.repeat(44),
+          amount: 5,
+          card_id: 'card-123',
+          timestamp: new Date().toISOString(),
+          nonce: 'nonce-2',
+          signature: 'sig-2',
+        },
+      })),
+    }));
+
+    vi.doMock('../credit/settlement.js', () => ({
+      settleRequesterEscrow: vi.fn(),
+      releaseRequesterEscrow: vi.fn(),
     }));
 
     const { AgentBnBConsumer } = await import('./consumer.js');
@@ -106,6 +158,37 @@ describe('AgentBnBConsumer auth headers', () => {
         expected_duration_ms: 12_000,
         hard_timeout_ms: 40_000,
       },
+    }));
+    expect(openCreditDbMock).toHaveBeenCalledTimes(1);
+
+    consumer.close();
+  });
+
+  it('forwards targetAgentId through requestViaRelay', async () => {
+    const requestViaTemporaryRelayMock = vi.fn().mockResolvedValue({ ok: true });
+
+    vi.doMock('../gateway/relay-dispatch.js', () => ({
+      requestViaTemporaryRelay: requestViaTemporaryRelayMock,
+    }));
+
+    const { AgentBnBConsumer } = await import('./consumer.js');
+    const consumer = new AgentBnBConsumer({ configDir: tempDir });
+    consumer.authenticate();
+
+    await consumer.requestViaRelay({
+      registryUrl: 'https://registry.agentbnb.dev',
+      targetOwner: 'legacy-owner',
+      targetAgentId: 'provider-agent-id',
+      cardId: 'card-123',
+      skillId: 'skill-1',
+      params: { prompt: 'test' },
+      timeoutMs: 9_876,
+    });
+
+    expect(requestViaTemporaryRelayMock).toHaveBeenCalledWith(expect.objectContaining({
+      targetOwner: 'legacy-owner',
+      targetAgentId: 'provider-agent-id',
+      timeoutMs: 9_876,
     }));
 
     consumer.close();

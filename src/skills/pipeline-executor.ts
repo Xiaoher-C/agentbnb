@@ -8,6 +8,20 @@ import { interpolateObject } from '../utils/interpolation.js';
 
 const execFileAsync = promisify(execFile);
 
+function isTimedOutCommandError(err: unknown): boolean {
+  if (!(err instanceof Error)) {
+    return false;
+  }
+
+  const timeoutCode = (err as NodeJS.ErrnoException).code;
+  const signal = (err as NodeJS.ErrnoException & { signal?: string }).signal;
+  const killed = (err as NodeJS.ErrnoException & { killed?: boolean }).killed;
+
+  return timeoutCode === 'ETIMEDOUT'
+    || err.message.includes('timed out')
+    || (killed === true && typeof signal === 'string');
+}
+
 /**
  * Shell-escapes a string value to prevent injection.
  */
@@ -197,7 +211,9 @@ export class PipelineExecutor implements ExecutorMode {
           });
           stepResult = stdout.trim();
         } catch (err) {
-          const message = err instanceof Error ? err.message : String(err);
+          const message = pipelineTimeoutMs !== undefined && isTimedOutCommandError(err)
+            ? `pipeline timed out after ${pipelineTimeoutMs}ms`
+            : err instanceof Error ? err.message : String(err);
           return {
             success: false,
             error: `Step ${i} failed: ${message}`,
