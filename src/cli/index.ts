@@ -18,7 +18,7 @@ import { fetchRemoteCards, mergeResults } from './remote-registry.js';
 import type { TaggedCard } from './remote-registry.js';
 import { loadPeers, savePeer, removePeer, findPeer } from './peers.js';
 import { AnyCardSchema } from '../types/index.js';
-import { openDatabase, insertCard, listCards, getCard, deleteCard } from '../registry/store.js';
+import { openDatabase, insertCard, listCards, getCard, deleteCard, attachCanonicalAgentId } from '../registry/store.js';
 import { searchCards, filterCards } from '../registry/matcher.js';
 import { getPricingStats } from '../registry/pricing.js';
 import { openCreditDb, getBalance, getTransactions } from '../credit/ledger.js';
@@ -37,7 +37,8 @@ import { performInit } from './init-action.js';
 import { runQuickstart } from './quickstart.js';
 
 /** Package version — injected at build time, falls back for dev mode. */
-const VERSION = AGENTBNB_VERSION ?? '0.0.0-dev';
+const VERSION =
+  typeof AGENTBNB_VERSION !== 'undefined' ? AGENTBNB_VERSION : '0.0.0-dev';
 
 /**
  * Loads Ed25519 identity auth credentials, auto-generating keypair/identity if missing.
@@ -262,15 +263,22 @@ program
 
     // Always publish to local DB
     const db = openDatabase(config.db_path);
+    let localCard = card;
     try {
       if (card.spec_version === '2.0') {
         const now = new Date().toISOString();
-        const cardWithTimestamps = { ...card, created_at: card.created_at ?? now, updated_at: now };
+        const cardWithTimestamps = attachCanonicalAgentId(db, {
+          ...card,
+          created_at: card.created_at ?? now,
+          updated_at: now,
+        });
         db.prepare(
           'INSERT OR REPLACE INTO capability_cards (id, owner, data, created_at, updated_at) VALUES (?, ?, ?, ?, ?)'
         ).run(cardWithTimestamps.id, cardWithTimestamps.owner, JSON.stringify(cardWithTimestamps), cardWithTimestamps.created_at, cardWithTimestamps.updated_at);
+        localCard = cardWithTimestamps;
       } else {
         insertCard(db, card);
+        localCard = attachCanonicalAgentId(db, card);
       }
     } finally {
       db.close();
@@ -286,7 +294,10 @@ program
     if (registryUrl) {
       const url = `${registryUrl.replace(/\/$/, '')}/cards`;
       // Inject gateway_url so remote agents know where to send requests
-      const remoteCard = { ...card, gateway_url: config.gateway_url };
+      const remoteCard =
+        config.agent_id && localCard.owner === config.owner && localCard.agent_id !== config.agent_id
+          ? { ...localCard, agent_id: config.agent_id, gateway_url: config.gateway_url }
+          : { ...localCard, gateway_url: config.gateway_url };
       try {
         const response = await fetch(url, {
           method: 'POST',
@@ -380,6 +391,7 @@ program
       spec_version: '2.0',
       id: randomUUID(),
       owner: config.owner,
+      agent_id: config.agent_id,
       agent_name: config.owner,
       skills,
       availability: { online: true },
@@ -389,9 +401,10 @@ program
 
     const db = openDatabase(config.db_path);
     try {
+      const storedCard = attachCanonicalAgentId(db, card);
       db.prepare(
         'INSERT OR REPLACE INTO capability_cards (id, owner, data, created_at, updated_at) VALUES (?, ?, ?, ?, ?)',
-      ).run(card.id, card.owner, JSON.stringify(card), now, now);
+      ).run(storedCard.id, storedCard.owner, JSON.stringify(storedCard), now, now);
     } finally {
       db.close();
     }
@@ -829,6 +842,7 @@ program
     let token: string;
     let isRemoteRequest = false;
     let targetOwner: string | undefined; // For relay routing
+    let targetAgentId: string | undefined;
     let timeoutHint: RequestTimeoutHint | undefined;
     // Always load identity auth — used for remote requests, harmless for local
     const identityAuth = loadIdentityAuth(config.owner);
@@ -886,6 +900,7 @@ program
         }
 
         targetOwner = (remoteCard.owner ?? remoteCard.agent_name) as string | undefined;
+        targetAgentId = typeof remoteCard.agent_id === 'string' ? remoteCard.agent_id : undefined;
         timeoutHint = buildTimeoutHintFromCard(remoteCard, opts.skill);
 
         if (remoteCard.gateway_url && typeof remoteCard.gateway_url === 'string') {
@@ -951,6 +966,7 @@ program
           owner: config.owner,
           token: config.token,
           targetOwner,
+          targetAgentId,
           cardId,
           skillId: opts.skill,
           params: {

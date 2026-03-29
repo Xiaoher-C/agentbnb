@@ -13,7 +13,7 @@ import { BudgetManager } from '../credit/budget.js';
 import { RelayClient } from '../relay/websocket-client.js';
 import { loadPeers } from './peers.js';
 import { loadConfig } from './config.js';
-import { openDatabase } from '../registry/store.js';
+import { openDatabase, listCards } from '../registry/store.js';
 import { openCreditDb } from '../credit/ledger.js';
 import type { MatchResult } from '../conductor/types.js';
 
@@ -123,16 +123,25 @@ export async function conductAction(
 
   const resolveAgentUrl = (owner: string): { url: string; cardId: string } => {
     // Try local peers first
-    const peer = peers.find(p => p.name.toLowerCase() === owner.toLowerCase());
-    if (peer) {
-      const execDb = openDatabase(config.db_path);
-      try {
-        const stmt = execDb.prepare('SELECT id FROM capability_cards WHERE owner = ? LIMIT 1');
-        const row = stmt.get(owner) as { id: string } | undefined;
-        return { url: peer.url, cardId: row?.id ?? owner };
-      } finally {
-        execDb.close();
+    const execDb = openDatabase(config.db_path);
+    let matchingCards;
+    try {
+      matchingCards = listCards(execDb, owner);
+    } finally {
+      execDb.close();
+    }
+
+    const candidateNames = new Set<string>([owner.toLowerCase()]);
+    for (const card of matchingCards) {
+      candidateNames.add(card.owner.toLowerCase());
+      if (typeof card.agent_id === 'string' && card.agent_id.length > 0) {
+        candidateNames.add(card.agent_id.toLowerCase());
       }
+    }
+
+    const peer = peers.find(p => candidateNames.has(p.name.toLowerCase()));
+    if (peer) {
+      return { url: peer.url, cardId: matchingCards[0]?.id ?? owner };
     }
 
     // Remote fallback: use relay:// sentinel URL when registry is configured

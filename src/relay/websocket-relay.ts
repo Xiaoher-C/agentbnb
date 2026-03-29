@@ -25,6 +25,7 @@ import { getBalance } from '../credit/ledger.js';
 import { markEscrowAbandoned, markEscrowProgressing, markEscrowStarted } from '../credit/escrow.js';
 import { handleJobRelayResponse } from '../hub-agent/relay-bridge.js';
 import { AgentBnBError, AnyCardSchema } from '../types/index.js';
+import { attachCanonicalAgentId } from '../registry/store.js';
 
 /** Maximum relay requests per agent per minute */
 const RATE_LIMIT_MAX = 60;
@@ -293,8 +294,14 @@ export function registerWebSocketRelay(
    * Uses AnyCardSchema to accept both v1.0 and v2.0 cards, and raw SQL
    * to bypass store.ts functions which are locked to v1.0 schema only.
    */
-  function upsertCard(cardData: Record<string, unknown>, owner: string): string {
-    const parsed = AnyCardSchema.safeParse(cardData);
+  function upsertCard(
+    cardData: Record<string, unknown>,
+    owner: string,
+    agentId?: string,
+  ): string {
+    const parsed = AnyCardSchema.safeParse(
+      agentId ? { ...cardData, agent_id: agentId } : cardData,
+    );
     if (!parsed.success) {
       throw new AgentBnBError(
         `Card validation failed: ${parsed.error.message}`,
@@ -302,7 +309,10 @@ export function registerWebSocketRelay(
       );
     }
 
-    const card = { ...parsed.data, availability: { ...parsed.data.availability, online: true } };
+    const card = attachCanonicalAgentId(db, {
+      ...parsed.data,
+      availability: { ...parsed.data.availability, online: true },
+    });
     const cardId = card.id;
     const now = new Date().toISOString();
 
@@ -380,7 +390,7 @@ export function registerWebSocketRelay(
         // Upsert each agent's cards
         for (const agentCard of agentEntry.cards) {
           try {
-            upsertCard(agentCard, owner);
+            upsertCard(agentCard, owner, agentEntry.agent_id);
           } catch { /* non-fatal: skip invalid cards */ }
         }
       }
@@ -399,7 +409,7 @@ export function registerWebSocketRelay(
     // Upsert primary card into registry (non-fatal — agent stays connected even if card is invalid)
     let cardId: string;
     try {
-      cardId = upsertCard(card, owner);
+      cardId = upsertCard(card, owner, msg.agent_id);
     } catch (err) {
       console.error(`[relay] card validation failed for ${owner}:`, err instanceof Error ? err.message : err);
       cardId = (card.id as string) ?? owner;
@@ -415,7 +425,7 @@ export function registerWebSocketRelay(
     if (msg.cards && msg.cards.length > 0) {
       for (const extraCard of msg.cards) {
         try {
-          upsertCard(extraCard, owner);
+          upsertCard(extraCard, owner, msg.agent_id);
         } catch { /* non-fatal: skip invalid additional cards */ }
       }
     }
@@ -658,8 +668,10 @@ export function registerWebSocketRelay(
     rateLimits.delete(owner);
     agentCapacities.delete(owner);
     // V8: Clean up agent_id → owner mapping
-    for (const [agentId, o] of agentIdToOwner) {
-      if (o === owner) { agentIdToOwner.delete(agentId); break; }
+    for (const [agentId, mappedOwner] of Array.from(agentIdToOwner.entries())) {
+      if (mappedOwner === owner) {
+        agentIdToOwner.delete(agentId);
+      }
     }
     markOwnerOffline(owner);
 

@@ -172,10 +172,12 @@ describe('Gateway Client - Escrow Receipt Attachment', () => {
 
     await requestViaRelay(relay, {
       targetOwner: 'target-agent',
+      targetAgentId: 'target-agent-id',
       cardId: randomUUID(),
       timeoutHint: { expected_duration_ms: 10_000 },
     });
     expect(relayRequestMock).toHaveBeenNthCalledWith(1, expect.objectContaining({
+      targetAgentId: 'target-agent-id',
       timeoutMs: 45_000,
     }));
 

@@ -302,6 +302,8 @@ export async function requestCapabilityBatch(
 export interface RelayRequestOptions {
   /** Target agent owner to relay the request to. */
   targetOwner: string;
+  /** Canonical target agent identity. Preferred for routing when available. */
+  targetAgentId?: string;
   /** Capability Card ID to execute. */
   cardId: string;
   /** Optional skill ID within the card. */
@@ -334,6 +336,7 @@ export async function requestViaRelay(
   try {
     return await relay.request({
       targetOwner: opts.targetOwner,
+      targetAgentId: opts.targetAgentId,
       cardId: opts.cardId,
       skillId: opts.skillId,
       params: opts.params ?? {},

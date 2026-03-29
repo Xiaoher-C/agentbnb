@@ -105,6 +105,7 @@ export class AgentBnBConsumer {
   async requestViaRelay(opts: {
     registryUrl: string;
     targetOwner: string;
+    targetAgentId?: string;
     cardId: string;
     skillId?: string;
     params?: Record<string, unknown>;
@@ -119,6 +120,7 @@ export class AgentBnBConsumer {
       owner: identity.owner,
       token,
       targetOwner: opts.targetOwner,
+      targetAgentId: opts.targetAgentId,
       cardId: opts.cardId,
       skillId: opts.skillId,
       params: opts.params ?? {},
