@@ -90,9 +90,9 @@ describe('E2E Canonical Transaction Flow', () => {
     insertCardV2(providerRegistryDb, TEST_CARD);
   });
 
-  // ── Scenario 1: Full canonical flow ─────────────────────────────────────────
+  // ── Scenario 1: Direct paid remote HTTP is disabled ────────────────────────
 
-  it('scenario 1: requester → provider → escrow hold → execute → settle', async () => {
+  it('scenario 1: paid direct HTTP receipt path is rejected in favor of relay routing', async () => {
     const { receipt } = createSignedEscrowReceipt(
       requesterCreditDb,
       requesterKeys.privateKey,
@@ -113,20 +113,17 @@ describe('E2E Canonical Transaction Flow', () => {
       skillExecutor: mockExecutor(SUCCESS_RESULT),
     });
 
-    expect(result.success).toBe(true);
-    if (result.success) {
-      expect((result.result as Record<string, unknown>).receipt_settled).toBe(true);
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.message).toMatch(/disabled/i);
+      expect(result.error.message).toMatch(/relay/i);
     }
 
-    // Provider earned 5 credits (5% fee rounds to 0)
-    expect(getBalance(providerCreditDb, PROVIDER)).toBe(5);
+    expect(getBalance(providerCreditDb, PROVIDER)).toBe(0);
 
-    // request_log has one success entry
+    // The provider never executes the request, so nothing is logged as a terminal execution.
     const logs = getRequestLog(providerRegistryDb, 10);
-    expect(logs).toHaveLength(1);
-    expect(logs[0]!.status).toBe('success');
-    expect(logs[0]!.credits_charged).toBe(5);
-    expect(logs[0]!.requester).toBe(REQUESTER);
+    expect(logs).toHaveLength(0);
   });
 
   // ── Scenario 2: No skill_id → fallback to first skill ───────────────────────
@@ -169,9 +166,9 @@ describe('E2E Canonical Transaction Flow', () => {
     }
   });
 
-  // ── Scenario 4: Expired receipt ─────────────────────────────────────────────
+  // ── Scenario 4: Expired receipt is superseded by the relay-only rule ───────
 
-  it('scenario 4: expired receipt (>5 min old) → rejected', async () => {
+  it('scenario 4: expired receipt still hits the relay-only rejection path for paid direct HTTP', async () => {
     // Build a receipt with a backdated timestamp and sign it correctly
     // so that signature verification passes and the expiry check is reached.
     const { randomUUID } = await import('node:crypto');
@@ -199,13 +196,14 @@ describe('E2E Canonical Transaction Flow', () => {
 
     expect(result.success).toBe(false);
     if (!result.success) {
-      expect(result.error.message).toContain('expired');
+      expect(result.error.message).toMatch(/disabled/i);
+      expect(result.error.message).toMatch(/relay/i);
     }
   });
 
-  // ── Scenario 5: Wrong signature ──────────────────────────────────────────────
+  // ── Scenario 5: Wrong signature is superseded by the relay-only rule ───────
 
-  it('scenario 5: tampered receipt signature → rejected', async () => {
+  it('scenario 5: tampered receipt signature still hits the relay-only rejection path', async () => {
     const { receipt } = createSignedEscrowReceipt(
       requesterCreditDb,
       requesterKeys.privateKey,
@@ -232,7 +230,8 @@ describe('E2E Canonical Transaction Flow', () => {
 
     expect(result.success).toBe(false);
     if (!result.success) {
-      expect(result.error.message).toContain('Invalid escrow receipt');
+      expect(result.error.message).toMatch(/disabled/i);
+      expect(result.error.message).toMatch(/relay/i);
     }
   });
 
@@ -268,9 +267,9 @@ describe('E2E Canonical Transaction Flow', () => {
     expect(logs[0]!.credits_charged).toBe(5);
   });
 
-  // ── Scenario 7: Local vs remote card — requester-side lifecycle parity ───────
+  // ── Scenario 7: Local path succeeds, direct HTTP remote path is blocked ─────
 
-  it('scenario 7: local path and remote-receipt path both settle and log correctly', async () => {
+  it('scenario 7: local path succeeds but direct HTTP remote receipts must route through relay', async () => {
     // ── Local path ──────────────────────────────────────────────────────────────
     const localRegistryDb = openDatabase(':memory:');
     const localCreditDb = openCreditDb(':memory:');
@@ -319,15 +318,15 @@ describe('E2E Canonical Transaction Flow', () => {
       skillExecutor: mockExecutor(SUCCESS_RESULT),
     });
 
-    expect(remoteResult.success).toBe(true);
-    if (remoteResult.success) {
-      expect((remoteResult.result as Record<string, unknown>).receipt_settled).toBe(true);
+    expect(remoteResult.success).toBe(false);
+    if (!remoteResult.success) {
+      expect(remoteResult.error.message).toMatch(/disabled/i);
+      expect(remoteResult.error.message).toMatch(/relay/i);
     }
     const remoteLogs = getRequestLog(providerRegistryDb, 10);
-    expect(remoteLogs[0]!.status).toBe('success');
-    expect(remoteLogs[0]!.credits_charged).toBe(5);
+    expect(remoteLogs).toHaveLength(0);
 
-    // Both paths: same observable outcome (success + log entry + credits accounted)
+    // Local execution still succeeds, but remote paid traffic now must go through relay.
   });
 
   // ── Scenario 8: Remote discovery + provider API quota exhausted + escrow refund ─

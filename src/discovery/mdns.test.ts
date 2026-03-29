@@ -13,7 +13,16 @@ import {
  */
 
 describe('mDNS discovery module', () => {
+  const browsers: Array<{ stop: () => void }> = [];
+
   afterEach(async () => {
+    for (const browser of browsers.splice(0)) {
+      try {
+        browser.stop();
+      } catch {
+        // Ignore browser cleanup failures during test teardown.
+      }
+    }
     await stopAnnouncement();
   });
 
@@ -37,13 +46,15 @@ describe('mDNS discovery module', () => {
         resolve(null);
       }, 4000);
 
-      browser = discoverLocalAgents((agent) => {
+      const trackedBrowser = discoverLocalAgents((agent) => {
         if (agent.owner === owner) {
           clearTimeout(timeout);
           browser?.stop();
           resolve(agent);
         }
       });
+      browser = trackedBrowser;
+      browsers.push(trackedBrowser);
 
       // Announce after browser is started
       announceGateway(owner, port);
@@ -78,7 +89,7 @@ describe('mDNS discovery module', () => {
       }, 4000);
 
       // Start browsing first
-      browser = discoverLocalAgents((agent) => {
+      const trackedBrowser = discoverLocalAgents((agent) => {
         const matchingAgent = agents.find((a) => a.owner === agent.owner);
         if (matchingAgent && !foundOwners.includes(agent.owner)) {
           foundOwners.push(agent.owner);
@@ -89,6 +100,8 @@ describe('mDNS discovery module', () => {
           }
         }
       });
+      browser = trackedBrowser;
+      browsers.push(trackedBrowser);
 
       // Announce all agents after browser is started
       for (const agent of agents) {

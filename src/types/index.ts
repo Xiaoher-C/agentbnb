@@ -49,6 +49,16 @@ export const CapabilityCardSchema = z.object({
     online: z.boolean(),
     schedule: z.string().optional(), // cron expression
   }),
+  /**
+   * Provider-estimated typical execution duration in milliseconds.
+   * Used by requesters to derive default client-side timeouts.
+   */
+  expected_duration_ms: z.number().positive().optional(),
+  /**
+   * Provider hard timeout in milliseconds.
+   * Used as a fallback timeout hint when expected_duration_ms is unavailable.
+   */
+  hard_timeout_ms: z.number().positive().optional(),
   powered_by: z.array(PoweredBySchema).optional(),
   /**
    * Private per-card metadata. Stripped from all API and CLI responses —
@@ -113,6 +123,16 @@ export const SkillSchema = z.object({
     credits_per_minute: z.number().nonnegative().optional(),
     free_tier: z.number().nonnegative().optional(),
   }),
+  /**
+   * Provider-estimated typical execution duration in milliseconds.
+   * Used by requesters to derive default client-side timeouts.
+   */
+  expected_duration_ms: z.number().positive().optional(),
+  /**
+   * Provider hard timeout in milliseconds.
+   * Used as a fallback timeout hint when expected_duration_ms is unavailable.
+   */
+  hard_timeout_ms: z.number().positive().optional(),
   /** Per-skill online flag — overrides card-level availability for this skill. */
   availability: z.object({ online: z.boolean() }).optional(),
   powered_by: z.array(PoweredBySchema).optional(),
@@ -377,4 +397,3 @@ export class AgentBnBError extends Error {
  * not_found     — card or skill ID not found in registry
  */
 export type FailureReason = 'bad_execution' | 'overload' | 'timeout' | 'auth_error' | 'not_found';
-

@@ -7,6 +7,7 @@ import type { AgentBnBConfig } from '../cli/config.js';
 import { ProcessGuard } from './process-guard.js';
 import {
   ServiceCoordinator,
+  buildRelayRegistrationCards,
   loadPersistedRuntime,
   resolveNodeExecutable,
 } from './service-coordinator.js';
@@ -58,6 +59,25 @@ describe('ServiceCoordinator', () => {
     const runtime = loadPersistedRuntime(tmpDir);
     expect(runtime).toBeNull();
     expect(resolveNodeExecutable(runtime)).toBe(process.execPath);
+  });
+
+  it('buildRelayRegistrationCards falls back to a synthetic card when registry is empty', () => {
+    const registration = buildRelayRegistrationCards('relay-owner', []);
+
+    expect(registration.primaryCard.owner).toBe('relay-owner');
+    expect(registration.primaryCard.name).toBe('relay-owner');
+    expect(registration.additionalCards).toEqual([]);
+  });
+
+  it('buildRelayRegistrationCards publishes every local card on the relay connection', () => {
+    const primary = { id: 'card-primary', owner: 'relay-owner', name: 'Primary' };
+    const conductor = { id: 'card-conductor', owner: 'relay-owner', name: 'Conductor' };
+    const extraSkill = { id: 'card-extra', owner: 'relay-owner', name: 'Extra Skill' };
+
+    const registration = buildRelayRegistrationCards('relay-owner', [primary, conductor, extraSkill]);
+
+    expect(registration.primaryCard).toEqual(primary);
+    expect(registration.additionalCards).toEqual([conductor, extraSkill]);
   });
 
   it('foreground startup failure rolls back lock and releases pid file', async () => {

@@ -1,8 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { AgentBnBConfig } from '../cli/config.js';
 import { getConfigDir } from '../cli/config.js';
-import { ensureIdentity } from '../identity/identity.js';
-import { generateKeyPair, loadKeyPair, saveKeyPair } from '../credit/signing.js';
+import { loadOrRepairIdentity } from '../identity/identity.js';
 import { createSignedEscrowReceipt } from '../credit/escrow-receipt.js';
 import { settleRequesterEscrow, releaseRequesterEscrow } from '../credit/settlement.js';
 import { openDatabase, getCard } from '../registry/store.js';
@@ -128,7 +127,7 @@ export class AgentBnBService {
     creditDb.pragma('busy_timeout = 5000');
 
     try {
-      const keys = this.getOrCreateKeyPair();
+      const { keys } = loadOrRepairIdentity(getConfigDir(), this.config.owner);
       const { escrowId, receipt } = createSignedEscrowReceipt(
         creditDb,
         keys.privateKey,
@@ -370,21 +369,9 @@ export class AgentBnBService {
     }
   }
 
-  private getOrCreateKeyPair(): import('../credit/signing.js').KeyPair {
-    const configDir = getConfigDir();
-    try {
-      return loadKeyPair(configDir);
-    } catch {
-      const keys = generateKeyPair();
-      saveKeyPair(configDir, keys);
-      return keys;
-    }
-  }
-
   private loadIdentityAuth(): import('../gateway/client.js').IdentityAuth {
     const configDir = getConfigDir();
-    const identity = ensureIdentity(configDir, this.config.owner);
-    const keys = this.getOrCreateKeyPair();
+    const { identity, keys } = loadOrRepairIdentity(configDir, this.config.owner);
     return {
       agentId: identity.agent_id,
       publicKey: identity.public_key,

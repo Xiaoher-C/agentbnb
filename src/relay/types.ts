@@ -95,6 +95,13 @@ export const RelayProgressMessageSchema = z.object({
   message: z.string().optional(), // optional status message
 });
 
+/** Agent B → Registry: Provider acknowledged request and has started work */
+export const RelayStartedMessageSchema = z.object({
+  type: z.literal('relay_started'),
+  id: z.string().uuid(),
+  message: z.string().optional(),
+});
+
 /** Agent → Registry: Heartbeat with capacity data and self summary */
 export const HeartbeatMessageSchema = z.object({
   type: z.literal('heartbeat'),
@@ -190,6 +197,7 @@ export const RelayMessageSchema = z.discriminatedUnion('type', [
   ResponseMessageSchema,
   ErrorMessageSchema,
   RelayProgressMessageSchema,
+  RelayStartedMessageSchema,
   HeartbeatMessageSchema,
   EscrowHoldMessageSchema,
   EscrowHoldConfirmedMessageSchema,
@@ -208,6 +216,7 @@ export type RelayResponseMessage = z.infer<typeof RelayResponseMessageSchema>;
 export type ResponseMessage = z.infer<typeof ResponseMessageSchema>;
 export type ErrorMessage = z.infer<typeof ErrorMessageSchema>;
 export type RelayProgressMessage = z.infer<typeof RelayProgressMessageSchema>;
+export type RelayStartedMessage = z.infer<typeof RelayStartedMessageSchema>;
 export type HeartbeatMessage = z.infer<typeof HeartbeatMessageSchema>;
 export type EscrowHoldMessage = z.infer<typeof EscrowHoldMessageSchema>;
 export type EscrowSettleMessage = z.infer<typeof EscrowSettleMessageSchema>;
@@ -226,7 +235,19 @@ export interface PendingRelayRequest {
   originOwner: string;
   /** Actual agent owner for credit operations (defaults to originOwner) */
   creditOwner?: string;
+  /** Active timeout handle (backward-compatible alias for current phase timer). */
   timeout: ReturnType<typeof setTimeout>;
+  /** Idle timeout before provider acknowledges start. */
+  idleTimeout?: ReturnType<typeof setTimeout>;
+  /** Hard timeout after provider start acknowledgement. */
+  hardTimeout?: ReturnType<typeof setTimeout>;
+  /** Grace timeout after requester disconnects post-start. */
+  graceTimeout?: ReturnType<typeof setTimeout>;
+  /** Lifecycle stage tracked by relay for disconnect policy. */
+  lifecycle?: 'held' | 'started' | 'progressing' | 'abandoned';
+  createdAt?: number;
+  startedAt?: number;
+  abandonedAt?: number;
   /** Escrow ID for the credit hold, if credits were reserved for this request */
   escrowId?: string;
   /** The target provider owner, needed to release escrow on provider disconnect */

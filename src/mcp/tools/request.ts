@@ -187,6 +187,7 @@ export async function handleRequest(
       }
 
       const targetOwner = (remoteCard['owner'] ?? remoteCard['agent_name']) as string | undefined;
+      const targetAgentId = typeof remoteCard['agent_id'] === 'string' ? remoteCard['agent_id'] : undefined;
       const gatewayUrl = remoteCard['gateway_url'] as string | undefined;
       const timeoutHint = deriveTimeoutHintFromCard(remoteCard, args.skill_id);
 
@@ -221,6 +222,7 @@ export async function handleRequest(
             owner: ctx.config.owner,
             token: ctx.config.token ?? '',
             targetOwner,
+            targetAgentId,
             cardId,
             skillId: args.skill_id,
             params: { ...(args.params ?? {}), ...(args.skill_id ? { skill_id: args.skill_id } : {}), requester: ctx.config.owner },
@@ -253,6 +255,7 @@ export async function handleRequest(
           owner: ctx.config.owner,
           token: ctx.config.token ?? '',
           targetOwner,
+          targetAgentId,
           cardId,
           skillId: args.skill_id,
           params: { ...(args.params ?? {}), ...(args.skill_id ? { skill_id: args.skill_id } : {}) },

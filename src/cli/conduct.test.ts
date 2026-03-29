@@ -45,6 +45,7 @@ vi.mock('../registry/store.js', () => ({
     prepare: vi.fn().mockReturnValue({ get: vi.fn().mockReturnValue(undefined) }),
     close: vi.fn(),
   })),
+  listCards: vi.fn(() => []),
 }));
 
 vi.mock('../credit/ledger.js', () => ({
@@ -67,15 +68,18 @@ vi.mock('./config.js', () => ({
 import { decompose } from '../conductor/task-decomposer.js';
 import { matchSubTasks } from '../conductor/capability-matcher.js';
 import { orchestrate } from '../conductor/pipeline-orchestrator.js';
+import { listCards } from '../registry/store.js';
 import { conductAction } from './conduct.js';
 
 const mockDecompose = vi.mocked(decompose);
 const mockMatchSubTasks = vi.mocked(matchSubTasks);
 const mockOrchestrate = vi.mocked(orchestrate);
+const mockListCards = vi.mocked(listCards);
 
 describe('CLI conduct command', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockListCards.mockReturnValue([]);
   });
 
   it('calls decompose, matchSubTasks, and orchestrate for execution', async () => {
@@ -153,5 +157,34 @@ describe('CLI conduct command', () => {
     expect(typeof output).toBe('object');
     expect(output.success).toBe(true);
     expect(output.total_credits).toBeDefined();
+  });
+
+  it('resolveAgentUrl passed to orchestrate accepts canonical agent_id aliases', async () => {
+    const subtasks = [
+      { id: 'st-1', description: 'Research data', required_capability: 'web_search', params: {}, depends_on: [], estimated_credits: 2 },
+    ];
+
+    mockDecompose.mockReturnValue(subtasks);
+    mockMatchSubTasks.mockReturnValue([
+      { subtask_id: 'st-1', selected_agent: 'eeeeeeeeeeeeeeee', selected_skill: 'web_search', score: 0.9, credits: 2, alternatives: [] },
+    ]);
+    mockListCards.mockReturnValue([
+      { id: 'card-agent-alice', owner: 'agent-alice', agent_id: 'eeeeeeeeeeeeeeee', availability: { online: true } } as never,
+    ]);
+    mockOrchestrate.mockResolvedValue({
+      success: true,
+      results: new Map([['st-1', { data: 'researched' }]]),
+      total_credits: 7,
+      latency_ms: 200,
+    });
+
+    await conductAction('Analyze AI trends', { maxBudget: '100', json: true });
+
+    const orchestrateArgs = mockOrchestrate.mock.calls[0]?.[0];
+    expect(orchestrateArgs).toBeDefined();
+    expect(orchestrateArgs?.resolveAgentUrl('eeeeeeeeeeeeeeee')).toEqual({
+      url: 'http://alice:7700',
+      cardId: 'card-agent-alice',
+    });
   });
 });

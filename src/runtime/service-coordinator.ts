@@ -8,13 +8,12 @@ import { createGatewayServer } from '../gateway/server.js';
 import { createRegistryServer } from '../registry/server.js';
 import { DEFAULT_AUTONOMY_CONFIG } from '../autonomy/tiers.js';
 import { IdleMonitor } from '../autonomy/idle-monitor.js';
-import { listCards } from '../registry/store.js';
+import { listCards, attachCanonicalAgentId } from '../registry/store.js';
 import { announceGateway, stopAnnouncement } from '../discovery/mdns.js';
+import { resolveSelfCli } from './resolve-self-cli.js';
 import { spawn, type ChildProcess } from 'node:child_process';
-import { createRequire } from 'node:module';
 import { existsSync, readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
-import { dirname, join, resolve } from 'node:path';
+import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 
@@ -46,6 +45,47 @@ export interface HealthResult {
   latency_ms: number;
   version?: string;
   owner?: string;
+}
+
+export interface RelayRegistrationCards {
+  primaryCard: Record<string, unknown>;
+  additionalCards: Record<string, unknown>[];
+}
+
+function buildFallbackRelayCard(owner: string): Record<string, unknown> {
+  return {
+    id: randomUUID(),
+    owner,
+    name: owner,
+    description: 'Agent registered via CLI',
+    spec_version: '1.0',
+    level: 1,
+    inputs: [],
+    outputs: [],
+    pricing: { credits_per_call: 1 },
+    availability: { online: true },
+  };
+}
+
+/**
+ * Splits local registry cards into the primary relay registration card and any
+ * additional cards that should be published on the same connection.
+ */
+export function buildRelayRegistrationCards(
+  owner: string,
+  localCards: Record<string, unknown>[],
+): RelayRegistrationCards {
+  if (localCards.length === 0) {
+    return {
+      primaryCard: buildFallbackRelayCard(owner),
+      additionalCards: [],
+    };
+  }
+
+  return {
+    primaryCard: localCards[0]!,
+    additionalCards: localCards.slice(1),
+  };
 }
 
 export class ServiceCoordinator {
@@ -215,7 +255,10 @@ export class ServiceCoordinator {
 
     if (opts.conductorEnabled && this.config.conductor?.public) {
       const { buildConductorCard } = await import('../conductor/card.js');
-      const conductorCard = buildConductorCard(this.config.owner);
+      const conductorCard = attachCanonicalAgentId(
+        this.runtime.registryDb,
+        buildConductorCard(this.config.owner),
+      );
       const now = new Date().toISOString();
       const existing = this.runtime.registryDb
         .prepare('SELECT id FROM capability_cards WHERE id = ?')
@@ -285,26 +328,9 @@ export class ServiceCoordinator {
       const { RelayClient } = await import('../relay/websocket-client.js');
       const { executeCapabilityRequest } = await import('../gateway/execute.js');
 
-      const cards = listCards(this.runtime.registryDb, this.config.owner);
-      const card = cards[0] ?? {
-        id: randomUUID(),
-        owner: this.config.owner,
-        name: this.config.owner,
-        description: 'Agent registered via CLI',
-        spec_version: '1.0',
-        level: 1,
-        inputs: [],
-        outputs: [],
-        pricing: { credits_per_call: 1 },
-        availability: { online: true },
-      };
-
-      const additionalCards: Record<string, unknown>[] = [];
+      const localCards = listCards(this.runtime.registryDb, this.config.owner) as unknown as Record<string, unknown>[];
+      const { primaryCard, additionalCards } = buildRelayRegistrationCards(this.config.owner, localCards);
       if (this.config.conductor?.public) {
-        const { buildConductorCard } = await import('../conductor/card.js');
-        additionalCards.push(
-          buildConductorCard(this.config.owner) as unknown as Record<string, unknown>,
-        );
         console.log('Conductor card will be published to registry (conductor.public: true)');
       }
 
@@ -313,9 +339,10 @@ export class ServiceCoordinator {
         owner: this.config.owner,
         agent_id: this.config.agent_id,
         token: this.config.token,
-        card: card as Record<string, unknown>,
+        card: primaryCard,
         cards: additionalCards.length > 0 ? additionalCards : undefined,
         onRequest: async (req) => {
+          this.relayClient?.sendStarted(req.id, 'provider acknowledged');
           const onProgress: import('../skills/executor.js').ProgressCallback = (info) => {
             this.relayClient!.sendProgress(req.id, info);
           };
@@ -400,7 +427,8 @@ export class ServiceCoordinator {
   private spawnManagedProcess(opts?: ServiceOptions): ChildProcess {
     const runtime = loadPersistedRuntime(getConfigDir());
     const nodeExec = resolveNodeExecutable(runtime);
-    const cliArgs = resolveCliLaunchArgs(this.buildServeArgs(opts));
+    const cliPath = resolveSelfCli();
+    const cliArgs = [cliPath, 'serve', ...this.buildServeArgs(opts)];
     const child = spawn(nodeExec, cliArgs, {
       detached: true,
       stdio: 'ignore',
@@ -634,35 +662,6 @@ export function resolveNodeExecutable(runtime: PersistedRuntimeInfo | null): str
     return runtime.node_exec;
   }
   return process.execPath;
-}
-
-function resolveCliLaunchArgs(serveArgs: string[]): string[] {
-  // 1. Try require.resolve — works under npm, pnpm, yarn global installs
-  const require = createRequire(import.meta.url);
-  try {
-    const distCli = require.resolve('agentbnb/dist/cli/index.js');
-    return [distCli, 'serve', ...serveArgs];
-  } catch {
-    // Not installed as package — fall through to local dev paths
-  }
-
-  // 2. Local dev: walk from source/dist to project root
-  const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
-  const distCli = join(projectRoot, 'dist', 'cli', 'index.js');
-  if (existsSync(distCli)) {
-    return [distCli, 'serve', ...serveArgs];
-  }
-
-  const srcCli = join(projectRoot, 'src', 'cli', 'index.ts');
-  if (existsSync(srcCli)) {
-    const tsxCli = require.resolve('tsx/dist/cli.mjs');
-    return [tsxCli, srcCli, 'serve', ...serveArgs];
-  }
-
-  throw new AgentBnBError(
-    'Unable to locate AgentBnB CLI entry (dist/cli/index.js or src/cli/index.ts)',
-    'CLI_ENTRY_NOT_FOUND',
-  );
 }
 
 function isPidAlive(pid: number): boolean {

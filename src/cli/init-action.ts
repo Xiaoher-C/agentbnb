@@ -8,18 +8,17 @@ import { networkInterfaces } from 'node:os';
 
 import { loadConfig, saveConfig, getConfigDir } from './config.js';
 import type { AgentBnBConfig } from './config.js';
-import { ensureIdentity } from '../identity/identity.js';
-import { generateKeyPair, saveKeyPair, loadKeyPair } from '../credit/signing.js';
-import type { KeyPair } from '../credit/signing.js';
+import { loadOrRepairIdentity } from '../identity/identity.js';
 import { detectOpenPorts, buildDraftCard } from './onboarding.js';
 import { detectCapabilities, capabilitiesToV2Card, interactiveTemplateMenu } from '../onboarding/index.js';
-import { openDatabase, insertCard } from '../registry/store.js';
+import { openDatabase, insertCard, attachCanonicalAgentId } from '../registry/store.js';
 import { openCreditDb, bootstrapAgent, migrateOwner } from '../credit/ledger.js';
-import { createAgentRecord, lookupAgent, lookupAgentByOwner } from '../identity/agent-identity.js';
+import { createAgentRecord, lookupAgent, lookupAgentByOwner, updateAgentRecord } from '../identity/agent-identity.js';
 import { createLedger } from '../credit/create-ledger.js';
 import { publishFromSoulV2 } from '../openclaw/index.js';
 import type { CapabilityCard } from '../types/index.js';
 import { createInterface } from 'node:readline';
+import type Database from 'better-sqlite3';
 
 /** Options accepted by performInit(). */
 export interface InitOptions {
@@ -76,22 +75,45 @@ function getLanIp(): string {
  */
 function loadIdentityAuth(owner: string): { agentId: string; publicKey: string; privateKey: Buffer } {
   const configDir = getConfigDir();
-
-  let keys: KeyPair;
-  try {
-    keys = loadKeyPair(configDir);
-  } catch {
-    keys = generateKeyPair();
-    saveKeyPair(configDir, keys);
-  }
-
-  const identity = ensureIdentity(configDir, owner);
+  const { identity, keys } = loadOrRepairIdentity(configDir, owner);
 
   return {
     agentId: identity.agent_id,
     publicKey: identity.public_key,
     privateKey: keys.privateKey,
   };
+}
+
+function syncAgentRecord(
+  db: Database.Database,
+  identity: { agent_id: string; public_key: string },
+  owner: string,
+  displayName: string,
+): void {
+  const existingAgent =
+    lookupAgent(db, identity.agent_id) ?? lookupAgentByOwner(db, owner);
+
+  if (!existingAgent) {
+    createAgentRecord(db, {
+      agent_id: identity.agent_id,
+      display_name: displayName,
+      public_key: identity.public_key,
+      legacy_owner: owner,
+    });
+    return;
+  }
+
+  const updates: Parameters<typeof updateAgentRecord>[2] = {};
+  if (existingAgent.display_name !== displayName) {
+    updates.display_name = displayName;
+  }
+  if (existingAgent.legacy_owner !== owner) {
+    updates.legacy_owner = owner;
+  }
+
+  if (Object.keys(updates).length > 0) {
+    updateAgentRecord(db, existingAgent.agent_id, updates);
+  }
 }
 
 /**
@@ -130,39 +152,35 @@ export async function performInit(opts: InitOptions): Promise<InitResult> {
 
   saveConfig(config);
 
-  // Generate Ed25519 keypair (idempotent)
-  let keypairStatus = 'existing';
-  try {
-    loadKeyPair(configDir);
-  } catch {
-    const keys = generateKeyPair();
-    saveKeyPair(configDir, keys);
-    keypairStatus = 'generated';
-  }
-
-  // Create or load agent identity (idempotent)
-  const identity = ensureIdentity(configDir, owner);
+  // Atomically load/repair identity + keypair.
+  const identityMaterial = loadOrRepairIdentity(configDir, owner);
+  const identity = identityMaterial.identity;
+  const keypairStatus = identityMaterial.status === 'generated' ? 'generated' : 'existing';
 
   // Migrate data if owner changed
   const creditDb = openCreditDb(creditDbPath);
+  const registryDb = openDatabase(dbPath);
+  syncAgentRecord(creditDb, identity, owner, config.display_name ?? owner);
+  syncAgentRecord(registryDb, identity, owner, config.display_name ?? owner);
+
   if (existingConfig?.owner && existingConfig.owner !== owner) {
     migrateOwner(creditDb, existingConfig.owner as string, owner);
 
-    const regDb = openDatabase(dbPath);
-    try {
-      const rows = regDb.prepare('SELECT id, owner, data FROM capability_cards WHERE owner != ?').all(owner) as Array<{ id: string; owner: string; data: string }>;
-      for (const row of rows) {
-        try {
-          const card = JSON.parse(row.data);
-          card.owner = owner;
-          regDb.prepare('UPDATE capability_cards SET owner = ?, data = ? WHERE id = ?').run(owner, JSON.stringify(card), row.id);
-        } catch { /* skip malformed cards */ }
-      }
-      if (!opts.json && rows.length > 0) {
-        console.log(`Migrated ${rows.length} card(s) → ${owner}`);
-      }
-    } finally {
-      regDb.close();
+    const rows = registryDb.prepare('SELECT id, owner, data FROM capability_cards WHERE owner = ?').all(existingConfig.owner as string) as Array<{ id: string; owner: string; data: string }>;
+    for (const row of rows) {
+      try {
+        const card = JSON.parse(row.data);
+        const updatedCard = attachCanonicalAgentId(registryDb, {
+          ...card,
+          owner,
+        });
+        registryDb
+          .prepare('UPDATE capability_cards SET owner = ?, data = ? WHERE id = ?')
+          .run(owner, JSON.stringify(updatedCard), row.id);
+      } catch { /* skip malformed cards */ }
+    }
+    if (!opts.json && rows.length > 0) {
+      console.log(`Migrated ${rows.length} card(s) → ${owner}`);
     }
 
     const allOwners = creditDb.prepare('SELECT owner FROM credit_balances WHERE owner != ?').all(owner) as Array<{ owner: string }>;
@@ -194,21 +212,6 @@ export async function performInit(opts: InitOptions): Promise<InitResult> {
     }
   }
 
-  // Register agent record in agents table (V8 identity)
-  const existingAgent = lookupAgent(creditDb, identity.agent_id) ?? lookupAgentByOwner(creditDb, owner);
-  if (!existingAgent) {
-    try {
-      createAgentRecord(creditDb, {
-        agent_id: identity.agent_id,
-        display_name: config.display_name ?? owner,
-        public_key: identity.public_key,
-        legacy_owner: owner,
-      });
-    } catch {
-      // AGENT_EXISTS — already registered, safe to ignore
-    }
-  }
-
   // Persist agent_id in config for fast access
   if (!config.agent_id || config.agent_id !== identity.agent_id) {
     config.agent_id = identity.agent_id;
@@ -216,7 +219,8 @@ export async function performInit(opts: InitOptions): Promise<InitResult> {
   }
 
   // Bootstrap credit ledger with 100 credits
-  bootstrapAgent(creditDb, owner, 100);
+  bootstrapAgent(creditDb, identity.agent_id, 100);
+  registryDb.close();
   creditDb.close();
 
   // Grant 50 credits on remote Registry if configured
@@ -276,13 +280,20 @@ export async function performInit(opts: InitOptions): Promise<InitResult> {
       if (yesMode) {
         const db = openDatabase(dbPath);
         try {
+          const storedCard = attachCanonicalAgentId(db, card);
           db.prepare(
             `INSERT OR REPLACE INTO capability_cards (id, owner, data, created_at, updated_at)
              VALUES (?, ?, ?, ?, ?)`
-          ).run(card.id, card.owner, JSON.stringify(card), card.created_at, card.updated_at);
-          publishedCards.push({ id: card.id, name: card.agent_name });
+          ).run(
+            storedCard.id,
+            storedCard.owner,
+            JSON.stringify(storedCard),
+            storedCard.created_at,
+            storedCard.updated_at,
+          );
+          publishedCards.push({ id: storedCard.id, name: storedCard.agent_name });
           if (!opts.json) {
-            console.log(`  Published v2.0 card: ${card.agent_name} (${card.skills.length} skills)`);
+            console.log(`  Published v2.0 card: ${storedCard.agent_name} (${storedCard.skills.length} skills)`);
           }
         } finally {
           db.close();
@@ -292,12 +303,19 @@ export async function performInit(opts: InitOptions): Promise<InitResult> {
         if (yes) {
           const db = openDatabase(dbPath);
           try {
+            const storedCard = attachCanonicalAgentId(db, card);
             db.prepare(
               `INSERT OR REPLACE INTO capability_cards (id, owner, data, created_at, updated_at)
                VALUES (?, ?, ?, ?, ?)`
-            ).run(card.id, card.owner, JSON.stringify(card), card.created_at, card.updated_at);
-            publishedCards.push({ id: card.id, name: card.agent_name });
-            console.log(`  Published v2.0 card: ${card.agent_name} (${card.skills.length} skills)`);
+            ).run(
+              storedCard.id,
+              storedCard.owner,
+              JSON.stringify(storedCard),
+              storedCard.created_at,
+              storedCard.updated_at,
+            );
+            publishedCards.push({ id: storedCard.id, name: storedCard.agent_name });
+            console.log(`  Published v2.0 card: ${storedCard.agent_name} (${storedCard.skills.length} skills)`);
           } finally {
             db.close();
           }
@@ -365,12 +383,19 @@ export async function performInit(opts: InitOptions): Promise<InitResult> {
           const card = capabilitiesToV2Card(selected, owner);
           const db = openDatabase(dbPath);
           try {
+            const storedCard = attachCanonicalAgentId(db, card);
             db.prepare(
               `INSERT OR REPLACE INTO capability_cards (id, owner, data, created_at, updated_at)
                VALUES (?, ?, ?, ?, ?)`
-            ).run(card.id, card.owner, JSON.stringify(card), card.created_at, card.updated_at);
-            publishedCards.push({ id: card.id, name: card.agent_name });
-            console.log(`\n  Published v2.0 card: ${card.agent_name} (${card.skills.length} skills)`);
+            ).run(
+              storedCard.id,
+              storedCard.owner,
+              JSON.stringify(storedCard),
+              storedCard.created_at,
+              storedCard.updated_at,
+            );
+            publishedCards.push({ id: storedCard.id, name: storedCard.agent_name });
+            console.log(`\n  Published v2.0 card: ${storedCard.agent_name} (${storedCard.skills.length} skills)`);
           } finally {
             db.close();
           }

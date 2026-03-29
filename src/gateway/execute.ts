@@ -4,12 +4,12 @@ import { getCard, updateReputation } from '../registry/store.js';
 import { getBalance } from '../credit/ledger.js';
 import { holdEscrow, settleEscrow, releaseEscrow } from '../credit/escrow.js';
 import { insertRequestLog } from '../registry/request-log.js';
-import { verifyEscrowReceipt } from '../credit/signing.js';
-import { settleProviderEarning } from '../credit/settlement.js';
 import { AgentBnBError } from '../types/index.js';
 import type { CapabilityCardV2, EscrowReceipt, FailureReason } from '../types/index.js';
 import type { SkillExecutor, ProgressCallback } from '../skills/executor.js';
 import { loadConfig } from '../cli/config.js';
+import { resolveTargetCapability } from './resolve-target-capability.js';
+import type { ResolvedTargetCapability } from './resolve-target-capability.js';
 
 /**
  * Sends a Telegram message to the owner when a skill is successfully executed.
@@ -107,6 +107,16 @@ export interface BatchExecuteOptions {
   owner: string;
   /** Optional registry URL (currently unused — reserved for future remote execution). */
   registryUrl?: string;
+  /**
+   * Optional dispatcher used to actually execute a resolved target request.
+   * When omitted, batch execution performs local credit-orchestration and returns
+   * a synthetic success payload for compatibility with existing behavior/tests.
+   */
+  dispatchRequest?: (opts: {
+    target: ResolvedTargetCapability;
+    params: Record<string, unknown>;
+    requester: string;
+  }) => Promise<unknown>;
 }
 
 /**
@@ -233,28 +243,22 @@ export async function executeCapabilityRequest(opts: ExecuteRequestOptions): Pro
     cardName = card.name;
   }
 
-  // Check balance and hold escrow — or verify signed receipt for remote P2P
+  // Check balance and hold escrow. Direct paid remote receipt settlement is disabled.
   let escrowId: string | null = null;
-  let isRemoteEscrow = false;
 
   if (relayAuthorized) {
     // Hub relay has already held credits — skip local credit check entirely.
     // The relay will settle or release the Hub-side escrow based on our response.
   } else if (receipt) {
-    const { signature, ...receiptData } = receipt;
-    const publicKeyBuf = Buffer.from(receipt.requester_public_key, 'hex');
-    const valid = verifyEscrowReceipt(receiptData as Record<string, unknown>, signature, publicKeyBuf);
-    if (!valid) {
-      return { success: false, error: { code: -32603, message: 'Invalid escrow receipt signature' } };
+    if (creditsNeeded > 0) {
+      return {
+        success: false,
+        error: {
+          code: -32603,
+          message: 'Direct HTTP paid remote settlement is disabled. Route paid requests through relay.',
+        },
+      };
     }
-    if (receipt.amount < creditsNeeded) {
-      return { success: false, error: { code: -32603, message: 'Insufficient escrow amount' } };
-    }
-    const receiptAge = Date.now() - new Date(receipt.timestamp).getTime();
-    if (receiptAge > 5 * 60 * 1000) {
-      return { success: false, error: { code: -32603, message: 'Escrow receipt expired' } };
-    }
-    isRemoteEscrow = true;
   } else {
     try {
       const balance = getBalance(creditDb, requester);
@@ -269,7 +273,6 @@ export async function executeCapabilityRequest(opts: ExecuteRequestOptions): Pro
   }
 
   const startMs = Date.now();
-  const receiptData = isRemoteEscrow ? { receipt_released: true } : undefined;
 
   // Helper: log request and handle escrow on failure.
   // updateReputation uses a stored EWA counter on capability_cards (not a live request_log query),
@@ -280,7 +283,7 @@ export async function executeCapabilityRequest(opts: ExecuteRequestOptions): Pro
     message: string,
     failureReason: FailureReason = 'bad_execution',
   ): ExecuteResult => {
-    if (!isRemoteEscrow && escrowId) releaseEscrow(creditDb, escrowId);
+    if (escrowId) releaseEscrow(creditDb, escrowId);
     // Only penalize reputation for quality failures (bad_execution, auth_error).
     // Non-quality failures (overload, timeout, not_found) should not hurt provider reputation.
     if (failureReason === 'bad_execution' || failureReason === 'auth_error') {
@@ -300,17 +303,12 @@ export async function executeCapabilityRequest(opts: ExecuteRequestOptions): Pro
         failure_reason: failureReason,
       });
     } catch { /* silent no-op */ }
-    return {
-      success: false,
-      error: { code: -32603, message, ...(receiptData ? { data: receiptData } : {}) },
-    };
+    return { success: false, error: { code: -32603, message } };
   };
 
   // Helper: log request and handle escrow on success
   const handleSuccess = (result: unknown, latencyMs: number): ExecuteResult => {
-    if (isRemoteEscrow && receipt) {
-      settleProviderEarning(creditDb, card.owner, receipt);
-    } else if (escrowId) {
+    if (escrowId) {
       settleEscrow(creditDb, escrowId, card.owner);
     }
     updateReputation(registryDb, cardId, true, latencyMs);
@@ -339,14 +337,7 @@ export async function executeCapabilityRequest(opts: ExecuteRequestOptions): Pro
       latencyMs,
     }).catch(() => {});
 
-    const successResult = isRemoteEscrow
-      ? {
-          ...(typeof result === 'object' && result !== null ? result : { data: result }),
-          receipt_settled: true,
-          receipt_nonce: receipt!.nonce,
-        }
-      : result;
-    return { success: true, result: successResult };
+    return { success: true, result };
   };
 
   // ── SkillExecutor path ──────────────────────────────────────────────────────
@@ -469,11 +460,14 @@ export async function executeCapabilityBatch(options: BatchExecuteOptions): Prom
    * Returns a BatchResult with full credit accounting.
    */
   const executeItem = async (item: BatchRequestItem, index: number): Promise<BatchResult> => {
-    // Resolve skill_id → card. skill_id may be either a card ID or a skill ID embedded in a card.
-    // We search by iterating cards (registry lookup via getCard) — try skill_id as cardId first,
-    // then fall back to scanning (not supported without DB scan; use card_id equals skill_id convention).
-    const card = getCard(registryDb, item.skill_id);
-    if (!card) {
+    // Unified target resolution: local DB -> remote registry -> relay-connected providers.
+    const resolved = await resolveTargetCapability(item.skill_id, {
+      registryDb,
+      registryUrl: options.registryUrl,
+      onlineOnly: true,
+    });
+
+    if (!resolved) {
       return {
         request_index: index,
         status: 'failed',
@@ -483,27 +477,16 @@ export async function executeCapabilityBatch(options: BatchExecuteOptions): Prom
       };
     }
 
-    // Resolve credits needed
-    const rawCard = card as unknown as Record<string, unknown>;
-    let creditsNeeded: number;
-    let resolvedSkillId: string | undefined;
-    if (Array.isArray(rawCard['skills'])) {
-      const v2card = card as unknown as CapabilityCardV2;
-      const skill = v2card.skills[0];
-      if (!skill) {
-        return {
-          request_index: index,
-          status: 'failed',
-          credits_spent: 0,
-          credits_refunded: 0,
-          error: `No skills defined on card: ${item.skill_id}`,
-        };
-      }
-      creditsNeeded = skill.pricing.credits_per_call;
-      resolvedSkillId = skill.id;
-    } else {
-      creditsNeeded = card.pricing.credits_per_call;
-    }
+    const localCard = getCard(registryDb, resolved.cardId);
+    const localCardRaw = localCard as Record<string, unknown> | null;
+    const cardName =
+      (typeof localCardRaw?.['name'] === 'string'
+        ? localCardRaw['name']
+        : typeof localCardRaw?.['agent_name'] === 'string'
+          ? localCardRaw['agent_name']
+          : resolved.cardId) as string;
+    const creditsNeeded = resolved.credits_per_call;
+    const resolvedSkillId = resolved.skillId;
 
     // Respect per-item max_credits cap
     if (creditsNeeded > item.max_credits) {
@@ -529,7 +512,7 @@ export async function executeCapabilityBatch(options: BatchExecuteOptions): Prom
           error: 'Insufficient credits',
         };
       }
-      escrowId = holdEscrow(creditDb, owner, creditsNeeded, card.id);
+      escrowId = holdEscrow(creditDb, owner, creditsNeeded, resolved.cardId);
     } catch (err) {
       const msg = err instanceof AgentBnBError ? err.message : 'Failed to hold escrow';
       return {
@@ -541,38 +524,69 @@ export async function executeCapabilityBatch(options: BatchExecuteOptions): Prom
       };
     }
 
-    // Execute: no skillExecutor or handlerUrl available in batch context — simulate locally
-    // by checking that the card exists and creditsNeeded is within budget.
-    // In production the registry server wires up executors; in the batch function we perform
-    // the credit lifecycle and log the request. A real skill execution path (SkillExecutor) is
-    // intentionally NOT wired here — the batch function is primarily a credit-orchestration layer.
     const startMs = Date.now();
-    const latencyMs = Date.now() - startMs;
-
-    // Settle escrow and log success
-    settleEscrow(creditDb, escrowId, card.owner);
-    updateReputation(registryDb, card.id, true, latencyMs);
     try {
-      insertRequestLog(registryDb, {
-        id: randomUUID(),
-        card_id: card.id,
-        card_name: card.name,
-        skill_id: resolvedSkillId,
-        requester: owner,
-        status: 'success',
-        latency_ms: latencyMs,
-        credits_charged: creditsNeeded,
-        created_at: new Date().toISOString(),
-      });
-    } catch { /* silent no-op */ }
+      const result = options.dispatchRequest
+        ? await options.dispatchRequest({
+            target: resolved,
+            params: item.params,
+            requester: owner,
+          })
+        : { card_id: resolved.cardId, skill_id: resolvedSkillId };
 
-    return {
-      request_index: index,
-      status: 'success',
-      result: { card_id: card.id, skill_id: resolvedSkillId },
-      credits_spent: creditsNeeded,
-      credits_refunded: 0,
-    };
+      const latencyMs = Date.now() - startMs;
+      settleEscrow(creditDb, escrowId, resolved.owner);
+      updateReputation(registryDb, resolved.cardId, true, latencyMs);
+      try {
+        insertRequestLog(registryDb, {
+          id: randomUUID(),
+          card_id: resolved.cardId,
+          card_name: cardName,
+          skill_id: resolvedSkillId,
+          requester: owner,
+          status: 'success',
+          latency_ms: latencyMs,
+          credits_charged: creditsNeeded,
+          created_at: new Date().toISOString(),
+        });
+      } catch {
+        // silent no-op
+      }
+
+      return {
+        request_index: index,
+        status: 'success',
+        result,
+        credits_spent: creditsNeeded,
+        credits_refunded: 0,
+      };
+    } catch (err) {
+      releaseEscrow(creditDb, escrowId);
+      const latencyMs = Date.now() - startMs;
+      try {
+        insertRequestLog(registryDb, {
+          id: randomUUID(),
+          card_id: resolved.cardId,
+          card_name: cardName,
+          skill_id: resolvedSkillId,
+          requester: owner,
+          status: 'failure',
+          latency_ms: latencyMs,
+          credits_charged: 0,
+          created_at: new Date().toISOString(),
+          failure_reason: 'not_found',
+        });
+      } catch {
+        // silent no-op
+      }
+      return {
+        request_index: index,
+        status: 'failed',
+        credits_spent: 0,
+        credits_refunded: creditsNeeded,
+        error: err instanceof Error ? err.message : String(err),
+      };
+    }
   };
 
   // ── Strategy dispatch ────────────────────────────────────────────────────────

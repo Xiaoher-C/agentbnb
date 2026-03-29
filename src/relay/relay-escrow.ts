@@ -145,8 +145,10 @@ export function processEscrowSettle(
 
   // Look up escrow to get the amount
   const escrowRow = creditDb
-    .prepare('SELECT amount, owner FROM credit_escrow WHERE id = ? AND status = ?')
-    .get(escrowId, 'held') as { amount: number; owner: string } | undefined;
+    .prepare(
+      "SELECT amount, owner FROM credit_escrow WHERE id = ? AND status IN ('held', 'started', 'progressing', 'abandoned')",
+    )
+    .get(escrowId) as { amount: number; owner: string } | undefined;
 
   if (!escrowRow) {
     throw new Error(`Escrow not found or already settled: ${escrowId}`);

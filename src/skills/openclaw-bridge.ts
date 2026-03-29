@@ -89,7 +89,8 @@ function validateAgentName(name: string): boolean {
 }
 
 /**
- * Executes the process channel: spawns `openclaw agent --agent <name> --message '<JSON>' --json --local`
+ * Executes the process channel: spawns
+ * `openclaw agent --agent <name> --message '<prompt>' --json --local`
  * via child_process.execFileSync (no shell interpolation) and parses stdout as JSON.
  *
  * @param config - OpenClaw skill config.
@@ -127,20 +128,22 @@ function executeProcess(
     `If you cannot complete the task, return: {"error": "reason"}`;
 
   try {
-    // Use execFileSync with array args — no shell, no injection
+    // Use execFileSync with array args — no shell, no injection.
     const stdout = execFileSync('openclaw', [
       'agent', '--agent', config.agent_name, '--message', message, '--json', '--local',
     ], {
       timeout: timeoutMs,
     });
     const text = stdout.toString().trim();
-    // OpenClaw agent --json outputs a JSON object; extract the reply text
+    // --json is part of the contract here, so treat non-JSON stdout as a hard failure.
     try {
       const parsed: unknown = JSON.parse(text);
       return { success: true, result: parsed };
     } catch {
-      // If stdout isn't valid JSON, return as raw text
-      return { success: true, result: { text } };
+      return {
+        success: false,
+        error: `OpenClaw process channel returned invalid JSON: ${text}`,
+      };
     }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
@@ -208,7 +211,7 @@ async function executeTelegram(
  * Forwards AgentBnB skill execution requests to an OpenClaw agent via one of
  * three configurable channels:
  * - `webhook` — HTTP POST to OpenClaw agent's local webhook endpoint
- * - `process` — spawn `openclaw run <agent_name>` subprocess
+ * - `process` — spawn `openclaw agent --agent <name> --message <JSON> --json --local`
  * - `telegram` — fire-and-forget POST to Telegram Bot API
  *
  * Implements the {@link ExecutorMode} interface so it can be registered into

@@ -21,7 +21,8 @@ import { registerStatusTool } from './tools/status.js';
 import { registerPublishTool } from './tools/publish.js';
 
 /** Package version — injected at build time, falls back for dev mode. */
-const VERSION = AGENTBNB_VERSION ?? '0.0.0-dev';
+const VERSION =
+  typeof AGENTBNB_VERSION !== 'undefined' ? AGENTBNB_VERSION : '0.0.0-dev';
 
 /**
  * Shared context passed to all MCP tool handlers.

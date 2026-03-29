@@ -1,4 +1,5 @@
 import type Database from 'better-sqlite3';
+import { canonicalizeCreditOwner } from './owner-normalization.js';
 
 /**
  * Provider reliability metrics — tracks streaks, repeat hires, feedback, and availability.
@@ -48,6 +49,7 @@ export function ensureReliabilityTable(db: Database.Database): void {
  * Ensures a row exists for the given owner, creating one if needed.
  */
 function ensureRow(db: Database.Database, owner: string): void {
+  const canonicalOwner = canonicalizeCreditOwner(db, owner);
   const now = new Date().toISOString();
   db.prepare(
     `INSERT OR IGNORE INTO provider_reliability_metrics
@@ -55,7 +57,7 @@ function ensureRow(db: Database.Database, owner: string): void {
       feedback_count, feedback_sum, availability_checks, availability_hits,
       cycle_start, updated_at)
      VALUES (?, 0, 0, 0, 0, 0, 0, 0, 0, ?, ?)`,
-  ).run(owner, now, now);
+  ).run(canonicalOwner, now, now);
 }
 
 /**
@@ -71,8 +73,10 @@ export function recordSuccessfulHire(
   providerOwner: string,
   consumerOwner: string,
 ): void {
+  const canonicalProviderOwner = canonicalizeCreditOwner(db, providerOwner);
+  const canonicalConsumerOwner = canonicalizeCreditOwner(db, consumerOwner);
   const now = new Date().toISOString();
-  ensureRow(db, providerOwner);
+  ensureRow(db, canonicalProviderOwner);
 
   // Check repeat hire by looking at settlement transactions for this provider from this consumer
   const isRepeat = db.prepare(
@@ -81,7 +85,7 @@ export function recordSuccessfulHire(
      AND reference_id IN (
        SELECT id FROM credit_escrow WHERE owner = ?
      )`,
-  ).get(providerOwner, consumerOwner) as { cnt: number } | undefined;
+  ).get(canonicalProviderOwner, canonicalConsumerOwner) as { cnt: number } | undefined;
 
   const repeatIncrement = (isRepeat?.cnt ?? 0) > 0 ? 1 : 0;
 
@@ -93,7 +97,7 @@ export function recordSuccessfulHire(
          repeat_hires = repeat_hires + ?,
          updated_at = ?
      WHERE owner = ?`,
-  ).run(repeatIncrement, now, providerOwner);
+  ).run(repeatIncrement, now, canonicalProviderOwner);
 }
 
 /**
@@ -107,14 +111,15 @@ export function recordQualityFailure(
   db: Database.Database,
   providerOwner: string,
 ): void {
+  const canonicalProviderOwner = canonicalizeCreditOwner(db, providerOwner);
   const now = new Date().toISOString();
-  ensureRow(db, providerOwner);
+  ensureRow(db, canonicalProviderOwner);
 
   db.prepare(
     `UPDATE provider_reliability_metrics
      SET current_streak = 0, updated_at = ?
      WHERE owner = ?`,
-  ).run(now, providerOwner);
+  ).run(now, canonicalProviderOwner);
 }
 
 /**
@@ -129,8 +134,9 @@ export function recordFeedback(
   providerOwner: string,
   score: number,
 ): void {
+  const canonicalProviderOwner = canonicalizeCreditOwner(db, providerOwner);
   const now = new Date().toISOString();
-  ensureRow(db, providerOwner);
+  ensureRow(db, canonicalProviderOwner);
 
   db.prepare(
     `UPDATE provider_reliability_metrics
@@ -138,7 +144,7 @@ export function recordFeedback(
          feedback_sum = feedback_sum + ?,
          updated_at = ?
      WHERE owner = ?`,
-  ).run(score, now, providerOwner);
+  ).run(score, now, canonicalProviderOwner);
 }
 
 /**
@@ -153,8 +159,9 @@ export function recordAvailabilityCheck(
   providerOwner: string,
   wasAvailable: boolean,
 ): void {
+  const canonicalProviderOwner = canonicalizeCreditOwner(db, providerOwner);
   const now = new Date().toISOString();
-  ensureRow(db, providerOwner);
+  ensureRow(db, canonicalProviderOwner);
 
   db.prepare(
     `UPDATE provider_reliability_metrics
@@ -162,7 +169,7 @@ export function recordAvailabilityCheck(
          availability_hits = availability_hits + ?,
          updated_at = ?
      WHERE owner = ?`,
-  ).run(wasAvailable ? 1 : 0, now, providerOwner);
+  ).run(wasAvailable ? 1 : 0, now, canonicalProviderOwner);
 }
 
 /**
@@ -176,11 +183,12 @@ export function getReliabilityMetrics(
   db: Database.Database,
   owner: string,
 ): ReliabilityMetrics | null {
+  const canonicalOwner = canonicalizeCreditOwner(db, owner);
   const row = db.prepare(
     `SELECT current_streak, longest_streak, total_hires, repeat_hires,
             feedback_count, feedback_sum, availability_checks, availability_hits
      FROM provider_reliability_metrics WHERE owner = ?`,
-  ).get(owner) as {
+  ).get(canonicalOwner) as {
     current_streak: number;
     longest_streak: number;
     total_hires: number;

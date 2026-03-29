@@ -70,7 +70,33 @@ export function loadKeyPair(configDir: string): KeyPair {
  * This ensures the same data always produces the same byte representation.
  */
 function canonicalJson(data: Record<string, unknown>): string {
-  return JSON.stringify(data, Object.keys(data).sort());
+  return JSON.stringify(sortForCanonicalJson(data));
+}
+
+/**
+ * Recursively sorts object keys to produce deterministic JSON.
+ * Arrays keep their original order while each element is canonicalized.
+ */
+function sortForCanonicalJson(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map((item) => sortForCanonicalJson(item));
+  }
+
+  if (value !== null && typeof value === 'object') {
+    const proto = Object.getPrototypeOf(value);
+    // Only canonicalize plain JSON objects; preserve special objects as-is.
+    if (proto === Object.prototype || proto === null) {
+      const input = value as Record<string, unknown>;
+      const output: Record<string, unknown> = {};
+      const sortedKeys = Object.keys(input).sort();
+      for (const key of sortedKeys) {
+        output[key] = sortForCanonicalJson(input[key]);
+      }
+      return output;
+    }
+  }
+
+  return value;
 }
 
 /**

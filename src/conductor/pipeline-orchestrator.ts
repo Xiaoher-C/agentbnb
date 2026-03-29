@@ -183,6 +183,7 @@ async function executeSingleTask(
 export async function orchestrate(opts: OrchestrateOptions): Promise<OrchestrationResult> {
   const { subtasks, matches, gatewayToken, resolveAgentUrl, timeoutMs = 300_000, maxBudget, relayClient, requesterOwner } = opts;
   const startTime = Date.now();
+  const hardDeadline = startTime + timeoutMs;
 
   // Build role-aware agent override map from team (if provided)
   // Key: subtask_id → TeamMember (for agent override)
@@ -212,6 +213,13 @@ export async function orchestrate(opts: OrchestrateOptions): Promise<Orchestrati
   const subtaskMap = new Map(subtasks.map((s) => [s.id, s]));
 
   for (const wave of waves) {
+    const remainingWaveMs = hardDeadline - Date.now();
+    if (remainingWaveMs <= 0) {
+      errors.push(`Orchestration timed out after ${timeoutMs}ms`);
+      break;
+    }
+    const waveTimeoutMs = Math.max(1, Math.min(timeoutMs, remainingWaveMs));
+
     // Budget check before wave: if maxBudget set and already exceeded, abort
     if (maxBudget !== undefined && totalCredits >= maxBudget) {
       errors.push(`Budget exceeded: spent ${totalCredits} cr, max ${maxBudget} cr`);
@@ -305,7 +313,7 @@ export async function orchestrate(opts: OrchestrateOptions): Promise<Orchestrati
                 gatewayUrl,
                 gatewayToken,
                 items.map(({ _pt, ...item }) => item),
-                { timeoutMs },
+                { timeoutMs: waveTimeoutMs },
               );
 
               return items.map((item) => {
@@ -331,7 +339,7 @@ export async function orchestrate(opts: OrchestrateOptions): Promise<Orchestrati
               // Batch failed — fall back to individual requests
               return Promise.all(group.map(async (pt): Promise<PromiseSettledResult<WaveResult>> => {
                 try {
-                  const res = await executeSingleTask(pt, gatewayToken, timeoutMs, requesterOwner, relayClient, resolveAgentUrl);
+                  const res = await executeSingleTask(pt, gatewayToken, waveTimeoutMs, requesterOwner, relayClient, resolveAgentUrl);
                   return { status: 'fulfilled', value: res };
                 } catch (err) {
                   return { status: 'rejected', reason: err };
@@ -346,7 +354,7 @@ export async function orchestrate(opts: OrchestrateOptions): Promise<Orchestrati
         batchPromises.push(
           (async (): Promise<PromiseSettledResult<WaveResult>[]> => {
             try {
-              const res = await executeSingleTask(pt, gatewayToken, timeoutMs, requesterOwner, relayClient, resolveAgentUrl);
+              const res = await executeSingleTask(pt, gatewayToken, waveTimeoutMs, requesterOwner, relayClient, resolveAgentUrl);
               return [{ status: 'fulfilled', value: res }];
             } catch (err) {
               return [{ status: 'rejected', reason: err }];
@@ -361,7 +369,7 @@ export async function orchestrate(opts: OrchestrateOptions): Promise<Orchestrati
       batchPromises.push(
         (async (): Promise<PromiseSettledResult<WaveResult>[]> => {
           try {
-            const res = await executeSingleTask(pt, gatewayToken, timeoutMs, requesterOwner, relayClient, resolveAgentUrl);
+            const res = await executeSingleTask(pt, gatewayToken, waveTimeoutMs, requesterOwner, relayClient, resolveAgentUrl);
             return [{ status: 'fulfilled', value: res }];
           } catch (err) {
             return [{ status: 'rejected', reason: err }];

@@ -6,6 +6,7 @@ import { openCreditDb, bootstrapAgent } from '../credit/ledger.js';
 import { createPendingRequest } from '../autonomy/pending-requests.js';
 import type { CapabilityCard } from '../types/index.js';
 import type Database from 'better-sqlite3';
+import { createAgentRecord } from '../identity/agent-identity.js';
 
 // Module-level mock for onboarding — allows per-test reconfiguration via vi.mocked()
 vi.mock('../cli/onboarding.js', () => ({
@@ -1333,6 +1334,63 @@ describe('createRegistryServer — GET /api/agents/:owner', () => {
     const response = await server.inject({ method: 'GET', url: '/api/agents/nonexistent-owner' });
     expect(response.statusCode).toBe(404);
     expect(response.json()).toEqual({ error: 'Agent not found' });
+
+    await server.close();
+  });
+
+  it('accepts canonical agent_id and resolves cards/activity for the mapped owner', async () => {
+    createAgentRecord(db, {
+      agent_id: 'ffffffffffffffff',
+      display_name: 'agent-eve',
+      public_key: '66'.repeat(32),
+      legacy_owner: 'agent-eve',
+    });
+
+    const cardId = crypto.randomUUID();
+    insertCard(db, {
+      spec_version: '1.0',
+      id: cardId,
+      owner: 'agent-eve',
+      name: 'Eve Capability',
+      description: 'Mapped owner capability',
+      level: 1,
+      inputs: [],
+      outputs: [],
+      pricing: { credits_per_call: 5 },
+      availability: { online: true },
+      metadata: {},
+    });
+
+    insertRequestLog(db, {
+      id: crypto.randomUUID(),
+      card_id: cardId,
+      card_name: 'Eve Capability',
+      requester: 'consumer-a',
+      status: 'success',
+      latency_ms: 120,
+      credits_charged: 5,
+      created_at: new Date().toISOString(),
+    });
+
+    const { server } = createRegistryServer({ registryDb: db, silent: true });
+    await server.ready();
+
+    const response = await server.inject({ method: 'GET', url: '/api/agents/ffffffffffffffff' });
+    expect(response.statusCode).toBe(200);
+    const body = response.json() as {
+      owner: string;
+      profile: { owner: string };
+      skills: Array<{ owner: string; agent_id?: string }>;
+      trust_metrics: { total_executions: number };
+      recent_activity: Array<{ card_name: string }>;
+    };
+    expect(body.owner).toBe('agent-eve');
+    expect(body.profile.owner).toBe('agent-eve');
+    expect(body.skills).toHaveLength(1);
+    expect(body.skills[0].owner).toBe('agent-eve');
+    expect(body.skills[0].agent_id).toBe('ffffffffffffffff');
+    expect(body.trust_metrics.total_executions).toBe(1);
+    expect(body.recent_activity[0].card_name).toBe('Eve Capability');
 
     await server.close();
   });

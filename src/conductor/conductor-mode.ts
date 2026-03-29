@@ -79,6 +79,8 @@ export class ConductorMode implements ExecutorMode {
     params: Record<string, unknown>,
     onProgress?: ProgressCallback,
   ): Promise<Omit<ExecutionResult, 'latency_ms'>> {
+    const skillTimeoutMs = typeof config.timeout_ms === 'number' ? config.timeout_ms : undefined;
+
     // Extract conductor_skill from config
     const conductorSkill = (config as { conductor_skill?: string }).conductor_skill;
 
@@ -132,7 +134,7 @@ export class ConductorMode implements ExecutorMode {
               decomposition_depth: decompositionDepth + 1,
               orchestration_depth: orchestrationDepth + 1,
             },
-            timeoutMs: 30_000,
+            timeoutMs: skillTimeoutMs ?? 30_000,
           });
           // Validate and normalize external decomposition output (Plan 50-02).
           // If validation fails, fall through to Rule Engine.
@@ -224,6 +226,7 @@ export class ConductorMode implements ExecutorMode {
       matches: matchMap,
       gatewayToken: this.gatewayToken,
       resolveAgentUrl: this.resolveAgentUrl,
+      timeoutMs: skillTimeoutMs,
       maxBudget: this.maxBudget,
       team,
     });

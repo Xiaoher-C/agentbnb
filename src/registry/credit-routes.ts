@@ -14,7 +14,7 @@ export interface CreditRoutesOptions {
 /**
  * Fastify plugin that registers all 6 credit API endpoints behind Ed25519 identity auth.
  *
- * Routes (all require valid X-Agent-PublicKey/Signature/Timestamp headers):
+ * Routes (all require valid X-Agent-Id/PublicKey/Signature/Timestamp headers):
  *   POST /api/credits/hold       — Hold credits in escrow during capability execution
  *   POST /api/credits/settle     — Transfer held credits to provider on success
  *   POST /api/credits/release    — Refund held credits to requester on failure
@@ -53,7 +53,7 @@ export async function creditRoutesPlugin(
   // Register all credit routes in a scoped block with identity auth
   await fastify.register(async (scope) => {
     // Apply Ed25519 identity auth hook to this scope
-    identityAuthPlugin(scope);
+    identityAuthPlugin(scope, { agentDb: creditDb });
 
     /**
      * POST /api/credits/hold

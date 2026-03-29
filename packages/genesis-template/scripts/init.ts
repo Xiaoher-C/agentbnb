@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 import prompts from 'prompts';
-import Handlebars from 'handlebars';
 import { readFileSync, writeFileSync, mkdirSync, cpSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execSync } from 'node:child_process';
+import { renderTemplate } from './template-render.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const TEMPLATES_DIR = join(__dirname, '../templates');
@@ -52,8 +52,7 @@ async function main() {
   const templates = ['SOUL.md', 'HEARTBEAT.md', 'openclaw.plugin.json'];
   for (const tmplName of templates) {
     const tmplSrc = readFileSync(join(TEMPLATES_DIR, `${tmplName}.hbs`), 'utf8');
-    const compiled = Handlebars.compile(tmplSrc);
-    const output = compiled(templateVars);
+    const output = renderTemplate(tmplSrc, templateVars);
     writeFileSync(join(outputDir, tmplName), output, 'utf8');
     console.log(`  Generated ${tmplName}`);
   }

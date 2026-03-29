@@ -175,7 +175,7 @@ export function listAgentsByOperator(
 export function updateAgentRecord(
   db: Database.Database,
   agentId: string,
-  updates: Partial<Pick<AgentRecord, 'display_name' | 'operator_id' | 'server_id'>>,
+  updates: Partial<Pick<AgentRecord, 'display_name' | 'operator_id' | 'server_id' | 'legacy_owner'>>,
 ): void {
   const fields: string[] = [];
   const values: unknown[] = [];
@@ -191,6 +191,10 @@ export function updateAgentRecord(
   if (updates.server_id !== undefined) {
     fields.push('server_id = ?');
     values.push(updates.server_id);
+  }
+  if (updates.legacy_owner !== undefined) {
+    fields.push('legacy_owner = ?');
+    values.push(updates.legacy_owner);
   }
 
   if (fields.length === 0) return;
@@ -225,6 +229,8 @@ export function resolveIdentifier(
   db: Database.Database,
   identifier: string,
 ): string {
+  ensureAgentsTable(db);
+
   // Fast path: looks like an agent_id (16-char hex)
   if (/^[a-f0-9]{16}$/.test(identifier)) {
     const agent = lookupAgent(db, identifier);
@@ -237,4 +243,91 @@ export function resolveIdentifier(
 
   // Fallback: return as-is (unregistered agent, backward compat)
   return identifier;
+}
+
+/**
+ * Canonical identity resolution result for owner/agent_id bridge flows.
+ */
+export interface CanonicalIdentity {
+  /** Canonical agent identifier when resolved; otherwise returns input identifier. */
+  agent_id: string;
+  /** Legacy owner associated with the resolved agent, if any. */
+  legacy_owner: string | null;
+  /** Whether the identifier was resolved through the agents table. */
+  resolved: boolean;
+  /** How resolution succeeded (or failed). */
+  source: 'agent_id' | 'legacy_owner' | 'unresolved';
+}
+
+/**
+ * Resolves an identifier that may be either a canonical agent_id or a legacy owner.
+ *
+ * Unlike resolveIdentifier(), this returns richer metadata used by migration-safe
+ * routing logic. When no row is found, the input is echoed as-is with `resolved=false`.
+ *
+ * @param db - Database instance with agents table.
+ * @param identifier - Either agent_id or legacy owner string.
+ * @returns Canonical identity resolution result.
+ */
+export function resolveCanonicalIdentity(
+  db: Database.Database,
+  identifier: string,
+): CanonicalIdentity {
+  ensureAgentsTable(db);
+
+  if (/^[a-f0-9]{16}$/.test(identifier)) {
+    const byAgentId = lookupAgent(db, identifier);
+    if (byAgentId) {
+      return {
+        agent_id: byAgentId.agent_id,
+        legacy_owner: byAgentId.legacy_owner,
+        resolved: true,
+        source: 'agent_id',
+      };
+    }
+  }
+
+  const byOwner = lookupAgentByOwner(db, identifier);
+  if (byOwner) {
+    return {
+      agent_id: byOwner.agent_id,
+      legacy_owner: byOwner.legacy_owner,
+      resolved: true,
+      source: 'legacy_owner',
+    };
+  }
+
+  return {
+    agent_id: identifier,
+    legacy_owner: null,
+    resolved: false,
+    source: 'unresolved',
+  };
+}
+
+/**
+ * Checks whether two identifiers refer to the same canonical agent.
+ *
+ * Resolution strategy:
+ * - If both identifiers resolve, compare canonical agent_id.
+ * - Otherwise, fall back to exact string equality for backward compatibility.
+ *
+ * @param db - Database instance with agents table.
+ * @param left - First identifier (owner or agent_id).
+ * @param right - Second identifier (owner or agent_id).
+ * @returns True when both identify the same agent.
+ */
+export function sameAgentIdentity(
+  db: Database.Database,
+  left: string,
+  right: string,
+): boolean {
+  const leftResolved = resolveCanonicalIdentity(db, left);
+  const rightResolved = resolveCanonicalIdentity(db, right);
+
+  if (leftResolved.resolved && rightResolved.resolved) {
+    return leftResolved.agent_id === rightResolved.agent_id;
+  }
+
+  return left === right;
 }

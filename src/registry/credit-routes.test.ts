@@ -5,6 +5,8 @@ import { openDatabase } from './store.js';
 import { openCreditDb, bootstrapAgent } from '../credit/ledger.js';
 import { generateKeyPair } from '../credit/signing.js';
 import { signRequest } from './identity-auth.js';
+import { createAgentRecord } from '../identity/agent-identity.js';
+import { deriveAgentId } from '../identity/identity.js';
 import type Database from 'better-sqlite3';
 
 describe('credit routes', () => {
@@ -21,6 +23,13 @@ describe('credit routes', () => {
   beforeEach(async () => {
     const registryDb = openDatabase(':memory:');
     creditDb = openCreditDb(':memory:');
+
+    createAgentRecord(creditDb, {
+      agent_id: deriveAgentId(publicKeyHex),
+      display_name: 'alice-agent',
+      public_key: publicKeyHex,
+      legacy_owner: 'alice',
+    });
 
     const { server: s } = createRegistryServer({
       registryDb,
@@ -139,7 +148,7 @@ describe('credit routes', () => {
 
   // Test 5: POST /api/credits/grant gives 50 credits on first call
   it('POST /api/credits/grant gives 50 credits on first call', async () => {
-    const body = { owner: 'charlie' };
+    const body = { owner: 'alice' };
     const response = await server.inject({
       method: 'POST',
       url: '/api/credits/grant',
@@ -156,7 +165,7 @@ describe('credit routes', () => {
 
   // Test 6: POST /api/credits/grant on second call returns already_granted
   it('POST /api/credits/grant deduplicates by Ed25519 public key', async () => {
-    const body = { owner: 'dave' };
+    const body = { owner: 'alice' };
     const headers = authHeaders('POST', '/api/credits/grant', body);
 
     // First grant

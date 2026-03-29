@@ -4,8 +4,14 @@ import type { AnyCard, CapabilityCard, CapabilityCardV2 } from '../types/index.j
 import { createRequestLogTable } from './request-log.js';
 import { initFeedbackTable } from '../feedback/store.js';
 import { initEvolutionTable } from '../evolution/store.js';
+import { ensureAgentsTable, resolveCanonicalIdentity } from '../identity/agent-identity.js';
 
 export type { Database };
+
+interface AgentScopedCard {
+  owner: string;
+  agent_id?: string;
+}
 
 /**
  * SQL for the v2.0 FTS5 triggers that aggregate over skills[] using json_each.
@@ -257,6 +263,7 @@ export function openDatabase(path = ':memory:'): Database.Database {
 
   // Create request_log table (adds skill_id column idempotently)
   createRequestLogTable(db);
+  ensureAgentsTable(db);
 
   // Create feedback table and indexes
   initFeedbackTable(db);
@@ -453,7 +460,11 @@ function rebuildCardsFts(db: Database.Database): void {
  */
 export function insertCard(db: Database.Database, card: CapabilityCard): void {
   const now = new Date().toISOString();
-  const withTimestamps = { ...card, created_at: card.created_at ?? now, updated_at: now };
+  const withTimestamps = attachCanonicalAgentId(db, {
+    ...card,
+    created_at: card.created_at ?? now,
+    updated_at: now,
+  });
 
   const parsed = CapabilityCardSchema.safeParse(withTimestamps);
   if (!parsed.success) {
@@ -493,6 +504,49 @@ export function getCard(db: Database.Database, id: string): CapabilityCard | nul
 }
 
 /**
+ * Ensures stored cards carry the canonical top-level agent_id whenever the
+ * owner can be resolved through the local agents table.
+ */
+export function attachCanonicalAgentId<T extends AgentScopedCard>(
+  db: Database.Database,
+  card: T,
+): T {
+  const resolved = resolveCanonicalIdentity(db, card.owner);
+  if (!resolved.resolved) {
+    return card;
+  }
+
+  if (card.agent_id === resolved.agent_id) {
+    return card;
+  }
+
+  return {
+    ...card,
+    agent_id: resolved.agent_id,
+  };
+}
+
+function canManageCardByIdentifier(
+  db: Database.Database,
+  card: CapabilityCard,
+  identifier: string,
+): boolean {
+  if (card.owner === identifier) return true;
+
+  const requester = resolveCanonicalIdentity(db, identifier);
+  if (!requester.resolved) {
+    return typeof card.agent_id === 'string' && card.agent_id.length > 0 && card.agent_id === identifier;
+  }
+
+  if (typeof card.agent_id === 'string' && card.agent_id.length > 0) {
+    return requester.agent_id === card.agent_id;
+  }
+
+  const cardOwnerIdentity = resolveCanonicalIdentity(db, card.owner);
+  return cardOwnerIdentity.resolved && cardOwnerIdentity.agent_id === requester.agent_id;
+}
+
+/**
  * Updates a CapabilityCard with partial data. Verifies owner before updating.
  * Re-validates the merged result via Zod schema.
  *
@@ -514,12 +568,12 @@ export function updateCard(
   if (!existing) {
     throw new AgentBnBError(`Card not found: ${id}`, 'NOT_FOUND');
   }
-  if (existing.owner !== owner) {
+  if (!canManageCardByIdentifier(db, existing, owner)) {
     throw new AgentBnBError('Forbidden: you do not own this card', 'FORBIDDEN');
   }
 
   const now = new Date().toISOString();
-  const merged = { ...existing, ...updates, updated_at: now };
+  const merged = attachCanonicalAgentId(db, { ...existing, ...updates, updated_at: now });
 
   const parsed = AnyCardSchema.safeParse(merged);
   if (!parsed.success) {
@@ -552,7 +606,7 @@ export function deleteCard(db: Database.Database, id: string, owner: string): vo
   if (!existing) {
     throw new AgentBnBError(`Card not found: ${id}`, 'NOT_FOUND');
   }
-  if (existing.owner !== owner) {
+  if (!canManageCardByIdentifier(db, existing, owner)) {
     throw new AgentBnBError('Forbidden: you do not own this card', 'FORBIDDEN');
   }
 
@@ -713,18 +767,44 @@ export function updateSkillIdleRate(
  * @returns Array of CapabilityCard objects.
  */
 export function listCards(db: Database.Database, owner?: string): CapabilityCard[] {
-  let stmt: Database.Statement;
-  let rows: Array<{ data: string }>;
-
-  if (owner !== undefined) {
-    stmt = db.prepare('SELECT data FROM capability_cards WHERE owner = ?');
-    rows = stmt.all(owner) as Array<{ data: string }>;
-  } else {
-    stmt = db.prepare('SELECT data FROM capability_cards');
-    rows = stmt.all() as Array<{ data: string }>;
+  if (owner === undefined) {
+    const rows = db.prepare('SELECT data FROM capability_cards').all() as Array<{ data: string }>;
+    return rows.map((row) => JSON.parse(row.data) as CapabilityCard);
   }
 
-  return rows.map((row) => JSON.parse(row.data) as CapabilityCard);
+  const filtered = new Map<string, CapabilityCard>();
+  const resolved = resolveCanonicalIdentity(db, owner);
+  const ownerAliases = new Set<string>([owner]);
+  if (resolved.legacy_owner) {
+    ownerAliases.add(resolved.legacy_owner);
+  }
+
+  for (const alias of ownerAliases) {
+    const aliasRows = db.prepare('SELECT data FROM capability_cards WHERE owner = ?').all(alias) as Array<{
+      data: string;
+    }>;
+    for (const row of aliasRows) {
+      const parsed = JSON.parse(row.data) as CapabilityCard;
+      filtered.set(parsed.id, parsed);
+    }
+  }
+
+  const agentIdentifiers = new Set<string>([owner]);
+  if (resolved.resolved) {
+    agentIdentifiers.add(resolved.agent_id);
+  }
+
+  for (const agentIdentifier of agentIdentifiers) {
+    const agentRows = db
+      .prepare("SELECT data FROM capability_cards WHERE json_extract(data, '$.agent_id') = ?")
+      .all(agentIdentifier) as Array<{ data: string }>;
+    for (const row of agentRows) {
+      const parsed = JSON.parse(row.data) as CapabilityCard;
+      filtered.set(parsed.id, parsed);
+    }
+  }
+
+  return [...filtered.values()];
 }
 
 /**

@@ -10,17 +10,46 @@ import type { AddressInfo } from 'node:net';
 /** Helpers */
 function waitForOpen(ws: WebSocket): Promise<void> {
   return new Promise((resolve, reject) => {
-    if (ws.readyState === WebSocket.OPEN) return resolve();
-    ws.on('open', resolve);
-    ws.on('error', reject);
+    if (ws.readyState === WebSocket.OPEN) {
+      resolve();
+      return;
+    }
+
+    const handleOpen = () => {
+      cleanup();
+      resolve();
+    };
+    const handleError = (error: Error) => {
+      cleanup();
+      reject(error);
+    };
+    const cleanup = () => {
+      ws.off('open', handleOpen);
+      ws.off('error', handleError);
+    };
+
+    ws.on('open', handleOpen);
+    ws.on('error', handleError);
   });
 }
 
 function waitForMessage(ws: WebSocket): Promise<Record<string, unknown>> {
-  return new Promise((resolve) => {
-    ws.once('message', (raw) => {
+  return new Promise((resolve, reject) => {
+    const handleMessage = (raw: WebSocket.RawData) => {
+      cleanup();
       resolve(JSON.parse(raw.toString()) as Record<string, unknown>);
-    });
+    };
+    const handleError = (error: Error) => {
+      cleanup();
+      reject(error);
+    };
+    const cleanup = () => {
+      ws.off('message', handleMessage);
+      ws.off('error', handleError);
+    };
+
+    ws.on('message', handleMessage);
+    ws.on('error', handleError);
   });
 }
 
@@ -45,9 +74,30 @@ describe('WebSocket Relay', () => {
   });
 
   afterEach(async () => {
-    for (const ws of clients) {
-      try { ws.close(); } catch { /* ignore */ }
-    }
+    await Promise.all(
+      clients.map(
+        (ws) =>
+          new Promise<void>((resolve) => {
+            if (ws.readyState === WebSocket.CLOSED) {
+              resolve();
+              return;
+            }
+
+            const timeout = setTimeout(resolve, 500);
+            const finish = () => resolve();
+            ws.once('close', () => {
+              clearTimeout(timeout);
+              finish();
+            });
+            try {
+              ws.close();
+            } catch {
+              clearTimeout(timeout);
+              resolve();
+            }
+          }),
+      ),
+    );
     clients.length = 0;
     relayState.shutdown();
     await server.close();
@@ -60,15 +110,19 @@ describe('WebSocket Relay', () => {
     return ws;
   }
 
-  async function registerAgent(owner: string): Promise<WebSocket> {
+  async function registerAgent(
+    owner: string,
+    opts: { agentId?: string; card?: Record<string, unknown> } = {},
+  ): Promise<WebSocket> {
     const ws = connect();
     await waitForOpen(ws);
     const responsePromise = waitForMessage(ws);
     send(ws, {
       type: 'register',
       owner,
+      ...(opts.agentId ? { agent_id: opts.agentId } : {}),
       token: 'test-token',
-      card: {
+      card: opts.card ?? {
         spec_version: '1.0',
         id: crypto.randomUUID(),
         owner,
@@ -176,6 +230,39 @@ describe('WebSocket Relay', () => {
     expect(response.id).toBe(requestId);
     expect((response.result as Record<string, unknown>).audio).toBe('base64...');
     expect(response.error).toBeUndefined();
+  });
+
+  it('routes relay requests by target_agent_id even when owner lookup differs', async () => {
+    const wsRequester = await registerAgent('requester-owner');
+    const wsProvider = await registerAgent('provider-owner', { agentId: 'provider-agent-id' });
+
+    const requestId = crypto.randomUUID();
+    const incomingPromise = waitForMessage(wsProvider);
+    const responsePromise = waitForMessage(wsRequester);
+
+    send(wsRequester, {
+      type: 'relay_request',
+      id: requestId,
+      target_owner: 'stale-owner-alias',
+      target_agent_id: 'provider-agent-id',
+      card_id: 'some-card',
+      params: { text: 'hello via agent id' },
+    });
+
+    const incoming = await incomingPromise;
+    expect(incoming.type).toBe('incoming_request');
+    expect(incoming.id).toBe(requestId);
+    expect((incoming.params as Record<string, unknown>).text).toBe('hello via agent id');
+
+    send(wsProvider, {
+      type: 'relay_response',
+      id: requestId,
+      result: { ok: true },
+    });
+
+    const response = await responsePromise;
+    expect(response.type).toBe('response');
+    expect((response.result as Record<string, unknown>).ok).toBe(true);
   });
 
   it('returns error when target agent is offline', async () => {
@@ -435,6 +522,20 @@ describe('WebSocket Relay', () => {
     expect(card.skills).toHaveLength(1);
     expect(card.skills[0].id).toBe('tts-elevenlabs');
     expect(card.availability.online).toBe(true);
+
+    ws.close();
+  });
+
+  it('stores relay-registered cards with the canonical agent_id from the register message', async () => {
+    const ws = await registerAgent('agent-v2-canonical', {
+      agentId: '1234567890abcdef',
+      card: makeV2Card('agent-v2-canonical'),
+    });
+
+    const row = db.prepare('SELECT data FROM capability_cards WHERE owner = ?').get('agent-v2-canonical') as { data: string } | undefined;
+    expect(row).toBeDefined();
+    const card = JSON.parse(row!.data);
+    expect(card.agent_id).toBe('1234567890abcdef');
 
     ws.close();
   });

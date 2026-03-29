@@ -141,7 +141,7 @@ describe('OpenClawBridge — process channel', () => {
     vi.restoreAllMocks();
   });
 
-  it('spawns openclaw agent command with JSON message', async () => {
+  it('spawns openclaw agent command with a contextual rental request message', async () => {
     const execFileSyncSpy = vi
       .spyOn(child_process, 'execFileSync')
       .mockReturnValue(Buffer.from(JSON.stringify({ result: 'done' })));
@@ -157,6 +157,9 @@ describe('OpenClawBridge — process channel', () => {
     expect(args[1]).toBe('--agent');
     expect(args[2]).toBe('my-agent');
     expect(args[3]).toBe('--message');
+    expect(args[4]).toContain('[AgentBnB Rental Request]');
+    expect(args[4]).toContain('skills/test-skill/SKILL.md');
+    expect(args[4]).toContain('"key": "value"');
     expect(args[5]).toBe('--json');
     expect(args[6]).toBe('--local');
 
@@ -164,14 +167,15 @@ describe('OpenClawBridge — process channel', () => {
     expect(result.result).toEqual({ result: 'done' });
   });
 
-  it('passes task payload as JSON in --message flag', async () => {
+  it('passes a contextual AgentBnB rental prompt in --message', async () => {
     vi.spyOn(child_process, 'execFileSync').mockImplementation((_cmd: unknown, args: unknown) => {
       const argArr = args as string[];
       const msgIdx = argArr.indexOf('--message');
       if (msgIdx === -1) throw new Error('No --message found in args');
-      const payload = JSON.parse(argArr[msgIdx + 1]!) as Record<string, unknown>;
-      expect(payload.task).toBe('Test Skill');
-      expect(payload.source).toBe('agentbnb');
+      const message = argArr[msgIdx + 1]!;
+      expect(message).toContain('[AgentBnB Rental Request]');
+      expect(message).toContain('test-skill');
+      expect(message).toContain('"prompt": "hello"');
       return Buffer.from(JSON.stringify({ output: 'ok' }));
     });
 
@@ -193,15 +197,15 @@ describe('OpenClawBridge — process channel', () => {
     expect(result.error).toMatch(/Command not found/);
   });
 
-  it('returns raw text when stdout is not valid JSON', async () => {
+  it('returns error when stdout is not valid JSON', async () => {
     vi.spyOn(child_process, 'execFileSync').mockReturnValue(Buffer.from('not json'));
 
     const bridge = new OpenClawBridge();
     const config = makeConfig({ channel: 'process' });
     const result = await bridge.execute(config, {});
 
-    expect(result.success).toBe(true);
-    expect(result.result).toEqual({ text: 'not json' });
+    expect(result.success).toBe(false);
+    expect(result.error).toMatch(/invalid json/i);
   });
 });
 

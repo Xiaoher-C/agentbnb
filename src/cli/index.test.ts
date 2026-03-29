@@ -27,6 +27,44 @@ function runCli(args: string, agentbnbDir: string): { stdout: string; stderr: st
   }
 }
 
+async function stopChildProcess(child: ChildProcess | undefined): Promise<void> {
+  if (!child || child.exitCode !== null) {
+    return;
+  }
+
+  const waitForExit = new Promise<void>((resolve) => {
+    const finish = () => resolve();
+    child.once('exit', finish);
+    child.once('error', finish);
+  });
+
+  try {
+    child.kill('SIGTERM');
+  } catch {
+    return;
+  }
+
+  await Promise.race([
+    waitForExit,
+    new Promise<void>((resolve) => setTimeout(resolve, 1_000)),
+  ]);
+
+  if (child.exitCode !== null) {
+    return;
+  }
+
+  try {
+    child.kill('SIGKILL');
+  } catch {
+    return;
+  }
+
+  await Promise.race([
+    waitForExit,
+    new Promise<void>((resolve) => setTimeout(resolve, 500)),
+  ]);
+}
+
 /** Creates a minimal valid CapabilityCard JSON for testing. */
 function makeCardJson(id: string, name: string): string {
   return JSON.stringify({
@@ -281,6 +319,20 @@ describe('CLI: request', () => {
     expect(status).toBe(1);
     expect(stderr).toContain('valid JSON');
   });
+
+  it('request --help shows --timeout option', () => {
+    runCli('init --owner req-agent', tmpDir);
+    const { status, stdout } = runCli('request --help', tmpDir);
+    expect(status).toBe(0);
+    expect(stdout).toContain('--timeout');
+  });
+
+  it('exits with error for non-numeric --timeout', () => {
+    runCli('init --owner req-agent', tmpDir);
+    const { status, stderr } = runCli('request some-card-id --timeout nope', tmpDir);
+    expect(status).toBe(1);
+    expect(stderr).toContain('--timeout <ms> must be a positive number');
+  });
 });
 
 describe('CLI: serve --registry-port', () => {
@@ -523,7 +575,7 @@ describe('CLI: --help', () => {
 describe('CLI: discover --registry (integration)', () => {
   let tmpDir: string;
   let port: number;
-  let serverProcess: ChildProcess;
+  let serverProcess: ChildProcess | undefined;
 
   beforeEach(async () => {
     tmpDir = mkdtempSync(join(tmpdir(), 'agentbnb-registry-test-'));
@@ -536,20 +588,37 @@ describe('CLI: discover --registry (integration)', () => {
     const serverScript = join(import.meta.dirname ?? __dirname, 'test-registry-server.ts');
 
     await new Promise<void>((resolve, reject) => {
+      let poll: ReturnType<typeof setInterval> | undefined;
+      const fail = (error: Error) => {
+        cleanup();
+        reject(error);
+      };
+      const handleExit = () => {
+        fail(new Error('Registry server exited before it reported a port'));
+      };
+      const cleanup = () => {
+        if (poll) {
+          clearInterval(poll);
+        }
+        serverProcess?.off('error', fail);
+        serverProcess?.off('exit', handleExit);
+      };
+
       serverProcess = spawn('npx', ['tsx', serverScript, portFile], {
         stdio: 'ignore',
         detached: false,
       });
 
-      serverProcess.on('error', reject);
+      serverProcess.on('error', fail);
+      serverProcess.on('exit', handleExit);
 
       // Poll for port file to appear (server ready signal)
       const deadline = Date.now() + 10_000;
-      const poll = setInterval(() => {
+      poll = setInterval(() => {
         try {
           const content = readFileSync(portFile, 'utf-8').trim();
           if (content.length > 0) {
-            clearInterval(poll);
+            cleanup();
             port = parseInt(content, 10);
             resolve();
           }
@@ -557,15 +626,14 @@ describe('CLI: discover --registry (integration)', () => {
           // File not yet written
         }
         if (Date.now() > deadline) {
-          clearInterval(poll);
-          reject(new Error('Registry server did not start within 10s'));
+          fail(new Error('Registry server did not start within 10s'));
         }
       }, 50);
     });
   });
 
-  afterEach(() => {
-    serverProcess.kill('SIGTERM');
+  afterEach(async () => {
+    await stopChildProcess(serverProcess);
     rmSync(tmpDir, { recursive: true, force: true });
   });
 
@@ -693,7 +761,7 @@ describe('CLI: discover --registry (integration)', () => {
 describe('CLI: serve — registry server with API key', () => {
   let tmpDir: string;
   let registryPort: number;
-  let serveProcess: ChildProcess;
+  let serveProcess: ChildProcess | undefined;
 
   beforeEach(async () => {
     tmpDir = mkdtempSync(join(tmpdir(), 'agentbnb-serve-test-'));
@@ -720,23 +788,43 @@ describe('CLI: serve — registry server with API key', () => {
 
     // Wait for registry server to be ready
     await new Promise<void>((resolve, reject) => {
-      const timeout = setTimeout(() => reject(new Error('Registry server did not start in time')), 10000);
+      let timeout: ReturnType<typeof setTimeout> | undefined;
+      let pollTimer: ReturnType<typeof setTimeout> | undefined;
+      const fail = (error: Error) => {
+        cleanup();
+        reject(error);
+      };
+      const handleExit = () => {
+        fail(new Error('Registry server exited before healthcheck succeeded'));
+      };
+      const cleanup = () => {
+        if (timeout) {
+          clearTimeout(timeout);
+        }
+        if (pollTimer) {
+          clearTimeout(pollTimer);
+        }
+        serveProcess?.off('error', fail);
+        serveProcess?.off('exit', handleExit);
+      };
       const check = () => {
         try {
           execSync(`curl -sf http://127.0.0.1:${registryPort}/health`, { timeout: 500 });
-          clearTimeout(timeout);
+          cleanup();
           resolve();
         } catch {
-          setTimeout(check, 200);
+          pollTimer = setTimeout(check, 200);
         }
       };
-      setTimeout(check, 500);
+      serveProcess.on('error', fail);
+      serveProcess.on('exit', handleExit);
+      timeout = setTimeout(() => fail(new Error('Registry server did not start in time')), 10000);
+      pollTimer = setTimeout(check, 500);
     });
   });
 
   afterEach(async () => {
-    serveProcess.kill('SIGTERM');
-    await new Promise<void>((resolve) => setTimeout(resolve, 300));
+    await stopChildProcess(serveProcess);
     rmSync(tmpDir, { recursive: true, force: true });
   });
 

@@ -3,6 +3,7 @@ import Database from 'better-sqlite3';
 import { openCreditDb, bootstrapAgent, getBalance } from '../credit/ledger.js';
 import { generateKeyPair } from '../credit/signing.js';
 import { signEscrowReceipt } from '../credit/signing.js';
+import { markEscrowStarted, markEscrowAbandoned } from '../credit/escrow.js';
 import {
   processEscrowHold,
   processEscrowSettle,
@@ -104,6 +105,19 @@ describe('relay-escrow', () => {
       // floor(5% of 5) = 0, no minimum in settleEscrow
       expect(result.network_fee).toBe(0);
       expect(result.provider_earned).toBe(5);
+    });
+
+    it('settles escrows that reached abandoned state', () => {
+      const hold = processEscrowHold(
+        db, 'consumer-1', 'provider-1', 'tts', 20, crypto.randomUUID(),
+      );
+
+      markEscrowStarted(db, hold.escrow_id);
+      markEscrowAbandoned(db, hold.escrow_id);
+
+      const result = processEscrowSettle(db, hold.escrow_id, true, 'provider-1');
+      expect(result.escrow_id).toBe(hold.escrow_id);
+      expect(result.provider_earned).toBeGreaterThan(0);
     });
   });
 

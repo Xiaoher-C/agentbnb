@@ -11,7 +11,7 @@
 import { join, basename, dirname } from 'node:path';
 import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { spawnSync, exec } from 'node:child_process';
+import { exec } from 'node:child_process';
 import { promisify } from 'node:util';
 import { randomUUID } from 'node:crypto';
 
@@ -51,6 +51,7 @@ import { getConfigDir, loadConfig } from '../../src/cli/config.js';
 import { AgentBnBError } from '../../src/types/index.js';
 import { ProcessGuard } from '../../src/runtime/process-guard.js';
 import { ServiceCoordinator } from '../../src/runtime/service-coordinator.js';
+import { resolveSelfCli } from '../../src/runtime/resolve-self-cli.js';
 import type { ServiceOptions, ServiceStatus } from '../../src/runtime/service-coordinator.js';
 import { AgentBnBService } from '../../src/app/agentbnb-service.js';
 import { openDatabase } from '../../src/registry/store.js';
@@ -174,15 +175,15 @@ function registerDecomposerCard(configDir: string, owner: string): void {
 }
 
 /**
- * Checks if the `agentbnb` CLI is available in PATH.
- * @returns Absolute path to the CLI, or null if not found.
+ * Checks if the `agentbnb` CLI can be resolved to an absolute executable path.
+ * @returns Absolute path to the CLI, or null if resolution fails.
  */
 export function findCli(): string | null {
-  const result = spawnSync('which', ['agentbnb'], { encoding: 'utf-8', stdio: 'pipe' });
-  if (result.status === 0 && result.stdout.trim()) {
-    return result.stdout.trim();
+  try {
+    return resolveSelfCli();
+  } catch {
+    return null;
   }
-  return null;
 }
 
 /**
@@ -222,32 +223,35 @@ function deriveAgentName(configDir: string): string {
  */
 /** Injectable dependencies for autoOnboard (test seam). */
 export interface OnboardDeps {
-  findCli: () => string | null;
+  resolveSelfCli: () => string;
   runCommand: (cmd: string, env: Record<string, string | undefined>) => Promise<{ stdout: string; stderr: string }>;
 }
 
 /** Default production dependencies. */
-const defaultDeps: OnboardDeps = { findCli, runCommand };
+const defaultDeps: OnboardDeps = { resolveSelfCli, runCommand };
 
 async function autoOnboard(configDir: string, deps: OnboardDeps = defaultDeps): Promise<import('./../../src/cli/config.js').AgentBnBConfig> {
   process.stderr.write('[agentbnb] First-time setup: initializing agent identity...\n');
 
   // Step 0: Check CLI exists
-  const cliPath = deps.findCli();
-  if (!cliPath) {
+  let cliPath: string;
+  try {
+    cliPath = deps.resolveSelfCli();
+  } catch {
     process.stderr.write('[agentbnb] CLI not found. Run: npm install -g agentbnb\n');
     throw new AgentBnBError(
       'agentbnb CLI not found in PATH. Install with: npm install -g agentbnb',
       'INIT_FAILED',
     );
   }
+  const quotedCliPath = quoteShellArg(cliPath);
 
   const env = { ...process.env, AGENTBNB_DIR: configDir };
   const agentName = deriveAgentName(configDir);
 
   // Step 1: Initialize identity (keypair + config.json + credit bootstrap)
   try {
-    await deps.runCommand(`agentbnb init --owner "${agentName}" --yes --no-detect`, env);
+    await deps.runCommand(`${quotedCliPath} init --owner "${agentName}" --yes --no-detect`, env);
     process.stderr.write(`[agentbnb] Agent "${agentName}" initialized.\n`);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -256,7 +260,7 @@ async function autoOnboard(configDir: string, deps: OnboardDeps = defaultDeps): 
 
   // Step 2: Publish capabilities from SOUL.md (if it exists)
   try {
-    await deps.runCommand('agentbnb openclaw sync', env);
+    await deps.runCommand(`${quotedCliPath} openclaw sync`, env);
     process.stderr.write('[agentbnb] Capabilities published from SOUL.md.\n');
   } catch {
     // Non-fatal: SOUL.md may not exist yet, or sync may fail for other reasons.
@@ -274,6 +278,10 @@ async function autoOnboard(configDir: string, deps: OnboardDeps = defaultDeps): 
 
   process.stderr.write('[agentbnb] Agent initialized and published to AgentBnB network.\n');
   return config;
+}
+
+function quoteShellArg(input: string): string {
+  return `'${input.replace(/'/g, `'\\''`)}'`;
 }
 
 /**

@@ -212,9 +212,23 @@ export class RelayClient {
   }
 
   /**
+   * Send a relay_started message to acknowledge that provider has started work.
+   *
+   * @param requestId - The relay request ID being processed.
+   * @param message - Optional status message.
+   */
+  sendStarted(requestId: string, message?: string): void {
+    this.send({
+      type: 'relay_started',
+      id: requestId,
+      ...(message ? { message } : {}),
+    });
+  }
+
+  /**
    * Send a relay_progress message to the relay server for a given request.
    * Used by the onRequest handler to forward SkillExecutor progress updates
-   * to the requesting agent so it can reset its timeout window.
+   * to the requesting agent while work is in-flight.
    *
    * @param requestId - The relay request ID to associate progress with.
    * @param info - Progress details (step, total, message).

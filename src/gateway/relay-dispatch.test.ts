@@ -23,7 +23,6 @@ import { RelayClient } from '../relay/websocket-client.js';
 describe('requestViaTemporaryRelay', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    // Re-set mock implementations after clearAllMocks resets them
     vi.mocked(RelayClient).mockImplementation(() => ({
       connect: relayConnectMock,
       disconnect: relayDisconnectMock,
@@ -51,8 +50,6 @@ describe('requestViaTemporaryRelay', () => {
     });
 
     expect(result).toEqual({ summary: 'ok' });
-
-    // RelayClient constructor called with ephemeral :req: owner
     expect(RelayClient).toHaveBeenCalledWith(
       expect.objectContaining({
         registryUrl: 'http://registry.example.com',
@@ -61,8 +58,6 @@ describe('requestViaTemporaryRelay', () => {
         silent: true,
       }),
     );
-
-    // requestViaRelay called with actual owner as requester (not :req: id)
     expect(requestViaRelay).toHaveBeenCalledWith(
       expect.any(Object),
       expect.objectContaining({
@@ -74,10 +69,8 @@ describe('requestViaTemporaryRelay', () => {
       }),
     );
 
-    // No escrowReceipt sent
     const relayCall = vi.mocked(requestViaRelay).mock.calls[0]![1];
     expect(relayCall).not.toHaveProperty('escrowReceipt');
-
     expect(relayConnectMock).toHaveBeenCalledTimes(1);
     expect(relayDisconnectMock).toHaveBeenCalledTimes(1);
   });
@@ -96,7 +89,6 @@ describe('requestViaTemporaryRelay', () => {
       }),
     ).rejects.toThrow('Relay connection failed');
 
-    // disconnect always called even on connect failure
     expect(relayDisconnectMock).toHaveBeenCalledTimes(1);
   });
 
@@ -134,5 +126,34 @@ describe('requestViaTemporaryRelay', () => {
       expect.any(Object),
       expect.objectContaining({ timeoutMs: 60_000 }),
     );
+  });
+
+  it('forwards targetAgentId and requester owner to relay requests', async () => {
+    vi.mocked(requestViaRelay).mockResolvedValue({ ok: true });
+
+    const result = await requestViaTemporaryRelay({
+      registryUrl: 'https://registry.agentbnb.dev',
+      owner: 'requester-owner',
+      token: 'registry-token',
+      targetOwner: 'legacy-owner-alias',
+      targetAgentId: 'target-agent-id',
+      cardId: 'card-123',
+      skillId: 'skill-xyz',
+      params: { prompt: 'hello' },
+      timeoutMs: 12_345,
+    });
+
+    expect(result).toEqual({ ok: true });
+    expect(requestViaRelay).toHaveBeenCalledWith(
+      expect.any(Object),
+      expect.objectContaining({
+        targetOwner: 'legacy-owner-alias',
+        targetAgentId: 'target-agent-id',
+        requester: 'requester-owner',
+        timeoutMs: 12_345,
+      }),
+    );
+    expect(relayConnectMock).toHaveBeenCalledTimes(1);
+    expect(relayDisconnectMock).toHaveBeenCalledTimes(1);
   });
 });

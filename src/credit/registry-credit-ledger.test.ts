@@ -216,6 +216,7 @@ describe('RegistryCreditLedger (HTTP client mode)', () => {
       expect(body).toEqual({ owner: 'agent-alice', amount: 30, cardId: 'card-123' });
       expect((opts.headers as Record<string, string>)['Content-Type']).toBe('application/json');
       // Ed25519 auth headers
+      expect((opts.headers as Record<string, string>)['X-Agent-Id']).toBeDefined();
       expect((opts.headers as Record<string, string>)['X-Agent-PublicKey']).toBe(ownerPublicKey);
       expect((opts.headers as Record<string, string>)['X-Agent-Signature']).toBeDefined();
       expect((opts.headers as Record<string, string>)['X-Agent-Timestamp']).toBeDefined();
@@ -344,13 +345,14 @@ describe('RegistryCreditLedger (HTTP client mode)', () => {
   });
 
   describe('request headers (Ed25519 auth)', () => {
-    it('includes X-Agent-PublicKey, X-Agent-Signature, X-Agent-Timestamp on GET requests', async () => {
+    it('includes X-Agent-Id, X-Agent-PublicKey, X-Agent-Signature, X-Agent-Timestamp on GET requests', async () => {
       mockFetch.mockResolvedValueOnce(mockResponse({ balance: 0 }));
 
       await ledger.getBalance('agent-auth-test');
 
       const [, opts] = mockFetch.mock.calls[0] as [string, RequestInit];
       const headers = opts.headers as Record<string, string>;
+      expect(headers['X-Agent-Id']).toBeDefined();
       expect(headers['X-Agent-PublicKey']).toBe(ownerPublicKey);
       expect(headers['X-Agent-Signature']).toBeDefined();
       expect(headers['X-Agent-Timestamp']).toBeDefined();
@@ -358,13 +360,14 @@ describe('RegistryCreditLedger (HTTP client mode)', () => {
       expect(headers['X-Agent-Owner']).toBeUndefined();
     });
 
-    it('includes X-Agent-PublicKey, X-Agent-Signature, X-Agent-Timestamp on POST requests', async () => {
+    it('includes X-Agent-Id, X-Agent-PublicKey, X-Agent-Signature, X-Agent-Timestamp on POST requests', async () => {
       mockFetch.mockResolvedValueOnce(mockResponse({ escrowId: 'test-id' }));
 
       await ledger.hold('agent-auth-test', 10, 'card-test');
 
       const [, opts] = mockFetch.mock.calls[0] as [string, RequestInit];
       const headers = opts.headers as Record<string, string>;
+      expect(headers['X-Agent-Id']).toBeDefined();
       expect(headers['X-Agent-PublicKey']).toBe(ownerPublicKey);
       expect(headers['X-Agent-Signature']).toBeDefined();
       expect(headers['X-Agent-Timestamp']).toBeDefined();

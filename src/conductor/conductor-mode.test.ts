@@ -408,7 +408,8 @@ describe('ConductorMode — depth guards and network routing', () => {
     mockedOrchestrate.mockResolvedValue(orchResult);
 
     const mode = createMode();
-    const result = await mode.execute(orchestrateConfig as any, {
+    const timedConfig = { ...orchestrateConfig, timeout_ms: 45_000 };
+    const result = await mode.execute(timedConfig as any, {
       task: 'make a video',
       orchestration_depth: 0,
     });
@@ -422,10 +423,14 @@ describe('ConductorMode — depth guards and network routing', () => {
           decomposition_depth: 1,
           orchestration_depth: 1,
         }),
+        timeoutMs: 45_000,
       })
     );
     // decompose should NOT have been called (external succeeded)
     expect(mockedDecompose).not.toHaveBeenCalled();
+    expect(mockedOrchestrate).toHaveBeenCalledWith(expect.objectContaining({
+      timeoutMs: 45_000,
+    }));
   });
 
   it('Self-exclusion: conductor-owner card is excluded from decomposer candidates', async () => {

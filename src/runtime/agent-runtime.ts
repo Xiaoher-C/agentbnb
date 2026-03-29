@@ -1,6 +1,6 @@
 import { readFileSync, existsSync } from 'node:fs';
 import { Cron } from 'croner';
-import { openDatabase } from '../registry/store.js';
+import { openDatabase, listCards } from '../registry/store.js';
 import { openCreditDb } from '../credit/ledger.js';
 import { releaseEscrow } from '../credit/escrow.js';
 import type Database from 'better-sqlite3';
@@ -45,9 +45,9 @@ export interface RuntimeOptions {
 }
 
 /**
- * Represents a held escrow row from the credit_escrow table.
+ * Represents an escrow row selected for orphan recovery.
  */
-interface HeldEscrowRow {
+interface RecoverableEscrowRow {
   id: string;
 }
 
@@ -169,18 +169,21 @@ export class AgentRuntime {
       // Build resolveAgentUrl from loadPeers()
       const resolveAgentUrl = (owner: string): { url: string; cardId: string } => {
         const peers = loadPeers();
-        const peer = peers.find(p => p.name.toLowerCase() === owner.toLowerCase());
+        const matchingCards = listCards(this.registryDb, owner);
+        const candidateNames = new Set<string>([owner.toLowerCase()]);
+        for (const card of matchingCards) {
+          candidateNames.add(card.owner.toLowerCase());
+          if (typeof card.agent_id === 'string' && card.agent_id.length > 0) {
+            candidateNames.add(card.agent_id.toLowerCase());
+          }
+        }
+        const peer = peers.find(p => candidateNames.has(p.name.toLowerCase()));
         if (!peer) {
           throw new Error(
             `No peer found for agent owner "${owner}". Add with: agentbnb connect ${owner} <url> <token>`,
           );
         }
-        // Look up this peer's card ID from registry DB
-        const stmt = this.registryDb.prepare(
-          'SELECT id FROM capability_cards WHERE owner = ? LIMIT 1',
-        );
-        const row = stmt.get(owner) as { id: string } | undefined;
-        const cardId = row?.id ?? owner; // fallback to owner name if no card found
+        const cardId = matchingCards[0]?.id ?? owner;
         return { url: peer.url, cardId };
       };
 
@@ -233,7 +236,8 @@ export class AgentRuntime {
 
   /**
    * Recovers orphaned escrows by releasing them.
-   * Orphaned escrows are 'held' escrows older than the configured age threshold.
+   * Orphaned escrows are stale 'held' or 'abandoned' escrows older than the
+   * configured age threshold. In-flight started/progressing escrows are not touched.
    * Errors during individual release are swallowed (escrow may have settled between query and release).
    */
   private async recoverOrphanedEscrows(): Promise<void> {
@@ -243,9 +247,9 @@ export class AgentRuntime {
 
     const orphaned = this.creditDb
       .prepare(
-        "SELECT id FROM credit_escrow WHERE status = 'held' AND created_at < ?",
+        "SELECT id FROM credit_escrow WHERE status IN ('held', 'abandoned') AND created_at < ?",
       )
-      .all(cutoff) as HeldEscrowRow[];
+      .all(cutoff) as RecoverableEscrowRow[];
 
     for (const row of orphaned) {
       try {

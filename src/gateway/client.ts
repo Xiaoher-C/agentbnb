@@ -4,6 +4,10 @@ import { AgentBnBError } from '../types/index.js';
 import type { EscrowReceipt } from '../types/index.js';
 import { signEscrowReceipt } from '../credit/signing.js';
 
+export const REQUEST_TIMEOUT_FALLBACK_MS = 300_000;
+export const REQUEST_TIMEOUT_GRACE_MS = 30_000;
+export const REQUEST_TIMEOUT_EXPECTED_MULTIPLIER = 1.5;
+
 /**
  * Shared HTTP connection pool for gateway requests.
  * Reuses TCP connections across requests to the same host, eliminating
@@ -30,6 +34,38 @@ export interface IdentityAuth {
 }
 
 /**
+ * Timeout hints published by a provider card/skill.
+ */
+export interface RequestTimeoutHint {
+  /** Typical expected duration from provider metadata. */
+  expected_duration_ms?: number;
+  /** Provider-declared hard timeout from provider metadata. */
+  hard_timeout_ms?: number;
+}
+
+/**
+ * Derives requester timeout from provider-published metadata.
+ *
+ * Priority:
+ * 1. expected_duration_ms * 1.5 + grace buffer
+ * 2. hard_timeout_ms + grace buffer
+ * 3. fallback default
+ */
+export function deriveRequestTimeoutMs(hint?: RequestTimeoutHint): number {
+  const expectedDurationMs = hint?.expected_duration_ms;
+  if (typeof expectedDurationMs === 'number' && expectedDurationMs > 0) {
+    return Math.ceil(expectedDurationMs * REQUEST_TIMEOUT_EXPECTED_MULTIPLIER) + REQUEST_TIMEOUT_GRACE_MS;
+  }
+
+  const hardTimeoutMs = hint?.hard_timeout_ms;
+  if (typeof hardTimeoutMs === 'number' && hardTimeoutMs > 0) {
+    return Math.ceil(hardTimeoutMs) + REQUEST_TIMEOUT_GRACE_MS;
+  }
+
+  return REQUEST_TIMEOUT_FALLBACK_MS;
+}
+
+/**
  * Options for requesting a capability from a remote gateway.
  */
 export interface RequestOptions {
@@ -41,8 +77,10 @@ export interface RequestOptions {
   cardId: string;
   /** Input parameters for the capability. */
   params?: Record<string, unknown>;
-  /** Timeout in milliseconds. Default 30000. */
+  /** Timeout in milliseconds. Explicit override when provided. */
   timeoutMs?: number;
+  /** Provider timeout metadata used to derive default timeout when timeoutMs is omitted. */
+  timeoutHint?: RequestTimeoutHint;
   /** Signed escrow receipt for cross-machine credit verification. */
   escrowReceipt?: EscrowReceipt;
   /** Identity credentials for Ed25519-based auth. */
@@ -88,7 +126,17 @@ function buildGatewayAuthHeaders(
  * @throws {AgentBnBError} on JSON-RPC error, network failure, or timeout.
  */
 export async function requestCapability(opts: RequestOptions): Promise<unknown> {
-  const { gatewayUrl, token, cardId, params = {}, timeoutMs = 300_000, escrowReceipt, identity } = opts;
+  const {
+    gatewayUrl,
+    token,
+    cardId,
+    params = {},
+    timeoutMs: timeoutOverrideMs,
+    timeoutHint,
+    escrowReceipt,
+    identity,
+  } = opts;
+  const timeoutMs = timeoutOverrideMs ?? deriveRequestTimeoutMs(timeoutHint);
 
   const id = randomUUID();
   const payload = {
@@ -172,7 +220,7 @@ export async function requestCapabilityBatch(
   gatewayUrl: string,
   token: string,
   items: BatchRequestItem[],
-  opts: { timeoutMs?: number; identity?: IdentityAuth } = {},
+  opts: { timeoutMs?: number; timeoutHint?: RequestTimeoutHint; identity?: IdentityAuth } = {},
 ): Promise<Map<string, unknown>> {
   if (items.length === 0) return new Map();
   if (items.length === 1) {
@@ -185,12 +233,14 @@ export async function requestCapabilityBatch(
       params: item.params,
       escrowReceipt: item.escrowReceipt,
       timeoutMs: opts.timeoutMs,
+      timeoutHint: opts.timeoutHint,
       identity: opts.identity,
     });
     return new Map([[item.id, result]]);
   }
 
-  const { timeoutMs = 300_000, identity } = opts;
+  const { timeoutMs: timeoutOverrideMs, timeoutHint, identity } = opts;
+  const timeoutMs = timeoutOverrideMs ?? deriveRequestTimeoutMs(timeoutHint);
 
   const batchPayload = items.map((item) => ({
     jsonrpc: '2.0',
@@ -252,6 +302,8 @@ export async function requestCapabilityBatch(
 export interface RelayRequestOptions {
   /** Target agent owner to relay the request to. */
   targetOwner: string;
+  /** Canonical target agent identity. Preferred for routing when available. */
+  targetAgentId?: string;
   /** Capability Card ID to execute. */
   cardId: string;
   /** Optional skill ID within the card. */
@@ -260,8 +312,10 @@ export interface RelayRequestOptions {
   params?: Record<string, unknown>;
   /** Signed escrow receipt for cross-machine credit verification. */
   escrowReceipt?: EscrowReceipt;
-  /** Timeout in milliseconds. Default 30000. */
+  /** Timeout in milliseconds. Explicit override when provided. */
   timeoutMs?: number;
+  /** Provider timeout metadata used to derive default timeout when timeoutMs is omitted. */
+  timeoutHint?: RequestTimeoutHint;
   /** Actual requester owner for credit tracking (defaults to relay client's owner). */
   requester?: string;
 }
@@ -278,15 +332,17 @@ export async function requestViaRelay(
   relay: import('../relay/websocket-client.js').RelayClient,
   opts: RelayRequestOptions,
 ): Promise<unknown> {
+  const timeoutMs = opts.timeoutMs ?? deriveRequestTimeoutMs(opts.timeoutHint);
   try {
     return await relay.request({
       targetOwner: opts.targetOwner,
+      targetAgentId: opts.targetAgentId,
       cardId: opts.cardId,
       skillId: opts.skillId,
       params: opts.params ?? {},
       requester: opts.requester,
       escrowReceipt: opts.escrowReceipt as Record<string, unknown> | undefined,
-      timeoutMs: opts.timeoutMs,
+      timeoutMs,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);

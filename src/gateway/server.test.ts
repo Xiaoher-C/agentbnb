@@ -1034,7 +1034,7 @@ describe('Gateway Escrow Receipt Verification', () => {
     creditDb.close();
   });
 
-  it('valid escrow receipt: execution succeeds, response includes receipt_settled, provider balance increases', async () => {
+  it('valid escrow receipt: paid direct HTTP path is rejected and provider balance stays unchanged', async () => {
     const providerBalanceBefore = getBalance(creditDb, 'provider-agent');
     const { receipt } = makeSignedReceipt({
       card_id: testCard.id,
@@ -1058,18 +1058,17 @@ describe('Gateway Escrow Receipt Verification', () => {
     });
 
     expect(res.statusCode).toBe(200);
-    const body = res.json<{ jsonrpc: string; result: unknown; id: string }>();
+    const body = res.json<{ jsonrpc: string; error: { code: number; message: string }; id: string }>();
     expect(body.jsonrpc).toBe('2.0');
-    expect(body.result).toBeDefined();
-    // Check that result includes receipt_settled flag
-    expect((body.result as Record<string, unknown>).receipt_settled).toBe(true);
+    expect(body.error.message).toMatch(/disabled/i);
+    expect(body.error.message).toMatch(/relay/i);
 
-    // Provider balance should increase by the receipt amount
+    // Provider balance should not change because the request must go through relay.
     const providerBalanceAfter = getBalance(creditDb, 'provider-agent');
-    expect(providerBalanceAfter).toBe(providerBalanceBefore + testCard.pricing.credits_per_call);
+    expect(providerBalanceAfter).toBe(providerBalanceBefore);
   });
 
-  it('tampered receipt: returns signature error', async () => {
+  it('tampered receipt: paid direct HTTP is still rejected before settlement', async () => {
     const { receipt } = makeSignedReceipt({
       card_id: testCard.id,
       amount: testCard.pricing.credits_per_call,
@@ -1096,10 +1095,11 @@ describe('Gateway Escrow Receipt Verification', () => {
     expect(res.statusCode).toBe(200);
     const body = res.json<{ error: { code: number; message: string } }>();
     expect(body.error.code).toBe(-32603);
-    expect(body.error.message).toMatch(/invalid escrow receipt signature/i);
+    expect(body.error.message).toMatch(/disabled/i);
+    expect(body.error.message).toMatch(/relay/i);
   });
 
-  it('insufficient receipt amount: returns amount error', async () => {
+  it('insufficient receipt amount: paid direct HTTP is still rejected before settlement', async () => {
     const { receipt } = makeSignedReceipt({
       card_id: testCard.id,
       amount: 1, // Less than credits_per_call (10)
@@ -1124,10 +1124,11 @@ describe('Gateway Escrow Receipt Verification', () => {
     expect(res.statusCode).toBe(200);
     const body = res.json<{ error: { code: number; message: string } }>();
     expect(body.error.code).toBe(-32603);
-    expect(body.error.message).toMatch(/insufficient escrow amount/i);
+    expect(body.error.message).toMatch(/disabled/i);
+    expect(body.error.message).toMatch(/relay/i);
   });
 
-  it('expired receipt: returns expired error', async () => {
+  it('expired receipt: paid direct HTTP is still rejected before settlement', async () => {
     // Create a receipt with a timestamp 10 minutes in the past
     const pastTimestamp = new Date(Date.now() - 10 * 60 * 1000).toISOString();
     const { receipt } = makeSignedReceipt({
@@ -1155,7 +1156,8 @@ describe('Gateway Escrow Receipt Verification', () => {
     expect(res.statusCode).toBe(200);
     const body = res.json<{ error: { code: number; message: string } }>();
     expect(body.error.code).toBe(-32603);
-    expect(body.error.message).toMatch(/escrow receipt expired/i);
+    expect(body.error.message).toMatch(/disabled/i);
+    expect(body.error.message).toMatch(/relay/i);
   });
 
   it('no receipt: falls back to local DB check (backward compat)', async () => {
@@ -1186,7 +1188,7 @@ describe('Gateway Escrow Receipt Verification', () => {
     expect((body.result as Record<string, unknown>).receipt_settled).toBeUndefined();
   });
 
-  it('valid receipt but execution fails: provider balance unchanged, response includes receipt_released', async () => {
+  it('valid receipt with failing executor: paid direct HTTP is rejected before execution runs', async () => {
     const errorHandler = await createMockHandler({ error: 'exec failed' }, 500);
     const errorGateway = createGatewayServer({
       registryDb,
@@ -1225,8 +1227,8 @@ describe('Gateway Escrow Receipt Verification', () => {
       const body = res.json<{ error: { code: number; message: string; data?: Record<string, unknown> } }>();
       expect(body.error).toBeDefined();
       expect(body.error.code).toBe(-32603);
-      // Check receipt_released flag in error data
-      expect(body.error.data?.receipt_released).toBe(true);
+      expect(body.error.message).toMatch(/disabled/i);
+      expect(body.error.message).toMatch(/relay/i);
 
       // Provider balance should NOT change
       const providerBalanceAfter = getBalance(creditDb, 'provider-agent');

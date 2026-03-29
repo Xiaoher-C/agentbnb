@@ -210,5 +210,17 @@ describe('PipelineExecutor', () => {
       expect(result.success).toBe(false);
       expect(result.error).toMatch(/Step 0 failed/);
     });
+
+    it('respects pipeline timeout_ms as a hard deadline', async () => {
+      const config = {
+        ...makePipeline([
+          { command: 'sleep 0.2', input_mapping: {} },
+        ]),
+        timeout_ms: 50,
+      };
+      const result = await pipeline.execute(config, {});
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('timed out');
+    });
   });
 });
