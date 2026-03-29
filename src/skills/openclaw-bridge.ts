@@ -89,11 +89,11 @@ function validateAgentName(name: string): boolean {
 }
 
 /**
- * Executes the process channel: spawns `openclaw run <agent_name> --input '<JSON>'`
+ * Executes the process channel: spawns `openclaw agent --agent <name> --message '<JSON>' --json --local`
  * via child_process.execFileSync (no shell interpolation) and parses stdout as JSON.
  *
  * @param config - OpenClaw skill config.
- * @param payload - Task payload to pass via --input flag.
+ * @param payload - Task payload to pass via --message flag.
  * @returns Partial ExecutionResult (without latency_ms).
  */
 function executeProcess(
@@ -114,12 +114,20 @@ function executeProcess(
 
   try {
     // Use execFileSync with array args — no shell, no injection
-    const stdout = execFileSync('openclaw', ['run', config.agent_name, '--input', inputJson], {
+    const stdout = execFileSync('openclaw', [
+      'agent', '--agent', config.agent_name, '--message', inputJson, '--json', '--local',
+    ], {
       timeout: timeoutMs,
     });
     const text = stdout.toString().trim();
-    const result: unknown = JSON.parse(text);
-    return { success: true, result };
+    // OpenClaw agent --json outputs a JSON object; extract the reply text
+    try {
+      const parsed: unknown = JSON.parse(text);
+      return { success: true, result: parsed };
+    } catch {
+      // If stdout isn't valid JSON, return as raw text
+      return { success: true, result: { text } };
+    }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     return { success: false, error: message };
