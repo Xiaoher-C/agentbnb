@@ -145,24 +145,95 @@ export function getBalance(db: Database.Database, owner: string): number {
 }
 
 /**
+ * Pagination options for transaction queries.
+ */
+export interface TransactionPage {
+  /** Maximum number of transactions to return. Defaults to 100. */
+  limit?: number;
+  /** Cursor: return transactions created before this ISO timestamp. */
+  before?: string;
+  /** Cursor: return transactions created after this ISO timestamp. */
+  after?: string;
+}
+
+/**
  * Returns the transaction history for an agent, newest first.
- * Useful for auditing credit flows.
+ * Supports cursor-based pagination via `before`/`after` timestamps.
  *
  * @param db - The credit database instance.
  * @param owner - Agent identifier.
- * @param limit - Maximum number of transactions to return. Defaults to 100.
+ * @param opts - Pagination options (limit, before, after cursors).
  * @returns Array of credit transactions, ordered newest first.
  */
 export function getTransactions(
   db: Database.Database,
   owner: string,
-  limit: number = 100,
+  opts: number | TransactionPage = 100,
 ): CreditTransaction[] {
+  // Backward-compatible: accept plain number as limit
+  const page: TransactionPage = typeof opts === 'number' ? { limit: opts } : opts;
+  const limit = page.limit ?? 100;
+
+  const conditions = ['owner = ?'];
+  const params: (string | number)[] = [owner];
+
+  if (page.before) {
+    conditions.push('created_at < ?');
+    params.push(page.before);
+  }
+  if (page.after) {
+    conditions.push('created_at > ?');
+    params.push(page.after);
+  }
+
+  params.push(limit);
+
   return db
     .prepare(
-      'SELECT id, owner, amount, reason, reference_id, created_at FROM credit_transactions WHERE owner = ? ORDER BY created_at DESC LIMIT ?',
+      `SELECT id, owner, amount, reason, reference_id, created_at FROM credit_transactions WHERE ${conditions.join(' AND ')} ORDER BY created_at DESC LIMIT ?`,
     )
-    .all(owner, limit) as CreditTransaction[];
+    .all(...params) as CreditTransaction[];
+}
+
+/**
+ * Archives transactions older than the given date to a separate table.
+ * Moves rows from credit_transactions to credit_transactions_archive,
+ * keeping the hot table small for fast queries.
+ *
+ * @param db - The credit database instance.
+ * @param olderThan - ISO timestamp. Transactions before this date are archived.
+ * @returns Number of rows archived.
+ */
+export function archiveTransactions(
+  db: Database.Database,
+  olderThan: string,
+): number {
+  // Ensure archive table exists
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS credit_transactions_archive (
+      id TEXT PRIMARY KEY,
+      owner TEXT NOT NULL,
+      amount INTEGER NOT NULL,
+      reason TEXT NOT NULL,
+      reference_id TEXT,
+      created_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_archive_owner ON credit_transactions_archive(owner, created_at);
+  `);
+
+  const result = db.transaction(() => {
+    // Copy to archive
+    const inserted = db.prepare(
+      'INSERT OR IGNORE INTO credit_transactions_archive SELECT * FROM credit_transactions WHERE created_at < ?',
+    ).run(olderThan);
+
+    // Delete from hot table
+    db.prepare('DELETE FROM credit_transactions WHERE created_at < ?').run(olderThan);
+
+    return inserted.changes;
+  })();
+
+  return result;
 }
 
 /**

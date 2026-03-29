@@ -9,7 +9,8 @@
  * This module is pure execution.
  */
 
-import { requestCapability } from '../gateway/client.js';
+import { requestCapability, requestCapabilityBatch } from '../gateway/client.js';
+import type { BatchRequestItem } from '../gateway/client.js';
 import { interpolateObject } from '../utils/interpolation.js';
 import type { RelayClient } from '../relay/websocket-client.js';
 import type { SubTask, MatchResult, OrchestrationResult } from './types.js';
@@ -81,12 +82,96 @@ function computeWaves(subtasks: SubTask[]): string[][] {
   return waves;
 }
 
+/** A task prepared for execution within a wave. */
+interface PreparedTask {
+  taskId: string;
+  subtask: SubTask;
+  match: MatchResult;
+  interpolatedParams: Record<string, unknown>;
+  agentOwner: string;
+  primary: { url: string; cardId: string };
+  teamId: string | null;
+  capabilityType: string | null;
+}
+
+/**
+ * Executes a single prepared task with retry logic.
+ * Extracted from wave execution to support both individual and batch-fallback paths.
+ */
+async function executeSingleTask(
+  pt: { taskId: string; match: MatchResult; interpolatedParams: Record<string, unknown>; primary: { url: string; cardId: string }; teamId: string | null; capabilityType: string | null; agentOwner: string },
+  gatewayToken: string,
+  timeoutMs: number,
+  requesterOwner: string | undefined,
+  relayClient: RelayClient | undefined,
+  resolveAgentUrl?: (owner: string) => { url: string; cardId: string },
+): Promise<{ taskId: string; result: unknown; credits: number; team_id: string | null; capability_type: string | null }> {
+  const { taskId, match: m, interpolatedParams, primary, teamId, capabilityType } = pt;
+  try {
+    let res: unknown;
+    if (primary.url.startsWith('relay://') && relayClient) {
+      const targetOwner = primary.url.replace('relay://', '');
+      res = await relayClient.request({
+        targetOwner,
+        cardId: primary.cardId,
+        params: interpolatedParams,
+        requester: requesterOwner,
+        timeoutMs,
+      });
+    } else {
+      res = await requestCapability({
+        gatewayUrl: primary.url,
+        token: gatewayToken,
+        cardId: primary.cardId,
+        params: { ...interpolatedParams, requester: requesterOwner },
+        timeoutMs,
+      });
+    }
+    return { taskId, result: res, credits: m.credits, team_id: teamId, capability_type: capabilityType };
+  } catch (primaryErr) {
+    if (m.alternatives.length > 0) {
+      const alt = m.alternatives[0]!;
+      const altResolved = resolveAgentUrl ? resolveAgentUrl(alt.agent) : { url: `http://${alt.agent}:7700`, cardId: `card-${alt.agent}` };
+      try {
+        let altRes: unknown;
+        if (altResolved.url.startsWith('relay://') && relayClient) {
+          const targetOwner = altResolved.url.replace('relay://', '');
+          altRes = await relayClient.request({
+            targetOwner,
+            cardId: altResolved.cardId,
+            params: interpolatedParams,
+            requester: requesterOwner,
+            timeoutMs,
+          });
+        } else {
+          altRes = await requestCapability({
+            gatewayUrl: altResolved.url,
+            token: gatewayToken,
+            cardId: altResolved.cardId,
+            params: { ...interpolatedParams, requester: requesterOwner },
+            timeoutMs,
+          });
+        }
+        return { taskId, result: altRes, credits: alt.credits, team_id: teamId, capability_type: capabilityType };
+      } catch (altErr) {
+        throw new Error(
+          `Task ${taskId}: primary (${m.selected_agent}) failed: ${primaryErr instanceof Error ? primaryErr.message : String(primaryErr)}; ` +
+          `alternative (${alt.agent}) failed: ${altErr instanceof Error ? altErr.message : String(altErr)}`,
+        );
+      }
+    }
+    throw new Error(
+      `Task ${taskId}: ${primaryErr instanceof Error ? primaryErr.message : String(primaryErr)}`,
+    );
+  }
+}
+
 /**
  * Executes a DAG of sub-tasks across remote agents via Gateway.
  *
  * Execution flow:
  * 1. Computes execution waves from dependency graph
- * 2. For each wave, executes all tasks in parallel via Promise.allSettled
+ * 2. For each wave, groups same-agent tasks for batch JSON-RPC
  * 3. Before each task, interpolates params against completed step outputs
  * 4. On failure, retries with the first alternative agent from MatchResult
  * 5. Tracks per-task spending and total credits
@@ -144,102 +229,149 @@ export async function orchestrate(opts: OrchestrateOptions): Promise<Orchestrati
       executableIds.push(taskId);
     }
 
-    // Execute all tasks in this wave in parallel
-    const waveResults = await Promise.allSettled(
-      executableIds.map(async (taskId) => {
-        const subtask = subtaskMap.get(taskId)!;
-        const m = matches.get(taskId);
-        if (!m) {
-          throw new Error(`No match found for subtask ${taskId}`);
-        }
+    // Prepare all tasks in this wave: resolve params, agents, URLs
+    const preparedTasks: PreparedTask[] = [];
+    for (const taskId of executableIds) {
+      const subtask = subtaskMap.get(taskId)!;
+      const m = matches.get(taskId);
+      if (!m) {
+        errors.push(`No match found for subtask ${taskId}`);
+        continue;
+      }
 
-        // Build interpolation context from completed step outputs
-        const stepsContext: Record<string, unknown> = {};
-        for (const [id, val] of results) {
-          stepsContext[id] = val;
-        }
-        const interpContext = { steps: stepsContext, prev: undefined as unknown };
-        // Set prev to the result of the last dependency (if any)
-        if (subtask.depends_on.length > 0) {
-          const lastDep = subtask.depends_on[subtask.depends_on.length - 1]!;
-          interpContext.prev = results.get(lastDep);
-        }
+      const stepsContext: Record<string, unknown> = {};
+      for (const [id, val] of results) stepsContext[id] = val;
+      const interpContext = { steps: stepsContext, prev: undefined as unknown };
+      if (subtask.depends_on.length > 0) {
+        const lastDep = subtask.depends_on[subtask.depends_on.length - 1]!;
+        interpContext.prev = results.get(lastDep);
+      }
 
-        // Interpolate params
-        const interpolatedParams = interpolateObject(
-          subtask.params,
-          interpContext as unknown as Record<string, unknown>,
-        );
+      const interpolatedParams = interpolateObject(
+        subtask.params,
+        interpContext as unknown as Record<string, unknown>,
+      );
 
-        // Capture team traceability context for the caller's log entry
-        const teamMember = teamMemberMap.get(taskId);
-        const teamId = opts.team?.team_id ?? null;
-        const taskCapabilityType = teamMember?.capability_type ?? null;
+      const teamMember = teamMemberMap.get(taskId);
+      const agentOwner = teamMember?.agent ?? m.selected_agent;
+      const primary = resolveAgentUrl(agentOwner);
 
-        // Try primary agent
-        // Use team member agent assignment if available (role-aware routing)
-        const agentOwner = teamMember?.agent ?? m.selected_agent;
-        const primary = resolveAgentUrl(agentOwner);
-        try {
-          let res: unknown;
-          if (primary.url.startsWith('relay://') && relayClient) {
-            const targetOwner = primary.url.replace('relay://', '');
-            res = await relayClient.request({
-              targetOwner,
-              cardId: primary.cardId,
-              params: interpolatedParams,
-              requester: requesterOwner,
-              timeoutMs,
-            });
-          } else {
-            res = await requestCapability({
-              gatewayUrl: primary.url,
-              token: gatewayToken,
-              cardId: primary.cardId,
-              params: { ...interpolatedParams, requester: requesterOwner },
-              timeoutMs,
-            });
-          }
-          return { taskId, result: res, credits: m.credits, team_id: teamId, capability_type: taskCapabilityType };
-        } catch (primaryErr) {
-          // Retry with first alternative if available
-          if (m.alternatives.length > 0) {
-            const alt = m.alternatives[0]!;
-            const altAgent = resolveAgentUrl(alt.agent);
+      preparedTasks.push({
+        taskId,
+        subtask,
+        match: m,
+        interpolatedParams,
+        agentOwner,
+        primary,
+        teamId: opts.team?.team_id ?? null,
+        capabilityType: teamMember?.capability_type ?? null,
+      });
+    }
+
+    // Group tasks by gateway URL for batching (only non-relay HTTP tasks)
+    const httpGroups = new Map<string, PreparedTask[]>();
+    const relayTasks: PreparedTask[] = [];
+
+    for (const pt of preparedTasks) {
+      if (pt.primary.url.startsWith('relay://') && relayClient) {
+        relayTasks.push(pt);
+      } else {
+        const group = httpGroups.get(pt.primary.url) ?? [];
+        group.push(pt);
+        httpGroups.set(pt.primary.url, group);
+      }
+    }
+
+    // Execute batched HTTP requests + individual relay requests in parallel
+    type WaveResult = { taskId: string; result: unknown; credits: number; team_id: string | null; capability_type: string | null };
+
+    const batchPromises: Promise<PromiseSettledResult<WaveResult>[]>[] = [];
+
+    // Batch HTTP groups: use requestCapabilityBatch for groups with 2+ tasks
+    for (const [gatewayUrl, group] of httpGroups) {
+      if (group.length >= 2) {
+        // Batch request to same gateway
+        batchPromises.push(
+          (async (): Promise<PromiseSettledResult<WaveResult>[]> => {
+            const items: (BatchRequestItem & { _pt: PreparedTask })[] = group.map((pt) => ({
+              id: pt.taskId,
+              cardId: pt.primary.cardId,
+              params: { ...pt.interpolatedParams, requester: requesterOwner },
+              _pt: pt,
+            }));
+
             try {
-              let altRes: unknown;
-              if (altAgent.url.startsWith('relay://') && relayClient) {
-                const targetOwner = altAgent.url.replace('relay://', '');
-                altRes = await relayClient.request({
-                  targetOwner,
-                  cardId: altAgent.cardId,
-                  params: interpolatedParams,
-                  requester: requesterOwner,
-                  timeoutMs,
-                });
-              } else {
-                altRes = await requestCapability({
-                  gatewayUrl: altAgent.url,
-                  token: gatewayToken,
-                  cardId: altAgent.cardId,
-                  params: { ...interpolatedParams, requester: requesterOwner },
-                  timeoutMs,
-                });
-              }
-              return { taskId, result: altRes, credits: alt.credits, team_id: teamId, capability_type: taskCapabilityType };
-            } catch (altErr) {
-              throw new Error(
-                `Task ${taskId}: primary (${m.selected_agent}) failed: ${primaryErr instanceof Error ? primaryErr.message : String(primaryErr)}; ` +
-                `alternative (${alt.agent}) failed: ${altErr instanceof Error ? altErr.message : String(altErr)}`,
+              const batchResults = await requestCapabilityBatch(
+                gatewayUrl,
+                gatewayToken,
+                items.map(({ _pt, ...item }) => item),
+                { timeoutMs },
               );
+
+              return items.map((item) => {
+                const res = batchResults.get(item.id);
+                if (res instanceof Error) {
+                  return {
+                    status: 'rejected' as const,
+                    reason: new Error(`Task ${item.id}: ${res.message}`),
+                  };
+                }
+                return {
+                  status: 'fulfilled' as const,
+                  value: {
+                    taskId: item.id,
+                    result: res,
+                    credits: item._pt.match.credits,
+                    team_id: item._pt.teamId,
+                    capability_type: item._pt.capabilityType,
+                  },
+                };
+              });
+            } catch (batchErr) {
+              // Batch failed — fall back to individual requests
+              return Promise.all(group.map(async (pt): Promise<PromiseSettledResult<WaveResult>> => {
+                try {
+                  const res = await executeSingleTask(pt, gatewayToken, timeoutMs, requesterOwner, relayClient, resolveAgentUrl);
+                  return { status: 'fulfilled', value: res };
+                } catch (err) {
+                  return { status: 'rejected', reason: err };
+                }
+              }));
             }
+          })(),
+        );
+      } else {
+        // Single task — use individual request
+        const pt = group[0]!;
+        batchPromises.push(
+          (async (): Promise<PromiseSettledResult<WaveResult>[]> => {
+            try {
+              const res = await executeSingleTask(pt, gatewayToken, timeoutMs, requesterOwner, relayClient, resolveAgentUrl);
+              return [{ status: 'fulfilled', value: res }];
+            } catch (err) {
+              return [{ status: 'rejected', reason: err }];
+            }
+          })(),
+        );
+      }
+    }
+
+    // Relay tasks: always individual
+    for (const pt of relayTasks) {
+      batchPromises.push(
+        (async (): Promise<PromiseSettledResult<WaveResult>[]> => {
+          try {
+            const res = await executeSingleTask(pt, gatewayToken, timeoutMs, requesterOwner, relayClient, resolveAgentUrl);
+            return [{ status: 'fulfilled', value: res }];
+          } catch (err) {
+            return [{ status: 'rejected', reason: err }];
           }
-          throw new Error(
-            `Task ${taskId}: ${primaryErr instanceof Error ? primaryErr.message : String(primaryErr)}`,
-          );
-        }
-      }),
-    );
+        })(),
+      );
+    }
+
+    const allBatchResults = await Promise.all(batchPromises);
+    const waveResults = allBatchResults.flat();
 
     // Collect results
     for (const settlement of waveResults) {

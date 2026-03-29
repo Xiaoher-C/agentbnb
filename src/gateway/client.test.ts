@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import type { EscrowReceipt } from '../types/index.js';
+import { generateKeyPair } from '../credit/signing.js';
 
 // Mock fetch globally
 const fetchMock = vi.fn();
@@ -78,5 +79,69 @@ describe('Gateway Client - Escrow Receipt Attachment', () => {
       params: Record<string, unknown>;
     };
     expect(payload.params.escrow_receipt).toBeUndefined();
+  });
+
+  it('requestCapability sends signed identity headers and bearer token together', async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ jsonrpc: '2.0', id: 'test', result: { ok: true } }),
+    });
+
+    const keys = generateKeyPair();
+    const publicKeyHex = keys.publicKey.toString('hex');
+    const { requestCapability } = await import('./client.js');
+
+    await requestCapability({
+      gatewayUrl: 'http://localhost:7700',
+      token: 'fallback-token',
+      cardId: randomUUID(),
+      identity: {
+        agentId: 'agent-identity-123',
+        publicKey: publicKeyHex,
+        privateKey: keys.privateKey,
+      },
+    });
+
+    const [, fetchOpts] = fetchMock.mock.calls[0] as [string, { headers: Record<string, string> }];
+    expect(fetchOpts.headers['Authorization']).toBe('Bearer fallback-token');
+    expect(fetchOpts.headers['X-Agent-Id']).toBe('agent-identity-123');
+    expect(fetchOpts.headers['X-Agent-Public-Key']).toBe(publicKeyHex);
+    expect(fetchOpts.headers['X-Agent-Signature']).toBeDefined();
+  });
+
+  it('requestCapabilityBatch sends signed identity headers and bearer token together', async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ([
+        { jsonrpc: '2.0', id: 'r1', result: { ok: true } },
+        { jsonrpc: '2.0', id: 'r2', result: { ok: true } },
+      ]),
+    });
+
+    const keys = generateKeyPair();
+    const publicKeyHex = keys.publicKey.toString('hex');
+    const { requestCapabilityBatch } = await import('./client.js');
+
+    await requestCapabilityBatch(
+      'http://localhost:7700',
+      'fallback-token',
+      [
+        { id: 'r1', cardId: randomUUID(), params: { requester: 'test-agent' } },
+        { id: 'r2', cardId: randomUUID(), params: { requester: 'test-agent' } },
+      ],
+      {
+        identity: {
+          agentId: 'agent-identity-123',
+          publicKey: publicKeyHex,
+          privateKey: keys.privateKey,
+        },
+      },
+    );
+
+    const [, fetchOpts] = fetchMock.mock.calls[0] as [string, { headers: Record<string, string> }];
+    expect(fetchOpts.headers['Authorization']).toBe('Bearer fallback-token');
+    expect(fetchOpts.headers['X-Agent-Id']).toBe('agent-identity-123');
+    expect(fetchOpts.headers['X-Agent-Public-Key']).toBe(publicKeyHex);
+    expect(fetchOpts.headers['X-Agent-Signature']).toBeDefined();
   });
 });

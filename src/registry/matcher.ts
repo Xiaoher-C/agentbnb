@@ -2,6 +2,57 @@ import type Database from 'better-sqlite3';
 import type { CapabilityCard } from '../types/index.js';
 import { getReputationScore } from '../feedback/reputation.js';
 
+// ---------------------------------------------------------------------------
+// FTS5 search result cache — per-DB LRU with TTL
+// ---------------------------------------------------------------------------
+
+/** Maximum cached entries per database. */
+const CACHE_MAX_ENTRIES = 100;
+/** Cache TTL in milliseconds (30 seconds). */
+const CACHE_TTL_MS = 30_000;
+
+interface CacheEntry {
+  results: CapabilityCard[];
+  expiresAt: number;
+}
+
+/** Per-database cache. WeakMap ensures GC when DB is closed. */
+const dbCaches = new WeakMap<object, Map<string, CacheEntry>>();
+
+function getDbCache(db: object): Map<string, CacheEntry> {
+  let cache = dbCaches.get(db);
+  if (!cache) {
+    cache = new Map();
+    dbCaches.set(db, cache);
+  }
+  return cache;
+}
+
+function cacheKey(query: string, filters: SearchFilters): string {
+  return `${query}|${filters.level ?? ''}|${filters.online ?? ''}|${(filters.apis_used ?? []).join(',')}|${filters.min_reputation ?? ''}`;
+}
+
+function evictCache(cache: Map<string, CacheEntry>): void {
+  const now = Date.now();
+  for (const [key, entry] of cache) {
+    if (entry.expiresAt <= now) cache.delete(key);
+  }
+  while (cache.size > CACHE_MAX_ENTRIES) {
+    const firstKey = cache.keys().next().value as string;
+    cache.delete(firstKey);
+  }
+}
+
+/**
+ * Clears the FTS5 search cache for a specific DB, or all caches if no DB given.
+ */
+export function clearSearchCache(db?: object): void {
+  if (db) {
+    dbCaches.get(db)?.clear();
+  }
+  // WeakMap doesn't support iteration, but callers can pass their DB ref
+}
+
 /**
  * Filters for capability card search.
  */
@@ -35,6 +86,17 @@ export function searchCards(
   query: string,
   filters: SearchFilters = {}
 ): CapabilityCard[] {
+  // Check per-DB cache first
+  const cache = getDbCache(db);
+  const key = cacheKey(query, filters);
+  const cached = cache.get(key);
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.results;
+  }
+
+  const trimmedQuery = query.trim();
+  const exactSkillMatches = findCardsByExactSkillId(db, trimmedQuery, filters);
+
   // Build FTS5 MATCH query — sanitize input to prevent FTS5 injection.
   // Strip FTS5 operators and wrap each word in double-quotes to treat as
   // literal phrase tokens. Hyphens within words are preserved (common in
@@ -44,7 +106,9 @@ export function searchCards(
     .split(/\s+/)
     .map((w) => w.replace(/["*^{}():]/g, ''))  // Strip FTS5 operators and quotes
     .filter((w) => w.length > 0);
-  if (words.length === 0) return [];
+  if (words.length === 0) {
+    return exactSkillMatches;
+  }
 
   // Each word is quoted so remaining chars are treated as literals
   const ftsQuery = words.map((w) => `"${w}"`).join(' OR ');
@@ -82,7 +146,9 @@ export function searchCards(
   const results = rows.map((row) => JSON.parse(row.data) as CapabilityCard);
 
   // Post-filter by apis_used if specified (not easily done in FTS5 query)
-  let filtered = results;
+  const mergedResults = mergeByCardId(exactSkillMatches, results);
+
+  let filtered = mergedResults;
   if (filters.apis_used && filters.apis_used.length > 0) {
     const requiredApis = filters.apis_used;
     filtered = filtered.filter((card) => {
@@ -96,7 +162,52 @@ export function searchCards(
     filtered = applyReputationFilter(db, filtered, filters.min_reputation);
   }
 
+  // Store in per-DB cache
+  evictCache(cache);
+  cache.set(key, { results: filtered, expiresAt: Date.now() + CACHE_TTL_MS });
+
   return filtered;
+}
+
+function mergeByCardId(primary: CapabilityCard[], secondary: CapabilityCard[]): CapabilityCard[] {
+  const seen = new Set<string>();
+  const merged: CapabilityCard[] = [];
+
+  for (const card of primary) {
+    if (seen.has(card.id)) continue;
+    seen.add(card.id);
+    merged.push(card);
+  }
+
+  for (const card of secondary) {
+    if (seen.has(card.id)) continue;
+    seen.add(card.id);
+    merged.push(card);
+  }
+
+  return merged;
+}
+
+function findCardsByExactSkillId(
+  db: Database.Database,
+  query: string,
+  filters: SearchFilters,
+): CapabilityCard[] {
+  if (query.length === 0) return [];
+
+  const rows = db.prepare('SELECT data FROM capability_cards').all() as Array<{ data: string }>;
+  const cards = rows.map((row) => JSON.parse(row.data) as CapabilityCard);
+
+  return cards.filter((card) => {
+    if (filters.level !== undefined && card.level !== filters.level) return false;
+    if (filters.online !== undefined && card.availability?.online !== filters.online) return false;
+
+    const asRecord = card as Record<string, unknown>;
+    const skills = asRecord['skills'] as Array<Record<string, unknown>> | undefined;
+    if (!Array.isArray(skills)) return false;
+
+    return skills.some((skill) => String(skill['id'] ?? '') === query);
+  });
 }
 
 /**
