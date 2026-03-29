@@ -179,12 +179,16 @@ async function verifyIdentity(
   }
 
   // Bind caller-declared requester/owner identifiers to authenticated identity.
+  // Skip this check for new agents (not yet in the registry DB) — their Ed25519
+  // signature is sufficient proof of identity.  For known agents, allow the claim
+  // to match any of: canonical agent_id, current display name, or legacy owner.
   const claimedRequester = extractClaimedRequester(request);
-  if (claimedRequester) {
+  if (claimedRequester && knownAgent !== null) {
     const matchesAgentId = claimedRequester === agentId;
-    const matchesLegacyOwner = knownAgent?.legacy_owner === claimedRequester;
+    const matchesDisplayName = knownAgent.display_name === claimedRequester;
+    const matchesLegacyOwner = knownAgent.legacy_owner === claimedRequester;
 
-    if (!matchesAgentId && !matchesLegacyOwner) {
+    if (!matchesAgentId && !matchesDisplayName && !matchesLegacyOwner) {
       await reply.code(401).send({ error: 'Identity does not match requester' });
       return false;
     }
