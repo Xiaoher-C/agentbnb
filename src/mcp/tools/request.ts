@@ -148,6 +148,11 @@ export async function handleRequest(
             token: '',
             cardId,
             params: { ...(args.params ?? {}), ...(args.skill_id ? { skill_id: args.skill_id } : {}), requester: ctx.config.owner },
+            identity: {
+              agentId: ctx.identity.agent_id,
+              publicKey: ctx.identity.public_key,
+              privateKey: keys.privateKey,
+            },
           });
           await ledger.settle(escrowId, targetOwner ?? 'unknown');
           return {
