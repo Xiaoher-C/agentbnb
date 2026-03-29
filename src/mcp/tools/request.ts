@@ -13,6 +13,8 @@ import { DEFAULT_AUTONOMY_CONFIG } from '../../autonomy/tiers.js';
 import { openDatabase } from '../../registry/store.js';
 import { openCreditDb } from '../../credit/ledger.js';
 import { loadKeyPair } from '../../credit/signing.js';
+import { createSignedEscrowReceipt } from '../../credit/escrow-receipt.js';
+import { confirmEscrowDebit, releaseEscrow } from '../../credit/escrow.js';
 import { RelayClient } from '../../relay/websocket-client.js';
 import { requestCapability } from '../../gateway/client.js';
 import type { IdentityAuth } from '../../gateway/client.js';
@@ -146,20 +148,70 @@ export async function handleRequest(
       const targetOwner = (remoteCard['owner'] ?? remoteCard['agent_name']) as string | undefined;
       const gatewayUrl = remoteCard['gateway_url'] as string | undefined;
 
-      // Direct HTTP request to provider gateway (matches CLI behavior —
-      // CLI uses local escrow, not registry HTTP escrow, so we skip
-      // RegistryCreditLedger to avoid identityAuthPlugin signing mismatch).
+      // Direct HTTP request to provider gateway.
+      // Match CLI behavior: local SQLite escrow + signed receipt for cross-machine
+      // credit verification. The provider gateway verifies the receipt and skips
+      // its own credit check (see execute.ts receipt path).
       if (gatewayUrl) {
-        const result = await requestCapability({
-          gatewayUrl,
-          token: '',
-          cardId,
-          params: { ...(args.params ?? {}), ...(args.skill_id ? { skill_id: args.skill_id } : {}), requester: ctx.config.owner },
-          identity: identityAuth,
-        });
-        return {
-          content: [{ type: 'text' as const, text: JSON.stringify({ success: true, result }, null, 2) }],
-        };
+        // Extract pricing from remote card for escrow amount
+        let remoteCost = 0;
+        const remoteSkills = remoteCard['skills'] as Array<{ id: string; pricing: { credits_per_call: number } }> | undefined;
+        if (Array.isArray(remoteSkills)) {
+          const matchedSkill = args.skill_id
+            ? remoteSkills.find((s) => s.id === args.skill_id)
+            : remoteSkills[0];
+          remoteCost = matchedSkill?.pricing?.credits_per_call ?? 0;
+        } else {
+          const remotePricing = remoteCard['pricing'] as { credits_per_call: number } | undefined;
+          remoteCost = remotePricing?.credits_per_call ?? 0;
+        }
+
+        if (remoteCost > 0) {
+          // Paid skill: create local escrow + signed receipt (same as CLI line 921-930)
+          const creditDb = openCreditDb(ctx.config.credit_db_path);
+          creditDb.pragma('busy_timeout = 5000');
+          try {
+            const keys = loadKeyPair(ctx.configDir);
+            const { escrowId, receipt } = createSignedEscrowReceipt(creditDb, keys.privateKey, keys.publicKey, {
+              owner: ctx.config.owner,
+              agent_id: ctx.identity.agent_id,
+              amount: remoteCost,
+              cardId,
+              skillId: args.skill_id,
+            });
+            try {
+              const result = await requestCapability({
+                gatewayUrl,
+                token: ctx.config.token ?? '',
+                cardId,
+                params: { ...(args.params ?? {}), ...(args.skill_id ? { skill_id: args.skill_id } : {}), requester: ctx.config.owner },
+                identity: identityAuth,
+                escrowReceipt: receipt,
+              });
+              confirmEscrowDebit(creditDb, escrowId);
+              return {
+                content: [{ type: 'text' as const, text: JSON.stringify({ success: true, result }, null, 2) }],
+              };
+            } catch (execErr) {
+              releaseEscrow(creditDb, escrowId);
+              throw execErr;
+            }
+          } finally {
+            creditDb.close();
+          }
+        } else {
+          // Free skill: no escrow needed
+          const result = await requestCapability({
+            gatewayUrl,
+            token: ctx.config.token ?? '',
+            cardId,
+            params: { ...(args.params ?? {}), ...(args.skill_id ? { skill_id: args.skill_id } : {}), requester: ctx.config.owner },
+            identity: identityAuth,
+          });
+          return {
+            content: [{ type: 'text' as const, text: JSON.stringify({ success: true, result }, null, 2) }],
+          };
+        }
       }
 
       // Relay-only: no gateway_url, relay handles credits server-side
