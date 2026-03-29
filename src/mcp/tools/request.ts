@@ -12,10 +12,10 @@ import { BudgetManager, DEFAULT_BUDGET_CONFIG } from '../../credit/budget.js';
 import { DEFAULT_AUTONOMY_CONFIG } from '../../autonomy/tiers.js';
 import { openDatabase } from '../../registry/store.js';
 import { openCreditDb } from '../../credit/ledger.js';
-import { createLedger } from '../../credit/create-ledger.js';
 import { loadKeyPair } from '../../credit/signing.js';
 import { RelayClient } from '../../relay/websocket-client.js';
 import { requestCapability } from '../../gateway/client.js';
+import type { IdentityAuth } from '../../gateway/client.js';
 import type { CapabilityCard } from '../../types/index.js';
 import type { McpServerContext } from '../server.js';
 
@@ -91,6 +91,19 @@ export async function handleRequest(
         db.close();
       }
 
+      // Build signed identity auth when key material is available.
+      let identityAuth: IdentityAuth | undefined;
+      try {
+        const keys = loadKeyPair(ctx.configDir);
+        identityAuth = {
+          agentId: ctx.identity.agent_id,
+          publicKey: ctx.identity.public_key,
+          privateKey: keys.privateKey,
+        };
+      } catch {
+        // Backward compatibility: allow bearer-only requests when keypair is unavailable.
+      }
+
       // Local card (owned by this agent) — use local gateway
       if (localCard && localCard.owner === ctx.config.owner) {
         const result = await requestCapability({
@@ -98,6 +111,7 @@ export async function handleRequest(
           token: ctx.config.token,
           cardId,
           params: { ...(args.params ?? {}), ...(args.skill_id ? { skill_id: args.skill_id } : {}), requester: ctx.config.owner },
+          identity: identityAuth,
         });
         return {
           content: [{ type: 'text' as const, text: JSON.stringify({ success: true, result }, null, 2) }],
@@ -132,36 +146,20 @@ export async function handleRequest(
       const targetOwner = (remoteCard['owner'] ?? remoteCard['agent_name']) as string | undefined;
       const gatewayUrl = remoteCard['gateway_url'] as string | undefined;
 
-      // Direct HTTP request with CreditLedger escrow
+      // Direct HTTP request to provider gateway (matches CLI behavior —
+      // CLI uses local escrow, not registry HTTP escrow, so we skip
+      // RegistryCreditLedger to avoid identityAuthPlugin signing mismatch).
       if (gatewayUrl) {
-        const keys = loadKeyPair(ctx.configDir);
-        const ledger = createLedger({
-          registryUrl: ctx.config.registry,
-          ownerPublicKey: ctx.identity.public_key,
-          privateKey: keys.privateKey,
+        const result = await requestCapability({
+          gatewayUrl,
+          token: '',
+          cardId,
+          params: { ...(args.params ?? {}), ...(args.skill_id ? { skill_id: args.skill_id } : {}), requester: ctx.config.owner },
+          identity: identityAuth,
         });
-
-        const { escrowId } = await ledger.hold(ctx.config.owner, maxCost, cardId);
-        try {
-          const result = await requestCapability({
-            gatewayUrl,
-            token: '',
-            cardId,
-            params: { ...(args.params ?? {}), ...(args.skill_id ? { skill_id: args.skill_id } : {}), requester: ctx.config.owner },
-            identity: {
-              agentId: ctx.identity.agent_id,
-              publicKey: ctx.identity.public_key,
-              privateKey: keys.privateKey,
-            },
-          });
-          await ledger.settle(escrowId, targetOwner ?? 'unknown');
-          return {
-            content: [{ type: 'text' as const, text: JSON.stringify({ success: true, result, credits_spent: maxCost }, null, 2) }],
-          };
-        } catch (err) {
-          await ledger.release(escrowId);
-          throw err;
-        }
+        return {
+          content: [{ type: 'text' as const, text: JSON.stringify({ success: true, result }, null, 2) }],
+        };
       }
 
       // Relay-only: no gateway_url, relay handles credits server-side
