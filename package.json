@@ -3,7 +3,7 @@
   "workspaces": [
     "packages/*"
   ],
-  "version": "8.2.0",
+  "version": "8.2.1",
   "description": "P2P Agent Capability Sharing Protocol — Airbnb for AI agent pipelines",
   "type": "module",
   "main": "dist/index.js",
@@ -37,8 +37,9 @@
     "build:hub": "cd hub && pnpm install && pnpm build",
     "build:all": "pnpm build && pnpm build:hub",
     "dev": "tsx watch src/cli/index.ts",
-    "test": "vitest",
+    "test": "vitest run",
     "test:run": "vitest run",
+    "test:watch": "vitest",
     "lint": "eslint src/",
     "typecheck": "tsc --noEmit",
     "prepublishOnly": "pnpm run build && pnpm run typecheck && pnpm run test:run"
@@ -81,6 +82,7 @@
     "fastify": "^5.1.0",
     "js-yaml": "^4.1.1",
     "typed-emitter": "^2.1.0",
+    "undici": "^7.24.6",
     "ws": "^8.19.0",
     "zod": "^3.24.0"
   },
