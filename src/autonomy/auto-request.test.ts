@@ -25,9 +25,15 @@ vi.mock('../cli/remote-registry.js', () => ({
   fetchRemoteCards: vi.fn(),
 }));
 
+vi.mock('../gateway/relay-dispatch.js', () => ({
+  requestViaTemporaryRelay: vi.fn(),
+}));
+
 import { requestCapability } from '../gateway/client.js';
+import { requestViaTemporaryRelay } from '../gateway/relay-dispatch.js';
 import { findPeer } from '../cli/peers.js';
 import { fetchRemoteCards } from '../cli/remote-registry.js';
+import { createAgentRecord } from '../identity/agent-identity.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -49,6 +55,7 @@ function makePeerCard(
     metadata: overrides.metadata ?? { success_rate: 0.9 },
     _internal: overrides._internal,
     spec_version: '1.0',
+    ...overrides,
   } as CapabilityCard;
 }
 
@@ -163,6 +170,40 @@ describe('scorePeers', () => {
 
     expect(scored[0].rawScore).toBeGreaterThanOrEqual(scored[1].rawScore);
     expect(scored[0].card.owner).toBe('bob');
+  });
+
+  it('excludes peers with the same canonical agent_id when registryDb is provided', () => {
+    const db = openMemoryRegistryDb();
+    createAgentRecord(db, {
+      agent_id: 'aaaaaaaaaaaaaaaa',
+      display_name: 'self-agent',
+      public_key: '33'.repeat(32),
+      legacy_owner: 'alice',
+    });
+
+    const sameAgentDifferentOwner = makePeerCard({
+      owner: 'alice-renamed',
+      metadata: { success_rate: 0.9 },
+      agent_id: 'aaaaaaaaaaaaaaaa',
+    });
+    const otherPeer = makePeerCard({
+      owner: 'bob',
+      metadata: { success_rate: 0.8 },
+      agent_id: 'bbbbbbbbbbbbbbbb',
+    });
+
+    const scored = scorePeers(
+      [
+        { card: sameAgentDifferentOwner, cost: 10, skillId: undefined },
+        { card: otherPeer, cost: 10, skillId: undefined },
+      ],
+      'alice',
+      db,
+    );
+
+    expect(scored).toHaveLength(1);
+    expect(scored[0]?.card.owner).toBe('bob');
+    db.close();
   });
 });
 
@@ -410,6 +451,45 @@ describe('AutoRequestor.requestWithAutonomy', () => {
 
     expect(result.status).toBe('success');
     expect(fetchRemoteCards).toHaveBeenCalledWith('http://registry.example.com', { q: 'text-to-speech', online: true });
+  });
+
+  it('--query can route to relay-connected providers when no direct gateway peer config exists', async () => {
+    const relayOnlyCard = makePeerCard({
+      id: randomUUID(),
+      owner: 'relay-provider',
+      name: 'stock analysis',
+      description: 'Analyze stock trends via relay',
+      pricing: { credits_per_call: 12 },
+    }) as CapabilityCard & { gateway_url?: string };
+    relayOnlyCard.gateway_url = '';
+
+    vi.mocked(fetchRemoteCards).mockResolvedValue([relayOnlyCard]);
+    vi.mocked(findPeer).mockReturnValue(null);
+    vi.mocked(requestViaTemporaryRelay).mockResolvedValue({ summary: 'relay-ok' });
+
+    const requestorWithRemote = new AutoRequestor({
+      owner: 'alice',
+      registryDb,
+      creditDb,
+      autonomyConfig: { tier1_max_credits: 100, tier2_max_credits: 200 },
+      budgetManager: new BudgetManager(creditDb, 'alice', DEFAULT_BUDGET_CONFIG),
+      registryUrl: 'http://registry.example.com',
+    });
+
+    const result = await requestorWithRemote.requestWithAutonomy({
+      query: 'stock analysis',
+      maxCostCredits: 50,
+    });
+
+    expect(result.status).toBe('success');
+    expect(result.peer).toBe('relay-provider');
+    expect(requestViaTemporaryRelay).toHaveBeenCalledWith(
+      expect.objectContaining({
+        targetOwner: 'relay-provider',
+        cardId: relayOnlyCard.id,
+        owner: 'alice',
+      }),
+    );
   });
 
   it('does NOT call fetchRemoteCards when local returns 1+ cards', async () => {

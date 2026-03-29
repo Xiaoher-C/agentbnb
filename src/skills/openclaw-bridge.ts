@@ -110,12 +110,26 @@ function executeProcess(
     };
   }
 
-  const inputJson = JSON.stringify(payload);
+  // Build a contextual prompt so the LLM understands this is an AgentBnB rental,
+  // not a generic chat message. Raw JSON leaves the LLM without any instruction.
+  const skillId = config.id;
+  const message =
+    `[AgentBnB Rental Request]\n` +
+    `You are executing the "${skillId}" skill for an AgentBnB network rental.\n` +
+    `Read your skills/${skillId}/SKILL.md for detailed instructions.\n` +
+    `\n` +
+    `Input parameters:\n` +
+    `${JSON.stringify(payload.params ?? {}, null, 2)}\n` +
+    `\n` +
+    `IMPORTANT: Return ONLY a JSON object as your response.\n` +
+    `Do NOT include explanations, markdown formatting, or code blocks.\n` +
+    `The JSON should contain the output fields specified in your SKILL.md.\n` +
+    `If you cannot complete the task, return: {"error": "reason"}`;
 
   try {
     // Use execFileSync with array args — no shell, no injection
     const stdout = execFileSync('openclaw', [
-      'agent', '--agent', config.agent_name, '--message', inputJson, '--json', '--local',
+      'agent', '--agent', config.agent_name, '--message', message, '--json', '--local',
     ], {
       timeout: timeoutMs,
     });
