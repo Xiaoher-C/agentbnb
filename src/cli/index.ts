@@ -1042,6 +1042,13 @@ program
         heldEscrows = creditDb
           .prepare('SELECT id, amount, card_id, created_at FROM credit_escrow WHERE owner = ? AND status = ?')
           .all(config.owner, 'held') as Array<{ id: string; amount: number; card_id: string; created_at: string }>;
+      } catch (err) {
+        // New agents may not yet have a registry record — show zero balance gracefully
+        balance = 0;
+        transactions = [];
+        heldEscrows = [];
+        const msg = err instanceof Error ? err.message : String(err);
+        console.warn(`Note: could not fetch balance from registry (${msg}). Run \`agentbnb init\` if this is a new agent.`);
       } finally {
         creditDb.close();
       }

@@ -7,6 +7,7 @@ interface TestDepsOverrides {
   existsPaths?: string[];
   runWhichResult?: string;
   requireResolveResult?: string;
+  nodeExecDir?: string;
 }
 
 function makeDeps(overrides: TestDepsOverrides = {}) {
@@ -17,6 +18,7 @@ function makeDeps(overrides: TestDepsOverrides = {}) {
     platform: overrides.platform ?? 'darwin',
     homeDir: '/Users/tester',
     envPath: '/usr/bin:/bin',
+    nodeExecDir: overrides.nodeExecDir,
     exists: (path: string) => existing.has(path),
     realpath: (path: string) => path,
     runWhich: () => {
@@ -58,6 +60,16 @@ describe('resolveSelfCliWithDeps', () => {
       }),
     );
     expect(resolved).toBe('/workspace/node_modules/agentbnb/dist/cli/index.js');
+  });
+
+  it('resolves agentbnb in the same directory as the node executable (nvm case)', () => {
+    const resolved = resolveSelfCliWithDeps(
+      makeDeps({
+        nodeExecDir: '/Users/tester/.nvm/versions/node/v24.13.1/bin',
+        existsPaths: ['/Users/tester/.nvm/versions/node/v24.13.1/bin/agentbnb'],
+      }),
+    );
+    expect(resolved).toBe('/Users/tester/.nvm/versions/node/v24.13.1/bin/agentbnb');
   });
 
   it('throws helpful error when no CLI path can be resolved', () => {

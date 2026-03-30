@@ -2,7 +2,7 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, realpathSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { homedir } from 'node:os';
-import { basename, isAbsolute, join, resolve } from 'node:path';
+import { basename, dirname, isAbsolute, join, resolve } from 'node:path';
 import { AgentBnBError } from '../types/index.js';
 
 interface ResolveSelfCliDeps {
@@ -11,6 +11,7 @@ interface ResolveSelfCliDeps {
   platform: NodeJS.Platform;
   homeDir: string;
   envPath?: string;
+  nodeExecDir?: string;
   exists: (path: string) => boolean;
   realpath: (path: string) => string;
   runWhich: (pathEnv: string) => string;
@@ -37,6 +38,7 @@ export function resolveSelfCli(): string {
     platform: process.platform,
     homeDir: homedir(),
     envPath: process.env['PATH'],
+    nodeExecDir: dirname(process.execPath),
     exists: existsSync,
     realpath: realpathSync,
     runWhich: (pathEnv) =>
@@ -76,7 +78,7 @@ export function resolveSelfCliWithDeps(deps: ResolveSelfCliDeps): string {
   const argvPath = tryCandidate(deps.argv1, 'process.argv[1]', true);
   if (argvPath) return argvPath;
 
-  const fullPathEnv = buildFullPathEnv(deps.envPath, deps.homeDir);
+  const fullPathEnv = buildFullPathEnv(deps.envPath, deps.homeDir, deps.nodeExecDir);
   tried.push(`which agentbnb PATH=${fullPathEnv}`);
   try {
     const whichPath = tryCandidate(deps.runWhich(fullPathEnv), 'which agentbnb');
@@ -97,6 +99,14 @@ export function resolveSelfCliWithDeps(deps: ResolveSelfCliDeps): string {
     if (resolvedPath) return resolvedPath;
   }
 
+  if (deps.nodeExecDir) {
+    const execDirCandidate = tryCandidate(
+      join(deps.nodeExecDir, 'agentbnb'),
+      'node-execpath-dir',
+    );
+    if (execDirCandidate) return execDirCandidate;
+  }
+
   try {
     const requireResolved = deps.requireResolve('agentbnb/dist/cli/index.js');
     const resolvedPath = tryCandidate(requireResolved, 'require.resolve(agentbnb/dist/cli/index.js)');
@@ -111,7 +121,7 @@ export function resolveSelfCliWithDeps(deps: ResolveSelfCliDeps): string {
   );
 }
 
-function buildFullPathEnv(pathEnv: string | undefined, homeDir: string): string {
+function buildFullPathEnv(pathEnv: string | undefined, homeDir: string, nodeExecDir?: string): string {
   const values = new Set<string>();
   for (const item of (pathEnv ?? '').split(':')) {
     if (item.trim()) values.add(item.trim());
@@ -129,6 +139,10 @@ function buildFullPathEnv(pathEnv: string | undefined, homeDir: string): string 
     join(homeDir, '.local', 'share', 'pnpm'),
   ]) {
     values.add(extra);
+  }
+
+  if (nodeExecDir) {
+    values.add(nodeExecDir);
   }
 
   return [...values].join(':');
