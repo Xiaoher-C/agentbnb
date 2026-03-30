@@ -15,7 +15,15 @@
     "dist",
     "README.md",
     "LICENSE",
-    "skills/agentbnb",
+    "skills/agentbnb/auto-request.ts",
+    "skills/agentbnb/auto-share.ts",
+    "skills/agentbnb/bootstrap.ts",
+    "skills/agentbnb/credit-mgr.ts",
+    "skills/agentbnb/gateway.ts",
+    "skills/agentbnb/openclaw-tools.ts",
+    "skills/agentbnb/HEARTBEAT.rules.md",
+    "skills/agentbnb/install.sh",
+    "skills/agentbnb/SKILL.md",
     "openclaw.plugin.json"
   ],
   "exports": {
@@ -92,7 +100,7 @@
     ]
   },
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=20.0.0 <25.0.0"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
