@@ -72,36 +72,49 @@ function generateSkillsYaml(configDir: string): { generated: boolean; path: stri
 }
 
 /**
- * Register AgentBnB MCP server with Claude Code's settings.json.
+ * Register AgentBnB MCP server with Claude Code's config file.
  * Idempotent — skips if already registered or if Claude Code is not detected.
+ *
+ * Claude Code 2.x stores MCP servers in ~/.claude.json (top-level file) under
+ * the `mcpServers` key, with entries shaped as:
+ *   { type: "stdio", command: "<path>", args: [...], env: {} }
+ *
+ * Older Claude Code versions used ~/.claude/settings.json. We check for
+ * ~/.claude.json first (preferred), then fall back to ~/.claude/settings.json.
  */
 function registerMcpWithClaudeCode(): { registered: boolean; path?: string; reason?: string } {
   const claudeDir = join(homedir(), '.claude');
+  const claudeJsonPath = join(homedir(), '.claude.json');
+  const legacySettingsPath = join(claudeDir, 'settings.json');
 
-  if (!existsSync(claudeDir)) {
+  // Detect which Claude Code config file to use.
+  // ~/.claude.json (Claude Code 2.x) takes priority over ~/.claude/settings.json.
+  const useLegacy = !existsSync(claudeJsonPath) && existsSync(legacySettingsPath);
+  const targetPath = useLegacy ? legacySettingsPath : claudeJsonPath;
+
+  if (!existsSync(claudeJsonPath) && !existsSync(claudeDir)) {
     return {
       registered: false,
       reason: 'Claude Code not detected. Add MCP manually: claude mcp add agentbnb -- agentbnb mcp-server',
     };
   }
 
-  const settingsPath = join(claudeDir, 'settings.json');
   let agentbnbCommand: string;
   try {
     agentbnbCommand = resolveSelfCli();
   } catch (err) {
     const reason = err instanceof Error ? err.message : String(err);
-    return { registered: false, path: settingsPath, reason: `MCP registration skipped: ${reason}` };
+    return { registered: false, path: targetPath, reason: `MCP registration skipped: ${reason}` };
   }
 
   let settings: Record<string, unknown> = {};
-  if (existsSync(settingsPath)) {
+  if (existsSync(targetPath)) {
     try {
-      settings = JSON.parse(readFileSync(settingsPath, 'utf-8'));
+      settings = JSON.parse(readFileSync(targetPath, 'utf-8'));
     } catch {
       // Malformed JSON — backup and start fresh
       try {
-        writeFileSync(`${settingsPath}.bak`, readFileSync(settingsPath, 'utf-8'), 'utf-8');
+        writeFileSync(`${targetPath}.bak`, readFileSync(targetPath, 'utf-8'), 'utf-8');
       } catch { /* ignore backup failure */ }
       settings = {};
     }
@@ -113,18 +126,23 @@ function registerMcpWithClaudeCode(): { registered: boolean; path?: string; reas
   const existingCommand = typeof existingEntry?.command === 'string' ? existingEntry.command : undefined;
   const existingArgs = Array.isArray(existingEntry?.args) ? existingEntry.args : undefined;
   if (existingCommand === agentbnbCommand && existingArgs?.length === 1 && existingArgs[0] === 'mcp-server') {
-    return { registered: false, path: settingsPath, reason: 'already registered' };
+    return { registered: false, path: targetPath, reason: 'already registered' };
   }
 
   // Add or update AgentBnB MCP entry with absolute CLI path.
+  // Claude Code 2.x requires `type: "stdio"` in the entry.
+  // The legacy settings.json format omits `type` — we include it anyway as it
+  // is harmlessly ignored by older versions.
   mcpServers.agentbnb = {
+    type: 'stdio',
     command: agentbnbCommand,
     args: ['mcp-server'],
+    env: {},
   };
   settings.mcpServers = mcpServers;
 
-  writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + '\n', 'utf-8');
-  return { registered: true, path: settingsPath };
+  writeFileSync(targetPath, JSON.stringify(settings, null, 2) + '\n', 'utf-8');
+  return { registered: true, path: targetPath };
 }
 
 /** Quickstart command options. */

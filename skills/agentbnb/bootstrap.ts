@@ -294,32 +294,29 @@ function quoteShellArg(input: string): string {
  * registered here to avoid double-handler conflicts. Track in Layer A implementation.
  */
 export async function activate(config: BootstrapConfig = {}, _onboardDeps?: OnboardDeps): Promise<BootstrapContext> {
+  const debug = process.env['AGENTBNB_DEBUG'] === '1';
+
   // Per-workspace isolation: determine the correct config directory.
   // Priority: config.agentDir > config.workspaceDir/.agentbnb > AGENTBNB_DIR env > resolveWorkspaceDir()
   if (config.agentDir) {
     process.env['AGENTBNB_DIR'] = config.agentDir;
-    process.stderr.write(
-      `[agentbnb] AGENTBNB_DIR set from config.agentDir: ${config.agentDir}\n`
-    );
+    if (debug) process.stderr.write(`[agentbnb] AGENTBNB_DIR set from config.agentDir: ${config.agentDir}\n`);
   } else if (config.workspaceDir) {
     const derived = join(config.workspaceDir, '.agentbnb');
     process.env['AGENTBNB_DIR'] = derived;
-    process.stderr.write(
-      `[agentbnb] AGENTBNB_DIR derived from config.workspaceDir: ${derived}\n`
-    );
+    if (debug) process.stderr.write(`[agentbnb] AGENTBNB_DIR derived from config.workspaceDir: ${derived}\n`);
   } else if (!process.env['AGENTBNB_DIR']) {
     const workspaceDir = resolveWorkspaceDir();
     process.env['AGENTBNB_DIR'] = workspaceDir;
-    process.stderr.write(
-      `[agentbnb] AGENTBNB_DIR auto-configured to ${workspaceDir} for workspace isolation.\n`
-    );
+    if (debug) process.stderr.write(`[agentbnb] AGENTBNB_DIR auto-configured to ${workspaceDir}\n`);
   }
 
   const configDir = getConfigDir();
 
   if (process.env['AGENTBNB_DIR'] !== configDir) {
+    // Unexpected: env was just set above, so this indicates a resolution conflict.
     process.stderr.write(
-      `[agentbnb] WARNING: AGENTBNB_DIR (${process.env['AGENTBNB_DIR']}) differs from resolved configDir (${configDir}).\n`
+      `[agentbnb] config dir mismatch: env=${process.env['AGENTBNB_DIR']} resolved=${configDir}\n`
     );
   }
 
@@ -329,10 +326,12 @@ export async function activate(config: BootstrapConfig = {}, _onboardDeps?: Onbo
     agentConfig = await autoOnboard(configDir, _onboardDeps);
   }
 
-  // Print startup diagnostic so it's always visible in agent logs.
-  process.stderr.write(
-    `[agentbnb] activate: owner=${agentConfig.owner} config=${configDir}/config.json\n`
-  );
+  // Startup diagnostic — only emit when debug mode is on or first-time setup.
+  if (debug) {
+    process.stderr.write(
+      `[agentbnb] activate: owner=${agentConfig.owner} config=${configDir}/config.json\n`
+    );
+  }
 
   // Use configDir for PID file — previously hardcoded to homedir()/.agentbnb which meant
   // multiple agents on the same machine would fight over the same PID file.
