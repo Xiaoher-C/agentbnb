@@ -9,13 +9,19 @@ import { AgentBnBError } from '../types/index.js';
 export interface TemporaryRelayRequestOptions {
   /** Registry URL (HTTP/HTTPS — will be upgraded to WS). */
   registryUrl: string;
-  /** Requester agent owner identifier. */
-  owner: string;
+  /**
+   * Requester canonical identity. Prefer agent_id (cryptographic, stable across
+   * renames) over owner (legacy human-chosen string). Used for relay credit tracking.
+   * Provide at least one of agent_id or owner.
+   */
+  agent_id?: string;
+  /** @deprecated Use agent_id. Kept for backward compat during v7→v8 transition. */
+  owner?: string;
   /** Authentication token for the registry. */
   token: string;
   /** Target agent owner identifier. */
   targetOwner: string;
-  /** Canonical target agent identity. Preferred over owner when available. */
+  /** Canonical target agent identity. Preferred over targetOwner when available. */
   targetAgentId?: string;
   /** Capability Card ID to execute. */
   cardId: string;
@@ -44,6 +50,7 @@ export interface TemporaryRelayRequestOptions {
 export async function requestViaTemporaryRelay(opts: TemporaryRelayRequestOptions): Promise<unknown> {
   const {
     registryUrl,
+    agent_id,
     owner,
     token,
     targetOwner,
@@ -54,7 +61,9 @@ export async function requestViaTemporaryRelay(opts: TemporaryRelayRequestOption
     timeoutMs = 300_000,
   } = opts;
 
-  const requesterId = `${owner}:req:${randomUUID()}`;
+  // Prefer agent_id (cryptographic, stable) over owner (legacy string).
+  const requesterIdentity = agent_id ?? owner ?? '';
+  const requesterId = `${requesterIdentity}:req:${randomUUID()}`;
 
   const relay = new RelayClient({
     registryUrl,
@@ -93,7 +102,7 @@ export async function requestViaTemporaryRelay(opts: TemporaryRelayRequestOption
       cardId,
       skillId,
       params,
-      requester: owner, // actual owner for credit tracking on relay server
+      requester: requesterIdentity, // canonical identity for relay credit tracking
       timeoutMs,
     });
   } finally {
