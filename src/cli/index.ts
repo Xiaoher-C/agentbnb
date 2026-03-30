@@ -1640,6 +1640,60 @@ openclaw
     await runOpenClawSetup(opts);
   });
 
+/**
+ * agentbnb openclaw skills
+ * Subcommand group for managing shared skills on AgentBnB.
+ */
+const skills = openclaw.command('skills').description('Manage shared skills on AgentBnB');
+
+skills
+  .command('list')
+  .description('List all shared skills with stats')
+  .action(async () => {
+    const { skillsList } = await import('./openclaw-skills.js');
+    await skillsList({});
+  });
+
+skills
+  .command('add')
+  .description('Add a skill to share (interactive or --manual)')
+  .option('--manual', 'Non-interactive: use flags instead of prompts')
+  .option('--name <id>', 'Skill ID')
+  .option('--type <type>', 'Skill type (command|openclaw)')
+  .option('--price <n>', 'Credits per call', parseFloat)
+  .option('--description <text>', 'Skill description')
+  .action(
+    async (opts: { manual?: boolean; name?: string; type?: string; price?: number; description?: string }) => {
+      const { skillsAdd } = await import('./openclaw-skills.js');
+      await skillsAdd(opts);
+    },
+  );
+
+skills
+  .command('remove <skillId>')
+  .description('Remove a skill from AgentBnB')
+  .action(async (skillId: string) => {
+    const { skillsRemove } = await import('./openclaw-skills.js');
+    await skillsRemove(skillId);
+  });
+
+skills
+  .command('price <skillId> <price>')
+  .description('Update skill price')
+  .action(async (skillId: string, price: string) => {
+    const { skillsPrice } = await import('./openclaw-skills.js');
+    await skillsPrice(skillId, parseFloat(price));
+  });
+
+skills
+  .command('stats')
+  .description('Revenue and performance report')
+  .option('--days <n>', 'Days to look back', parseInt, 7)
+  .action(async (opts: { days?: number }) => {
+    const { skillsStats } = await import('./openclaw-skills.js');
+    await skillsStats(opts);
+  });
+
 // ---------------------------------------------------------------------------
 // conduct
 // ---------------------------------------------------------------------------

@@ -4,13 +4,16 @@
  */
 
 import { createInterface } from 'node:readline';
-import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join as joinPath } from 'node:path';
 import { homedir } from 'node:os';
 import { getPricingStats } from '../registry/pricing.js';
 import { parseSoulMd } from '../skills/publish-capability.js';
 import { publishFromSoulV2 } from '../openclaw/index.js';
 import { performInit } from './init-action.js';
+import { scanAgents } from '../workspace/scanner.js';
+import { appendSoulMdTradingSection, appendHeartbeatTradingSection } from '../workspace/writer.js';
+import { initGepDir } from '../workspace/gep-init.js';
 
 /** Options passed to runOpenClawSetup */
 export interface OpenClawSetupOptions {
@@ -65,54 +68,99 @@ async function detectFreePort(start = 3100): Promise<number> {
 export async function runOpenClawSetup(opts: OpenClawSetupOptions): Promise<void> {
   console.log('AgentBnB Setup for OpenClaw Agents\n');
 
-  // 1. Resolve OpenClaw agents directory
+  // ── Step 1: Mode selection ──────────────────────────────────────────────────
+  if (!opts.yes) {
+    console.log('How do you want to get started?');
+    console.log('  1. Connect an existing agent');
+    console.log('  2. Create a new trading agent (coming soon)');
+    console.log('');
+    const modeInput = await prompt('Select mode (default: 1): ');
+    const mode = modeInput === '' ? '1' : modeInput;
+    if (mode === '2') {
+      console.log('\nCreating new trading agents from templates is coming in a future release.');
+      console.log('For now, use Option 1 to connect an existing OpenClaw agent.');
+      process.exit(0);
+    }
+    if (mode !== '1') {
+      console.error('Invalid selection.');
+      process.exit(1);
+    }
+  }
+
+  // ── Step 2: Agent discovery (brains/ primary + agents/ fallback) ────────────
   const agentsDir = joinPath(homedir(), '.openclaw', 'agents');
-  if (!existsSync(agentsDir)) {
-    console.error(`Error: OpenClaw agents directory not found at ${agentsDir}`);
+  const brainsDir = joinPath(homedir(), '.openclaw', 'workspace', 'brains');
+
+  // Verify at least one OpenClaw directory exists
+  if (!existsSync(agentsDir) && !existsSync(brainsDir)) {
+    console.error(`Error: OpenClaw directory not found at ${agentsDir}`);
     console.error('Install OpenClaw first: https://openclaw.dev');
     process.exit(1);
   }
 
-  // 2. Discover agents with SOUL.md
   let agentName: string;
+  let agentBrainDir = '';
+
   if (opts.agent) {
     agentName = opts.agent;
+    agentBrainDir = existsSync(joinPath(brainsDir, agentName))
+      ? joinPath(brainsDir, agentName)
+      : '';
   } else {
-    console.log(`Scanning ${agentsDir}...\n`);
-    const entries = readdirSync(agentsDir, { withFileTypes: true })
-      .filter((d) => d.isDirectory())
-      .map((d) => d.name)
-      .filter((name) => existsSync(joinPath(agentsDir, name, 'SOUL.md')));
+    console.log('Scanning for available agents...\n');
 
-    if (entries.length === 0) {
-      console.error('No agents with SOUL.md found in ~/.openclaw/agents/');
+    // Use unified scanner (brains/ + agents/)
+    const detected = scanAgents();
+
+    if (detected.length === 0) {
+      console.error('No agents found in ~/.openclaw/workspace/brains/ or ~/.openclaw/agents/');
       process.exit(1);
     }
 
     console.log('Available agents:');
-    entries.forEach((name, i) => console.log(`  ${i + 1}. ${name} (SOUL.md found)`));
+    const maxNameLen = Math.max(...detected.map((d) => d.name.length));
+    detected.forEach((d, i) => {
+      const desc = d.description ? d.description.slice(0, 50) : '(no description)';
+      const skills = d.skillCount > 0 ? `, ${d.skillCount} skills` : '';
+      const brainIndicator = d.brainDir ? ' [brain]' : '';
+      console.log(
+        `  ${i + 1}. ${d.name.padEnd(maxNameLen + 2)} — ${desc}${skills}${brainIndicator}`,
+      );
+    });
     console.log('');
 
     const input = await prompt(`Select agent (default: 1): `);
     const idx = input === '' ? 0 : parseInt(input, 10) - 1;
-    if (isNaN(idx) || idx < 0 || idx >= entries.length) {
+    if (isNaN(idx) || idx < 0 || idx >= detected.length) {
       console.error('Invalid selection.');
       process.exit(1);
     }
-    agentName = entries[idx]!;
+
+    const selected = detected[idx]!;
+    agentName = selected.name;
+    agentBrainDir = selected.brainDir;
   }
 
+  // ── Step 3: Resolve SOUL.md ─────────────────────────────────────────────────
   const agentDir = joinPath(agentsDir, agentName);
-  const soulPath = opts.soulPath ?? joinPath(agentDir, 'SOUL.md');
 
-  if (!existsSync(soulPath)) {
-    console.error(`Error: SOUL.md not found at ${soulPath}`);
+  // Check brain dir first, then agent dir
+  let soulPath: string;
+  if (opts.soulPath) {
+    soulPath = opts.soulPath;
+  } else if (agentBrainDir && existsSync(joinPath(agentBrainDir, 'SOUL.md'))) {
+    soulPath = joinPath(agentBrainDir, 'SOUL.md');
+  } else if (existsSync(joinPath(agentDir, 'SOUL.md'))) {
+    soulPath = joinPath(agentDir, 'SOUL.md');
+  } else {
+    console.error(`Error: SOUL.md not found for agent "${agentName}"`);
+    console.error(`Checked: ${agentBrainDir ? agentBrainDir + '/SOUL.md, ' : ''}${agentDir}/SOUL.md`);
     process.exit(1);
   }
 
   console.log(`\nReading ${agentName}/SOUL.md...`);
 
-  // 3. Parse SOUL.md to extract skills
+  // Parse SOUL.md to extract skills
   const soulContent = readFileSync(soulPath, 'utf-8');
   const parsed = parseSoulMd(soulContent);
 
@@ -121,16 +169,14 @@ export async function runOpenClawSetup(opts: OpenClawSetupOptions): Promise<void
     process.exit(1);
   }
 
-  // 4. Determine agentbnb dir for this agent
+  // ── Step 4: Determine agentbnb dir and pricing ──────────────────────────────
   const agentbnbDir = joinPath(agentDir, '.agentbnb');
   const alreadyInit = existsSync(joinPath(agentbnbDir, 'config.json'));
 
-  // 5. Set AGENTBNB_DIR for all subsequent operations
+  // Set AGENTBNB_DIR for all subsequent operations
   process.env['AGENTBNB_DIR'] = agentbnbDir;
 
-  // 6. Get pricing suggestions
-  // We need a temp db instance for pricing stats. If already init'd, use existing db.
-  // Otherwise we can't query yet — use heuristics only.
+  // Get pricing suggestions
   const pricingMap: Record<string, number> = {};
   if (alreadyInit) {
     try {
@@ -155,7 +201,7 @@ export async function runOpenClawSetup(opts: OpenClawSetupOptions): Promise<void
     }
   }
 
-  // 7. Display detected skills
+  // Display detected skills
   console.log('\nDetected skills:');
   const maxNameLen = Math.max(...parsed.capabilities.map((c) => c.name.length));
   for (const cap of parsed.capabilities) {
@@ -164,7 +210,7 @@ export async function runOpenClawSetup(opts: OpenClawSetupOptions): Promise<void
     console.log(`  ${cap.name.padEnd(maxNameLen + 2)} — ${desc.padEnd(42)} (suggested: ${price} cr)`);
   }
 
-  // 8. Confirm
+  // Confirm
   if (!opts.yes) {
     const answer = await prompt(`\nShare ${parsed.capabilities.length} skill(s) on the AgentBnB network? [Y/n]: `);
     if (answer.toLowerCase() === 'n') {
@@ -175,7 +221,7 @@ export async function runOpenClawSetup(opts: OpenClawSetupOptions): Promise<void
 
   console.log('\nInitializing...');
 
-  // 9. Init (if needed)
+  // ── Step 5: Init identity + config ─────────────────────────────────────────
   if (!alreadyInit) {
     const freePort = await detectFreePort();
     await performInit({
@@ -190,7 +236,7 @@ export async function runOpenClawSetup(opts: OpenClawSetupOptions): Promise<void
     console.log(`  ✓ ${agentbnbDir}/config.json already exists`);
   }
 
-  // 10. Publish capability card
+  // ── Step 6: Publish capability card ────────────────────────────────────────
   const { loadConfig } = await import('./config.js');
   const cfg = loadConfig();
   if (!cfg) {
@@ -206,9 +252,10 @@ export async function runOpenClawSetup(opts: OpenClawSetupOptions): Promise<void
     db.close();
   }
 
-  // 11. Generate skills.yaml template (only if not exists)
+  // ── Step 7: Generate skills.yaml template (only if not exists) ──────────────
+  const { existsSync: fsExists, writeFileSync: fsWrite } = await import('node:fs');
   const skillsYamlPath = joinPath(agentbnbDir, 'skills.yaml');
-  if (!existsSync(skillsYamlPath)) {
+  if (!fsExists(skillsYamlPath)) {
     const yamlLines = ['# AgentBnB skills configuration — generated by `agentbnb openclaw setup`', ''];
     for (const cap of parsed.capabilities) {
       const price = pricingMap[cap.name]!;
@@ -223,46 +270,59 @@ export async function runOpenClawSetup(opts: OpenClawSetupOptions): Promise<void
         '',
       );
     }
-    writeFileSync(skillsYamlPath, yamlLines.join('\n'), 'utf-8');
+    fsWrite(skillsYamlPath, yamlLines.join('\n'), 'utf-8');
     console.log(`  ✓ Generated ${skillsYamlPath}`);
   }
 
-  // 12. Inject AgentBnB trading section into SOUL.md
-  const sectionHeader = '## AgentBnB Network Trading';
-  if (!soulContent.includes(sectionHeader)) {
-    const skillRows = parsed.capabilities
-      .map((cap) => `| ${cap.name} | ${pricingMap[cap.name]!} cr | ${cap.description.split('\n')[0]?.trim().slice(0, 60) ?? ''} |`)
-      .join('\n');
+  // ── Step 8: GEP-lite init ───────────────────────────────────────────────────
+  const effectiveBrainDir = agentBrainDir || agentDir;
+  try {
+    initGepDir(effectiveBrainDir);
+    console.log(`  ✓ Initialized evolution assets (gep/)`);
+  } catch {
+    // Non-fatal — brain dir may not be writable
+  }
 
-    const section = [
-      '',
-      '---',
-      sectionHeader,
-      '',
-      `This agent is connected to the [AgentBnB](https://agentbnb.dev) P2P capability-sharing network.`,
-      '',
-      '### Shared Skills',
-      '| Skill | Price | Description |',
-      '|-------|-------|-------------|',
-      skillRows,
-      '',
-      '### Trading Rules',
-      `- AGENTBNB_DIR: ${agentbnbDir}`,
-      '- Reserve floor: 20 credits (never auto-spend below this)',
-      '- Auto-trade limit: 10 credits per transaction (above → ask owner)',
-      `- Run capabilities: \`AGENTBNB_DIR=${agentbnbDir} agentbnb request <card_id> --skill <skill> --params '<json>'\``,
-      `- Check balance: \`AGENTBNB_DIR=${agentbnbDir} agentbnb status\``,
-      '',
-      '### How to Earn',
-      'Credits are escrowed when another agent hires your skill and settled on success (5% network fee applies).',
-    ].join('\n');
+  // ── Step 9: Inject AgentBnB trading section into SOUL.md ───────────────────
+  const skillEntries = parsed.capabilities.map((cap) => ({
+    id: cap.name,
+    name: cap.name,
+    description: cap.description,
+    pricing: { credits_per_call: pricingMap[cap.name]! },
+  }));
 
-    writeFileSync(soulPath, soulContent + section, 'utf-8');
-    console.log(`  ✓ AgentBnB trading section added to SOUL.md`);
-  } else {
-    console.log(`  ✓ SOUL.md already has AgentBnB section`);
+  try {
+    appendSoulMdTradingSection(soulPath, skillEntries, agentbnbDir);
+    const currentContent = readFileSync(soulPath, 'utf-8');
+    if (currentContent.includes('## AgentBnB Network Trading')) {
+      console.log(`  ✓ AgentBnB trading section present in SOUL.md`);
+    }
+  } catch {
+    // Non-fatal
+  }
+
+  // ── Step 10: Append HEARTBEAT.md trading section (if exists) ───────────────
+  const heartbeatCandidates = [
+    agentBrainDir ? joinPath(agentBrainDir, 'HEARTBEAT.md') : null,
+    joinPath(agentDir, 'HEARTBEAT.md'),
+  ].filter(Boolean) as string[];
+
+  for (const hbPath of heartbeatCandidates) {
+    if (fsExists(hbPath)) {
+      try {
+        appendHeartbeatTradingSection(hbPath, agentbnbDir);
+        console.log(`  ✓ Updated HEARTBEAT.md`);
+      } catch {
+        // Non-fatal
+      }
+      break;
+    }
   }
 
   console.log(`\n${agentName} is now on the AgentBnB network!`);
   console.log(`Run 'openclaw daemon restart' to start earning.`);
+  console.log(`\nUseful commands:`);
+  console.log(`  AGENTBNB_DIR=${agentbnbDir} agentbnb openclaw skills list`);
+  console.log(`  AGENTBNB_DIR=${agentbnbDir} agentbnb openclaw skills stats`);
+  console.log(`  AGENTBNB_DIR=${agentbnbDir} agentbnb status`);
 }
