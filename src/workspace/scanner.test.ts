@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { scanAgents, scanCapabilities } from './scanner.js';
+import { scanAgents, scanCapabilities, getOpenClawWorkspaceDir, findSoulMd, scanWorkspaceSkills } from './scanner.js';
 
 /** Create a temp dir for test isolation. */
 function makeTempDir(): string {
@@ -10,6 +10,176 @@ function makeTempDir(): string {
   mkdirSync(dir, { recursive: true });
   return dir;
 }
+
+describe('getOpenClawWorkspaceDir', () => {
+  let tempHome: string;
+  let originalHome: string | undefined;
+  let originalProfile: string | undefined;
+
+  beforeEach(() => {
+    tempHome = makeTempDir();
+    originalHome = process.env['HOME'];
+    originalProfile = process.env['OPENCLAW_PROFILE'];
+    process.env['HOME'] = tempHome;
+    delete process.env['OPENCLAW_PROFILE'];
+  });
+
+  afterEach(() => {
+    if (originalHome !== undefined) process.env['HOME'] = originalHome;
+    else delete process.env['HOME'];
+    if (originalProfile !== undefined) process.env['OPENCLAW_PROFILE'] = originalProfile;
+    else delete process.env['OPENCLAW_PROFILE'];
+    rmSync(tempHome, { recursive: true, force: true });
+  });
+
+  it('returns default workspace when no config or profile', () => {
+    const result = getOpenClawWorkspaceDir();
+    expect(result).toBe(join(tempHome, '.openclaw', 'workspace'));
+  });
+
+  it('uses workspace-<profile> when OPENCLAW_PROFILE is set', () => {
+    process.env['OPENCLAW_PROFILE'] = 'prod';
+    const result = getOpenClawWorkspaceDir();
+    expect(result).toBe(join(tempHome, '.openclaw', 'workspace-prod'));
+  });
+
+  it('ignores OPENCLAW_PROFILE=default and uses default path', () => {
+    process.env['OPENCLAW_PROFILE'] = 'default';
+    const result = getOpenClawWorkspaceDir();
+    expect(result).toBe(join(tempHome, '.openclaw', 'workspace'));
+  });
+
+  it('reads custom workspace from openclaw.json', () => {
+    const openclawDir = join(tempHome, '.openclaw');
+    mkdirSync(openclawDir, { recursive: true });
+    const customPath = '/custom/workspace/path';
+    writeFileSync(
+      join(openclawDir, 'openclaw.json'),
+      JSON.stringify({ agents: { defaults: { workspace: customPath } } }),
+      'utf-8',
+    );
+    const result = getOpenClawWorkspaceDir();
+    expect(result).toBe(customPath);
+  });
+
+  it('falls back to default when openclaw.json has no workspace field', () => {
+    const openclawDir = join(tempHome, '.openclaw');
+    mkdirSync(openclawDir, { recursive: true });
+    writeFileSync(join(openclawDir, 'openclaw.json'), JSON.stringify({ other: 'data' }), 'utf-8');
+    const result = getOpenClawWorkspaceDir();
+    expect(result).toBe(join(tempHome, '.openclaw', 'workspace'));
+  });
+});
+
+describe('findSoulMd', () => {
+  let tempHome: string;
+  let originalHome: string | undefined;
+
+  beforeEach(() => {
+    tempHome = makeTempDir();
+    originalHome = process.env['HOME'];
+    process.env['HOME'] = tempHome;
+  });
+
+  afterEach(() => {
+    if (originalHome !== undefined) process.env['HOME'] = originalHome;
+    else delete process.env['HOME'];
+    rmSync(tempHome, { recursive: true, force: true });
+  });
+
+  it('returns null when no SOUL.md exists anywhere', () => {
+    expect(findSoulMd('my-agent')).toBeNull();
+  });
+
+  it('finds SOUL.md in brains/ directory (priority 1)', () => {
+    const brainDir = join(tempHome, '.openclaw', 'workspace', 'brains', 'my-agent');
+    mkdirSync(brainDir, { recursive: true });
+    const soulPath = join(brainDir, 'SOUL.md');
+    writeFileSync(soulPath, '# Agent', 'utf-8');
+
+    // Also create agents/my-agent/SOUL.md to verify priority
+    const agentDir = join(tempHome, '.openclaw', 'agents', 'my-agent');
+    mkdirSync(agentDir, { recursive: true });
+    writeFileSync(join(agentDir, 'SOUL.md'), '# Legacy', 'utf-8');
+
+    expect(findSoulMd('my-agent')).toBe(soulPath);
+  });
+
+  it('falls back to agents/ directory (priority 2)', () => {
+    const agentDir = join(tempHome, '.openclaw', 'agents', 'my-agent');
+    mkdirSync(agentDir, { recursive: true });
+    const soulPath = join(agentDir, 'SOUL.md');
+    writeFileSync(soulPath, '# Agent', 'utf-8');
+
+    expect(findSoulMd('my-agent')).toBe(soulPath);
+  });
+
+  it('falls back to workspace root SOUL.md (priority 3)', () => {
+    const workspaceDir = join(tempHome, '.openclaw', 'workspace');
+    mkdirSync(workspaceDir, { recursive: true });
+    const soulPath = join(workspaceDir, 'SOUL.md');
+    writeFileSync(soulPath, '# Main Agent', 'utf-8');
+
+    // Any agent name falls back to workspace root
+    expect(findSoulMd('main')).toBe(soulPath);
+    expect(findSoulMd('nonexistent')).toBe(soulPath);
+  });
+});
+
+describe('scanWorkspaceSkills', () => {
+  let tempHome: string;
+  let originalHome: string | undefined;
+
+  beforeEach(() => {
+    tempHome = makeTempDir();
+    originalHome = process.env['HOME'];
+    process.env['HOME'] = tempHome;
+  });
+
+  afterEach(() => {
+    if (originalHome !== undefined) process.env['HOME'] = originalHome;
+    else delete process.env['HOME'];
+    rmSync(tempHome, { recursive: true, force: true });
+  });
+
+  it('returns empty array when workspace/skills/ does not exist', () => {
+    expect(scanWorkspaceSkills()).toEqual([]);
+  });
+
+  it('scans SKILL.md files in workspace/skills/', () => {
+    const skillDir = join(tempHome, '.openclaw', 'workspace', 'skills', 'my-skill');
+    mkdirSync(skillDir, { recursive: true });
+    writeFileSync(
+      join(skillDir, 'SKILL.md'),
+      '---\nname: My Workspace Skill\ndescription: Does something shared\n---\n',
+      'utf-8',
+    );
+
+    const result = scanWorkspaceSkills();
+    expect(result).toHaveLength(1);
+    expect(result[0]!.name).toBe('My Workspace Skill');
+    expect(result[0]!.description).toBe('Does something shared');
+    expect(result[0]!.source).toBe('skill_md');
+  });
+
+  it('uses directory name as fallback when no frontmatter', () => {
+    const skillDir = join(tempHome, '.openclaw', 'workspace', 'skills', 'raw-skill');
+    mkdirSync(skillDir, { recursive: true });
+    writeFileSync(join(skillDir, 'SKILL.md'), '# Raw Skill\n\nNo frontmatter.', 'utf-8');
+
+    const result = scanWorkspaceSkills();
+    expect(result).toHaveLength(1);
+    expect(result[0]!.name).toBe('raw-skill');
+  });
+
+  it('skips directories without SKILL.md', () => {
+    const skillDir = join(tempHome, '.openclaw', 'workspace', 'skills', 'no-skill-md');
+    mkdirSync(skillDir, { recursive: true });
+    writeFileSync(join(skillDir, 'README.md'), '# Not a skill', 'utf-8');
+
+    expect(scanWorkspaceSkills()).toHaveLength(0);
+  });
+});
 
 describe('scanAgents', () => {
   let tempHome: string;
@@ -94,6 +264,38 @@ describe('scanAgents', () => {
 
     const result = scanAgents();
     expect(result.map((r) => r.name)).toEqual(['alpha-bot', 'middle-bot', 'zebra-bot']);
+  });
+
+  it('detects workspace-root SOUL.md as "main" agent', () => {
+    const workspaceDir = join(tempHome, '.openclaw', 'workspace');
+    mkdirSync(workspaceDir, { recursive: true });
+    writeFileSync(
+      join(workspaceDir, 'SOUL.md'),
+      '# Main Agent\n\nI am the primary workspace agent.',
+      'utf-8',
+    );
+
+    const result = scanAgents();
+    expect(result).toHaveLength(1);
+    expect(result[0]!.name).toBe('main');
+    expect(result[0]!.description).toContain('primary workspace agent');
+    expect(result[0]!.brainDir).toBe(workspaceDir);
+  });
+
+  it('does not add "main" from workspace root if brains/main already exists', () => {
+    const brainsDir = join(tempHome, '.openclaw', 'workspace', 'brains', 'main');
+    mkdirSync(brainsDir, { recursive: true });
+    writeFileSync(join(brainsDir, 'SOUL.md'), '# Main Brain\n\nBrain version.', 'utf-8');
+
+    const workspaceDir = join(tempHome, '.openclaw', 'workspace');
+    writeFileSync(join(workspaceDir, 'SOUL.md'), '# Main Root\n\nRoot version.', 'utf-8');
+
+    const result = scanAgents();
+    expect(result).toHaveLength(1);
+    expect(result[0]!.name).toBe('main');
+    // Brain dir takes precedence
+    expect(result[0]!.brainDir).toBe(brainsDir);
+    expect(result[0]!.description).toContain('Brain version');
   });
 });
 

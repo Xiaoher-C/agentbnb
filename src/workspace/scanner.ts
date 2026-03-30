@@ -1,12 +1,18 @@
 /**
  * Workspace scanner — discovers OpenClaw agents and capabilities.
  *
- * Scans ~/.openclaw/workspace/brains/ (primary) and ~/.openclaw/agents/ (fallback)
- * to build a unified view of available agents and their capabilities.
+ * Scans ~/.openclaw/workspace/brains/ (primary), ~/.openclaw/agents/ (fallback),
+ * and ~/.openclaw/workspace/SOUL.md (workspace-root single-agent) to build a
+ * unified view of available agents and their capabilities.
+ *
+ * Workspace path resolution honours (in priority order):
+ *   1. openclaw.json agents.defaults.workspace
+ *   2. OPENCLAW_PROFILE env var  → workspace-<profile>
+ *   3. Default ~/.openclaw/workspace/
  */
 
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, dirname } from 'node:path';
 import { homedir } from 'node:os';
 
 /** A detected OpenClaw agent with its workspace metadata. */
@@ -100,17 +106,97 @@ function countSkills(brainDir: string): number {
 }
 
 /**
+ * Returns the OpenClaw workspace directory.
+ *
+ * Resolution order:
+ *   1. openclaw.json → agents.defaults.workspace
+ *   2. OPENCLAW_PROFILE env → ~/.openclaw/workspace-<profile>
+ *   3. Default ~/.openclaw/workspace/
+ */
+export function getOpenClawWorkspaceDir(): string {
+  const openclawDir = join(homedir(), '.openclaw');
+  const configPath = join(openclawDir, 'openclaw.json');
+
+  if (existsSync(configPath)) {
+    try {
+      const raw = readFileSync(configPath, 'utf-8');
+      const config = JSON.parse(raw) as Record<string, unknown>;
+      const agents = config['agents'] as Record<string, unknown> | undefined;
+      const defaults = agents?.['defaults'] as Record<string, unknown> | undefined;
+      const workspace = defaults?.['workspace'];
+      if (typeof workspace === 'string' && workspace.length > 0) {
+        return workspace;
+      }
+    } catch { /* fall through */ }
+  }
+
+  const profile = process.env['OPENCLAW_PROFILE'];
+  if (profile && profile !== 'default') {
+    return join(openclawDir, `workspace-${profile}`);
+  }
+
+  return join(openclawDir, 'workspace');
+}
+
+/**
+ * Finds the SOUL.md file for a given agent by searching multiple paths.
+ *
+ * Search priority:
+ *   1. <workspaceDir>/brains/<agentName>/SOUL.md  (multi-agent brain dir)
+ *   2. ~/.openclaw/agents/<agentName>/SOUL.md      (legacy agents dir)
+ *   3. <workspaceDir>/SOUL.md                      (workspace-root / single-agent)
+ *
+ * @param agentName - Agent name to search for.
+ * @returns Absolute path to SOUL.md, or null if not found.
+ */
+export function findSoulMd(agentName: string): string | null {
+  const openclawDir = join(homedir(), '.openclaw');
+  const workspaceDir = getOpenClawWorkspaceDir();
+
+  const candidates: string[] = [
+    // Priority 1: brains directory (multi-agent)
+    join(workspaceDir, 'brains', agentName, 'SOUL.md'),
+    // Priority 2: agents directory (legacy)
+    join(openclawDir, 'agents', agentName, 'SOUL.md'),
+    // Priority 3: workspace root (single-agent or "main")
+    join(workspaceDir, 'SOUL.md'),
+  ];
+
+  for (const candidate of candidates) {
+    if (existsSync(candidate)) return candidate;
+  }
+  return null;
+}
+
+/**
+ * Infers the brain directory for an agent from a resolved SOUL.md path.
+ *
+ * Returns the directory containing SOUL.md, unless that directory is the
+ * legacy agents/<name> dir (in which case it's not treated as a brainDir).
+ *
+ * @param soulPath - Absolute path to SOUL.md.
+ * @param agentDir - The legacy agents/<name> directory path.
+ * @returns Brain directory path, or '' if the soul is in the legacy agent dir.
+ */
+export function inferBrainDir(soulPath: string, agentDir: string): string {
+  const soulDir = dirname(soulPath);
+  return soulDir === agentDir ? '' : soulDir;
+}
+
+/**
  * Scans for available OpenClaw agents.
  *
- * Primary scan: ~/.openclaw/workspace/brains/ (brain-dir agents)
+ * Primary scan: <workspaceDir>/brains/ (brain-dir agents)
  * Fallback scan: ~/.openclaw/agents/ (legacy agents without brain dirs)
+ * Workspace root: <workspaceDir>/SOUL.md → adds "main" agent if not already seen
  * Deduplication: brain-dir agents take precedence; fallback only adds new names.
  *
  * @returns Array of detected agents sorted by name.
  */
 export function scanAgents(): DetectedAgent[] {
   const openclawDir = join(homedir(), '.openclaw');
-  const brainsDir = join(openclawDir, 'workspace', 'brains');
+  const workspaceDir = getOpenClawWorkspaceDir();
+  const brainsDir = join(workspaceDir, 'brains');
   const agentsDir = join(openclawDir, 'agents');
   const results: DetectedAgent[] = [];
   const seenNames = new Set<string>();
@@ -164,6 +250,21 @@ export function scanAgents(): DetectedAgent[] {
       });
       seenNames.add(name);
     }
+  }
+
+  // Workspace root: SOUL.md at workspace root → "main" agent
+  const rootSoul = join(workspaceDir, 'SOUL.md');
+  if (existsSync(rootSoul) && !seenNames.has('main')) {
+    const description = firstParagraph(readFileSync(rootSoul, 'utf-8'));
+    results.push({
+      name: 'main',
+      description,
+      skillCount: countSkills(workspaceDir),
+      channel: readChannel(agentsDir, 'main'),
+      brainDir: workspaceDir,
+      agentbnbDir: join(agentsDir, 'main', '.agentbnb'),
+    });
+    seenNames.add('main');
   }
 
   return results.sort((a, b) => a.name.localeCompare(b.name));
@@ -279,6 +380,62 @@ export function scanCapabilities(brainDir: string): DetectedCapability[] {
       } catch {
         // Skip unreadable SKILL.md files
       }
+    }
+  }
+
+  return results;
+}
+
+/**
+ * Scans the workspace-level skills/ directory for shared SKILL.md files.
+ *
+ * These are workspace-wide skills (not agent-specific) that can be shared
+ * on AgentBnB. Used to populate `agentbnb openclaw skills add` discovery.
+ *
+ * @returns Array of detected capabilities from workspace/skills/.
+ */
+export function scanWorkspaceSkills(): DetectedCapability[] {
+  const workspaceDir = getOpenClawWorkspaceDir();
+  const skillsDir = join(workspaceDir, 'skills');
+  const results: DetectedCapability[] = [];
+
+  if (!existsSync(skillsDir)) return results;
+
+  let entries: string[];
+  try {
+    entries = readdirSync(skillsDir, { withFileTypes: true })
+      .filter((e) => e.isDirectory())
+      .map((e) => e.name);
+  } catch {
+    return results;
+  }
+
+  for (const skillDirName of entries) {
+    const skillMdPath = join(skillsDir, skillDirName, 'SKILL.md');
+    if (!existsSync(skillMdPath)) continue;
+
+    try {
+      const content = readFileSync(skillMdPath, 'utf-8');
+      const fmMatch = /^---\n([\s\S]*?)\n---/.exec(content);
+      let name = skillDirName;
+      let description = '';
+
+      if (fmMatch) {
+        const fm = fmMatch[1]!;
+        const nameMatch = /^name:\s*(.+)$/m.exec(fm);
+        const descMatch = /^description:\s*(.+)$/m.exec(fm);
+        if (nameMatch) name = nameMatch[1]!.trim();
+        if (descMatch) description = descMatch[1]!.trim();
+      }
+
+      results.push({
+        name,
+        description,
+        source: 'skill_md',
+        suggestedPrice: heuristicPrice(name),
+      });
+    } catch {
+      // Skip unreadable SKILL.md files
     }
   }
 

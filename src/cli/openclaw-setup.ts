@@ -11,7 +11,7 @@ import { getPricingStats } from '../registry/pricing.js';
 import { parseSoulMd } from '../skills/publish-capability.js';
 import { publishFromSoulV2 } from '../openclaw/index.js';
 import { performInit } from './init-action.js';
-import { scanAgents } from '../workspace/scanner.js';
+import { scanAgents, findSoulMd, inferBrainDir, getOpenClawWorkspaceDir } from '../workspace/scanner.js';
 import { appendSoulMdTradingSection, appendHeartbeatTradingSection } from '../workspace/writer.js';
 import { initGepDir } from '../workspace/gep-init.js';
 
@@ -87,12 +87,13 @@ export async function runOpenClawSetup(opts: OpenClawSetupOptions): Promise<void
     }
   }
 
-  // ── Step 2: Agent discovery (brains/ primary + agents/ fallback) ────────────
+  // ── Step 2: Agent discovery (brains/ primary + agents/ fallback + workspace root) ────
   const agentsDir = joinPath(homedir(), '.openclaw', 'agents');
-  const brainsDir = joinPath(homedir(), '.openclaw', 'workspace', 'brains');
+  const workspaceDir = getOpenClawWorkspaceDir();
+  const brainsDir = joinPath(workspaceDir, 'brains');
 
   // Verify at least one OpenClaw directory exists
-  if (!existsSync(agentsDir) && !existsSync(brainsDir)) {
+  if (!existsSync(agentsDir) && !existsSync(brainsDir) && !existsSync(workspaceDir)) {
     console.error(`Error: OpenClaw directory not found at ${agentsDir}`);
     console.error('Install OpenClaw first: https://openclaw.dev');
     process.exit(1);
@@ -103,17 +104,24 @@ export async function runOpenClawSetup(opts: OpenClawSetupOptions): Promise<void
 
   if (opts.agent) {
     agentName = opts.agent;
-    agentBrainDir = existsSync(joinPath(brainsDir, agentName))
-      ? joinPath(brainsDir, agentName)
-      : '';
+    // Check brains dir first
+    if (existsSync(joinPath(brainsDir, agentName))) {
+      agentBrainDir = joinPath(brainsDir, agentName);
+    } else if (agentName === 'main' && existsSync(joinPath(workspaceDir, 'SOUL.md'))) {
+      // "main" agent with workspace-root SOUL.md
+      agentBrainDir = workspaceDir;
+    } else {
+      agentBrainDir = '';
+    }
   } else {
     console.log('Scanning for available agents...\n');
 
-    // Use unified scanner (brains/ + agents/)
+    // Use unified scanner (brains/ + agents/ + workspace root)
     const detected = scanAgents();
 
     if (detected.length === 0) {
-      console.error('No agents found in ~/.openclaw/workspace/brains/ or ~/.openclaw/agents/');
+      console.error('No agents found in OpenClaw workspace.');
+      console.error(`Checked: ${brainsDir}, ${agentsDir}, ${workspaceDir}/SOUL.md`);
       process.exit(1);
     }
 
@@ -144,18 +152,85 @@ export async function runOpenClawSetup(opts: OpenClawSetupOptions): Promise<void
   // ── Step 3: Resolve SOUL.md ─────────────────────────────────────────────────
   const agentDir = joinPath(agentsDir, agentName);
 
-  // Check brain dir first, then agent dir
   let soulPath: string;
   if (opts.soulPath) {
     soulPath = opts.soulPath;
-  } else if (agentBrainDir && existsSync(joinPath(agentBrainDir, 'SOUL.md'))) {
-    soulPath = joinPath(agentBrainDir, 'SOUL.md');
-  } else if (existsSync(joinPath(agentDir, 'SOUL.md'))) {
-    soulPath = joinPath(agentDir, 'SOUL.md');
+    // Infer brainDir from explicit soul path if not already set
+    if (!agentBrainDir) {
+      agentBrainDir = inferBrainDir(soulPath, agentDir);
+    }
   } else {
-    console.error(`Error: SOUL.md not found for agent "${agentName}"`);
-    console.error(`Checked: ${agentBrainDir ? agentBrainDir + '/SOUL.md, ' : ''}${agentDir}/SOUL.md`);
-    process.exit(1);
+    const found = findSoulMd(agentName);
+    if (found) {
+      soulPath = found;
+      // Infer brainDir from found soul path if not already set
+      if (!agentBrainDir) {
+        agentBrainDir = inferBrainDir(found, agentDir);
+      }
+    } else {
+      // No SOUL.md found — offer partial (manual) setup
+      console.log(`\nAgent "${agentName}" has no SOUL.md. Capability detection will be limited.`);
+      console.log(`Checked: ${joinPath(workspaceDir, 'brains', agentName, 'SOUL.md')}`);
+      console.log(`         ${joinPath(agentsDir, agentName, 'SOUL.md')}`);
+      console.log(`         ${joinPath(workspaceDir, 'SOUL.md')}`);
+
+      if (!opts.yes) {
+        const answer = await prompt('\nProceed with manual skill setup? (Y/n) ');
+        if (answer.toLowerCase() === 'n') {
+          console.log('Setup cancelled.');
+          process.exit(0);
+        }
+      }
+
+      // Partial setup: init identity only, skip skill publishing
+      console.log('\nInitializing...');
+      const agentbnbDir = joinPath(agentDir, '.agentbnb');
+      process.env['AGENTBNB_DIR'] = agentbnbDir;
+      const alreadyInit = existsSync(joinPath(agentbnbDir, 'config.json'));
+      if (!alreadyInit) {
+        const freePort = await detectFreePort();
+        await performInit({
+          owner: agentName,
+          port: String(freePort),
+          yes: true,
+          nonInteractive: true,
+          detect: false,
+        });
+        console.log(`  ✓ Created ${agentbnbDir}/config.json`);
+      } else {
+        console.log(`  ✓ ${agentbnbDir}/config.json already exists`);
+      }
+
+      // GEP init
+      const effectiveBrainDir = agentBrainDir || agentDir;
+      try {
+        initGepDir(effectiveBrainDir);
+        console.log(`  ✓ Initialized evolution assets (gep/)`);
+      } catch { /* non-fatal */ }
+
+      // HEARTBEAT.md
+      const heartbeatCandidates = [
+        agentBrainDir ? joinPath(agentBrainDir, 'HEARTBEAT.md') : null,
+        joinPath(agentDir, 'HEARTBEAT.md'),
+      ].filter(Boolean) as string[];
+      const { existsSync: fsExists } = await import('node:fs');
+      for (const hbPath of heartbeatCandidates) {
+        if (fsExists(hbPath)) {
+          try {
+            appendHeartbeatTradingSection(hbPath, agentbnbDir);
+            console.log(`  ✓ Updated HEARTBEAT.md`);
+          } catch { /* non-fatal */ }
+          break;
+        }
+      }
+
+      console.log(`\n${agentName} initialized on AgentBnB (no skills yet).`);
+      console.log(`Add skills manually: agentbnb openclaw skills add --manual --name <id> --type command --price 3`);
+      console.log(`\nUseful commands:`);
+      console.log(`  AGENTBNB_DIR=${agentbnbDir} agentbnb openclaw skills list`);
+      console.log(`  AGENTBNB_DIR=${agentbnbDir} agentbnb status`);
+      return;
+    }
   }
 
   console.log(`\nReading ${agentName}/SOUL.md...`);
@@ -165,8 +240,9 @@ export async function runOpenClawSetup(opts: OpenClawSetupOptions): Promise<void
   const parsed = parseSoulMd(soulContent);
 
   if (parsed.capabilities.length === 0) {
-    console.error('No skills (H2 sections) found in SOUL.md.');
-    process.exit(1);
+    console.log('No skills (H2 sections) found in SOUL.md.');
+    console.log(`Add skills manually: agentbnb openclaw skills add --manual --name <id> --type command --price 3`);
+    process.exit(0);
   }
 
   // ── Step 4: Determine agentbnb dir and pricing ──────────────────────────────

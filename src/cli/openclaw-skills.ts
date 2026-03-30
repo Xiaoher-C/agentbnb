@@ -73,6 +73,17 @@ function rpad(s: string | number, width: number): string {
   return String(s).padEnd(width);
 }
 
+/**
+ * Derives the agent name from an AGENTBNB_DIR path.
+ * Convention: ~/.openclaw/agents/<name>/.agentbnb  →  <name>
+ */
+function deriveAgentName(configDir: string): string {
+  const parts = configDir.split('/');
+  const agentbnbIdx = parts.lastIndexOf('.agentbnb');
+  if (agentbnbIdx > 0) return parts[agentbnbIdx - 1] ?? '';
+  return '';
+}
+
 /** Options for skillsList. */
 export interface SkillsListOptions {
   agentDir?: string;
@@ -80,6 +91,7 @@ export interface SkillsListOptions {
 
 /**
  * Lists all shared skills with hire counts and revenue.
+ * Also shows unshared capabilities discovered in the workspace.
  *
  * @param opts - Optional AGENTBNB_DIR override.
  */
@@ -91,6 +103,9 @@ export async function skillsList(opts: SkillsListOptions): Promise<void> {
 
   if (skills.length === 0) {
     console.log('No skills configured. Run `agentbnb openclaw setup` to share skills.');
+
+    // Still show available skills to help the user know what they can share
+    await showAvailableSkills(configDir, new Set<string>());
     return;
   }
 
@@ -134,7 +149,7 @@ export async function skillsList(opts: SkillsListOptions): Promise<void> {
     }
   }
 
-  // Print table
+  // Print shared skills table
   const headers = ['ID', 'Price', 'Hires', 'Revenue', 'Success%'];
   console.log(
     `\n${rpad(headers[0]!, 24)} ${rpad(headers[1]!, 8)} ${rpad(headers[2]!, 7)} ${rpad(headers[3]!, 9)} ${headers[4]}`,
@@ -154,6 +169,77 @@ export async function skillsList(opts: SkillsListOptions): Promise<void> {
     );
   }
   console.log('');
+
+  // Show unshared available skills
+  const sharedIds = new Set(skills.map((s) => s.id));
+  await showAvailableSkills(configDir, sharedIds);
+}
+
+/**
+ * Scans workspace for capabilities not yet shared on AgentBnB and prints them.
+ * Silent if no unshared capabilities are found.
+ */
+async function showAvailableSkills(configDir: string, sharedIds: Set<string>): Promise<void> {
+  try {
+    const { scanCapabilities, scanWorkspaceSkills, findSoulMd } = await import('../workspace/scanner.js');
+    const agentName = deriveAgentName(configDir);
+    if (!agentName) return;
+
+    const { homedir } = await import('node:os');
+    const { join: pathJoin } = await import('node:path');
+    const { getOpenClawWorkspaceDir } = await import('../workspace/scanner.js');
+
+    const workspaceDir = getOpenClawWorkspaceDir();
+    const brainsDir = pathJoin(workspaceDir, 'brains');
+    const brainDir = pathJoin(brainsDir, agentName);
+    const agentsDir = pathJoin(homedir(), '.openclaw', 'agents');
+    const agentDir = pathJoin(agentsDir, agentName);
+
+    // Determine effective brain dir
+    let effectiveBrainDir = '';
+    if (existsSync(brainDir)) {
+      effectiveBrainDir = brainDir;
+    } else {
+      const soulPath = findSoulMd(agentName);
+      if (soulPath) {
+        const { inferBrainDir } = await import('../workspace/scanner.js');
+        effectiveBrainDir = inferBrainDir(soulPath, agentDir) || agentDir;
+      }
+    }
+
+    const agentCaps = effectiveBrainDir ? scanCapabilities(effectiveBrainDir) : [];
+    const workspaceCaps = scanWorkspaceSkills();
+
+    // Merge and deduplicate, filtering out already-shared
+    const seen = new Set<string>(sharedIds);
+    const available: Array<{ name: string; description: string; source: string }> = [];
+
+    for (const cap of agentCaps) {
+      if (!seen.has(cap.name)) {
+        seen.add(cap.name);
+        available.push({ name: cap.name, description: cap.description, source: 'agent' });
+      }
+    }
+    for (const cap of workspaceCaps) {
+      if (!seen.has(cap.name)) {
+        seen.add(cap.name);
+        available.push({ name: cap.name, description: cap.description, source: 'workspace' });
+      }
+    }
+
+    if (available.length === 0) return;
+
+    console.log('Available to share (not yet on AgentBnB):');
+    for (const cap of available) {
+      const tag = cap.source === 'workspace' ? ' [workspace]' : '';
+      const desc = cap.description.slice(0, 50);
+      console.log(`  • ${cap.name}${tag} — ${desc}`);
+    }
+    console.log(`\nRun 'agentbnb openclaw skills add' to share one.`);
+    console.log('');
+  } catch {
+    // Non-fatal — skip available skills section silently
+  }
 }
 
 /** Options for skillsAdd. */
@@ -210,61 +296,84 @@ export async function skillsAdd(opts: SkillsAddOptions): Promise<void> {
     // Remove undefined fields
     if (newSkill.command === undefined) delete newSkill['command'];
   } else {
-    // Interactive mode: discover capabilities
-    const { scanCapabilities } = await import('../workspace/scanner.js');
+    // Interactive mode: discover capabilities from multiple sources
+    const { scanCapabilities, scanWorkspaceSkills, findSoulMd, inferBrainDir, getOpenClawWorkspaceDir } =
+      await import('../workspace/scanner.js');
 
-    // Find a brain dir for this agent
-    const agentsDir = join(
-      process.env['HOME'] ?? process.env['USERPROFILE'] ?? '/root',
-      '.openclaw',
-      'agents',
+    const { homedir } = await import('node:os');
+    const { join: pathJoin } = await import('node:path');
+
+    const agentName = deriveAgentName(configDir);
+    const workspaceDir = getOpenClawWorkspaceDir();
+    const brainsDir = pathJoin(workspaceDir, 'brains');
+    const agentsDir = pathJoin(homedir(), '.openclaw', 'agents');
+    const agentDir = pathJoin(agentsDir, agentName);
+    const brainDir = pathJoin(brainsDir, agentName);
+
+    // Determine effective brain dir via findSoulMd
+    let effectiveBrainDir = '';
+    if (existsSync(brainDir)) {
+      effectiveBrainDir = brainDir;
+    } else if (agentName) {
+      const soulPath = findSoulMd(agentName);
+      if (soulPath) {
+        effectiveBrainDir = inferBrainDir(soulPath, agentDir) || agentDir;
+      }
+    }
+
+    // Scan agent-specific capabilities
+    const agentCaps = effectiveBrainDir ? scanCapabilities(effectiveBrainDir) : [];
+    // Scan workspace-level shared skills
+    const workspaceCaps = scanWorkspaceSkills();
+
+    // Build grouped unshared lists
+    const unsharedAgent = agentCaps.filter((c) => !existingIds.has(c.name));
+    const unsharedWorkspace = workspaceCaps.filter(
+      (c) => !existingIds.has(c.name) && !unsharedAgent.some((a) => a.name === c.name),
     );
-    const configParent = configDir.replace(/\/.agentbnb$/, '');
-    const agentName = configParent.split('/').pop() ?? '';
-    const brainsDir = join(
-      process.env['HOME'] ?? process.env['USERPROFILE'] ?? '/root',
-      '.openclaw',
-      'workspace',
-      'brains',
-    );
-    const brainDir = join(brainsDir, agentName);
 
-    const soulPath = join(agentsDir, agentName, 'SOUL.md');
-    const brainSoulPath = join(brainDir, 'SOUL.md');
-    const hasBrain = existsSync(brainDir) && existsSync(brainSoulPath);
-    const hasSoul = existsSync(soulPath);
-
-    if (!hasBrain && !hasSoul) {
-      console.log('No SOUL.md found. Use --manual to add a skill directly.');
-      console.log(`  Example: agentbnb openclaw skills add --manual --name my-skill --type command --price 3`);
+    if (unsharedAgent.length === 0 && unsharedWorkspace.length === 0) {
+      if (agentCaps.length === 0 && workspaceCaps.length === 0) {
+        console.log('No SOUL.md or skills found. Use --manual to add a skill directly.');
+        console.log(`  Example: agentbnb openclaw skills add --manual --name my-skill --type command --price 3`);
+      } else {
+        console.log('All detected capabilities are already shared!');
+        console.log('Use --manual to add a new skill: agentbnb openclaw skills add --manual --name <id> --type command --price <n>');
+      }
       return;
     }
 
-    const capabilities = hasBrain
-      ? scanCapabilities(brainDir)
-      : scanCapabilities(agentsDir + '/' + agentName);
+    // Build flat selection list with grouping display
+    const allUnshared: Array<{ cap: (typeof agentCaps)[0]; group: string }> = [
+      ...unsharedAgent.map((c) => ({ cap: c, group: effectiveBrainDir ? `From ${effectiveBrainDir}:` : 'From agent:' })),
+      ...unsharedWorkspace.map((c) => ({ cap: c, group: `From workspace/skills/:` })),
+    ];
 
-    const unshared = capabilities.filter((c) => !existingIds.has(c.name));
+    // Print grouped
+    let lastGroup = '';
+    allUnshared.forEach(({ cap, group }, i) => {
+      if (group !== lastGroup) {
+        console.log(`\n${group}`);
+        lastGroup = group;
+      }
+      console.log(`  ${i + 1}. ${cap.name} — ${cap.description.slice(0, 50)} (suggested: ${cap.suggestedPrice} cr)`);
+    });
 
-    if (unshared.length === 0) {
-      console.log('All detected capabilities are already shared!');
-      console.log('Use --manual to add a new skill: agentbnb openclaw skills add --manual --name <id> --type command --price <n>');
-      return;
+    if (existingSkills.length > 0) {
+      console.log('\nAlready shared on AgentBnB:');
+      for (const s of existingSkills) {
+        console.log(`  ✅ ${s.id} (${s.pricing?.credits_per_call ?? '?'} cr)`);
+      }
     }
-
-    console.log('\nUnshared capabilities:');
-    unshared.forEach((c, i) =>
-      console.log(`  ${i + 1}. ${c.name} — ${c.description.slice(0, 50)} (suggested: ${c.suggestedPrice} cr)`),
-    );
 
     const selInput = await prompt('\nSelect capability to add (default: 1): ');
     const selIdx = selInput === '' ? 0 : parseInt(selInput, 10) - 1;
-    if (isNaN(selIdx) || selIdx < 0 || selIdx >= unshared.length) {
+    if (isNaN(selIdx) || selIdx < 0 || selIdx >= allUnshared.length) {
       console.error('Invalid selection.');
       process.exit(1);
     }
 
-    const selected = unshared[selIdx]!;
+    const selected = allUnshared[selIdx]!.cap;
 
     const typeInput = await prompt(`Skill type [command/openclaw] (default: command): `);
     const skillType = typeInput === '' ? 'command' : typeInput;
@@ -296,29 +405,7 @@ export async function skillsAdd(opts: SkillsAddOptions): Promise<void> {
   console.log(`\n✅ Added skill "${newSkill.id}" (${newSkill.pricing?.credits_per_call} cr)`);
 
   // Update SOUL.md skills table if section exists
-  try {
-    const { updateSoulMdSkillsTable } = await import('../workspace/writer.js');
-    const agentsDir = join(
-      process.env['HOME'] ?? process.env['USERPROFILE'] ?? '/root',
-      '.openclaw',
-      'agents',
-    );
-    const configParent = configDir.replace(/\/.agentbnb$/, '');
-    const agentName = configParent.split('/').pop() ?? '';
-    const soulPath = join(agentsDir, agentName, 'SOUL.md');
-    if (existsSync(soulPath)) {
-      const skillEntries: SkillEntry[] = updatedSkills.map((s) => ({
-        id: s.id,
-        name: s.name,
-        description: s.description,
-        pricing: s.pricing,
-      }));
-      updateSoulMdSkillsTable(soulPath, skillEntries);
-      console.log(`✅ Updated SOUL.md skills table`);
-    }
-  } catch {
-    // Non-fatal
-  }
+  await updateSoulMdIfPresent(configDir, updatedSkills);
 }
 
 /**
@@ -339,30 +426,7 @@ export async function skillsRemove(skillId: string): Promise<void> {
   writeSkillsYaml(configDir, filtered);
   console.log(`✅ Removed skill "${skillId}"`);
 
-  // Update SOUL.md
-  try {
-    const { updateSoulMdSkillsTable } = await import('../workspace/writer.js');
-    const agentsDir = join(
-      process.env['HOME'] ?? process.env['USERPROFILE'] ?? '/root',
-      '.openclaw',
-      'agents',
-    );
-    const configParent = configDir.replace(/\/.agentbnb$/, '');
-    const agentName = configParent.split('/').pop() ?? '';
-    const soulPath = join(agentsDir, agentName, 'SOUL.md');
-    if (existsSync(soulPath)) {
-      const skillEntries: SkillEntry[] = filtered.map((s) => ({
-        id: s.id,
-        name: s.name,
-        description: s.description,
-        pricing: s.pricing,
-      }));
-      updateSoulMdSkillsTable(soulPath, skillEntries);
-      console.log(`✅ Updated SOUL.md skills table`);
-    }
-  } catch {
-    // Non-fatal
-  }
+  await updateSoulMdIfPresent(configDir, filtered);
 }
 
 /**
@@ -387,27 +451,33 @@ export async function skillsPrice(skillId: string, newPrice: number): Promise<vo
   writeSkillsYaml(configDir, skills);
   console.log(`✅ Updated "${skillId}" price: ${oldPrice} cr → ${newPrice} cr`);
 
-  // Update SOUL.md
+  await updateSoulMdIfPresent(configDir, skills);
+}
+
+/**
+ * Updates the SOUL.md skills table after a skills.yaml mutation.
+ * Resolves SOUL.md path using findSoulMd() for multi-path support.
+ * Non-fatal on any error.
+ */
+async function updateSoulMdIfPresent(configDir: string, skills: SkillYamlEntry[]): Promise<void> {
   try {
     const { updateSoulMdSkillsTable } = await import('../workspace/writer.js');
-    const agentsDir = join(
-      process.env['HOME'] ?? process.env['USERPROFILE'] ?? '/root',
-      '.openclaw',
-      'agents',
-    );
-    const configParent = configDir.replace(/\/.agentbnb$/, '');
-    const agentName = configParent.split('/').pop() ?? '';
-    const soulPath = join(agentsDir, agentName, 'SOUL.md');
-    if (existsSync(soulPath)) {
-      const skillEntries: SkillEntry[] = skills.map((s) => ({
-        id: s.id,
-        name: s.name,
-        description: s.description,
-        pricing: s.pricing,
-      }));
-      updateSoulMdSkillsTable(soulPath, skillEntries);
-      console.log(`✅ Updated SOUL.md skills table`);
-    }
+    const { findSoulMd } = await import('../workspace/scanner.js');
+
+    const agentName = deriveAgentName(configDir);
+    if (!agentName) return;
+
+    const soulPath = findSoulMd(agentName);
+    if (!soulPath) return;
+
+    const skillEntries: SkillEntry[] = skills.map((s) => ({
+      id: s.id,
+      name: s.name,
+      description: s.description,
+      pricing: s.pricing,
+    }));
+    updateSoulMdSkillsTable(soulPath, skillEntries);
+    console.log(`✅ Updated SOUL.md skills table`);
   } catch {
     // Non-fatal
   }
