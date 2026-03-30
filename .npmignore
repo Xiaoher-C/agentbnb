@@ -2,4 +2,4 @@
 skills/deep-stock-analyst
 
 # Exclude test files from skill bundles
-skills/agentbnb/bootstrap.test.ts
+skills/agentbnb/*.test.ts
