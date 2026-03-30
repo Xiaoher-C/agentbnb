@@ -52,6 +52,46 @@ async function notifyTelegramSkillExecuted(opts: {
   });
 }
 
+/**
+ * Sends a Telegram message to the owner when a skill fails.
+ * Fire-and-forget — never throws or rejects.
+ */
+async function notifyTelegramSkillFailed(opts: {
+  creditDb: Database.Database;
+  owner: string;
+  skillName: string;
+  skillId: string | null;
+  requester: string;
+  latencyMs: number;
+  failureReason: FailureReason;
+  message: string;
+}): Promise<void> {
+  const cfg = loadConfig();
+  if (!cfg?.telegram_notifications) return;
+
+  const token = cfg.telegram_bot_token ?? process.env['TELEGRAM_BOT_TOKEN'];
+  const chatId = cfg.telegram_chat_id ?? process.env['TELEGRAM_CHAT_ID'];
+  if (!token || !chatId) return;
+
+  const balance = getBalance(opts.creditDb, opts.owner);
+  const skillLabel = opts.skillId ? `${opts.skillName} (${opts.skillId})` : opts.skillName;
+  const text = [
+    '[AgentBnB] Skill failed',
+    `Skill: ${skillLabel}`,
+    `Requester: ${opts.requester}`,
+    `Reason: ${opts.failureReason}`,
+    `Error: ${opts.message}`,
+    `Balance: ${balance} credits`,
+    `Latency: ${opts.latencyMs}ms`,
+  ].join('\n');
+
+  await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ chat_id: chatId, text }),
+  });
+}
+
 // ── Batch request types ───────────────────────────────────────────────────────
 
 /**
@@ -303,6 +343,19 @@ export async function executeCapabilityRequest(opts: ExecuteRequestOptions): Pro
         failure_reason: failureReason,
       });
     } catch { /* silent no-op */ }
+
+    // Telegram failure notification — fire-and-forget, never throws
+    notifyTelegramSkillFailed({
+      creditDb,
+      owner: card.owner,
+      skillName: cardName,
+      skillId: resolvedSkillId ?? null,
+      requester,
+      latencyMs,
+      failureReason,
+      message,
+    }).catch(() => {});
+
     return { success: false, error: { code: -32603, message } };
   };
 

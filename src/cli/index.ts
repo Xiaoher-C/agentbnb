@@ -1625,6 +1625,21 @@ openclaw
     }
   });
 
+/**
+ * agentbnb openclaw setup
+ * Interactive onboarding: connect an OpenClaw agent to AgentBnB.
+ */
+openclaw
+  .command('setup')
+  .description('Interactive onboarding: connect an OpenClaw agent to AgentBnB')
+  .option('--agent <name>', 'Agent name to set up (skip interactive selection)')
+  .option('--soul-path <path>', 'Override SOUL.md path')
+  .option('-y, --yes', 'Skip confirmation prompts')
+  .action(async (opts: { agent?: string; soulPath?: string; yes?: boolean }) => {
+    const { runOpenClawSetup } = await import('./openclaw-setup.js');
+    await runOpenClawSetup(opts);
+  });
+
 // ---------------------------------------------------------------------------
 // conduct
 // ---------------------------------------------------------------------------
