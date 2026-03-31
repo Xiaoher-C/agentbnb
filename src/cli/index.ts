@@ -23,6 +23,7 @@ import { searchCards, filterCards } from '../registry/matcher.js';
 import { getPricingStats } from '../registry/pricing.js';
 import { openCreditDb, getBalance, getTransactions } from '../credit/ledger.js';
 import { createLedger } from '../credit/create-ledger.js';
+import { syncCreditsFromRegistry } from '../credit/registry-sync.js';
 import { requestCapability } from '../gateway/client.js';
 import type { RequestTimeoutHint } from '../gateway/client.js';
 import { discoverLocalAgents } from '../discovery/mdns.js';
@@ -704,6 +705,21 @@ program
     if (!config) {
       console.error('Error: not initialized. Run `agentbnb init` first.');
       process.exit(1);
+    }
+
+    // Sync credits from registry before request (ensures local escrow hold uses accurate remote balance)
+    if (config.registry) {
+      const creditDb = openCreditDb(config.credit_db_path);
+      try {
+        const syncResult = await syncCreditsFromRegistry(config, creditDb, getConfigDir());
+        if (syncResult.synced && syncResult.remoteBalance !== undefined) {
+          console.log(`Credits synced: ${syncResult.remoteBalance} [registry]`);
+        }
+      } catch {
+        // Non-fatal — proceed with local balance
+      } finally {
+        creditDb.close();
+      }
     }
 
     // Batch request flow: --batch reads a JSON file and POSTs to /api/request/batch
