@@ -2,6 +2,8 @@
  * MCP tool: agentbnb_status
  *
  * Check your AgentBnB agent status: identity, credit balance, and configuration.
+ * When a registry is configured, both local and registry balances are returned
+ * so LLM agents can detect stale local state.
  */
 
 import { z } from 'zod';
@@ -17,16 +19,39 @@ const statusInputSchema = {
 };
 
 /**
+ * Returns 0 on any error (e.g. fresh install with no DB yet).
+ */
+function readLocalBalance(creditDbPath: string, creditKey: string): number {
+  const creditDb = openCreditDb(creditDbPath);
+  try {
+    return getBalance(creditDb, creditKey);
+  } catch {
+    return 0;
+  } finally {
+    creditDb.close();
+  }
+}
+
+/**
  * Handler logic for agentbnb_status. Exported for direct testing.
+ *
+ * When `config.registry` is set the handler fetches the authoritative registry
+ * balance via Ed25519-signed HTTP and also reads the local SQLite balance.
+ * Both are included in the response along with `sync_needed` (true when they
+ * differ by more than 1 credit) so LLM agents can act on stale local state.
  */
 export async function handleStatus(
   ctx: McpServerContext,
 ): Promise<{ content: Array<{ type: 'text'; text: string }> }> {
   try {
-    let balance = 0;
     // Prefer agent_id (cryptographic identity) over owner (legacy human-chosen string).
     // owner is kept as fallback for agents that pre-date the v8 agent_id migration.
     const creditKey = ctx.identity.agent_id ?? ctx.identity.owner;
+
+    const local_balance = readLocalBalance(ctx.config.credit_db_path, creditKey);
+
+    let registry_balance: number | null = null;
+    let sync_needed = false;
 
     if (ctx.config.registry) {
       try {
@@ -36,30 +61,22 @@ export async function handleStatus(
           ownerPublicKey: ctx.identity.public_key,
           privateKey: keys.privateKey,
         });
-        balance = await ledger.getBalance(creditKey);
+        registry_balance = await ledger.getBalance(creditKey);
+        sync_needed = Math.abs(registry_balance - local_balance) > 1;
       } catch {
-        // Fall back to local balance on error
-        const creditDb = openCreditDb(ctx.config.credit_db_path);
-        try {
-          balance = getBalance(creditDb, creditKey);
-        } finally {
-          creditDb.close();
-        }
-      }
-    } else {
-      const creditDb = openCreditDb(ctx.config.credit_db_path);
-      try {
-        balance = getBalance(creditDb, creditKey);
-      } finally {
-        creditDb.close();
+        // Registry unreachable — fall through with registry_balance = null.
       }
     }
+
+    const balance = registry_balance ?? local_balance;
 
     const result = {
       agent_id: ctx.identity.agent_id,
       owner: ctx.identity.owner,
       public_key: ctx.identity.public_key,
       balance,
+      local_balance,
+      ...(ctx.config.registry ? { registry_balance, sync_needed } : {}),
       registry_url: ctx.config.registry ?? null,
       config_dir: ctx.configDir,
     };

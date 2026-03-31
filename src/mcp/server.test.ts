@@ -149,6 +149,50 @@ describe('agentbnb_status handler', () => {
     expect(parsed['owner']).toBe('test-agent');
     expect(parsed['registry_url']).toBeNull();
   });
+
+  it('includes local_balance when no registry configured', async () => {
+    const { handleStatus } = await import('./tools/status.js');
+    const ctx = createMockContext({ registry: undefined });
+
+    const result = await handleStatus(ctx);
+    const parsed = JSON.parse(result.content[0]!.text) as Record<string, unknown>;
+
+    expect(typeof parsed['local_balance']).toBe('number');
+    expect(typeof parsed['balance']).toBe('number');
+    // No registry fields when registry is not set
+    expect(parsed['registry_balance']).toBeUndefined();
+    expect(parsed['sync_needed']).toBeUndefined();
+  });
+
+  it('includes registry_balance and sync_needed when registry is configured but unreachable', async () => {
+    const { handleStatus } = await import('./tools/status.js');
+    // Use a registry URL that will fail (no real server)
+    const ctx = createMockContext({ registry: 'http://localhost:19999' });
+
+    const result = await handleStatus(ctx);
+    const parsed = JSON.parse(result.content[0]!.text) as Record<string, unknown>;
+
+    // Registry unreachable: registry_balance is null, sync_needed is false
+    expect(parsed['registry_balance']).toBeNull();
+    expect(parsed['sync_needed']).toBe(false);
+    // local_balance is always present
+    expect(typeof parsed['local_balance']).toBe('number');
+    // balance falls back to local when registry is unreachable
+    expect(parsed['balance']).toBe(parsed['local_balance']);
+  });
+
+  it('never throws — returns error as JSON content on fatal failure', async () => {
+    const { handleStatus } = await import('./tools/status.js');
+    // Force a failure by using a context with a broken credit_db_path and bad configDir
+    const ctx = createMockContext({ registry: undefined, credit_db_path: ':memory:' });
+    // Override configDir to a path that won't have keys (loadKeyPair would fail)
+    (ctx as { configDir: string }).configDir = '/tmp/nonexistent-agentbnb-test-dir';
+
+    // Should not throw — errors become JSON error responses
+    const result = await handleStatus(ctx);
+    expect(result.content).toHaveLength(1);
+    expect(typeof result.content[0]!.text).toBe('string');
+  });
 });
 
 // ---------------------------------------------------------------------------
