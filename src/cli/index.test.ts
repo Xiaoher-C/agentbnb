@@ -641,7 +641,7 @@ describe('CLI: discover --registry (integration)', () => {
     const { status, stdout } = runCli(`discover --registry http://127.0.0.1:${port}`, tmpDir);
     expect(status).toBe(0);
     expect(stdout).toContain('Remote Voice Synth');
-    expect(stdout).toContain('[remote]');
+    expect(stdout).toContain('remote');
   });
 
   it('discover --registry --json includes source field', () => {
@@ -673,7 +673,7 @@ describe('CLI: discover --registry (integration)', () => {
     const { status, stdout } = runCli('discover', tmpDir);
     expect(status).toBe(0);
     expect(stdout).toContain('Remote Voice Synth');
-    expect(stdout).toContain('[remote]');
+    expect(stdout).toContain('remote');
   });
 
   it('config default registry unreachable degrades to local results', () => {

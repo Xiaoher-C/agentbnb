@@ -13,6 +13,20 @@ import yaml from 'js-yaml';
 import { getConfigDir, loadConfig } from './config.js';
 import type { SkillEntry } from '../workspace/writer.js';
 
+/**
+ * Known OpenClaw bundled/community skills that should not appear
+ * in the "Available to share" listing. These ship with OpenClaw
+ * and are not user-authored capabilities.
+ */
+const OPENCLAW_COMMUNITY_SKILLS = new Set([
+  'find-skills',
+  'gog',
+  'openclaw-security-audit',
+  'proactive-agent',
+  'skill-vetter',
+  'tavily',
+]);
+
 /** A minimal skills.yaml entry shape for read/write operations. */
 interface SkillYamlEntry {
   id: string;
@@ -215,12 +229,14 @@ async function showAvailableSkills(configDir: string, sharedIds: Set<string>): P
     const available: Array<{ name: string; description: string; source: string }> = [];
 
     for (const cap of agentCaps) {
+      if (OPENCLAW_COMMUNITY_SKILLS.has(cap.name)) continue;
       if (!seen.has(cap.name)) {
         seen.add(cap.name);
         available.push({ name: cap.name, description: cap.description, source: 'agent' });
       }
     }
     for (const cap of workspaceCaps) {
+      if (OPENCLAW_COMMUNITY_SKILLS.has(cap.name)) continue;
       if (!seen.has(cap.name)) {
         seen.add(cap.name);
         available.push({ name: cap.name, description: cap.description, source: 'workspace' });
