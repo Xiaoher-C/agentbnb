@@ -4,7 +4,6 @@ import type { AgentBnBConfig } from '../cli/config.js';
 import { loadOrRepairIdentity } from '../identity/identity.js';
 import { createLedger } from './create-ledger.js';
 import { getBalance } from './ledger.js';
-import type { CreditTransaction } from './ledger.js';
 import { canonicalizeCreditOwner } from './owner-normalization.js';
 
 /**

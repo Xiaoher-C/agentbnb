@@ -305,7 +305,7 @@ export class ServiceCoordinator {
       }
 
       this.creditSyncJob = new Cron('*/5 * * * *', async () => {
-        const result = await syncCreditsFromRegistry(this.config, this.runtime.creditDb);
+        const result = await syncCreditsFromRegistry(this.config, this.runtime!.creditDb);
         if (result.synced) {
           console.log(`[agentbnb] credits synced: ${result.remoteBalance} (was ${result.localWas})`);
         } else {
