@@ -16,6 +16,8 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
+import { Cron } from 'croner';
+import { syncCreditsFromRegistry, syncCreditsFromRegistryOnce } from '../credit/registry-sync.js';
 
 export interface ServiceOptions {
   port?: number;
@@ -99,6 +101,7 @@ export class ServiceCoordinator {
   private inProcessStartup = false;
   private shutdownPromise: Promise<void> | null = null;
   private signalHandlersRegistered = false;
+  private creditSyncJob: Cron | null = null;
 
   constructor(config: AgentBnBConfig, guard: ProcessGuard) {
     this.config = config;
@@ -293,6 +296,24 @@ export class ServiceCoordinator {
     this.runtime.registerJob(idleJob);
     console.log('IdleMonitor started (60s poll interval, 70% idle threshold)');
 
+    if (this.config.registry) {
+      const startupSync = await syncCreditsFromRegistry(this.config, this.runtime.creditDb);
+      if (startupSync.synced) {
+        console.log(`[agentbnb] credits synced: ${startupSync.remoteBalance} (was ${startupSync.localWas})`);
+      } else {
+        console.warn(`[agentbnb] credit sync skipped: ${startupSync.error}`);
+      }
+
+      this.creditSyncJob = new Cron('*/5 * * * *', async () => {
+        const result = await syncCreditsFromRegistryOnce(this.config);
+        if (result.synced) {
+          console.log(`[agentbnb] credits synced: ${result.remoteBalance} (was ${result.localWas})`);
+        } else {
+          console.warn(`[agentbnb] credit sync failed: ${result.error}`);
+        }
+      });
+    }
+
     this.gateway = createGatewayServer({
       port: opts.port,
       registryDb: this.runtime.registryDb,
@@ -392,6 +413,10 @@ export class ServiceCoordinator {
     }
 
     this.shutdownPromise = (async () => {
+      if (this.creditSyncJob) {
+        this.creditSyncJob.stop();
+        this.creditSyncJob = null;
+      }
       if (this.relayClient) {
         this.relayClient.disconnect();
         this.relayClient = null;
