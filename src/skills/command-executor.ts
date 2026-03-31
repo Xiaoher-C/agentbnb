@@ -14,34 +14,60 @@ function shellEscape(value: string): string {
 }
 
 /**
+ * Resolves a dotted expression (e.g. "params.ticker") from a context object.
+ * Returns undefined if any part of the path is missing.
+ */
+function resolveExpression(expr: string, context: Record<string, unknown>): unknown {
+  const parts = expr.split('.');
+  let current: unknown = context;
+  for (const part of parts) {
+    if (current === null || typeof current !== 'object') return undefined;
+    const bracketMatch = part.match(/^(\w+)\[(\d+)\]$/);
+    if (bracketMatch) {
+      current = (current as Record<string, unknown>)[bracketMatch[1]!];
+      if (Array.isArray(current)) {
+        current = current[parseInt(bracketMatch[2]!, 10)];
+      } else {
+        return undefined;
+      }
+    } else {
+      current = (current as Record<string, unknown>)[part];
+    }
+  }
+  return current;
+}
+
+/**
  * Interpolates a command template, shell-escaping all substituted values
  * to prevent shell injection attacks.
+ *
+ * When a placeholder resolves to undefined/null and is preceded by a CLI flag
+ * (e.g. `--depth ${params.depth}`), the entire `--flag <placeholder>` pair is
+ * stripped. This prevents absent optional parameters from polluting the
+ * argument list — e.g. `--depth --style` where `--style` is misinterpreted
+ * as the value of `--depth`.
  */
 function safeInterpolateCommand(
   template: string,
   context: Record<string, unknown>,
 ): string {
-  return template.replace(/\$\{([^}]+)\}/g, (_match, expr: string) => {
-    // Resolve the expression from context
-    const parts = expr.split('.');
-    let current: unknown = context;
-    for (const part of parts) {
-      if (current === null || typeof current !== 'object') return '';
-      const bracketMatch = part.match(/^(\w+)\[(\d+)\]$/);
-      if (bracketMatch) {
-        current = (current as Record<string, unknown>)[bracketMatch[1]!];
-        if (Array.isArray(current)) {
-          current = current[parseInt(bracketMatch[2]!, 10)];
-        } else {
-          return '';
-        }
-      } else {
-        current = (current as Record<string, unknown>)[part];
+  // Match optional preceding --flag (with separating whitespace) followed by ${expr}.
+  // Group 1: the `--flag ` prefix (may be absent).
+  // Group 2: the expression inside ${...}.
+  const result = template.replace(
+    /(--[\w-]+\s+)?\$\{([^}]+)\}/g,
+    (_match, flagPrefix: string | undefined, expr: string) => {
+      const value = resolveExpression(expr, context);
+      if (value === undefined || value === null) {
+        // Drop both the --flag prefix and the placeholder when value is absent
+        return '';
       }
-    }
-    if (current === undefined || current === null) return '';
-    return shellEscape(String(current));
-  });
+      return (flagPrefix ?? '') + shellEscape(String(value));
+    },
+  );
+
+  // Collapse any leftover multi-spaces from removed flag+value pairs
+  return result.replace(/  +/g, ' ').trim();
 }
 
 /**

@@ -132,6 +132,31 @@ describe('CommandExecutor', () => {
     expect(result.result).toBe('hello world');
   });
 
+  it('omits --flag when corresponding param is not provided', async () => {
+    executor = new CommandExecutor();
+    // Simulates: script --ticker NVDA --depth <missing> --style <missing>
+    // Should produce: script --ticker NVDA (not --ticker NVDA --depth --style)
+    const config = makeConfig({
+      command: 'echo --ticker ${params.ticker} --depth ${params.depth} --style ${params.style}',
+      output_type: 'text',
+    });
+    const result = await executor.execute(config, { ticker: 'NVDA' });
+    expect(result.success).toBe(true);
+    // Only --ticker should remain; --depth and --style should be stripped
+    expect(result.result).toBe('--ticker NVDA');
+  });
+
+  it('keeps flags when all params are provided', async () => {
+    executor = new CommandExecutor();
+    const config = makeConfig({
+      command: 'echo --ticker ${params.ticker} --depth ${params.depth} --style ${params.style}',
+      output_type: 'text',
+    });
+    const result = await executor.execute(config, { ticker: 'NVDA', depth: 'deep', style: 'detailed' });
+    expect(result.success).toBe(true);
+    expect(result.result).toBe('--ticker NVDA --depth deep --style detailed');
+  });
+
   it('prevents shell injection via params', async () => {
     executor = new CommandExecutor();
     const config = makeConfig({
