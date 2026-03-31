@@ -254,4 +254,64 @@ describe('credit routes', () => {
 
     expect(response.statusCode).toBe(400);
   });
+
+  // Test 11: GET /api/credits/balance (public, no auth) returns { owner, balance }
+  it('GET /api/credits/balance returns balance without auth', async () => {
+    const response = await server.inject({
+      method: 'GET',
+      url: '/api/credits/balance?owner=alice',
+    });
+
+    expect(response.statusCode).toBe(200);
+    const data = response.json();
+    expect(data).toHaveProperty('owner', 'alice');
+    expect(data).toHaveProperty('balance', 200);
+  });
+
+  // Test 12: GET /api/credits/balance missing owner returns 400
+  it('GET /api/credits/balance without owner returns 400', async () => {
+    const response = await server.inject({
+      method: 'GET',
+      url: '/api/credits/balance',
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toHaveProperty('error');
+  });
+
+  // Test 13: GET /api/credits/transactions (public, no auth) returns { owner, transactions, limit }
+  it('GET /api/credits/transactions returns transaction history without auth', async () => {
+    const response = await server.inject({
+      method: 'GET',
+      url: '/api/credits/transactions?owner=alice',
+    });
+
+    expect(response.statusCode).toBe(200);
+    const data = response.json();
+    expect(data).toHaveProperty('owner', 'alice');
+    expect(Array.isArray(data.transactions)).toBe(true);
+    expect(data).toHaveProperty('limit');
+  });
+
+  // Test 14: GET /api/credits/transactions with limit param is capped at 100
+  it('GET /api/credits/transactions respects limit param', async () => {
+    const response = await server.inject({
+      method: 'GET',
+      url: '/api/credits/transactions?owner=alice&limit=5',
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().limit).toBe(5);
+  });
+
+  // Test 15: GET /api/credits/transactions missing owner returns 400
+  it('GET /api/credits/transactions without owner returns 400', async () => {
+    const response = await server.inject({
+      method: 'GET',
+      url: '/api/credits/transactions',
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toHaveProperty('error');
+  });
 });

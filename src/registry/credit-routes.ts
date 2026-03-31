@@ -12,18 +12,26 @@ export interface CreditRoutesOptions {
 }
 
 /**
- * Fastify plugin that registers all 6 credit API endpoints behind Ed25519 identity auth.
+ * Fastify plugin that registers credit API endpoints.
  *
- * Routes (all require valid X-Agent-Id/PublicKey/Signature/Timestamp headers):
+ * PUBLIC routes (no auth required — safe read-only queries for agent startup):
+ *   GET  /api/credits/balance        — Get balance by ?owner= query param
+ *   GET  /api/credits/transactions   — Get transaction history by ?owner= query param
+ *
+ * AUTHENTICATED routes (require valid X-Agent-Id/PublicKey/Signature/Timestamp headers):
  *   POST /api/credits/hold       — Hold credits in escrow during capability execution
  *   POST /api/credits/settle     — Transfer held credits to provider on success
  *   POST /api/credits/release    — Refund held credits to requester on failure
  *   POST /api/credits/grant      — Bootstrap grant of 50 credits (once per Ed25519 public key)
- *   GET  /api/credits/:owner     — Get current credit balance
- *   GET  /api/credits/:owner/history — Get paginated transaction history
+ *   GET  /api/credits/:owner     — Get current credit balance (path-param style, auth required)
+ *   GET  /api/credits/:owner/history — Get paginated transaction history (auth required)
  *
  * Grant deduplication is enforced via a `credit_grants` table keyed by Ed25519 public key.
  * This ensures each identity can only claim the initial grant once, regardless of agent name.
+ *
+ * POST /api/credits/grant requires ADMIN_TOKEN env var for admin override grants.
+ * Set ADMIN_TOKEN in fly.toml or fly secrets to enable manual credit grants.
+ * If ADMIN_TOKEN is not set, only Ed25519-authenticated self-grants are accepted.
  *
  * @param fastify - The Fastify instance (parent scope from server.ts)
  * @param options - Must include a `creditDb` Database instance
@@ -50,7 +58,111 @@ export async function creditRoutesPlugin(
   // Initialize free-tier usage tracking table
   initFreeTierTable(creditDb);
 
-  // Register all credit routes in a scoped block with identity auth
+  // Warn on startup if ADMIN_TOKEN is not configured
+  // POST /api/credits/grant requires ADMIN_TOKEN env var for admin override grants
+  if (!process.env.ADMIN_TOKEN) {
+    // eslint-disable-next-line no-console
+    console.warn('[agentbnb] ADMIN_TOKEN not set — POST /api/credits/grant will return 401 for admin override grants');
+  }
+
+  // -------------------------------------------------------------------------
+  // PUBLIC routes — registered BEFORE the auth scope so they are unauthenticated.
+  // These are read-only balance/history queries safe to expose without auth.
+  // Agents query their own balance/history during startup before Ed25519 keys load.
+  // -------------------------------------------------------------------------
+
+  /**
+   * GET /api/credits/balance?owner=<owner>
+   * Returns: { owner: string, balance: number }
+   *
+   * Public alias for balance lookup — no Ed25519 auth required.
+   * Use this during agent startup or from scripts where auth is not yet initialized.
+   */
+  fastify.get('/api/credits/balance', {
+    schema: {
+      tags: ['credits'],
+      summary: 'Get credit balance by owner query param (public, no auth required)',
+      querystring: {
+        type: 'object',
+        properties: { owner: { type: 'string', description: 'Agent owner name' } },
+        required: ['owner'],
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            owner: { type: 'string' },
+            balance: { type: 'number' },
+          },
+        },
+        400: { type: 'object', properties: { error: { type: 'string' } } },
+      },
+    },
+  }, async (request: FastifyRequest, reply: FastifyReply) => {
+    const query = request.query as Record<string, string | undefined>;
+    const owner = typeof query.owner === 'string' ? query.owner.trim() : '';
+    if (!owner) {
+      return reply.code(400).send({ error: 'owner query param required' });
+    }
+    const balance = getBalance(creditDb, owner);
+    return reply.send({ owner, balance });
+  });
+
+  /**
+   * GET /api/credits/transactions?owner=<owner>&since=<iso>&limit=<n>
+   * Returns: { owner: string, transactions: CreditTransaction[], limit: number }
+   *
+   * Public alias for transaction history — no Ed25519 auth required.
+   * Useful for agent sync on startup or from scripts without full auth ceremony.
+   * Query params:
+   *   owner  — required; agent owner name
+   *   since  — optional ISO 8601 timestamp; only return transactions after this time
+   *   limit  — optional integer (default 50, max 100)
+   */
+  fastify.get('/api/credits/transactions', {
+    schema: {
+      tags: ['credits'],
+      summary: 'Get transaction history by query params (public, no auth required)',
+      querystring: {
+        type: 'object',
+        properties: {
+          owner: { type: 'string', description: 'Agent owner name' },
+          since: { type: 'string', description: 'ISO 8601 timestamp — only return transactions after this time' },
+          limit: { type: 'integer', description: 'Max entries (default 50, max 100)' },
+        },
+        required: ['owner'],
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            owner: { type: 'string' },
+            transactions: { type: 'array' },
+            limit: { type: 'integer' },
+          },
+        },
+        400: { type: 'object', properties: { error: { type: 'string' } } },
+      },
+    },
+  }, async (request: FastifyRequest, reply: FastifyReply) => {
+    const query = request.query as Record<string, string | undefined>;
+    const owner = typeof query.owner === 'string' ? query.owner.trim() : '';
+    if (!owner) {
+      return reply.code(400).send({ error: 'owner query param required' });
+    }
+    const rawLimit = query.limit !== undefined ? parseInt(query.limit, 10) : 50;
+    const limit = Math.min(isNaN(rawLimit) || rawLimit < 1 ? 50 : rawLimit, 100);
+    const since = typeof query.since === 'string' && query.since.trim() ? query.since.trim() : undefined;
+
+    const transactions = getTransactions(creditDb, owner, { limit, after: since });
+    return reply.send({ owner, transactions, limit });
+  });
+
+  // -------------------------------------------------------------------------
+  // AUTHENTICATED routes — scoped block with Ed25519 identity auth applied.
+  // -------------------------------------------------------------------------
+
+  // Register all auth-gated credit routes in a scoped block with identity auth
   await fastify.register(async (scope) => {
     // Apply Ed25519 identity auth hook to this scope
     identityAuthPlugin(scope, { agentDb: creditDb });
