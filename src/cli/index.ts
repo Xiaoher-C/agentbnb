@@ -1023,55 +1023,83 @@ program
     }
 
     const creditDb = openCreditDb(config.credit_db_path);
-    let balance: number;
-    let transactions: import('../credit/ledger.js').CreditTransaction[];
-    let heldEscrows: Array<{ id: string; amount: number; card_id: string; created_at: string }>;
+    let localBalance = 0;
+    let registryBalance: number | null = null;
+    let registryUnavailable = false;
+    let transactions: import('../credit/ledger.js').CreditTransaction[] = [];
+    let heldEscrows: Array<{ id: string; amount: number; card_id: string; created_at: string }> = [];
 
-    if (config.registry) {
-      // Registry mode: use CreditLedger for balance and history
+    try {
+      localBalance = getBalance(creditDb, config.owner);
+      transactions = getTransactions(creditDb, config.owner, 5);
+      heldEscrows = creditDb
+        .prepare('SELECT id, amount, card_id, created_at FROM credit_escrow WHERE owner = ? AND status = ?')
+        .all(config.owner, 'held') as Array<{ id: string; amount: number; card_id: string; created_at: string }>;
+    } finally {
+      creditDb.close();
+    }
+
+    const hasRegistry = config.registry != null;
+
+    if (hasRegistry) {
       const statusIdentityAuth = loadIdentityAuth(config.owner);
       const statusLedger = createLedger({
-        registryUrl: config.registry,
+        registryUrl: config.registry!,
         ownerPublicKey: statusIdentityAuth.publicKey,
         privateKey: statusIdentityAuth.privateKey,
       });
       try {
-        balance = await statusLedger.getBalance(config.owner);
+        registryBalance = await statusLedger.getBalance(config.owner);
         transactions = await statusLedger.getHistory(config.owner, 5);
-        // Held escrows are still tracked locally in Registry mode for display
-        heldEscrows = creditDb
-          .prepare('SELECT id, amount, card_id, created_at FROM credit_escrow WHERE owner = ? AND status = ?')
-          .all(config.owner, 'held') as Array<{ id: string; amount: number; card_id: string; created_at: string }>;
       } catch (err) {
-        // New agents may not yet have a registry record — show zero balance gracefully
-        balance = 0;
-        transactions = [];
-        heldEscrows = [];
+        registryUnavailable = true;
         const msg = err instanceof Error ? err.message : String(err);
-        console.warn(`Note: could not fetch balance from registry (${msg}). Run \`agentbnb init\` if this is a new agent.`);
-      } finally {
-        creditDb.close();
-      }
-    } else {
-      // Local mode: use SQLite directly
-      try {
-        balance = getBalance(creditDb, config.owner);
-        transactions = getTransactions(creditDb, config.owner, 5);
-        heldEscrows = creditDb
-          .prepare('SELECT id, amount, card_id, created_at FROM credit_escrow WHERE owner = ? AND status = ?')
-          .all(config.owner, 'held') as Array<{ id: string; amount: number; card_id: string; created_at: string }>;
-      } finally {
-        creditDb.close();
+        if (!opts.json) {
+          console.warn(`Note: could not fetch balance from registry (${msg}). Run \`agentbnb init\` if this is a new agent.`);
+        }
       }
     }
 
+    const syncNeeded = hasRegistry && !registryUnavailable && registryBalance !== null && Math.abs(registryBalance - localBalance) > 1;
+    const displayBalance = registryBalance ?? localBalance;
+
     if (opts.json) {
-      console.log(JSON.stringify({ owner: config.owner, balance, held_escrows: heldEscrows, recent_transactions: transactions }, null, 2));
+      const output: Record<string, unknown> = {
+        owner: config.owner,
+        balance: displayBalance,
+        local_balance: localBalance,
+        held_escrows: heldEscrows,
+        recent_transactions: transactions,
+      };
+      if (config.agent_id) output['agent_id'] = config.agent_id;
+      if (hasRegistry) {
+        output['registry_balance'] = registryBalance;
+        output['sync_needed'] = syncNeeded;
+      }
+      console.log(JSON.stringify(output, null, 2));
       return;
     }
 
-    console.log(`Owner:   ${config.owner}`);
-    console.log(`Balance: ${balance} credits`);
+    console.log(`Owner:    ${config.owner}`);
+    if (config.agent_id) {
+      console.log(`Agent ID: ${config.agent_id}`);
+    }
+    if (hasRegistry) {
+      console.log(`Registry: ${config.registry}`);
+    }
+
+    if (!hasRegistry) {
+      console.log(`Balance:  ${localBalance} credits [local]`);
+    } else if (registryUnavailable) {
+      console.log(`Balance:  ${localBalance} credits [local — registry unavailable]`);
+    } else if (syncNeeded) {
+      const diff = Math.abs(registryBalance! - localBalance);
+      console.log(`Balance:  ${registryBalance} credits [registry]`);
+      console.log(`Local:    ${localBalance} credits [stale — run: agentbnb sync]`);
+      console.log(`\n⚠ Local balance out of sync (off by ${diff} credits)`);
+    } else {
+      console.log(`Balance:  ${displayBalance} credits [registry, in sync]`);
+    }
 
     if (heldEscrows.length > 0) {
       console.log(`\nActive Escrows (${heldEscrows.length}):`);
