@@ -17,7 +17,7 @@ import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { Cron } from 'croner';
-import { syncCreditsFromRegistry, syncCreditsFromRegistryOnce } from '../credit/registry-sync.js';
+import { syncCreditsFromRegistry } from '../credit/registry-sync.js';
 
 export interface ServiceOptions {
   port?: number;
@@ -305,7 +305,7 @@ export class ServiceCoordinator {
       }
 
       this.creditSyncJob = new Cron('*/5 * * * *', async () => {
-        const result = await syncCreditsFromRegistryOnce(this.config);
+        const result = await syncCreditsFromRegistry(this.config, this.runtime.creditDb);
         if (result.synced) {
           console.log(`[agentbnb] credits synced: ${result.remoteBalance} (was ${result.localWas})`);
         } else {

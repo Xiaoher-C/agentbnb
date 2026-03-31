@@ -711,7 +711,7 @@ program
     if (config.registry) {
       const creditDb = openCreditDb(config.credit_db_path);
       try {
-        const syncResult = await syncCreditsFromRegistry(config, creditDb, getConfigDir());
+        const syncResult = await syncCreditsFromRegistry(config, creditDb);
         if (syncResult.synced && syncResult.remoteBalance !== undefined) {
           console.log(`Credits synced: ${syncResult.remoteBalance} [registry]`);
         }
