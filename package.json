@@ -15,7 +15,15 @@
     "dist",
     "README.md",
     "LICENSE",
-    "skills/agentbnb",
+    "skills/agentbnb/auto-request.ts",
+    "skills/agentbnb/auto-share.ts",
+    "skills/agentbnb/bootstrap.ts",
+    "skills/agentbnb/credit-mgr.ts",
+    "skills/agentbnb/gateway.ts",
+    "skills/agentbnb/openclaw-tools.ts",
+    "skills/agentbnb/HEARTBEAT.rules.md",
+    "skills/agentbnb/install.sh",
+    "skills/agentbnb/SKILL.md",
     "openclaw.plugin.json"
   ],
   "exports": {
@@ -74,7 +82,7 @@
     "@fastify/swagger": "^9.7.0",
     "@fastify/swagger-ui": "^5.2.5",
     "@fastify/websocket": "^11.2.0",
-    "@modelcontextprotocol/sdk": "^1.27.1",
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "better-sqlite3": "^11.6.0",
     "bonjour-service": "^1.3.0",
     "commander": "^12.1.0",
@@ -92,7 +100,7 @@
     ]
   },
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=20.0.0 <25.0.0"
   },
   "pnpm": {
     "onlyBuiltDependencies": [

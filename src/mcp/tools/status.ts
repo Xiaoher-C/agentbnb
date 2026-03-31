@@ -24,6 +24,9 @@ export async function handleStatus(
 ): Promise<{ content: Array<{ type: 'text'; text: string }> }> {
   try {
     let balance = 0;
+    // Prefer agent_id (cryptographic identity) over owner (legacy human-chosen string).
+    // owner is kept as fallback for agents that pre-date the v8 agent_id migration.
+    const creditKey = ctx.identity.agent_id ?? ctx.identity.owner;
 
     if (ctx.config.registry) {
       try {
@@ -33,12 +36,12 @@ export async function handleStatus(
           ownerPublicKey: ctx.identity.public_key,
           privateKey: keys.privateKey,
         });
-        balance = await ledger.getBalance(ctx.identity.owner);
+        balance = await ledger.getBalance(creditKey);
       } catch {
         // Fall back to local balance on error
         const creditDb = openCreditDb(ctx.config.credit_db_path);
         try {
-          balance = getBalance(creditDb, ctx.identity.owner);
+          balance = getBalance(creditDb, creditKey);
         } finally {
           creditDb.close();
         }
@@ -46,7 +49,7 @@ export async function handleStatus(
     } else {
       const creditDb = openCreditDb(ctx.config.credit_db_path);
       try {
-        balance = getBalance(creditDb, ctx.identity.owner);
+        balance = getBalance(creditDb, creditKey);
       } finally {
         creditDb.close();
       }
