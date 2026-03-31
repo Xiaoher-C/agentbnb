@@ -8,6 +8,7 @@ import { AgentBnBError } from '../types/index.js';
 import type { CapabilityCardV2, EscrowReceipt, FailureReason } from '../types/index.js';
 import type { SkillExecutor, ProgressCallback } from '../skills/executor.js';
 import { loadConfig } from '../cli/config.js';
+import { syncCreditsFromRegistry } from '../credit/registry-sync.js';
 import { resolveTargetCapability } from './resolve-target-capability.js';
 import type { ResolvedTargetCapability } from './resolve-target-capability.js';
 
@@ -300,6 +301,20 @@ export async function executeCapabilityRequest(opts: ExecuteRequestOptions): Pro
       };
     }
   } else {
+    // Sync local balance from registry before checking (graceful — if sync fails, use local balance)
+    const cfg = loadConfig();
+    if (cfg?.registry) {
+      try {
+        await Promise.race([
+          syncCreditsFromRegistry(cfg, creditDb),
+          new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error('sync timeout')), 2000),
+          ),
+        ]);
+      } catch {
+        // Non-fatal: proceed with local balance
+      }
+    }
     try {
       const balance = getBalance(creditDb, requester);
       if (balance < creditsNeeded) {
