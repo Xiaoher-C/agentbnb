@@ -51,6 +51,18 @@ export {
   createClaimRequest,
 } from './operators.js';
 
+// DID (Decentralized Identifiers)
+export {
+  type ParsedDID,
+  type DIDDocument,
+  type VerificationMethod,
+  type ServiceEndpoint,
+  toDIDKey,
+  toDIDAgentBnB,
+  parseDID,
+  buildDIDDocument,
+} from './did.js';
+
 // Human Guarantor
 export {
   GuarantorRecordSchema,

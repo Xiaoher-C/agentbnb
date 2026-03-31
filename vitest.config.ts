@@ -5,7 +5,7 @@ const pkg = JSON.parse(readFileSync('./package.json', 'utf-8')) as { version: st
 
 export default defineConfig({
   test: {
-    exclude: ['hub/**', 'node_modules/**'],
+    exclude: ['hub/**', 'node_modules/**', '.claude/worktrees/**', 'packages/**/node_modules/**'],
     pool: 'forks',
     testTimeout: 20_000,
     hookTimeout: 20_000,
