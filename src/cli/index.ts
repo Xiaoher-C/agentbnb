@@ -1904,6 +1904,40 @@ program
   .action(runQuickstart);
 
 // ---------------------------------------------------------------------------
+// DID (Decentralized Identity)
+// ---------------------------------------------------------------------------
+
+const did = program.command('did').description('Decentralized Identity commands');
+
+did
+  .command('show')
+  .description('Display local agent DID identifiers')
+  .option('--json', 'Output as JSON')
+  .action(async (opts: { json?: boolean }) => {
+    const { didShow, didShowJson } = await import('./did-action.js');
+    if (opts.json) {
+      await didShowJson();
+    } else {
+      await didShow();
+    }
+  });
+
+// ---------------------------------------------------------------------------
+// Verifiable Credentials
+// ---------------------------------------------------------------------------
+
+const vc = program.command('vc').description('Verifiable Credentials commands');
+
+vc
+  .command('show')
+  .description('Display Verifiable Credentials for this agent')
+  .option('--json', 'Output as JSON')
+  .action(async (opts: { json?: boolean }) => {
+    const { vcShow } = await import('./vc-action.js');
+    await vcShow(opts);
+  });
+
+// ---------------------------------------------------------------------------
 // MCP Server
 // ---------------------------------------------------------------------------
 

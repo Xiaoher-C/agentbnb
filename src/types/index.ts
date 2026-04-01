@@ -34,6 +34,8 @@ export const CapabilityCardSchema = z.object({
   owner: z.string().min(1),
   /** V8: Cryptographic agent identity (Ed25519 public key hash). */
   agent_id: z.string().optional(),
+  /** W3C Decentralized Identifier (e.g. did:agentbnb:<agent_id>). */
+  did: z.string().optional(),
   name: z.string().min(1).max(100),
   description: z.string().max(500),
   level: z.union([z.literal(1), z.literal(2), z.literal(3)]),
@@ -207,6 +209,8 @@ export const CapabilityCardV2Schema = z.object({
   owner: z.string().min(1),
   /** V8: Cryptographic agent identity (Ed25519 public key hash). */
   agent_id: z.string().optional(),
+  /** W3C Decentralized Identifier (e.g. did:agentbnb:<agent_id>). */
+  did: z.string().optional(),
   /** Agent display name — was 'name' in v1.0. */
   agent_name: z.string().min(1).max(100),
   /** Short one-liner shown in Hub v2 Identity Header. */
@@ -265,6 +269,8 @@ export interface AgentProfileV2 {
   owner: string;
   /** V8: Cryptographic agent identity. */
   agent_id?: string;
+  /** W3C Decentralized Identifier. */
+  did?: string;
   agent_name?: string;
   short_description?: string;
   joined_at: string;

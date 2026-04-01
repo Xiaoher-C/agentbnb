@@ -1253,6 +1253,59 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
   });
 
   /**
+   * GET /api/did/:agent_id — Returns a W3C DID Document for an agent.
+   */
+  api.get('/api/did/:agent_id', {
+    schema: {
+      tags: ['identity'],
+      summary: 'Resolve agent DID Document',
+      params: { type: 'object', properties: { agent_id: { type: 'string' } }, required: ['agent_id'] },
+      response: {
+        200: { type: 'object', additionalProperties: true },
+        404: { type: 'object', properties: { error: { type: 'string' } } },
+      },
+    },
+  }, async (request, reply) => {
+    const { agent_id } = request.params as { agent_id: string };
+    const allCards = listCards(opts.registryDb);
+    const agentCard = allCards.find((c) => {
+      const parsed = AnyCardSchema.safeParse(c);
+      return parsed.success && parsed.data.agent_id === agent_id;
+    });
+    if (!agentCard) {
+      return reply.code(404).send({ error: `Agent ${agent_id} not found` });
+    }
+    const parsed = AnyCardSchema.parse(agentCard);
+    const didId = `did:agentbnb:${agent_id}`;
+    const didDocument: Record<string, unknown> = {
+      '@context': ['https://www.w3.org/ns/did/v1', 'https://w3id.org/security/suites/ed25519-2020/v1'],
+      id: didId,
+      verificationMethod: [{ id: `${didId}#key-1`, type: 'Ed25519VerificationKey2020', controller: didId }],
+      authentication: [`${didId}#key-1`],
+      assertionMethod: [`${didId}#key-1`],
+    };
+    if (parsed.gateway_url) {
+      didDocument['service'] = [{ id: `${didId}#agentbnb-gateway`, type: 'AgentGateway', serviceEndpoint: parsed.gateway_url }];
+    }
+    return reply.send(didDocument);
+  });
+
+  /**
+   * GET /api/credentials/:agent_id — Returns Verifiable Credentials for an agent.
+   */
+  api.get('/api/credentials/:agent_id', {
+    schema: {
+      tags: ['identity'],
+      summary: 'Get Verifiable Credentials for an agent',
+      params: { type: 'object', properties: { agent_id: { type: 'string' } }, required: ['agent_id'] },
+      response: { 200: { type: 'object', additionalProperties: true } },
+    },
+  }, async (request, reply) => {
+    const { agent_id } = request.params as { agent_id: string };
+    return reply.send({ agent_id, did: `did:agentbnb:${agent_id}`, credentials: [] });
+  });
+
+  /**
    * GET /api/openapi/gpt-actions — Returns a GPT Builder-importable OpenAPI spec.
    *
    * Filters the auto-generated spec to only public GET/POST endpoints,

@@ -25,6 +25,8 @@ export const AgentIdentitySchema = z.object({
   owner: z.string().min(1),
   /** Hex-encoded Ed25519 public key. */
   public_key: z.string().min(1),
+  /** W3C Decentralized Identifier (e.g. did:agentbnb:<agent_id>). */
+  did: z.string().optional(),
   /** ISO 8601 timestamp of identity creation. */
   created_at: z.string().datetime(),
   /** Optional guarantor info if linked to a human. */
@@ -79,10 +81,12 @@ function derivePublicKeyFromPrivate(privateKey: Buffer): Buffer {
 
 function buildIdentityFromPublicKey(publicKey: Buffer, owner: string, createdAt?: string): AgentIdentity {
   const publicKeyHex = publicKey.toString('hex');
+  const agentId = deriveAgentId(publicKeyHex);
   return {
-    agent_id: deriveAgentId(publicKeyHex),
+    agent_id: agentId,
     owner,
     public_key: publicKeyHex,
+    did: `did:agentbnb:${agentId}`,
     created_at: createdAt ?? new Date().toISOString(),
   };
 }
@@ -132,6 +136,7 @@ export function createIdentity(configDir: string, owner: string): AgentIdentity 
     agent_id: agentId,
     owner,
     public_key: publicKeyHex,
+    did: `did:agentbnb:${agentId}`,
     created_at: new Date().toISOString(),
   };
 
@@ -245,6 +250,13 @@ export function loadOrRepairIdentity(configDir: string, ownerHint?: string): Ide
 
   if (ownerHint && loadedIdentity.owner !== ownerHint) {
     const updatedIdentity = { ...loadedIdentity, owner: ownerHint };
+    saveIdentity(configDir, updatedIdentity);
+    return { identity: updatedIdentity, keys, status: 'repaired' };
+  }
+
+  // Backfill DID for identities created before the identity protocol
+  if (!loadedIdentity.did) {
+    const updatedIdentity = { ...loadedIdentity, did: `did:agentbnb:${loadedIdentity.agent_id}` };
     saveIdentity(configDir, updatedIdentity);
     return { identity: updatedIdentity, keys, status: 'repaired' };
   }
