@@ -43,6 +43,8 @@ export const RelayRequestMessageSchema = z.object({
   params: z.record(z.unknown()).default({}),
   requester: z.string().optional(),
   escrow_receipt: z.record(z.unknown()).optional(),
+  /** Optional UCAN token for capability delegation. */
+  ucan_token: z.string().optional(),
 });
 
 /** Registry → Agent B: Incoming request forwarded from Agent A */
@@ -55,6 +57,8 @@ export const IncomingRequestMessageSchema = z.object({
   params: z.record(z.unknown()).default({}),
   requester: z.string().optional(),
   escrow_receipt: z.record(z.unknown()).optional(),
+  /** Optional UCAN token for capability delegation. */
+  ucan_token: z.string().optional(),
 });
 
 /** Agent B → Registry: Response to a relayed request */

@@ -6,6 +6,7 @@ import { executeCapabilityRequest } from './execute.js';
 import type { EscrowReceipt } from '../types/index.js';
 // FailureReason is used as a string literal 'overload' in the overload log entry
 import { verifyEscrowReceipt } from '../credit/signing.js';
+import { decodeUCAN, verifyUCAN } from '../auth/ucan.js';
 import { insertRequestLog } from '../registry/request-log.js';
 
 /**
@@ -113,11 +114,33 @@ export function createGatewayServer(opts: GatewayOptions): FastifyInstance {
       }
     }
 
-    // Neither method succeeded
+    // Phase 3: UCAN token check — Authorization: Bearer ucan.<token>
+    const authHeader = request.headers.authorization;
+    if (authHeader?.startsWith('Bearer ucan.')) {
+      const ucanToken = authHeader.slice('Bearer ucan.'.length);
+      try {
+        const decoded = decodeUCAN(ucanToken);
+        // Resolve issuer's public key from x-agent-public-key header
+        const ucanPubKeyHex = request.headers['x-agent-public-key'] as string | undefined;
+        if (ucanPubKeyHex) {
+          const pubKeyBuf = Buffer.from(ucanPubKeyHex, 'hex');
+          const ucanResult = verifyUCAN(ucanToken, pubKeyBuf);
+          if (ucanResult.valid) {
+            (request as unknown as Record<string, unknown>)._authenticated = true;
+            (request as unknown as Record<string, unknown>)._ucanPayload = decoded.payload;
+            return;
+          }
+        }
+      } catch {
+        // UCAN verification failed — fall through to unauthorized
+      }
+    }
+
+    // No auth method succeeded
     await reply.status(401).send({
       jsonrpc: '2.0',
       id: null,
-      error: { code: -32000, message: 'Unauthorized: provide Bearer token or X-Agent-Id/Signature headers' },
+      error: { code: -32000, message: 'Unauthorized: provide Bearer token, X-Agent-Id/Signature headers, or UCAN token' },
     });
   });
 
