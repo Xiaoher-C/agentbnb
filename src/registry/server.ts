@@ -661,6 +661,24 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
     const card = result.data;
     const now = new Date().toISOString();
 
+    // Card quality gate — prevent garbage cards on the registry
+    if (card.spec_version === '2.0') {
+      if (!card.skills || card.skills.length === 0) {
+        return reply.code(400).send({ error: 'Card must have at least 1 skill' });
+      }
+      const badSkill = card.skills.find((s) => !s.description || s.description.length < 20);
+      if (badSkill) {
+        return reply.code(400).send({ error: `Skill "${badSkill.id}" must have a description (20+ chars)` });
+      }
+      if (card.agent_name === card.owner || /^[0-9a-f]{16}$/.test(card.agent_name)) {
+        return reply.code(400).send({ error: 'agent_name must be a readable name, not an ID' });
+      }
+    } else {
+      if (!card.description || card.description.length < 20) {
+        return reply.code(400).send({ error: 'Card must have a description (20+ chars)' });
+      }
+    }
+
     if (card.spec_version === '2.0') {
       // v2.0 card — raw SQL INSERT OR REPLACE (insertCard only supports v1.0)
       const cardWithTimestamps = attachCanonicalAgentId(db, {

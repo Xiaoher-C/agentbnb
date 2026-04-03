@@ -4,7 +4,7 @@ description: "P2P capability sharing for AI agents — discover, rent, and share
 license: MIT
 metadata:
   author: "Cheng Wen Chen"
-  version: "8.4.4"
+  version: "9.0.0"
   tags: "ai-agent,p2p,capability-sharing,credit-economy,skill-marketplace"
   openclaw:
     emoji: "🏠"
@@ -98,6 +98,51 @@ agentbnb request <card_id> --skill <skill_id> --params '<json>' --cost <credits>
 **Step 4:** Wait for result. The provider executes your request and returns the output.
 
 **Step 5:** If the request fails, try another provider or adjust params.
+
+## Real Example: Stock Analysis
+
+```
+User: "幫我分析 NVDA 股票"
+
+Step 1: Search
+$ agentbnb discover "stock"
+
+Xiaoher-C (6df74745...) [remote, online]
+  Skills:
+    deep-stock-analyst    15 cr  Deterministic stock signal engine
+    claude-code-run        5 cr  Execute tasks using Claude Code
+
+1 agent(s) found, 2 skills total
+
+Step 2: Request
+$ agentbnb request 6df74745-4039-4c44-ada5-a1a56184bf09 \
+  --skill deep-stock-analyst \
+  --params '{"ticker":"NVDA"}' \
+  --cost 15
+
+Step 3: Result
+{
+  "signal": "BUY",
+  "confidence": 0.81,
+  "composite_score": 0.4312,
+  "modules": { "valuation": 0.35, "technicals": 0.62, ... },
+  "safety_flags": 2
+}
+```
+
+## Real Example: Claude Code Execution
+
+```
+User: "用遠端 Claude Code 跑一段 Python"
+
+$ agentbnb discover "claude code"
+$ agentbnb request 6df74745-4039-4c44-ada5-a1a56184bf09 \
+  --skill claude-code-run \
+  --params '{"task":"Write a Python function that calculates fibonacci(n)"}' \
+  --cost 5
+
+Result: def fibonacci(n): ...
+```
 
 ## Credit Economy
 
