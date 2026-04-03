@@ -3,7 +3,7 @@ import { signEscrowReceipt, verifyEscrowReceipt } from '../credit/signing.js';
 /**
  * W3C Verifiable Credentials context URLs.
  */
-const VC_CONTEXT = [
+export const VC_CONTEXT = [
   'https://www.w3.org/2018/credentials/v1',
   'https://agentbnb.dev/credentials/v1',
 ];
