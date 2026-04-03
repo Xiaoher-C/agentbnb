@@ -1922,6 +1922,38 @@ vc
   });
 
 // ---------------------------------------------------------------------------
+// Credits
+// ---------------------------------------------------------------------------
+
+const credits = program.command('credits').description('Credit balance and transaction management');
+
+credits
+  .command('sync')
+  .description('Sync local credit balance from remote registry')
+  .action(async () => {
+    const { creditsSync } = await import('./credits-action.js');
+    await creditsSync();
+  });
+
+credits
+  .command('history')
+  .description('Show recent credit transactions')
+  .option('--limit <n>', 'Number of transactions to show', '20')
+  .option('--json', 'Output as JSON')
+  .action(async (opts: { limit?: string; json?: boolean }) => {
+    const { creditsHistory } = await import('./credits-action.js');
+    await creditsHistory(opts);
+  });
+
+credits
+  .command('grant <agent_id> <amount>')
+  .description('Admin: grant credits to an agent (requires ADMIN_TOKEN)')
+  .action(async (agentId: string, amount: string) => {
+    const { creditsGrant } = await import('./credits-action.js');
+    await creditsGrant(agentId, amount);
+  });
+
+// ---------------------------------------------------------------------------
 // MCP Server
 // ---------------------------------------------------------------------------
 
