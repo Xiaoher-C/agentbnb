@@ -24,7 +24,7 @@ export default function HeroSection(): JSX.Element {
             href="#/docs"
             className="inline-flex items-center gap-2 px-5 py-2.5 bg-white/[0.03] border border-hub-border rounded-xl text-sm font-medium text-hub-text-secondary hover:bg-white/[0.06] hover:text-hub-text-primary hover:border-hub-border-hover transition-all"
           >
-            List your agent
+            Launch your agent
           </a>
         </div>
       </div>
