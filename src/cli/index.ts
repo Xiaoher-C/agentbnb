@@ -629,58 +629,42 @@ program
       return;
     }
 
-    // Table output
+    // Detailed output with skills listed under each agent
     const col = (s: string | undefined, w: number) => (s ?? '').slice(0, w).padEnd(w);
+    let totalSkills = 0;
 
-    if (hasRemote) {
-      // Extended table with Source column
-      console.log(
-        col('ID', 16) + '  ' +
-        col('Name', 28) + '  ' +
-        col('Lvl', 3) + '  ' +
-        col('Credits', 7) + '  ' +
-        col('Online', 6) + '  ' +
-        col('Source', 8)
-      );
-      console.log('-'.repeat(80));
-      for (const card of outputCards as TaggedCard[]) {
-        const shortId = card.id.slice(0, 8) + '...';
-        const displayName = card.name ?? (card as unknown as { agent_name?: string }).agent_name ?? '';
-        const source = 'source' in card ? (card as TaggedCard).source : 'local';
-        const sourceTag = source === 'remote' ? '[remote]' : '[local]';
-        console.log(
-          col(shortId, 16) + '  ' +
-          col(displayName, 28) + '  ' +
-          col(String(card.level ?? ''), 3) + '  ' +
-          col(String(card.pricing?.credits_per_call ?? ''), 7) + '  ' +
-          col(card.availability?.online ? 'yes' : 'no', 6) + '  ' +
-          col(sourceTag, 8)
-        );
-      }
-    } else {
-      // Standard local-only table (preserved format)
-      console.log(
-        col('ID', 16) + '  ' +
-        col('Name', 32) + '  ' +
-        col('Lvl', 3) + '  ' +
-        col('Credits', 7) + '  ' +
-        col('Online', 6)
-      );
-      console.log('-'.repeat(72));
-      for (const card of outputCards) {
-        const shortId = card.id.slice(0, 8) + '...';
-        const displayName = card.name ?? (card as unknown as { agent_name?: string }).agent_name ?? '';
-        console.log(
-          col(shortId, 16) + '  ' +
-          col(displayName, 32) + '  ' +
-          col(String(card.level ?? ''), 3) + '  ' +
-          col(String(card.pricing?.credits_per_call ?? ''), 7) + '  ' +
-          col(card.availability?.online ? 'yes' : 'no', 6)
-        );
+    for (const card of outputCards) {
+      const shortId = card.id.slice(0, 8) + '...';
+      const displayName = card.name ?? (card as unknown as { agent_name?: string }).agent_name ?? '';
+      const online = card.availability?.online ? 'online' : 'offline';
+      const source = 'source' in card ? (card as TaggedCard).source : 'local';
+      const tags = hasRemote ? `${source}, ${online}` : online;
+
+      console.log(`\n${displayName} (${shortId}) [${tags}]`);
+
+      // Extract and display skills for v2.0 cards
+      const raw = card as Record<string, unknown>;
+      const skills = Array.isArray(raw['skills'])
+        ? (raw['skills'] as Array<{ id: string; name?: string; description?: string; pricing?: { credits_per_call?: number } }>)
+        : [];
+
+      if (skills.length > 0) {
+        console.log('  Skills:');
+        for (const skill of skills) {
+          const price = String(skill.pricing?.credits_per_call ?? '?');
+          const desc = (skill.description ?? '').slice(0, 50);
+          console.log(`    ${col(skill.id, 24)} ${col(price + ' cr', 8)} ${desc}`);
+        }
+        totalSkills += skills.length;
+      } else if (card.pricing?.credits_per_call != null) {
+        // v1.0 card — show card-level pricing
+        console.log(`  ${card.pricing.credits_per_call} cr/call`);
+        totalSkills += 1;
       }
     }
 
-    console.log(`\n${outputCards.length} result(s)`);
+    const skillsSuffix = totalSkills > 0 ? `, ${totalSkills} skills total` : '';
+    console.log(`\n${outputCards.length} agent(s) found${skillsSuffix}`);
   });
 
 // ---------------------------------------------------------------------------
