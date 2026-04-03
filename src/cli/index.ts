@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { Command } from 'commander';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
 import { networkInterfaces } from 'node:os';
@@ -1539,24 +1539,59 @@ const openclaw = program.command('openclaw').description('OpenClaw integration c
 /**
  * agentbnb openclaw sync
  * Reads SOUL.md and publishes (or updates) a v2.0 multi-skill card.
+ *
+ * When --soul-path is not provided, searches multiple locations via findSoulMd():
+ *   1. <workspace>/brains/<owner>/SOUL.md
+ *   2. ~/.openclaw/agents/<owner>/SOUL.md
+ *   3. <workspace>/SOUL.md
+ *   4. ./SOUL.md (cwd fallback)
  */
 openclaw
   .command('sync')
   .description('Read SOUL.md and publish/update a v2.0 capability card')
-  .option('--soul-path <path>', 'Path to SOUL.md', './SOUL.md')
+  .option('--soul-path <path>', 'Path to SOUL.md (auto-detected if omitted)')
   .option('--skills <ids>', 'Comma-separated skill IDs to publish (overrides shared-skills config and skill visibility)')
-  .action(async (opts: { soulPath: string; skills?: string }) => {
+  .action(async (opts: { soulPath?: string; skills?: string }) => {
     const config = loadConfig();
     if (!config) {
       console.error('Error: not initialized. Run `agentbnb init` first.');
       process.exit(1);
     }
 
+    // Resolve SOUL.md path: explicit flag > findSoulMd() > ./SOUL.md fallback
+    let resolvedSoulPath: string;
+    if (opts.soulPath) {
+      resolvedSoulPath = opts.soulPath;
+    } else {
+      const { findSoulMd, getOpenClawWorkspaceDir } = await import('../workspace/scanner.js');
+      const found = findSoulMd(config.owner);
+      if (found) {
+        resolvedSoulPath = found;
+      } else if (existsSync('./SOUL.md')) {
+        resolvedSoulPath = './SOUL.md';
+      } else {
+        const { homedir } = await import('node:os');
+        const home = homedir();
+        const workspaceDir = getOpenClawWorkspaceDir();
+        console.error(`No SOUL.md found for agent "${config.owner}".`);
+        console.error('Searched:');
+        console.error(`  - ${join(workspaceDir, 'brains', config.owner, 'SOUL.md')}`);
+        console.error(`  - ${join(home, '.openclaw', 'agents', config.owner, 'SOUL.md')}`);
+        console.error(`  - ${join(workspaceDir, 'SOUL.md')}`);
+        console.error(`  - ./SOUL.md`);
+        console.error('');
+        console.error('Create a SOUL.md file in one of these locations, or use:');
+        console.error('  agentbnb openclaw sync --soul-path /path/to/SOUL.md');
+        console.error(`  agentbnb openclaw setup --agent ${config.owner}`);
+        process.exit(1);
+      }
+    }
+
     let content: string;
     try {
-      content = readFileSync(opts.soulPath, 'utf-8');
+      content = readFileSync(resolvedSoulPath, 'utf-8');
     } catch {
-      console.error(`Error: cannot read SOUL.md at ${opts.soulPath}`);
+      console.error(`Error: cannot read SOUL.md at ${resolvedSoulPath}`);
       process.exit(1);
     }
 
@@ -1570,7 +1605,7 @@ openclaw
     const db = openDatabase(config.db_path);
     try {
       const card = publishFromSoulV2(db, content, config.owner, sharedSkills);
-      console.log(`Published card ${card.id} with ${card.skills.length} skill(s)`);
+      console.log(`Published card ${card.id} with ${card.skills.length} skill(s) (from ${resolvedSoulPath})`);
 
       // Display market reference prices per skill
       for (const skill of card.skills) {

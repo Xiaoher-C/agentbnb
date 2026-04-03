@@ -1,8 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdirSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
-import { tmpdir } from 'node:os';
+import { tmpdir, homedir } from 'node:os';
 import yaml from 'js-yaml';
+import { isCommunitySkill, isCommunitySkillByNameOrPath } from './openclaw-skills.js';
 
 function makeTempDir(): string {
   const dir = join(tmpdir(), `agentbnb-skills-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
@@ -204,5 +205,60 @@ describe('skillsStats', () => {
     expect(output).toContain('my-skill');
     // No hires yet — should show 0 or '-'
     expect(output).toMatch(/my-skill/);
+  });
+});
+
+describe('isCommunitySkill', () => {
+  const home = homedir();
+
+  it('returns true for paths under ~/.openclaw/skills/', () => {
+    const skillPath = join(home, '.openclaw', 'skills', 'tavily');
+    expect(isCommunitySkill(skillPath)).toBe(true);
+  });
+
+  it('returns true for paths under ~/.openclaw/extensions/', () => {
+    const skillPath = join(home, '.openclaw', 'extensions', 'agentbnb');
+    expect(isCommunitySkill(skillPath)).toBe(true);
+  });
+
+  it('returns false for workspace skill paths', () => {
+    const skillPath = join(home, '.openclaw', 'workspace', 'brains', 'my-agent', 'skills', 'my-skill');
+    expect(isCommunitySkill(skillPath)).toBe(false);
+  });
+
+  it('returns false for arbitrary paths', () => {
+    expect(isCommunitySkill('/tmp/some-skill')).toBe(false);
+  });
+});
+
+describe('isCommunitySkillByNameOrPath', () => {
+  const home = homedir();
+
+  it('returns true for known community skill names', () => {
+    expect(isCommunitySkillByNameOrPath('gog')).toBe(true);
+    expect(isCommunitySkillByNameOrPath('tavily')).toBe(true);
+    expect(isCommunitySkillByNameOrPath('find-skills')).toBe(true);
+    expect(isCommunitySkillByNameOrPath('skill-vetter')).toBe(true);
+    expect(isCommunitySkillByNameOrPath('proactive-agent')).toBe(true);
+    expect(isCommunitySkillByNameOrPath('openclaw-security-audit')).toBe(true);
+  });
+
+  it('returns false for user skill names without community path', () => {
+    expect(isCommunitySkillByNameOrPath('my-custom-skill')).toBe(false);
+    expect(isCommunitySkillByNameOrPath('voice-synthesis')).toBe(false);
+  });
+
+  it('returns true for unknown name with community path', () => {
+    const communityPath = join(home, '.openclaw', 'skills', 'new-community-skill');
+    expect(isCommunitySkillByNameOrPath('new-community-skill', communityPath)).toBe(true);
+  });
+
+  it('returns false for unknown name with non-community path', () => {
+    const userPath = join(home, '.openclaw', 'workspace', 'brains', 'agent', 'skills', 'custom');
+    expect(isCommunitySkillByNameOrPath('custom', userPath)).toBe(false);
+  });
+
+  it('returns true when name matches even without path', () => {
+    expect(isCommunitySkillByNameOrPath('tavily', undefined)).toBe(true);
   });
 });
