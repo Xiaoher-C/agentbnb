@@ -78,6 +78,14 @@ export {
   verifyRevocationRecord,
 } from './did-revocation.js';
 
+// EVM Bridge (Ed25519 ↔ secp256k1 cross-chain identity)
+export {
+  type EVMBridgeLink,
+  createBridgeLink,
+  verifyBridgeLink,
+  derivePseudoEVMAddress,
+} from './evm-bridge.js';
+
 // Human Guarantor
 export {
   GuarantorRecordSchema,

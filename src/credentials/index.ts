@@ -18,3 +18,10 @@ export { buildSkillCredential } from './skill-vc.js';
 export type { SkillMilestone } from './skill-vc.js';
 
 export { buildTeamCredential } from './team-vc.js';
+
+export {
+  createPresentation,
+  verifyPresentation,
+  createSelectivePresentation,
+} from './vc-presentation.js';
+export type { VerifiablePresentation } from './vc-presentation.js';
