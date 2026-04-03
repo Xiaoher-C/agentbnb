@@ -14,13 +14,15 @@ AgentBnB is a P2P agent capability sharing protocol. Agent owners publish what t
 
 ## Current State
 
-- **Version**: 7.0.0-beta.1 (package.json)
-- **Milestones shipped**: v1.1 → v2.x → v3.0 (SkillExecutor, Conductor, Signed Escrow) → v3.1 (WebSocket Relay) → v4.0 (Agent Economy Platform) → v5.0 (Genesis Flywheel) → v5.1 (OpenClaw Hardening) → v6.0 (Team Formation Protocol, shipped 2026-03-24)
-- **v7.0 in progress**: Agent Economy Infrastructure (Phases 54-60)
-  - Phase 54-55: FailureReason, Reputation Protection, Capacity Enforcement ✅
-  - Phase 56-60: Owner Console, Claude Code Executor, Multi-Provider, Social Layer
-- **Tests**: 302+
-- **Phase numbering**: Phases 1-49 (v1-v5), 50-53 (v6), 54-60 (v7)
+- **Version**: 8.4.7 (package.json), v9.0 identity protocol shipped
+- **Milestones shipped**: v1.1 → v2.x → v3.0 (SkillExecutor, Conductor, Signed Escrow) → v3.1 (WebSocket Relay) → v4.0 (Agent Economy Platform) → v5.0 (Genesis Flywheel) → v5.1 (OpenClaw Hardening) → v6.0 (Team Formation Protocol) → v7.0 (Agent Economy Infrastructure) → v8.x (V8 Identity Convergence) → **v9.0 (Agent Identity Protocol, shipped 2026-04-03)**
+- **v9.0 shipped**: Three-layer identity stack (DID + UCAN + Verifiable Credentials)
+  - Phase 1: DID Envelope (did:key + did:agentbnb, rotation, revocation, EVM bridge) ✅
+  - Phase 2: UCAN Token Engine (create/verify/delegate, escrow binding, gateway/relay/conductor integration) ✅
+  - Phase 3: Verifiable Credentials (reputation/skill/team VCs, weekly scheduler, selective disclosure) ✅
+  - Phase 4: Cross-Platform Federation (DID rotation, VC presentation, EVM bridge) ✅
+  - Phase 5: BLS Team Proofs → deferred to v10
+- **Tests**: 1,700+
 
 ## Tech Stack
 
@@ -49,7 +51,9 @@ src/
 ├── hub-agent/   # Hub-hosted agent management, job queue, relay bridge (13 files)
 ├── feedback/    # Reputation & feedback scoring (8 files)
 ├── evolution/   # Agent skill evolution tracking (7 files)
-├── identity/    # Agent identity, Ed25519 certs, guarantor/Sybil protection (7 files)
+├── auth/        # UCAN tokens, canonical JSON (RFC 8785), resource URI parser (10 files)
+├── credentials/ # Verifiable Credentials engine, reputation/skill/team VCs, scheduler (11 files)
+├── identity/    # Agent identity, DID (did:key + did:agentbnb), rotation, revocation, EVM bridge, guarantor (15 files)
 ├── sdk/         # Consumer/Provider SDK for LangChain/CrewAI/AutoGen (7 files)
 ├── mcp/         # MCP server — tools: discover, request, publish, status, conduct, serve_skill
 ├── app/         # AgentBnB service entry point
@@ -60,7 +64,7 @@ src/
 ├── conductor/   # Multi-agent orchestration, team formation, role schema (19 files)
 ├── utils/       # Shared utilities (interpolation)
 ├── discovery/   # mDNS peer discovery
-├── cli/         # CLI: init, publish, discover, request, serve, quickstart, conduct, mcp-server (17 files)
+├── cli/         # CLI: init, publish, discover, request, serve, quickstart, conduct, mcp-server, did, vc (19 files)
 └── types/       # Core TypeScript types + Zod schemas
 
 hub/             # React SPA at /hub (Vite + Tailwind, premium dark theme)
@@ -80,6 +84,35 @@ Key fields: `id`, `owner`, `name`, `skills[]`, `pricing`, `availability`, `capab
 Per-skill fields: `capability_types[]`, `requires_capabilities[]`, `visibility` ('public'|'private'), `capacity.max_concurrent`
 
 Full interfaces: `src/types/index.ts` (CapabilityCard, CapabilityCardV2, Skill)
+
+## Agent Identity Protocol (v9)
+
+Three-layer identity stack for autonomous agents:
+
+### Layer 1: Cryptographic Identity (DID)
+- **did:key** — Ed25519 pubkey encoded with Multicodec 0xed01 + base58btc (`src/identity/did.ts`)
+- **did:agentbnb** — Agent-specific DID method, resolvable via `GET /api/did/:agent_id`
+- **Key rotation** — Old key signs rotation proof, 90-day grace period (`src/identity/did-rotation.ts`)
+- **Revocation** — Permanent DID revocation with cascade escrow settlement (`src/identity/did-revocation.ts`)
+- **EVM bridge** — Ed25519 ↔ secp256k1 cross-sign for ERC-8004 (`src/identity/evm-bridge.ts`)
+
+### Layer 2: Capability Delegation (UCAN)
+- **Token format** — JWT-like: base64url(header).base64url(payload).signature, Ed25519 signed
+- **Resource URIs** — `agentbnb://kb/*`, `agentbnb://skill/*`, `agentbnb://escrow/*` with glob matching (`src/auth/ucan-resources.ts`)
+- **Canonical JSON** — RFC 8785 deterministic serialization (`src/auth/canonical-json.ts`)
+- **Delegation chain** — Max depth 3, attenuation-only (narrowing), offline verifiable (`src/auth/ucan-delegation.ts`)
+- **Escrow binding** — UCAN lifecycle tied to escrow: settle → expired, refund → revoked (`src/auth/ucan-escrow.ts`)
+- **Integration** — Gateway (`Bearer ucan.<token>`), Relay (`ucan_token` field), Conductor (auto sub-delegation)
+- **Spec** — `docs/adr/020-ucan-token.md`
+
+### Layer 3: Portable Reputation (Verifiable Credentials)
+- **W3C VC format** — Ed25519Signature2020 proof, `@context: [w3.org, agentbnb.dev]` (`src/credentials/vc.ts`)
+- **ReputationCredential** — success rate, volume, earnings, peer endorsements (`src/credentials/reputation-vc.ts`)
+- **SkillCredential** — milestone badges: bronze (100), silver (500), gold (1000 uses) (`src/credentials/skill-vc.ts`)
+- **TeamCredential** — team participation with role + task metadata (`src/credentials/team-vc.ts`)
+- **Weekly refresh** — croner scheduler auto-refreshes all agent VCs Sunday 00:00 (`src/credentials/vc-scheduler.ts`)
+- **Selective disclosure** — Verifiable Presentation wrapper (`src/credentials/vc-presentation.ts`)
+- **Live API** — `GET /api/credentials/:agent_id` returns real VCs from request_log data
 
 ## Agent Autonomy Model
 
@@ -135,9 +168,11 @@ Two-axis trust model:
 - **`performance_tier`** (0/1/2 = Listed/Active/Trusted) — computed from execution metrics, never conflated with "verified"
 - **`verification_badges`** — external grants only (Phase 2+, currently `[]`)
 - **`authority_source`** (`self` | `platform` | `org`)
-- **FailureReason** (v7.0): `bad_execution` | `overload` | `timeout` | `auth_error` | `not_found` — non-quality failures excluded from reputation
+- **FailureReason**: `bad_execution` | `overload` | `timeout` | `auth_error` | `not_found` — non-quality failures excluded from reputation
+- **Verifiable Credentials** (v9): Portable trust — `AgentReputationCredential`, `AgentSkillCredential`, `AgentTeamCredential` issued from execution data
+- **UCAN Authorization** (v9): Scoped, time-bound, delegatable auth tokens bound to escrow lifecycle
 
-See `docs/hub-v2-trust-signals.md` for design rationale.
+See `docs/hub-v2-trust-signals.md` for design rationale and `docs/adr/020-ucan-token.md` for UCAN spec.
 
 ## Package Manager Rules
 
@@ -167,11 +202,13 @@ This project uses **pnpm**. Never use npm or yarn in the project root.
 
 ## Important Context
 
-- v6.0 shipped. v7.0 Phases 54-60 in progress (Agent Economy Infrastructure).
+- v9.0 Agent Identity Protocol shipped (2026-04-03). Three-layer identity stack fully operational.
 - Agent-first philosophy: every feature must pass "Does this require human intervention? If yes, redesign."
 - Hub at `/hub` is the recruiting tool — must be visually polished.
 - Founder (Cheng Wen Chen) is the primary developer using vibe coding with Claude Code + GSD.
-- Key v7.0 additions: FailureReason enum, capacity enforcement (max_concurrent), demand vouchers, provider bonuses.
+- Key new directories: `src/auth/` (UCAN), `src/credentials/` (VC) — added in v9.0.
+- Gateway supports 3 auth methods: Bearer token, Ed25519 identity headers, UCAN tokens.
+- v10 planned: BLS signature aggregation, x402 credit bridge, ERC-8004 on-chain identity.
 
 ## Local Deployment Checklist
 
