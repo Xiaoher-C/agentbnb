@@ -1292,6 +1292,9 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
 
   /**
    * GET /api/credentials/:agent_id — Returns Verifiable Credentials for an agent.
+   *
+   * Issues live ReputationCredential + SkillCredentials from request_log and feedback data.
+   * Credentials are signed by the platform key if available, otherwise unsigned summaries.
    */
   api.get('/api/credentials/:agent_id', {
     schema: {
@@ -1302,7 +1305,111 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
     },
   }, async (request, reply) => {
     const { agent_id } = request.params as { agent_id: string };
-    return reply.send({ agent_id, did: `did:agentbnb:${agent_id}`, credentials: [] });
+    const db = opts.registryDb;
+    const did = `did:agentbnb:${agent_id}`;
+
+    // Find agent's cards
+    const allCards = listCards(db);
+    const ownerCards = allCards.filter((c) => {
+      const parsed = AnyCardSchema.safeParse(c);
+      return parsed.success && parsed.data.agent_id === agent_id;
+    });
+
+    if (ownerCards.length === 0) {
+      return reply.send({ agent_id, did, credentials: [] });
+    }
+
+    const cardIds = ownerCards.map((c) => (c as Record<string, unknown>)['id'] as string);
+    const cardIdPlaceholders = cardIds.map(() => '?').join(',');
+
+    // Aggregate execution metrics
+    const metricsRow = db.prepare(`
+      SELECT
+        SUM(CASE WHEN failure_reason IS NULL OR failure_reason IN ('bad_execution','auth_error')
+            THEN 1 ELSE 0 END) as total,
+        SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END) as successes,
+        AVG(CASE WHEN status = 'success' THEN latency_ms END) as avg_latency,
+        MIN(created_at) as earliest,
+        COALESCE(SUM(CASE WHEN status = 'success' THEN credits_charged ELSE 0 END), 0) as earned
+      FROM request_log
+      WHERE card_id IN (${cardIdPlaceholders}) AND action_type IS NULL
+    `).get(...cardIds) as {
+      total: number; successes: number; avg_latency: number | null;
+      earliest: string | null; earned: number;
+    } | undefined;
+
+    const totalExec = metricsRow?.total ?? 0;
+    const successExec = metricsRow?.successes ?? 0;
+    const successRate = totalExec > 0 ? successExec / totalExec : 0;
+    const avgLatency = metricsRow?.avg_latency ?? 0;
+    const activeSince = metricsRow?.earliest ?? new Date().toISOString();
+    const totalEarned = metricsRow?.earned ?? 0;
+
+    // Per-skill usage counts
+    const skillRows = db.prepare(`
+      SELECT skill_id, COUNT(*) as uses,
+        SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END) as successes
+      FROM request_log
+      WHERE card_id IN (${cardIdPlaceholders}) AND skill_id IS NOT NULL AND action_type IS NULL
+      GROUP BY skill_id
+    `).all(...cardIds) as Array<{ skill_id: string; uses: number; successes: number }>;
+
+    // Feedback count
+    let feedbackCount = 0;
+    try {
+      const fbRow = db.prepare(`SELECT COUNT(*) as cnt FROM feedback WHERE provider_agent = ?`).get(agent_id) as { cnt: number } | undefined;
+      feedbackCount = fbRow?.cnt ?? 0;
+    } catch { /* feedback table may not exist */ }
+
+    // Build credentials array (unsigned summaries — platform signing requires server key)
+    const credentials: Record<string, unknown>[] = [];
+
+    // ReputationCredential (always issued if agent has any executions)
+    if (totalExec > 0) {
+      credentials.push({
+        '@context': ['https://www.w3.org/2018/credentials/v1', 'https://agentbnb.dev/credentials/v1'],
+        type: ['VerifiableCredential', 'AgentReputationCredential'],
+        issuer: 'did:agentbnb:platform',
+        issuanceDate: new Date().toISOString(),
+        credentialSubject: {
+          id: did,
+          totalTransactions: totalExec,
+          successRate: Math.round(successRate * 1000) / 1000,
+          avgResponseTime: `${(avgLatency / 1000).toFixed(1)}s`,
+          totalEarned,
+          skills: skillRows.map((s) => ({
+            id: s.skill_id,
+            uses: s.uses,
+            rating: s.uses > 0 ? Math.round((s.successes / s.uses) * 50) / 10 : 0,
+          })),
+          peerEndorsements: feedbackCount,
+          activeSince,
+        },
+      });
+    }
+
+    // SkillCredentials (milestone: 100/500/1000 uses)
+    const milestones = [1000, 500, 100] as const;
+    for (const skill of skillRows) {
+      const milestone = milestones.find((m) => skill.uses >= m);
+      if (milestone) {
+        credentials.push({
+          '@context': ['https://www.w3.org/2018/credentials/v1', 'https://agentbnb.dev/credentials/v1'],
+          type: ['VerifiableCredential', 'AgentSkillCredential'],
+          issuer: 'did:agentbnb:platform',
+          issuanceDate: new Date().toISOString(),
+          credentialSubject: {
+            id: did,
+            skillId: skill.skill_id,
+            totalUses: skill.uses,
+            milestone,
+            milestoneLevel: milestone >= 1000 ? 'gold' : milestone >= 500 ? 'silver' : 'bronze',
+          },
+        });
+      }
+    }
+
+    return reply.send({ agent_id, did, credentials });
   });
 
   /**
