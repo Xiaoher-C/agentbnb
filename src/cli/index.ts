@@ -1134,7 +1134,36 @@ program
   .option('--conductor', 'Enable Conductor orchestration mode')
   .option('--announce', 'Announce this gateway on the local network via mDNS')
   .option('--no-relay', 'Do not auto-connect to remote registry relay')
-  .action(async (opts: { port?: string; handlerUrl: string; skillsYaml?: string; registryPort: string; registry?: string; conductor?: boolean; announce?: boolean; relay?: boolean }) => {
+  .option('--daemon', 'Run in background as daemon')
+  .option('--status', 'Show daemon status')
+  .option('--stop', 'Stop the daemon')
+  .option('--restart', 'Restart the daemon')
+  .option('--startup', 'Register for auto-start on boot')
+  .action(async (opts: { port?: string; handlerUrl: string; skillsYaml?: string; registryPort: string; registry?: string; conductor?: boolean; announce?: boolean; relay?: boolean; daemon?: boolean; status?: boolean; stop?: boolean; restart?: boolean; startup?: boolean }) => {
+    // Handle daemon subcommands first
+    if (opts.status || opts.stop || opts.restart || opts.daemon || opts.startup) {
+      const { startDaemon, stopDaemon, restartDaemon, daemonStatus, registerStartup } = await import('../runtime/daemon.js');
+
+      if (opts.status) { daemonStatus(); return; }
+      if (opts.stop) { stopDaemon(); return; }
+
+      // Collect serve args for daemon/restart/startup
+      const serveArgs: string[] = [];
+      if (opts.port) serveArgs.push('--port', opts.port);
+      if (opts.handlerUrl && opts.handlerUrl !== 'http://localhost:8080') serveArgs.push('--handler-url', opts.handlerUrl);
+      if (opts.skillsYaml) serveArgs.push('--skills-yaml', opts.skillsYaml);
+      if (opts.registryPort) serveArgs.push('--registry-port', opts.registryPort);
+      if (opts.registry) serveArgs.push('--registry', opts.registry);
+      if (opts.conductor) serveArgs.push('--conductor');
+      if (opts.announce) serveArgs.push('--announce');
+      if (opts.relay === false) serveArgs.push('--no-relay');
+
+      if (opts.restart) { await restartDaemon(serveArgs); return; }
+      if (opts.startup) { registerStartup(serveArgs); if (!opts.daemon) return; }
+      if (opts.daemon) { startDaemon(serveArgs); return; }
+    }
+
+    // Normal foreground serve
     const config = loadConfig();
     if (!config) {
       console.error('Error: not initialized. Run `agentbnb init` first.');
