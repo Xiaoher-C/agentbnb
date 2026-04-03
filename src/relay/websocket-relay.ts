@@ -523,6 +523,7 @@ export function registerWebSocketRelay(
       params: msg.params,
       requester: msg.requester ?? fromOwner,
       escrow_receipt: msg.escrow_receipt,
+      ucan_token: msg.ucan_token,
     });
   }
 

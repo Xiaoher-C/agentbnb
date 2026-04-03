@@ -18,7 +18,9 @@ import { BudgetController } from './budget-controller.js';
 import { BudgetManager } from '../credit/budget.js';
 import { orchestrate } from './pipeline-orchestrator.js';
 import { formTeam } from './team-formation.js';
-import type { Team } from './role-schema.js';
+import type { Team, TeamMember } from './role-schema.js';
+import { delegateUCAN } from '../auth/ucan-delegation.js';
+import type { UCANAttenuation } from '../auth/ucan.js';
 import type { MatchResult, SubTask } from './types.js';
 import { getCardsByCapabilityType } from '../registry/store.js';
 import { requestCapability } from '../gateway/client.js';
@@ -188,6 +190,28 @@ export class ConductorMode implements ExecutorMode {
         conductorOwner: this.conductorOwner,
       });
       onProgress?.({ step: 2, total: 5, message: `Formed team: ${team.matched.length} members, ${team.unrouted.length} unrouted` });
+
+      // Auto-generate delegated UCANs for team members if conductor has a UCAN
+      const conductorUCAN = typeof params.ucan_token === 'string' ? params.ucan_token : undefined;
+      const conductorKey = params.conductor_private_key instanceof Buffer ? params.conductor_private_key as Buffer : undefined;
+      if (conductorUCAN && conductorKey) {
+        for (const member of team.matched) {
+          try {
+            const memberAtts: UCANAttenuation[] = [
+              { with: `agentbnb://skill/${member.skill}`, can: 'invoke' },
+            ];
+            const memberUCAN = delegateUCAN({
+              parentToken: conductorUCAN,
+              newAudienceDid: `did:agentbnb:${member.agent}`,
+              narrowedAttenuations: memberAtts,
+              signerKey: conductorKey,
+            });
+            (member as TeamMember & { ucan_token?: string }).ucan_token = memberUCAN;
+          } catch {
+            // Delegation failed (e.g., attenuation not in parent scope) — skip
+          }
+        }
+      }
     }
 
     // Step 3: Budget check
