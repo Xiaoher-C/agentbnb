@@ -60,6 +60,24 @@ export {
   buildDIDDocument,
 } from './did.js';
 
+// DID Rotation
+export {
+  type RotationRecord,
+  ROTATION_GRACE_DAYS,
+  createRotationRecord,
+  verifyRotationRecord,
+  isWithinGracePeriod,
+  rotateKeys,
+} from './did-rotation.js';
+
+// DID Revocation
+export {
+  type RevocationRecord,
+  DIDRevocationRegistry,
+  createRevocationRecord,
+  verifyRevocationRecord,
+} from './did-revocation.js';
+
 // Human Guarantor
 export {
   GuarantorRecordSchema,
