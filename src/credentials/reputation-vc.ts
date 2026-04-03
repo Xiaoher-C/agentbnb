@@ -60,7 +60,7 @@ export function buildReputationCredential(opts: {
   };
 
   return issueCredential({
-    subject,
+    subject: subject as unknown as Record<string, unknown> & { id: string },
     types: ['VerifiableCredential', 'AgentReputationCredential'],
     issuerDid: opts.issuerDid,
     signerKey: opts.signerKey,
