@@ -9,6 +9,7 @@
 import { createInterface } from 'node:readline';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { homedir } from 'node:os';
 import yaml from 'js-yaml';
 import { getConfigDir, loadConfig } from './config.js';
 import type { SkillEntry } from '../workspace/writer.js';
@@ -26,6 +27,41 @@ const OPENCLAW_COMMUNITY_SKILLS = new Set([
   'skill-vetter',
   'tavily',
 ]);
+
+/**
+ * Directories that contain OpenClaw community/bundled skills.
+ * Skills whose paths fall under these directories are not user-authored
+ * and should be filtered from the "available to share" listing.
+ */
+const COMMUNITY_DIRS = [
+  join(homedir(), '.openclaw', 'skills'),
+  join(homedir(), '.openclaw', 'extensions'),
+];
+
+/**
+ * Checks whether a skill path belongs to a community/bundled directory.
+ *
+ * @param skillPath - Absolute path to the skill directory.
+ * @returns True if the skill lives under a community directory.
+ */
+export function isCommunitySkill(skillPath: string): boolean {
+  return COMMUNITY_DIRS.some((dir) => skillPath.startsWith(dir));
+}
+
+/**
+ * Checks whether a skill name or path indicates a community/bundled skill.
+ *
+ * Uses both name-based (hardcoded set) and path-based (directory) heuristics.
+ *
+ * @param name - Skill name.
+ * @param skillPath - Optional absolute path to the skill directory.
+ * @returns True if the skill is a community/bundled skill.
+ */
+export function isCommunitySkillByNameOrPath(name: string, skillPath?: string): boolean {
+  if (OPENCLAW_COMMUNITY_SKILLS.has(name)) return true;
+  if (skillPath && isCommunitySkill(skillPath)) return true;
+  return false;
+}
 
 /** A minimal skills.yaml entry shape for read/write operations. */
 interface SkillYamlEntry {
@@ -191,23 +227,20 @@ export async function skillsList(opts: SkillsListOptions): Promise<void> {
 
 /**
  * Scans workspace for capabilities not yet shared on AgentBnB and prints them.
- * Silent if no unshared capabilities are found.
+ * Groups output into user skills (available to share) and community skills (not shared).
+ * Silent if no capabilities are found at all.
  */
 async function showAvailableSkills(configDir: string, sharedIds: Set<string>): Promise<void> {
   try {
-    const { scanCapabilities, scanWorkspaceSkills, findSoulMd } = await import('../workspace/scanner.js');
+    const { scanCapabilities, scanWorkspaceSkills, findSoulMd, inferBrainDir, getOpenClawWorkspaceDir } =
+      await import('../workspace/scanner.js');
     const agentName = deriveAgentName(configDir);
     if (!agentName) return;
 
-    const { homedir } = await import('node:os');
-    const { join: pathJoin } = await import('node:path');
-    const { getOpenClawWorkspaceDir } = await import('../workspace/scanner.js');
-
     const workspaceDir = getOpenClawWorkspaceDir();
-    const brainsDir = pathJoin(workspaceDir, 'brains');
-    const brainDir = pathJoin(brainsDir, agentName);
-    const agentsDir = pathJoin(homedir(), '.openclaw', 'agents');
-    const agentDir = pathJoin(agentsDir, agentName);
+    const brainDir = join(workspaceDir, 'brains', agentName);
+    const home = homedir();
+    const agentDir = join(home, '.openclaw', 'agents', agentName);
 
     // Determine effective brain dir
     let effectiveBrainDir = '';
@@ -216,7 +249,6 @@ async function showAvailableSkills(configDir: string, sharedIds: Set<string>): P
     } else {
       const soulPath = findSoulMd(agentName);
       if (soulPath) {
-        const { inferBrainDir } = await import('../workspace/scanner.js');
         effectiveBrainDir = inferBrainDir(soulPath, agentDir) || agentDir;
       }
     }
@@ -224,34 +256,45 @@ async function showAvailableSkills(configDir: string, sharedIds: Set<string>): P
     const agentCaps = effectiveBrainDir ? scanCapabilities(effectiveBrainDir) : [];
     const workspaceCaps = scanWorkspaceSkills();
 
-    // Merge and deduplicate, filtering out already-shared
+    // Merge and deduplicate, separating user skills from community skills
     const seen = new Set<string>(sharedIds);
-    const available: Array<{ name: string; description: string; source: string }> = [];
+    const userSkills: Array<{ name: string; description: string; source: string; suggestedPrice: number }> = [];
+    const communitySkills: string[] = [];
 
-    for (const cap of agentCaps) {
-      if (OPENCLAW_COMMUNITY_SKILLS.has(cap.name)) continue;
-      if (!seen.has(cap.name)) {
+    const classifyCaps = (caps: typeof agentCaps, source: string): void => {
+      for (const cap of caps) {
+        if (seen.has(cap.name)) continue;
         seen.add(cap.name);
-        available.push({ name: cap.name, description: cap.description, source: 'agent' });
+        if (isCommunitySkillByNameOrPath(cap.name)) {
+          communitySkills.push(cap.name);
+        } else {
+          userSkills.push({ name: cap.name, description: cap.description, source, suggestedPrice: cap.suggestedPrice });
+        }
       }
-    }
-    for (const cap of workspaceCaps) {
-      if (OPENCLAW_COMMUNITY_SKILLS.has(cap.name)) continue;
-      if (!seen.has(cap.name)) {
-        seen.add(cap.name);
-        available.push({ name: cap.name, description: cap.description, source: 'workspace' });
+    };
+    classifyCaps(agentCaps, 'agent');
+    classifyCaps(workspaceCaps, 'workspace');
+
+    if (userSkills.length === 0 && communitySkills.length === 0) return;
+
+    // Print user skills (available to share)
+    if (userSkills.length > 0) {
+      console.log('Your skills (available to share):');
+      for (let i = 0; i < userSkills.length; i++) {
+        const cap = userSkills[i]!;
+        const tag = cap.source === 'workspace' ? ' [workspace]' : '';
+        const desc = cap.description.slice(0, 50);
+        console.log(`  [${i + 1}] ${cap.name}${tag} — ${desc} (${cap.suggestedPrice} cr)`);
       }
+      console.log(`\nRun 'agentbnb openclaw skills add' to share one.`);
     }
 
-    if (available.length === 0) return;
-
-    console.log('Available to share (not yet on AgentBnB):');
-    for (const cap of available) {
-      const tag = cap.source === 'workspace' ? ' [workspace]' : '';
-      const desc = cap.description.slice(0, 50);
-      console.log(`  • ${cap.name}${tag} — ${desc}`);
+    // Print community skills (not shared)
+    if (communitySkills.length > 0) {
+      console.log(`\nCommunity skills (not shared):`);
+      console.log(`  ${communitySkills.join(', ')}`);
     }
-    console.log(`\nRun 'agentbnb openclaw skills add' to share one.`);
+
     console.log('');
   } catch {
     // Non-fatal — skip available skills section silently
@@ -316,15 +359,11 @@ export async function skillsAdd(opts: SkillsAddOptions): Promise<void> {
     const { scanCapabilities, scanWorkspaceSkills, findSoulMd, inferBrainDir, getOpenClawWorkspaceDir } =
       await import('../workspace/scanner.js');
 
-    const { homedir } = await import('node:os');
-    const { join: pathJoin } = await import('node:path');
-
     const agentName = deriveAgentName(configDir);
     const workspaceDir = getOpenClawWorkspaceDir();
-    const brainsDir = pathJoin(workspaceDir, 'brains');
-    const agentsDir = pathJoin(homedir(), '.openclaw', 'agents');
-    const agentDir = pathJoin(agentsDir, agentName);
-    const brainDir = pathJoin(brainsDir, agentName);
+    const home = homedir();
+    const agentDir = join(home, '.openclaw', 'agents', agentName);
+    const brainDir = join(workspaceDir, 'brains', agentName);
 
     // Determine effective brain dir via findSoulMd
     let effectiveBrainDir = '';
@@ -342,10 +381,12 @@ export async function skillsAdd(opts: SkillsAddOptions): Promise<void> {
     // Scan workspace-level shared skills
     const workspaceCaps = scanWorkspaceSkills();
 
-    // Build grouped unshared lists
-    const unsharedAgent = agentCaps.filter((c) => !existingIds.has(c.name));
+    // Build grouped unshared lists, filtering out community skills
+    const unsharedAgent = agentCaps.filter(
+      (c) => !existingIds.has(c.name) && !isCommunitySkillByNameOrPath(c.name),
+    );
     const unsharedWorkspace = workspaceCaps.filter(
-      (c) => !existingIds.has(c.name) && !unsharedAgent.some((a) => a.name === c.name),
+      (c) => !existingIds.has(c.name) && !unsharedAgent.some((a) => a.name === c.name) && !isCommunitySkillByNameOrPath(c.name),
     );
 
     if (unsharedAgent.length === 0 && unsharedWorkspace.length === 0) {

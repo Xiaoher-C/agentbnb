@@ -12,3 +12,4 @@ export { parseSoulMdV2, publishFromSoulV2 } from './soul-sync.js';
 export { generateHeartbeatSection, injectHeartbeatSection } from './heartbeat-writer.js';
 export { getOpenClawStatus } from './skill.js';
 export type { OpenClawStatus, SkillStatus } from './skill.js';
+export { findSoulMd, getOpenClawWorkspaceDir } from '../workspace/scanner.js';
