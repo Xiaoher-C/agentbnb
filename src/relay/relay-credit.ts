@@ -1,5 +1,10 @@
 import type Database from 'better-sqlite3';
 import { holdEscrow, settleEscrow, releaseEscrow } from '../credit/escrow.js';
+import { loadCoreConfig } from '../core-config.js';
+
+const coreConductorFee = loadCoreConfig<{
+  conductor?: { sub_task_fee_rate?: number; sub_task_fee_min?: number; sub_task_fee_max?: number };
+}>('economics');
 
 /**
  * Looks up the credits_per_call price for a capability card.
@@ -121,8 +126,11 @@ export function settleForRelay(
  */
 export function calculateConductorFee(totalSubTaskCost: number): number {
   if (totalSubTaskCost <= 0) return 0;
-  const fee = Math.ceil(totalSubTaskCost * 0.1);
-  return Math.max(1, Math.min(20, fee));
+  const rate = coreConductorFee?.conductor?.sub_task_fee_rate ?? 0.1;
+  const min = coreConductorFee?.conductor?.sub_task_fee_min ?? 1;
+  const max = coreConductorFee?.conductor?.sub_task_fee_max ?? 20;
+  const fee = Math.ceil(totalSubTaskCost * rate);
+  return Math.max(min, Math.min(max, fee));
 }
 
 /**

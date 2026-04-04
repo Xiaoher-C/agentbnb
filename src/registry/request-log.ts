@@ -292,6 +292,26 @@ export function getActivityFeed(
  *   When omitted, all entries are returned (up to limit).
  * @returns Array of RequestLogEntry objects, newest first.
  */
+/**
+ * Counts how many skill executions have occurred today (UTC).
+ * Used by the provider daily limit gate to cap incoming requests.
+ *
+ * Only counts non-autonomy entries (action_type IS NULL) to avoid
+ * counting auto-share audit events against the daily limit.
+ *
+ * @param db - Open database instance (provider's registry DB).
+ * @returns Number of executions today.
+ */
+export function countTodayExecutions(db: Database.Database): number {
+  const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+  const stmt = db.prepare(
+    `SELECT COUNT(*) as cnt FROM request_log
+     WHERE created_at >= ? AND action_type IS NULL`,
+  );
+  const row = stmt.get(today + 'T00:00:00.000Z') as { cnt: number };
+  return row.cnt;
+}
+
 export function getRequestLog(
   db: Database.Database,
   limit = 10,

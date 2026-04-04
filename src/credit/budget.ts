@@ -1,5 +1,6 @@
 import Database from 'better-sqlite3';
 import { getBalance } from './ledger.js';
+import { loadCoreConfig } from '../core-config.js';
 
 /**
  * Configuration for credit budget enforcement.
@@ -15,8 +16,10 @@ export interface BudgetConfig {
  * Reserves 20 credits as a safety floor to prevent agents from fully isolating
  * themselves from the network due to depleted balances.
  */
+const coreBudget = loadCoreConfig<{ budget_reserve_credits?: number }>('economics');
+
 export const DEFAULT_BUDGET_CONFIG: BudgetConfig = {
-  reserve_credits: 20,
+  reserve_credits: coreBudget?.budget_reserve_credits ?? 20,
 };
 
 /**

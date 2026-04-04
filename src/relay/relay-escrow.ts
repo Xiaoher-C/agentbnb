@@ -1,5 +1,5 @@
 import type Database from 'better-sqlite3';
-import { holdEscrow, settleEscrow, releaseEscrow } from '../credit/escrow.js';
+import { holdEscrow, settleEscrow, releaseEscrow, NETWORK_FEE_RATE } from '../credit/escrow.js';
 import { getBalance } from '../credit/ledger.js';
 import { verifyEscrowReceipt } from '../credit/signing.js';
 
@@ -154,8 +154,7 @@ export function processEscrowSettle(
     throw new Error(`Escrow not found or already settled: ${escrowId}`);
   }
 
-  // Network fee rate (must match the one in escrow.ts — settleEscrow handles the actual deduction)
-  const NETWORK_FEE_RATE = 0.05;
+  // Use the canonical NETWORK_FEE_RATE from escrow.ts (imported above)
 
   if (success) {
     // settleEscrow handles: network fee, provider credit, provider bonus, reliability metrics

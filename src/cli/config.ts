@@ -74,6 +74,34 @@ export interface AgentBnBConfig {
    * When empty/omitted, respects each skill's `visibility` field.
    */
   shared_skills?: string[];
+  /**
+   * Provider execution gate mode controlling how incoming rental requests are handled.
+   * - `auto`: Execute immediately, no notification (default, backward-compatible).
+   * - `notify`: Execute immediately + send Telegram notification before execution.
+   */
+  provider_gate?: 'auto' | 'notify';
+  /**
+   * Global switch to accept or reject incoming rental requests.
+   * When false, all requests are rejected (except from whitelisted agents).
+   * Default: true (accepting).
+   */
+  provider_accepting?: boolean;
+  /**
+   * Maximum number of skill executions per calendar day (UTC). 0 = unlimited.
+   * When the limit is reached, incoming requests are rejected with an error.
+   * Whitelisted agents (provider_whitelist) bypass this limit.
+   */
+  provider_daily_limit?: number;
+  /**
+   * Agent IDs that bypass provider_gate, provider_accepting, provider_daily_limit,
+   * and provider_blacklist checks. Useful for trusted agents or your own agents.
+   */
+  provider_whitelist?: string[];
+  /**
+   * Agent IDs that are blocked from renting skills on this provider.
+   * Requests from blacklisted agents are rejected immediately.
+   */
+  provider_blacklist?: string[];
 }
 
 /**

@@ -1281,7 +1281,7 @@ configCmd
   .command('set <key> <value>')
   .description('Set a configuration value')
   .action((key: string, value: string) => {
-    const allowedKeys = ['registry', 'tier1', 'tier2', 'reserve', 'idle-threshold', 'conductor-public', 'telegram-notifications', 'telegram-bot-token', 'telegram-chat-id', 'shared-skills'];
+    const allowedKeys = ['registry', 'tier1', 'tier2', 'reserve', 'idle-threshold', 'conductor-public', 'telegram-notifications', 'telegram-bot-token', 'telegram-chat-id', 'shared-skills', 'provider-gate', 'provider-accepting', 'provider-daily-limit', 'provider-whitelist', 'provider-blacklist'];
     if (!allowedKeys.includes(key)) {
       console.error(`Unknown config key: ${key}. Valid keys: ${allowedKeys.join(', ')}`);
       process.exit(1);
@@ -1402,6 +1402,56 @@ configCmd
       saveConfig(config);
       const display = config.shared_skills.length > 0 ? config.shared_skills.join(', ') : '(all skills published)';
       console.log(`Set shared-skills: ${display}`);
+      return;
+    }
+
+    if (key === 'provider-gate') {
+      if (value !== 'auto' && value !== 'notify') {
+        console.error('Error: provider-gate must be "auto" or "notify"');
+        process.exit(1);
+      }
+      config.provider_gate = value;
+      saveConfig(config);
+      console.log(`Set provider-gate = ${value} (${value === 'notify' ? 'Telegram notification before execution' : 'execute silently'})`);
+      return;
+    }
+
+    if (key === 'provider-accepting') {
+      if (value !== 'true' && value !== 'false') {
+        console.error('Error: provider-accepting must be "true" or "false"');
+        process.exit(1);
+      }
+      config.provider_accepting = value === 'true';
+      saveConfig(config);
+      console.log(`Set provider-accepting = ${value} (${value === 'true' ? 'accepting incoming requests' : 'REJECTING all incoming requests'})`);
+      return;
+    }
+
+    if (key === 'provider-daily-limit') {
+      const parsed = parseInt(value, 10);
+      if (isNaN(parsed) || parsed < 0) {
+        console.error('Error: provider-daily-limit must be a non-negative integer');
+        process.exit(1);
+      }
+      config.provider_daily_limit = parsed;
+      saveConfig(config);
+      console.log(`Set provider-daily-limit = ${parsed} (${parsed === 0 ? 'unlimited' : `max ${parsed} executions/day`})`);
+      return;
+    }
+
+    if (key === 'provider-whitelist') {
+      config.provider_whitelist = value.trim() === '' ? [] : value.split(',').map((s) => s.trim()).filter(Boolean);
+      saveConfig(config);
+      const display = config.provider_whitelist.length > 0 ? config.provider_whitelist.join(', ') : '(empty)';
+      console.log(`Set provider-whitelist: ${display}`);
+      return;
+    }
+
+    if (key === 'provider-blacklist') {
+      config.provider_blacklist = value.trim() === '' ? [] : value.split(',').map((s) => s.trim()).filter(Boolean);
+      saveConfig(config);
+      const display = config.provider_blacklist.length > 0 ? config.provider_blacklist.join(', ') : '(empty)';
+      console.log(`Set provider-blacklist: ${display}`);
       return;
     }
 
@@ -1707,7 +1757,7 @@ openclaw
 
     const autonomy = config.autonomy ?? DEFAULT_AUTONOMY_CONFIG;
     const budget = config.budget ?? DEFAULT_BUDGET_CONFIG;
-    const section = generateHeartbeatSection(autonomy, budget);
+    const section = generateHeartbeatSection(autonomy, budget, config);
 
     if (opts.inject) {
       injectHeartbeatSection(opts.inject, section);

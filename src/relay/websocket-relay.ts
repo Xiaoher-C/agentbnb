@@ -26,17 +26,26 @@ import { markEscrowAbandoned, markEscrowProgressing, markEscrowStarted } from '.
 import { handleJobRelayResponse } from '../hub-agent/relay-bridge.js';
 import { AgentBnBError, AnyCardSchema } from '../types/index.js';
 import { attachCanonicalAgentId } from '../registry/store.js';
+import { loadCoreConfig } from '../core-config.js';
+
+const coreRelay = loadCoreConfig<{
+  rate_limit_max?: number;
+  rate_limit_window_ms?: number;
+  relay_idle_timeout_ms?: number;
+  relay_hard_timeout_ms?: number;
+  relay_disconnect_grace_ms?: number;
+}>('relay');
 
 /** Maximum relay requests per agent per minute */
-const RATE_LIMIT_MAX = 60;
+const RATE_LIMIT_MAX = coreRelay?.rate_limit_max ?? 60;
 /** Rate limit window in milliseconds (1 minute) */
-const RATE_LIMIT_WINDOW_MS = 60_000;
+const RATE_LIMIT_WINDOW_MS = coreRelay?.rate_limit_window_ms ?? 60_000;
 /** Relay idle timeout before provider start acknowledgment. */
-const RELAY_IDLE_TIMEOUT_MS = 30_000;
+const RELAY_IDLE_TIMEOUT_MS = coreRelay?.relay_idle_timeout_ms ?? 30_000;
 /** Relay hard timeout once provider has started work. */
-const RELAY_HARD_TIMEOUT_MS = 300_000;
+const RELAY_HARD_TIMEOUT_MS = coreRelay?.relay_hard_timeout_ms ?? 300_000;
 /** Grace period after requester disconnects post-start. */
-const RELAY_DISCONNECT_GRACE_MS = RELAY_HARD_TIMEOUT_MS + 30_000;
+const RELAY_DISCONNECT_GRACE_MS = coreRelay?.relay_disconnect_grace_ms ?? (RELAY_HARD_TIMEOUT_MS + 30_000);
 
 function readTimeoutOverride(envKey: string, fallbackMs: number): number {
   const raw = process.env[envKey];

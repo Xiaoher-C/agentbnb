@@ -4,9 +4,12 @@ import { AgentBnBError } from '../types/index.js';
 import { registerProvider, getProviderNumber, getProviderBonus, getActiveVoucher, consumeVoucher } from './ledger.js';
 import { recordSuccessfulHire } from './reliability-metrics.js';
 import { canonicalizeCreditOwner } from './owner-normalization.js';
+import { loadCoreConfig } from '../core-config.js';
+
+const coreEconomics = loadCoreConfig<{ network_fee_rate?: number }>('economics');
 
 /** Network fee rate applied to settled escrows (5%). */
-export const NETWORK_FEE_RATE = 0.05;
+export const NETWORK_FEE_RATE = coreEconomics?.network_fee_rate ?? 0.05;
 /** Escrow lifecycle statuses. */
 export type EscrowStatus = 'held' | 'started' | 'progressing' | 'abandoned' | 'settled' | 'released';
 /** Non-terminal escrow statuses that can still be finalized to settled/released. */

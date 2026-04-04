@@ -1,6 +1,7 @@
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import type { AutonomyConfig } from '../autonomy/tiers.js';
 import type { BudgetConfig } from '../credit/budget.js';
+import type { AgentBnBConfig } from '../cli/config.js';
 
 /** HTML comment marker for the start of the AgentBnB rules block. */
 export const HEARTBEAT_MARKER_START = '<!-- agentbnb:start -->';
@@ -21,10 +22,14 @@ export const HEARTBEAT_MARKER_END = '<!-- agentbnb:end -->';
 export function generateHeartbeatSection(
   autonomy: AutonomyConfig,
   budget: BudgetConfig,
+  config?: AgentBnBConfig,
 ): string {
   const t1 = autonomy.tier1_max_credits;
   const t2 = autonomy.tier2_max_credits;
   const reserve = budget.reserve_credits;
+
+  const dailyLimit = config?.provider_daily_limit ?? 0;
+  const dailyLimitLabel = dailyLimit === 0 ? 'unlimited' : `${dailyLimit}/day`;
 
   return [
     HEARTBEAT_MARKER_START,
@@ -51,6 +56,27 @@ export function generateHeartbeatSection(
     `- Maintain minimum balance of ${reserve} credits (reserve for emergencies)`,
     `- If balance drops below ${reserve}, increase sharing priority`,
     '- If balance exceeds 500, notify owner of surplus',
+    '',
+    '### Provider Control',
+    '',
+    'Owner can control incoming rental requests via natural language.',
+    `Current daily limit: ${dailyLimitLabel}.`,
+    '',
+    '**All commands require the AGENTBNB_DIR prefix for your agent.**',
+    '',
+    '| Owner says | Command |',
+    '|------------|---------|',
+    '| Stop accepting / 停止接單 | `agentbnb config set provider-accepting false` |',
+    '| Start accepting / 開始接單 | `agentbnb config set provider-accepting true` |',
+    '| Block \\<agent_id\\> / 封鎖 | `agentbnb config set provider-blacklist <current>,<agent_id>` |',
+    '| Unblock \\<agent_id\\> / 解除封鎖 | `agentbnb config set provider-blacklist <without_agent_id>` |',
+    '| Set daily limit to N | `agentbnb config set provider-daily-limit N` |',
+    '| Remove daily limit | `agentbnb config set provider-daily-limit 0` |',
+    '| Check status / 查看狀態 | `agentbnb config get provider-accepting` |',
+    '',
+    'Before modifying blacklist: read current value first with `agentbnb config get provider-blacklist`,',
+    'then append or remove the agent ID from the comma-separated list.',
+    'Changes take effect immediately — no serve restart needed.',
     HEARTBEAT_MARKER_END,
   ].join('\n');
 }

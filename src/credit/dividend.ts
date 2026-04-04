@@ -1,5 +1,6 @@
 import type Database from 'better-sqlite3';
 import { randomUUID } from 'node:crypto';
+import { loadCoreConfig } from '../core-config.js';
 
 // ---------------------------------------------------------------------------
 // Schema
@@ -58,11 +59,13 @@ export interface DividendCycleResult {
 // Configuration
 // ---------------------------------------------------------------------------
 
+const coreDividend = loadCoreConfig<{ dividend?: { pool_ratio?: number; min_hires_to_qualify?: number } }>('economics');
+
 /** Fraction of network fees allocated to the dividend pool. */
-const DIVIDEND_POOL_RATIO = 0.5;
+const DIVIDEND_POOL_RATIO = coreDividend?.dividend?.pool_ratio ?? 0.5;
 
 /** Minimum total hires required to qualify for dividends. */
-const MIN_HIRES = 10;
+const MIN_HIRES = coreDividend?.dividend?.min_hires_to_qualify ?? 10;
 
 // ---------------------------------------------------------------------------
 // Calculation

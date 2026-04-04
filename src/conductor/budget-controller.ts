@@ -7,9 +7,12 @@
 
 import { BudgetManager } from '../credit/budget.js';
 import type { MatchResult, ExecutionBudget } from './types.js';
+import { loadCoreConfig } from '../core-config.js';
+
+const coreConductor = loadCoreConfig<{ conductor?: { orchestration_fee?: number } }>('economics');
 
 /** Credits retained by the Conductor for coordination overhead. */
-export const ORCHESTRATION_FEE = 5;
+export const ORCHESTRATION_FEE = coreConductor?.conductor?.orchestration_fee ?? 5;
 
 /**
  * Controls budget enforcement for orchestration runs.

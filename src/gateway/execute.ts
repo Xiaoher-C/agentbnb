@@ -93,6 +93,42 @@ async function notifyTelegramSkillFailed(opts: {
   });
 }
 
+/**
+ * Sends a Telegram notification when an incoming rental request is received.
+ * Sent BEFORE execution begins so the owner is aware in real-time.
+ * Fire-and-forget — never throws or rejects.
+ *
+ * Only sent when config.provider_gate === 'notify'.
+ */
+async function notifyTelegramSkillReceived(opts: {
+  skillName: string;
+  skillId: string | null;
+  requester: string;
+  cost: number;
+}): Promise<void> {
+  const cfg = loadConfig();
+  if (cfg?.provider_gate !== 'notify') return;
+
+  const token = cfg.telegram_bot_token ?? process.env['TELEGRAM_BOT_TOKEN'];
+  const chatId = cfg.telegram_chat_id ?? process.env['TELEGRAM_CHAT_ID'];
+  if (!token || !chatId) return;
+
+  const skillLabel = opts.skillId ? `${opts.skillName} (${opts.skillId})` : opts.skillName;
+  const text = [
+    '📥 [AgentBnB] Incoming rental request',
+    `Skill: ${skillLabel}`,
+    `Requester: ${opts.requester}`,
+    `Cost: ${opts.cost} credits`,
+    `Status: Executing...`,
+  ].join('\n');
+
+  await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ chat_id: chatId, text }),
+  });
+}
+
 // ── Batch request types ───────────────────────────────────────────────────────
 
 /**
@@ -326,6 +362,50 @@ export async function executeCapabilityRequest(opts: ExecuteRequestOptions): Pro
       return { success: false, error: { code: -32603, message: msg } };
     }
   }
+
+  // ── Provider-side execution gate ──────────────────────────────────────────
+  const providerCfg = loadConfig();
+  const providerWhitelist = providerCfg?.provider_whitelist ?? [];
+  const isWhitelisted = providerWhitelist.includes(requester);
+
+  // Global accepting switch. Whitelisted agents bypass.
+  if (providerCfg?.provider_accepting === false && !isWhitelisted) {
+    if (escrowId) releaseEscrow(creditDb, escrowId);
+    return { success: false, error: { code: -32098, message: 'Provider is not accepting requests' } };
+  }
+
+  // Blacklist check. Applied even if whitelisted (blacklist takes priority would be weird, so whitelist wins).
+  if (!isWhitelisted) {
+    const blacklist = providerCfg?.provider_blacklist ?? [];
+    if (blacklist.includes(requester)) {
+      if (escrowId) releaseEscrow(creditDb, escrowId);
+      return { success: false, error: { code: -32097, message: 'Requester is blocked by provider' } };
+    }
+  }
+
+  // Daily execution limit (0 = unlimited). Whitelisted agents bypass.
+  if (!isWhitelisted) {
+    const dailyLimit = providerCfg?.provider_daily_limit ?? 0;
+    if (dailyLimit > 0) {
+      const { countTodayExecutions } = await import('../registry/request-log.js');
+      const todayCount = countTodayExecutions(registryDb);
+      if (todayCount >= dailyLimit) {
+        if (escrowId) releaseEscrow(creditDb, escrowId);
+        return {
+          success: false,
+          error: { code: -32099, message: `Provider daily execution limit reached (${dailyLimit}/day)` },
+        };
+      }
+    }
+  }
+
+  // Pre-execution notification (provider_gate: 'notify')
+  notifyTelegramSkillReceived({
+    skillName: cardName,
+    skillId: resolvedSkillId ?? null,
+    requester,
+    cost: creditsNeeded,
+  }).catch(() => {});
 
   const startMs = Date.now();
 

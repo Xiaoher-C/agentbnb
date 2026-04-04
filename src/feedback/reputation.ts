@@ -1,33 +1,45 @@
 import type Database from 'better-sqlite3';
 import type { StructuredFeedback } from './schema.js';
 import { getFeedbackForProvider } from './store.js';
+import { loadCoreConfig } from '../core-config.js';
+
+// ---------------------------------------------------------------------------
+// Load overrides from @agentbnb/core if installed, otherwise use defaults.
+// ---------------------------------------------------------------------------
+const coreReputation = loadCoreConfig<{
+  quality_scores?: Record<string, number>;
+  cost_value_scores?: Record<string, number>;
+  decay_days?: number;
+  cold_start_score?: number;
+  weights?: Record<string, number>;
+}>('reputation');
 
 /** Mapping from result_quality enum to numeric score (0.0 - 1.0). */
 const QUALITY_SCORES: Record<StructuredFeedback['result_quality'], number> = {
-  excellent: 1.0,
-  good: 0.8,
-  acceptable: 0.6,
-  poor: 0.3,
-  failed: 0.0,
+  excellent: coreReputation?.quality_scores?.['excellent'] ?? 1.0,
+  good: coreReputation?.quality_scores?.['good'] ?? 0.8,
+  acceptable: coreReputation?.quality_scores?.['acceptable'] ?? 0.6,
+  poor: coreReputation?.quality_scores?.['poor'] ?? 0.3,
+  failed: coreReputation?.quality_scores?.['failed'] ?? 0.0,
 };
 
 /** Mapping from cost_value_ratio enum to numeric score (0.0 - 1.0). */
 const COST_VALUE_SCORES: Record<StructuredFeedback['cost_value_ratio'], number> = {
-  great: 1.0,
-  fair: 0.6,
-  overpriced: 0.2,
+  great: coreReputation?.cost_value_scores?.['great'] ?? 1.0,
+  fair: coreReputation?.cost_value_scores?.['fair'] ?? 0.6,
+  overpriced: coreReputation?.cost_value_scores?.['overpriced'] ?? 0.2,
 };
 
 /** Decay constant for recency weighting: half-life ~= 21 days. */
-const DECAY_DAYS = 30;
+const DECAY_DAYS = coreReputation?.decay_days ?? 30;
 
 /** Component weights — must sum to 1.0. */
 const WEIGHTS = {
-  rating: 0.4,
-  quality: 0.3,
-  would_reuse: 0.2,
-  cost_value: 0.1,
-} as const;
+  rating: coreReputation?.weights?.['rating'] ?? 0.4,
+  quality: coreReputation?.weights?.['quality'] ?? 0.3,
+  would_reuse: coreReputation?.weights?.['would_reuse'] ?? 0.2,
+  cost_value: coreReputation?.weights?.['cost_value'] ?? 0.1,
+};
 
 /**
  * Computes a reputation score (0.0 - 1.0) from an array of StructuredFeedback entries.
@@ -40,7 +52,7 @@ const WEIGHTS = {
  * @returns Reputation score in range [0.0, 1.0].
  */
 export function computeReputation(feedbacks: StructuredFeedback[]): number {
-  if (feedbacks.length === 0) return 0.5;
+  if (feedbacks.length === 0) return coreReputation?.cold_start_score ?? 0.5;
 
   const now = Date.now();
   let weightedSum = 0;
@@ -67,7 +79,7 @@ export function computeReputation(feedbacks: StructuredFeedback[]): number {
     totalWeight += recencyWeight;
   }
 
-  if (totalWeight === 0) return 0.5;
+  if (totalWeight === 0) return coreReputation?.cold_start_score ?? 0.5;
 
   const raw = weightedSum / totalWeight;
   // Clamp to [0.0, 1.0] to guard against floating-point edge cases
