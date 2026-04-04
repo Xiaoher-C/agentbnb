@@ -191,6 +191,28 @@ export const BalanceSyncResponseMessageSchema = z.object({
   balance: z.number(),
 });
 
+// ---------------------------------------------------------------------------
+// Session messages (agent-to-agent interactive sessions)
+// ---------------------------------------------------------------------------
+
+import {
+  SessionOpenMessageSchema,
+  SessionAckMessageSchema,
+  SessionMessageMessageSchema,
+  SessionEndMessageSchema,
+  SessionSettledMessageSchema as SessionSettledMsgSchema,
+  SessionErrorMessageSchema,
+} from '../session/session-types.js';
+
+export {
+  SessionOpenMessageSchema,
+  SessionAckMessageSchema,
+  SessionMessageMessageSchema,
+  SessionEndMessageSchema,
+  SessionErrorMessageSchema,
+};
+export { SessionSettledMsgSchema as SessionSettledMessageSchema };
+
 /** Discriminated union of all relay messages */
 export const RelayMessageSchema = z.discriminatedUnion('type', [
   RegisterMessageSchema,
@@ -209,6 +231,12 @@ export const RelayMessageSchema = z.discriminatedUnion('type', [
   EscrowSettledMessageSchema,
   BalanceSyncMessageSchema,
   BalanceSyncResponseMessageSchema,
+  SessionOpenMessageSchema,
+  SessionAckMessageSchema,
+  SessionMessageMessageSchema,
+  SessionEndMessageSchema,
+  SessionSettledMsgSchema,
+  SessionErrorMessageSchema,
 ]);
 
 // TypeScript types derived from Zod schemas
@@ -225,6 +253,14 @@ export type HeartbeatMessage = z.infer<typeof HeartbeatMessageSchema>;
 export type EscrowHoldMessage = z.infer<typeof EscrowHoldMessageSchema>;
 export type EscrowSettleMessage = z.infer<typeof EscrowSettleMessageSchema>;
 export type BalanceSyncMessage = z.infer<typeof BalanceSyncMessageSchema>;
+export type {
+  SessionOpenMessage,
+  SessionAckMessage,
+  SessionMessageMessage,
+  SessionEndMessage,
+  SessionSettledMessage,
+  SessionErrorMessage,
+} from '../session/session-types.js';
 export type RelayMessage = z.infer<typeof RelayMessageSchema>;
 
 /** Rate limit state per agent */

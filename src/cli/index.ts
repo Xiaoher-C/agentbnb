@@ -2095,6 +2095,57 @@ credits
   });
 
 // ---------------------------------------------------------------------------
+// Session (agent-to-agent interactive sessions)
+// ---------------------------------------------------------------------------
+
+const sessionCmd = program.command('session').description('Manage interactive agent-to-agent sessions');
+
+sessionCmd
+  .command('open <card_id>')
+  .description('Open an interactive session with a provider agent')
+  .requiredOption('--skill <skill_id>', 'Skill ID to use')
+  .requiredOption('--budget <credits>', 'Maximum credits for this session', parseInt)
+  .requiredOption('--message <msg>', 'Initial message to send')
+  .option('--pricing <model>', 'Pricing model: per_message, per_minute, per_session', 'per_message')
+  .action(async (cardId: string, opts: { skill: string; budget: number; message: string; pricing: string }) => {
+    const { sessionOpen } = await import('./session-action.js');
+    await sessionOpen(cardId, opts);
+  });
+
+sessionCmd
+  .command('send <session_id> <message>')
+  .description('Send a message within an active session')
+  .action(async (sessionId: string, message: string) => {
+    const { sessionSend } = await import('./session-action.js');
+    await sessionSend(sessionId, message);
+  });
+
+sessionCmd
+  .command('end <session_id>')
+  .description('End an active session')
+  .option('--reason <reason>', 'End reason: completed, cancelled', 'completed')
+  .action(async (sessionId: string, opts: { reason: string }) => {
+    const { sessionEnd } = await import('./session-action.js');
+    await sessionEnd(sessionId, opts.reason);
+  });
+
+sessionCmd
+  .command('list')
+  .description('List active sessions')
+  .action(async () => {
+    const { sessionList } = await import('./session-action.js');
+    await sessionList();
+  });
+
+sessionCmd
+  .command('status <session_id>')
+  .description('Show session details')
+  .action(async (sessionId: string) => {
+    const { sessionStatus } = await import('./session-action.js');
+    await sessionStatus(sessionId);
+  });
+
+// ---------------------------------------------------------------------------
 // MCP Server
 // ---------------------------------------------------------------------------
 
