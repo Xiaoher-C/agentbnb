@@ -1,10 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { OpenClawBridge } from './openclaw-bridge.js';
+import { OpenClawBridge, parseOpenClawResponse } from './openclaw-bridge.js';
 import type { OpenClawSkillConfig } from './skill-config.js';
 
-// Mock node:child_process at module level so ESM can replace execFileSync
+// Mock node:child_process at module level so ESM can replace spawnSync
 vi.mock('node:child_process', () => ({
-  execFileSync: vi.fn(),
+  spawnSync: vi.fn(),
 }));
 
 import * as child_process from 'node:child_process';
@@ -136,23 +136,37 @@ describe('OpenClawBridge — webhook channel', () => {
 // Process channel
 // ---------------------------------------------------------------------------
 
+/** Helper to create a mock spawnSync return value with JSON on stderr (OpenClaw behavior). */
+function mockSpawnResult(jsonData: unknown, opts?: { error?: Error; status?: number; useStdout?: boolean }) {
+  const json = JSON.stringify(jsonData);
+  return {
+    stdout: Buffer.from(opts?.useStdout ? json : ''),
+    stderr: Buffer.from(opts?.useStdout ? '' : json),
+    status: opts?.status ?? 0,
+    error: opts?.error ?? undefined,
+    pid: 12345,
+    signal: null,
+    output: [],
+  };
+}
+
 describe('OpenClawBridge — process channel', () => {
   afterEach(() => {
     vi.restoreAllMocks();
   });
 
   it('spawns openclaw agent command with a contextual rental request message', async () => {
-    const execFileSyncSpy = vi
-      .spyOn(child_process, 'execFileSync')
-      .mockReturnValue(Buffer.from(JSON.stringify({ result: 'done' })));
+    const spawnSyncSpy = vi
+      .spyOn(child_process, 'spawnSync')
+      .mockReturnValue(mockSpawnResult({ result: 'done' }) as ReturnType<typeof child_process.spawnSync>);
 
     const bridge = new OpenClawBridge();
     const config = makeConfig({ channel: 'process' });
     const result = await bridge.execute(config, { key: 'value' });
 
-    expect(execFileSyncSpy).toHaveBeenCalledOnce();
-    const args = execFileSyncSpy.mock.calls[0]![1] as string[];
-    expect(execFileSyncSpy.mock.calls[0]![0]).toBe('openclaw');
+    expect(spawnSyncSpy).toHaveBeenCalledOnce();
+    const args = spawnSyncSpy.mock.calls[0]![1] as string[];
+    expect(spawnSyncSpy.mock.calls[0]![0]).toBe('openclaw');
     expect(args[0]).toBe('agent');
     expect(args[1]).toBe('--agent');
     expect(args[2]).toBe('my-agent');
@@ -168,7 +182,7 @@ describe('OpenClawBridge — process channel', () => {
   });
 
   it('passes a contextual AgentBnB rental prompt in --message', async () => {
-    vi.spyOn(child_process, 'execFileSync').mockImplementation((_cmd: unknown, args: unknown) => {
+    vi.spyOn(child_process, 'spawnSync').mockImplementation((_cmd: unknown, args: unknown) => {
       const argArr = args as string[];
       const msgIdx = argArr.indexOf('--message');
       if (msgIdx === -1) throw new Error('No --message found in args');
@@ -176,7 +190,7 @@ describe('OpenClawBridge — process channel', () => {
       expect(message).toContain('[AgentBnB Rental Request]');
       expect(message).toContain('test-skill');
       expect(message).toContain('"prompt": "hello"');
-      return Buffer.from(JSON.stringify({ output: 'ok' }));
+      return mockSpawnResult({ output: 'ok' }) as ReturnType<typeof child_process.spawnSync>;
     });
 
     const bridge = new OpenClawBridge();
@@ -185,9 +199,9 @@ describe('OpenClawBridge — process channel', () => {
   });
 
   it('returns error when command fails', async () => {
-    vi.spyOn(child_process, 'execFileSync').mockImplementation(() => {
-      throw new Error('Command not found: openclaw');
-    });
+    vi.spyOn(child_process, 'spawnSync').mockReturnValue(
+      mockSpawnResult({}, { error: new Error('Command not found: openclaw') }) as ReturnType<typeof child_process.spawnSync>,
+    );
 
     const bridge = new OpenClawBridge();
     const config = makeConfig({ channel: 'process' });
@@ -197,8 +211,16 @@ describe('OpenClawBridge — process channel', () => {
     expect(result.error).toMatch(/Command not found/);
   });
 
-  it('returns error when stdout is not valid JSON', async () => {
-    vi.spyOn(child_process, 'execFileSync').mockReturnValue(Buffer.from('not json'));
+  it('returns error when output is not valid JSON', async () => {
+    vi.spyOn(child_process, 'spawnSync').mockReturnValue({
+      stdout: Buffer.from(''),
+      stderr: Buffer.from('not json at all'),
+      status: 0,
+      error: undefined,
+      pid: 12345,
+      signal: null,
+      output: [],
+    } as unknown as ReturnType<typeof child_process.spawnSync>);
 
     const bridge = new OpenClawBridge();
     const config = makeConfig({ channel: 'process' });
@@ -206,6 +228,51 @@ describe('OpenClawBridge — process channel', () => {
 
     expect(result.success).toBe(false);
     expect(result.error).toMatch(/invalid json/i);
+  });
+
+  it('reads JSON from stderr (OpenClaw default behavior)', async () => {
+    vi.spyOn(child_process, 'spawnSync').mockReturnValue(
+      mockSpawnResult({ payloads: [{ text: '{"ok": true}', mediaUrl: null }], meta: { durationMs: 100 } }) as ReturnType<typeof child_process.spawnSync>,
+    );
+
+    const bridge = new OpenClawBridge();
+    const config = makeConfig({ channel: 'process' });
+    const result = await bridge.execute(config, {});
+
+    expect(result.success).toBe(true);
+    expect((result.result as Record<string, unknown>).ok).toBe(true);
+  });
+
+  it('falls back to stdout when stderr is empty', async () => {
+    vi.spyOn(child_process, 'spawnSync').mockReturnValue(
+      mockSpawnResult({ simple: 'result' }, { useStdout: true }) as ReturnType<typeof child_process.spawnSync>,
+    );
+
+    const bridge = new OpenClawBridge();
+    const config = makeConfig({ channel: 'process' });
+    const result = await bridge.execute(config, {});
+
+    expect(result.success).toBe(true);
+    expect((result.result as Record<string, unknown>).simple).toBe('result');
+  });
+
+  it('returns error when both stdout and stderr are empty', async () => {
+    vi.spyOn(child_process, 'spawnSync').mockReturnValue({
+      stdout: Buffer.from(''),
+      stderr: Buffer.from(''),
+      status: 0,
+      error: undefined,
+      pid: 12345,
+      signal: null,
+      output: [],
+    } as unknown as ReturnType<typeof child_process.spawnSync>);
+
+    const bridge = new OpenClawBridge();
+    const config = makeConfig({ channel: 'process' });
+    const result = await bridge.execute(config, {});
+
+    expect(result.success).toBe(false);
+    expect(result.error).toMatch(/empty output/i);
   });
 });
 
@@ -276,6 +343,175 @@ describe('OpenClawBridge — telegram channel', () => {
 });
 
 // ---------------------------------------------------------------------------
+// parseOpenClawResponse
+// ---------------------------------------------------------------------------
+
+describe('parseOpenClawResponse', () => {
+  it('extracts structured JSON from the last payload text', () => {
+    const raw = {
+      payloads: [
+        { text: 'Thinking about the query...', mediaUrl: null },
+        { text: 'Searching knowledge base...', mediaUrl: null },
+        { text: '{"results": [{"text": "found it", "score": 0.9}], "total_results": 1}', mediaUrl: null },
+      ],
+      meta: {
+        durationMs: 15000,
+        agentMeta: { model: 'claude-sonnet-4-20250514', provider: 'anthropic' },
+      },
+    };
+
+    const result = parseOpenClawResponse(raw) as Record<string, unknown>;
+    expect(result.results).toEqual([{ text: 'found it', score: 0.9 }]);
+    expect(result.total_results).toBe(1);
+    expect((result._openclaw_meta as Record<string, unknown>).duration_ms).toBe(15000);
+    expect((result._openclaw_meta as Record<string, unknown>).model).toBe('claude-sonnet-4-20250514');
+  });
+
+  it('falls back to concatenated text when last payload is not JSON', () => {
+    const raw = {
+      payloads: [
+        { text: 'Here is the answer:', mediaUrl: null },
+        { text: 'AgentBnB is a P2P agent capability sharing protocol.', mediaUrl: null },
+      ],
+      meta: { durationMs: 8000 },
+    };
+
+    const result = parseOpenClawResponse(raw) as Record<string, unknown>;
+    expect(result.text).toContain('Here is the answer:');
+    expect(result.text).toContain('P2P agent capability sharing');
+    expect(result._openclaw_meta).toBeDefined();
+  });
+
+  it('collects media_urls from payloads', () => {
+    const raw = {
+      payloads: [
+        { text: 'Generated audio', mediaUrl: 'https://example.com/audio.mp3' },
+        { text: '{"status": "ok"}', mediaUrl: null },
+      ],
+      meta: { durationMs: 5000 },
+    };
+
+    const result = parseOpenClawResponse(raw) as Record<string, unknown>;
+    // Structured JSON from last payload, but mediaUrl should not be lost
+    expect(result.status).toBe('ok');
+  });
+
+  it('handles payloads with only media URLs and no text', () => {
+    const raw = {
+      payloads: [
+        { text: null, mediaUrl: 'https://example.com/file.pdf' },
+      ],
+      meta: { durationMs: 3000 },
+    };
+
+    const result = parseOpenClawResponse(raw) as Record<string, unknown>;
+    expect(result.text).toBe('');
+    expect(result.media_urls).toEqual(['https://example.com/file.pdf']);
+  });
+
+  it('passes through non-OpenClaw format unchanged', () => {
+    const raw = { result: 'done', latency: 100 };
+    expect(parseOpenClawResponse(raw)).toEqual(raw);
+  });
+
+  it('passes through primitive values unchanged', () => {
+    expect(parseOpenClawResponse('hello')).toBe('hello');
+    expect(parseOpenClawResponse(42)).toBe(42);
+    expect(parseOpenClawResponse(null)).toBe(null);
+  });
+
+  it('handles empty payloads array', () => {
+    const raw = {
+      payloads: [],
+      meta: { durationMs: 1000 },
+    };
+
+    const result = parseOpenClawResponse(raw) as Record<string, unknown>;
+    expect(result.text).toBe('');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Process channel — OpenClaw response parsing integration
+// ---------------------------------------------------------------------------
+
+describe('OpenClawBridge — process channel with OpenClaw response format', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('extracts structured result from OpenClaw { payloads, meta } envelope on stderr', async () => {
+    const openclawResponse = {
+      payloads: [
+        { text: 'Searching...', mediaUrl: null },
+        { text: '{"results": [{"text": "match", "score": 0.85}], "query": "test"}', mediaUrl: null },
+      ],
+      meta: { durationMs: 12000, agentMeta: { model: 'claude-sonnet-4-20250514', provider: 'anthropic' } },
+    };
+
+    vi.spyOn(child_process, 'spawnSync').mockReturnValue(
+      mockSpawnResult(openclawResponse) as ReturnType<typeof child_process.spawnSync>,
+    );
+
+    const bridge = new OpenClawBridge();
+    const config = makeConfig({ channel: 'process' });
+    const result = await bridge.execute(config, { query: 'test' });
+
+    expect(result.success).toBe(true);
+    const data = result.result as Record<string, unknown>;
+    expect(data.results).toEqual([{ text: 'match', score: 0.85 }]);
+    expect(data.query).toBe('test');
+    expect((data._openclaw_meta as Record<string, unknown>).model).toBe('claude-sonnet-4-20250514');
+  });
+
+  it('returns text fallback when agent does not return JSON', async () => {
+    const openclawResponse = {
+      payloads: [
+        { text: 'I could not find the skill definition.', mediaUrl: null },
+      ],
+      meta: { durationMs: 5000 },
+    };
+
+    vi.spyOn(child_process, 'spawnSync').mockReturnValue(
+      mockSpawnResult(openclawResponse) as ReturnType<typeof child_process.spawnSync>,
+    );
+
+    const bridge = new OpenClawBridge();
+    const config = makeConfig({ channel: 'process' });
+    const result = await bridge.execute(config, {});
+
+    expect(result.success).toBe(true);
+    const data = result.result as Record<string, unknown>;
+    expect(data.text).toContain('could not find');
+  });
+
+  it('extracts JSON from stderr with preceding log lines', async () => {
+    const openclawResponse = {
+      payloads: [{ text: '{"found": true}', mediaUrl: null }],
+      meta: { durationMs: 3000 },
+    };
+    const stderrWithLogs = `[plugins] memory loaded\n[agent] starting\n${JSON.stringify(openclawResponse)}`;
+
+    vi.spyOn(child_process, 'spawnSync').mockReturnValue({
+      stdout: Buffer.from(''),
+      stderr: Buffer.from(stderrWithLogs),
+      status: 0,
+      error: undefined,
+      pid: 12345,
+      signal: null,
+      output: [],
+    } as unknown as ReturnType<typeof child_process.spawnSync>);
+
+    const bridge = new OpenClawBridge();
+    const config = makeConfig({ channel: 'process' });
+    const result = await bridge.execute(config, {});
+
+    expect(result.success).toBe(true);
+    expect((result.result as Record<string, unknown>).found).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Invalid channel
 // ---------------------------------------------------------------------------
 
@@ -315,18 +551,17 @@ describe('OpenClawBridge — timeout', () => {
     expect(result.error).toMatch(/timed out|aborted/i);
   });
 
-  it('process: timeout option is passed to execFileSync', async () => {
-    const execFileSyncSpy = vi
-      .spyOn(child_process, 'execFileSync')
-      .mockReturnValue(Buffer.from(JSON.stringify({ ok: true })));
+  it('process: timeout option is passed to spawnSync', async () => {
+    const spawnSyncSpy = vi
+      .spyOn(child_process, 'spawnSync')
+      .mockReturnValue(mockSpawnResult({ ok: true }) as ReturnType<typeof child_process.spawnSync>);
 
     const bridge = new OpenClawBridge();
     const config = makeConfig({ channel: 'process', timeout_ms: 3000 });
     await bridge.execute(config, {});
 
-    expect(execFileSyncSpy).toHaveBeenCalledOnce();
-    // execFileSync('openclaw', [...args], { timeout })
-    const opts = execFileSyncSpy.mock.calls[0]![2] as { timeout?: number };
+    expect(spawnSyncSpy).toHaveBeenCalledOnce();
+    const opts = spawnSyncSpy.mock.calls[0]![2] as { timeout?: number };
     expect(opts?.timeout).toBe(3000);
   });
 });

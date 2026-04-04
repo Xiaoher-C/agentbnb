@@ -1,4 +1,4 @@
-import { execFileSync } from 'node:child_process';
+import { spawnSync } from 'node:child_process';
 import type { ExecutorMode, ExecutionResult } from './executor.js';
 import type { SkillConfig, OpenClawSkillConfig } from './skill-config.js';
 
@@ -7,6 +7,92 @@ const DEFAULT_BASE_URL = 'http://localhost:3000';
 
 /** Default timeout in milliseconds for all channels. */
 const DEFAULT_TIMEOUT_MS = 60_000;
+
+/**
+ * Shape of a single payload entry in the OpenClaw `--json` output.
+ */
+interface OpenClawPayload {
+  text: string | null;
+  mediaUrl: string | null;
+}
+
+/**
+ * Shape of the OpenClaw `--json` agent response.
+ * `openclaw agent --json` wraps the agent's reply in this envelope.
+ */
+interface OpenClawJsonResponse {
+  payloads: OpenClawPayload[];
+  meta: {
+    durationMs?: number;
+    agentMeta?: {
+      model?: string;
+      provider?: string;
+      usage?: Record<string, number>;
+    };
+    aborted?: boolean;
+  };
+}
+
+/**
+ * Type guard: checks whether a parsed value matches the OpenClaw `--json` envelope format.
+ */
+function isOpenClawJsonResponse(value: unknown): value is OpenClawJsonResponse {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'payloads' in value &&
+    Array.isArray((value as Record<string, unknown>).payloads) &&
+    'meta' in value
+  );
+}
+
+/**
+ * Extracts the useful result from an OpenClaw `--json` response envelope.
+ *
+ * Strategy:
+ * 1. Collect all non-empty text payloads.
+ * 2. Try to JSON.parse the *last* text payload (agent was instructed to return JSON).
+ * 3. If that works → return the structured object with `_openclaw_meta` attached.
+ * 4. If not → return `{ text, media_urls, _openclaw_meta }` as a fallback.
+ *
+ * Non-OpenClaw values pass through untouched.
+ */
+export function parseOpenClawResponse(raw: unknown): unknown {
+  if (!isOpenClawJsonResponse(raw)) {
+    return raw;
+  }
+
+  const { payloads, meta } = raw;
+  const texts = payloads.map((p) => p.text).filter((t): t is string => typeof t === 'string' && t.length > 0);
+  const mediaUrls = payloads.map((p) => p.mediaUrl).filter((u): u is string => typeof u === 'string' && u.length > 0);
+
+  const openclawMeta = {
+    duration_ms: meta.durationMs,
+    model: meta.agentMeta?.model,
+    provider: meta.agentMeta?.provider,
+  };
+
+  if (texts.length === 0) {
+    return { text: '', media_urls: mediaUrls, _openclaw_meta: openclawMeta };
+  }
+
+  // Try to parse the last payload as structured JSON (SKILL.md instructs the agent to do this).
+  const lastText = texts[texts.length - 1]!;
+  try {
+    const structured: unknown = JSON.parse(lastText);
+    if (typeof structured === 'object' && structured !== null) {
+      return { ...(structured as Record<string, unknown>), _openclaw_meta: openclawMeta };
+    }
+    return { result: structured, _openclaw_meta: openclawMeta };
+  } catch {
+    // Agent didn't return valid JSON — fall back to text concatenation.
+    return {
+      text: texts.join('\n\n'),
+      media_urls: mediaUrls.length > 0 ? mediaUrls : undefined,
+      _openclaw_meta: openclawMeta,
+    };
+  }
+}
 
 /**
  * Builds the OpenClaw task payload from a skill config and params.
@@ -128,26 +214,51 @@ function executeProcess(
     `If you cannot complete the task, return: {"error": "reason"}`;
 
   try {
-    // Use execFileSync with array args — no shell, no injection.
-    const stdout = execFileSync('openclaw', [
+    // Use spawnSync with array args — no shell, no injection.
+    // OpenClaw writes its --json output to stderr (not stdout), so we must capture both.
+    const proc = spawnSync('openclaw', [
       'agent', '--agent', config.agent_name, '--message', message, '--json', '--local',
     ], {
       timeout: timeoutMs,
+      maxBuffer: 10 * 1024 * 1024, // 10 MB
     });
-    const text = stdout.toString().trim();
-    // --json is part of the contract here, so treat non-JSON stdout as a hard failure.
+
+    if (proc.error) {
+      return { success: false, error: proc.error.message };
+    }
+
+    // OpenClaw writes --json envelope to stderr; stdout is typically empty.
+    const stderrText = proc.stderr?.toString() ?? '';
+    const stdoutText = proc.stdout?.toString() ?? '';
+
+    // Try stderr first (where OpenClaw --json output lives), then stdout as fallback.
+    const text = (stderrText || stdoutText).trim();
+
+    if (!text) {
+      return {
+        success: false,
+        error: `OpenClaw process channel returned empty output (exit code ${proc.status})`,
+      };
+    }
+
+    // The --json output may be preceded by log lines. Find the last top-level JSON object.
+    const jsonStart = text.lastIndexOf('\n{');
+    const jsonText = jsonStart >= 0 ? text.slice(jsonStart + 1) : text;
+
     try {
-      const parsed: unknown = JSON.parse(text);
-      return { success: true, result: parsed };
+      const parsed: unknown = JSON.parse(jsonText);
+      // Extract useful content from the OpenClaw { payloads, meta } envelope.
+      const result = parseOpenClawResponse(parsed);
+      return { success: true, result };
     } catch {
       return {
         success: false,
-        error: `OpenClaw process channel returned invalid JSON: ${text}`,
+        error: `OpenClaw process channel returned invalid JSON: ${jsonText.slice(0, 500)}`,
       };
     }
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    return { success: false, error: message };
+    const errMsg = err instanceof Error ? err.message : String(err);
+    return { success: false, error: errMsg };
   }
 }
 
