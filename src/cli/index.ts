@@ -1952,6 +1952,33 @@ program
   .action(runQuickstart);
 
 // ---------------------------------------------------------------------------
+// Skill Management
+// ---------------------------------------------------------------------------
+
+const skill = program.command('skill').description('Skill management commands');
+
+skill
+  .command('wrap')
+  .description('Wrap a CLI command as a rentable AgentBnB skill')
+  .option('--name <name>', 'Skill name')
+  .option('--command <cmd>', 'Command template with ${params.x} placeholders')
+  .option('--description <desc>', 'Short description')
+  .option('--price <credits>', 'Price per call (number or "auto")')
+  .option('--category <cat>', 'Category for pricing hints')
+  .option('--inputs <json>', 'Input schema JSON override')
+  .option('--outputs <json>', 'Output schema JSON override')
+  .option('--tags <tags>', 'Comma-separated tags')
+  .option('--auto <binary>', 'Auto-detect subcommands from CLI binary')
+  .option('--from-help <binary>', 'Parse --help to generate skill definition')
+  .option('--scan', 'Scan PATH for all cli-anything-* binaries')
+  .option('--dry-run', 'Preview without writing')
+  .option('-y, --yes', 'Skip confirmation prompts')
+  .action(async (opts) => {
+    const { runSkillWrap } = await import('./skill-wrap.js');
+    await runSkillWrap(opts);
+  });
+
+// ---------------------------------------------------------------------------
 // DID (Decentralized Identity)
 // ---------------------------------------------------------------------------
 
