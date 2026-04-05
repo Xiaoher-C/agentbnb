@@ -11,12 +11,16 @@ import {
   loadSessionConfig,
 } from './session-types.js';
 import { SessionEscrow } from './session-escrow.js';
+import { emitProviderEvent } from '../registry/provider-events.js';
+import { notifyProviderEvent } from '../gateway/provider-notifier.js';
 
 /**
  * Options for constructing a SessionManager.
  */
 export interface SessionManagerOptions {
   creditDb: Database.Database;
+  /** Registry database for provider event logging. */
+  registryDb?: Database.Database;
   /** Send a JSON message to an agent identified by connection key. */
   sendToAgent: (agentKey: string, msg: unknown) => void;
   /** Check if an agent is currently connected. */
@@ -43,6 +47,7 @@ export class SessionManager {
   private escrow: SessionEscrow;
   private config: SessionConfig;
   private sendToAgent: (agentKey: string, msg: unknown) => void;
+  private registryDb: Database.Database | null;
 
   /** Maps agent connection key → set of session IDs they participate in. */
   private agentSessions = new Map<string, Set<string>>();
@@ -51,7 +56,7 @@ export class SessionManager {
     this.escrow = new SessionEscrow(opts.creditDb);
     this.config = opts.config ?? loadSessionConfig();
     this.sendToAgent = opts.sendToAgent;
-    // opts.isAgentOnline reserved for future online-check guard before message dispatch
+    this.registryDb = opts.registryDb ?? null;
   }
 
   /**
@@ -125,6 +130,17 @@ export class SessionManager {
     // Start timers
     this.resetIdleTimer(session.id);
     this.startDurationTimer(session.id);
+
+    // Emit session.opened event
+    this.emitEvent({
+      event_type: 'session.opened',
+      skill_id: session.skill_id,
+      session_id: session.id,
+      requester: session.requester_id,
+      credits: session.budget,
+      duration_ms: 0,
+      metadata: { engine: 'session', pricing_model: session.pricing_model },
+    });
 
     return session;
   }
@@ -202,6 +218,17 @@ export class SessionManager {
       metadata: msg.metadata,
     });
 
+    // Emit session.message event
+    this.emitEvent({
+      event_type: 'session.message',
+      skill_id: session.skill_id,
+      session_id: session.id,
+      requester: session.requester_id,
+      credits: session.spent,
+      duration_ms: Date.now() - new Date(session.created_at).getTime(),
+      metadata: { message_count: session.messages.length, running_cost: session.spent, sender: msg.sender },
+    });
+
     // Reset idle timer
     this.resetIdleTimer(session.id);
   }
@@ -254,6 +281,19 @@ export class SessionManager {
   }
 
   // -------------------------------------------------------------------------
+  // Event emission
+  // -------------------------------------------------------------------------
+
+  /** Emit a provider event + Telegram notification. Silently no-ops on failure. */
+  private emitEvent(event: Parameters<typeof emitProviderEvent>[1]): void {
+    if (!this.registryDb) return;
+    try {
+      const emitted = emitProviderEvent(this.registryDb, event);
+      notifyProviderEvent(emitted).catch(() => {});
+    } catch { /* silent */ }
+  }
+
+  // -------------------------------------------------------------------------
   // Internal helpers
   // -------------------------------------------------------------------------
 
@@ -284,6 +324,29 @@ export class SessionManager {
 
     session.status = 'settled';
     session.updated_at = new Date().toISOString();
+
+    // Emit session event — session.failed includes last 3 messages for debug context
+    const isFailed = reason === 'error';
+    const eventMetadata: Record<string, unknown> = {
+      total_messages: session.messages.length,
+      reason,
+      refunded: session.budget - session.spent,
+    };
+    if (isFailed) {
+      eventMetadata['last_messages'] = session.messages.slice(-3).map((m) => ({
+        sender: m.sender,
+        content: m.content.slice(0, 200),
+      }));
+    }
+    this.emitEvent({
+      event_type: isFailed ? 'session.failed' : 'session.ended',
+      skill_id: session.skill_id,
+      session_id: session.id,
+      requester: session.requester_id,
+      credits: session.spent,
+      duration_ms: durationMs,
+      metadata: eventMetadata,
+    });
 
     // Notify both parties
     this.sendToAgent(session.requester_id, settledMsg);

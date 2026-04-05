@@ -9,125 +9,13 @@ import type { CapabilityCardV2, EscrowReceipt, FailureReason } from '../types/in
 import type { SkillExecutor, ProgressCallback } from '../skills/executor.js';
 import { loadConfig } from '../cli/config.js';
 import { syncCreditsFromRegistry } from '../credit/registry-sync.js';
+import { emitProviderEvent } from '../registry/provider-events.js';
+import { notifyProviderEvent } from './provider-notifier.js';
 import { resolveTargetCapability } from './resolve-target-capability.js';
 import type { ResolvedTargetCapability } from './resolve-target-capability.js';
 
-/**
- * Sends a Telegram message to the owner when a skill is successfully executed.
- * Fire-and-forget — never throws or rejects.
- *
- * Requires config.telegram_notifications = true AND both token + chat_id set
- * (in config.json or via TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID env vars).
- */
-async function notifyTelegramSkillExecuted(opts: {
-  creditDb: Database.Database;
-  owner: string;
-  skillName: string;
-  skillId: string | null;
-  requester: string;
-  creditsEarned: number;
-  latencyMs: number;
-}): Promise<void> {
-  const cfg = loadConfig();
-  if (!cfg?.telegram_notifications) return;
-
-  const token = cfg.telegram_bot_token ?? process.env['TELEGRAM_BOT_TOKEN'];
-  const chatId = cfg.telegram_chat_id ?? process.env['TELEGRAM_CHAT_ID'];
-  if (!token || !chatId) return;
-
-  const balance = getBalance(opts.creditDb, opts.owner);
-  const skillLabel = opts.skillId ? `${opts.skillName} (${opts.skillId})` : opts.skillName;
-  const text = [
-    '[AgentBnB] Skill executed',
-    `Skill: ${skillLabel}`,
-    `Requester: ${opts.requester}`,
-    `Earned: +${opts.creditsEarned} credits`,
-    `Balance: ${balance} credits`,
-    `Latency: ${opts.latencyMs}ms`,
-  ].join('\n');
-
-  await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ chat_id: chatId, text }),
-  });
-}
-
-/**
- * Sends a Telegram message to the owner when a skill fails.
- * Fire-and-forget — never throws or rejects.
- */
-async function notifyTelegramSkillFailed(opts: {
-  creditDb: Database.Database;
-  owner: string;
-  skillName: string;
-  skillId: string | null;
-  requester: string;
-  latencyMs: number;
-  failureReason: FailureReason;
-  message: string;
-}): Promise<void> {
-  const cfg = loadConfig();
-  if (!cfg?.telegram_notifications) return;
-
-  const token = cfg.telegram_bot_token ?? process.env['TELEGRAM_BOT_TOKEN'];
-  const chatId = cfg.telegram_chat_id ?? process.env['TELEGRAM_CHAT_ID'];
-  if (!token || !chatId) return;
-
-  const balance = getBalance(opts.creditDb, opts.owner);
-  const skillLabel = opts.skillId ? `${opts.skillName} (${opts.skillId})` : opts.skillName;
-  const text = [
-    '[AgentBnB] Skill failed',
-    `Skill: ${skillLabel}`,
-    `Requester: ${opts.requester}`,
-    `Reason: ${opts.failureReason}`,
-    `Error: ${opts.message}`,
-    `Balance: ${balance} credits`,
-    `Latency: ${opts.latencyMs}ms`,
-  ].join('\n');
-
-  await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ chat_id: chatId, text }),
-  });
-}
-
-/**
- * Sends a Telegram notification when an incoming rental request is received.
- * Sent BEFORE execution begins so the owner is aware in real-time.
- * Fire-and-forget — never throws or rejects.
- *
- * Only sent when config.provider_gate === 'notify'.
- */
-async function notifyTelegramSkillReceived(opts: {
-  skillName: string;
-  skillId: string | null;
-  requester: string;
-  cost: number;
-}): Promise<void> {
-  const cfg = loadConfig();
-  if (cfg?.provider_gate !== 'notify') return;
-
-  const token = cfg.telegram_bot_token ?? process.env['TELEGRAM_BOT_TOKEN'];
-  const chatId = cfg.telegram_chat_id ?? process.env['TELEGRAM_CHAT_ID'];
-  if (!token || !chatId) return;
-
-  const skillLabel = opts.skillId ? `${opts.skillName} (${opts.skillId})` : opts.skillName;
-  const text = [
-    '📥 [AgentBnB] Incoming rental request',
-    `Skill: ${skillLabel}`,
-    `Requester: ${opts.requester}`,
-    `Cost: ${opts.cost} credits`,
-    `Status: Executing...`,
-  ].join('\n');
-
-  await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ chat_id: chatId, text }),
-  });
-}
+// Telegram notifications are now handled by provider-notifier.ts via emitted events.
+// The notifyProviderEvent() function is called after each emitProviderEvent() below.
 
 // ── Batch request types ───────────────────────────────────────────────────────
 
@@ -379,6 +267,7 @@ export async function executeCapabilityRequest(opts: ExecuteRequestOptions): Pro
     const blacklist = providerCfg?.provider_blacklist ?? [];
     if (blacklist.includes(requester)) {
       if (escrowId) releaseEscrow(creditDb, escrowId);
+      try { emitProviderEvent(registryDb, { event_type: 'skill.rejected', skill_id: resolvedSkillId ?? null, session_id: null, requester, credits: 0, duration_ms: 0, metadata: { reason: 'blacklisted' } }); } catch { /* silent */ }
       return { success: false, error: { code: -32097, message: 'Requester is blocked by provider' } };
     }
   }
@@ -391,6 +280,7 @@ export async function executeCapabilityRequest(opts: ExecuteRequestOptions): Pro
       const todayCount = countTodayExecutions(registryDb);
       if (todayCount >= dailyLimit) {
         if (escrowId) releaseEscrow(creditDb, escrowId);
+        try { emitProviderEvent(registryDb, { event_type: 'skill.rejected', skill_id: resolvedSkillId ?? null, session_id: null, requester, credits: 0, duration_ms: 0, metadata: { reason: 'daily_limit', limit: dailyLimit } }); } catch { /* silent */ }
         return {
           success: false,
           error: { code: -32099, message: `Provider daily execution limit reached (${dailyLimit}/day)` },
@@ -399,13 +289,12 @@ export async function executeCapabilityRequest(opts: ExecuteRequestOptions): Pro
     }
   }
 
-  // Pre-execution notification (provider_gate: 'notify')
-  notifyTelegramSkillReceived({
-    skillName: cardName,
-    skillId: resolvedSkillId ?? null,
-    requester,
-    cost: creditsNeeded,
-  }).catch(() => {});
+  // Emit skill.received event + Telegram notification
+  const receivedEvent = { event_type: 'skill.received' as const, skill_id: resolvedSkillId ?? null, session_id: null, requester, credits: creditsNeeded, duration_ms: 0, metadata: { gate_mode: providerCfg?.provider_gate ?? 'auto' } };
+  try {
+    const emitted = emitProviderEvent(registryDb, receivedEvent);
+    notifyProviderEvent(emitted, creditDb, card.owner).catch(() => {});
+  } catch { /* silent */ }
 
   const startMs = Date.now();
 
@@ -439,17 +328,11 @@ export async function executeCapabilityRequest(opts: ExecuteRequestOptions): Pro
       });
     } catch { /* silent no-op */ }
 
-    // Telegram failure notification — fire-and-forget, never throws
-    notifyTelegramSkillFailed({
-      creditDb,
-      owner: card.owner,
-      skillName: cardName,
-      skillId: resolvedSkillId ?? null,
-      requester,
-      latencyMs,
-      failureReason,
-      message,
-    }).catch(() => {});
+    // Emit skill.failed event + Telegram notification
+    try {
+      const emitted = emitProviderEvent(registryDb, { event_type: 'skill.failed', skill_id: resolvedSkillId ?? null, session_id: null, requester, credits: 0, duration_ms: latencyMs, metadata: { failure_reason: failureReason, error: message } });
+      notifyProviderEvent(emitted, creditDb, card.owner).catch(() => {});
+    } catch { /* silent */ }
 
     return { success: false, error: { code: -32603, message } };
   };
@@ -474,16 +357,11 @@ export async function executeCapabilityRequest(opts: ExecuteRequestOptions): Pro
       });
     } catch { /* silent no-op */ }
 
-    // Telegram notification — fire-and-forget, never throws
-    notifyTelegramSkillExecuted({
-      creditDb,
-      owner: card.owner,
-      skillName: cardName,
-      skillId: resolvedSkillId ?? null,
-      requester,
-      creditsEarned: creditsNeeded,
-      latencyMs,
-    }).catch(() => {});
+    // Emit skill.executed event + Telegram notification
+    try {
+      const emitted = emitProviderEvent(registryDb, { event_type: 'skill.executed', skill_id: resolvedSkillId ?? null, session_id: null, requester, credits: creditsNeeded, duration_ms: latencyMs, metadata: null });
+      notifyProviderEvent(emitted, creditDb, card.owner).catch(() => {});
+    } catch { /* silent */ }
 
     return { success: true, result };
   };
