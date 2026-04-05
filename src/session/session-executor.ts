@@ -93,7 +93,7 @@ export class SessionExecutor {
    * OpenClaw engine — delegates to openclaw agent.
    */
   private async executeOpenClaw(
-    sessionId: string,
+    _sessionId: string,
     skillId: string,
     message: string,
     history: SessionMessage[],

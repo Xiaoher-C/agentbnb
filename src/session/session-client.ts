@@ -1,7 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type WebSocket from 'ws';
 import type {
-  Session,
   SessionMessage,
   SessionAckMessage,
   SessionSettledMessage,

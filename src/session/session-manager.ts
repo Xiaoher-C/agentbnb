@@ -43,7 +43,6 @@ export class SessionManager {
   private escrow: SessionEscrow;
   private config: SessionConfig;
   private sendToAgent: (agentKey: string, msg: unknown) => void;
-  private isAgentOnline: (agentKey: string) => boolean;
 
   /** Maps agent connection key → set of session IDs they participate in. */
   private agentSessions = new Map<string, Set<string>>();
@@ -52,7 +51,7 @@ export class SessionManager {
     this.escrow = new SessionEscrow(opts.creditDb);
     this.config = opts.config ?? loadSessionConfig();
     this.sendToAgent = opts.sendToAgent;
-    this.isAgentOnline = opts.isAgentOnline ?? (() => true);
+    // opts.isAgentOnline reserved for future online-check guard before message dispatch
   }
 
   /**
