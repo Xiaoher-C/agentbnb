@@ -102,6 +102,13 @@ export interface AgentBnBConfig {
    * Requests from blacklisted agents are rejected immediately.
    */
   provider_blacklist?: string[];
+  /**
+   * Event types to suppress from Telegram notifications.
+   * Uses dot-notation event types (e.g. 'session.message').
+   * Common use: suppress noisy per-message session notifications while keeping open/end.
+   * Default: ['session.message'] (suppress per-message noise).
+   */
+  notification_filters?: string[];
 }
 
 /**

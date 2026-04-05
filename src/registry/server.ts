@@ -1869,6 +1869,64 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
         const items = await ledger.getHistory(ownerName, limit);
         return reply.send({ items, limit });
       });
+
+      /**
+       * GET /me/events — Provider event stream.
+       *
+       * Query params:
+       *   limit — Max entries (default 50, max 200)
+       *   since — ISO timestamp for cursor-based polling
+       *   event_type — Filter by event type (e.g. 'skill.executed')
+       */
+      ownerRoutes.get('/me/events', {
+        schema: {
+          tags: ['owner'],
+          summary: 'Provider event stream',
+          security: [{ bearerAuth: [] }],
+          querystring: {
+            type: 'object',
+            properties: {
+              limit: { type: 'integer', description: 'Max entries (default 50)' },
+              since: { type: 'string', description: 'ISO timestamp for cursor-based polling' },
+              event_type: { type: 'string', description: 'Filter by event type' },
+            },
+          },
+        },
+      }, async (request, reply) => {
+        const { getProviderEvents: getEvents } = await import('./provider-events.js');
+        const query = request.query as Record<string, string | undefined>;
+        const limit = query.limit ? parseInt(query.limit, 10) : undefined;
+        const events = getEvents(db, {
+          limit,
+          since: query.since,
+          event_type: query.event_type as import('./provider-events.js').ProviderEventType | undefined,
+        });
+        return reply.send({ events });
+      });
+
+      /**
+       * GET /me/stats — Aggregated provider stats.
+       *
+       * Query params:
+       *   period — '24h', '7d', or '30d' (default '7d')
+       */
+      ownerRoutes.get('/me/stats', {
+        schema: {
+          tags: ['owner'],
+          summary: 'Aggregated provider stats',
+          security: [{ bearerAuth: [] }],
+          querystring: {
+            type: 'object',
+            properties: { period: { type: 'string', enum: ['24h', '7d', '30d'] } },
+          },
+        },
+      }, async (request, reply) => {
+        const { getProviderStats: getStats } = await import('./provider-events.js');
+        const query = request.query as Record<string, string | undefined>;
+        const period = (query.period as '24h' | '7d' | '30d') ?? '7d';
+        const stats = getStats(db, period);
+        return reply.send(stats);
+      });
     });
   }
 

@@ -5,6 +5,7 @@ import { createRequestLogTable } from './request-log.js';
 import { initFeedbackTable } from '../feedback/store.js';
 import { initEvolutionTable } from '../evolution/store.js';
 import { ensureAgentsTable, resolveCanonicalIdentity } from '../identity/agent-identity.js';
+import { ensureProviderEventsTable } from './provider-events.js';
 
 export type { Database };
 
@@ -264,6 +265,9 @@ export function openDatabase(path = ':memory:'): Database.Database {
   // Create request_log table (adds skill_id column idempotently)
   createRequestLogTable(db);
   ensureAgentsTable(db);
+
+  // Create provider_events table for observability
+  ensureProviderEventsTable(db);
 
   // Create feedback table and indexes
   initFeedbackTable(db);

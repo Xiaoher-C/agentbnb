@@ -1281,7 +1281,7 @@ configCmd
   .command('set <key> <value>')
   .description('Set a configuration value')
   .action((key: string, value: string) => {
-    const allowedKeys = ['registry', 'tier1', 'tier2', 'reserve', 'idle-threshold', 'conductor-public', 'telegram-notifications', 'telegram-bot-token', 'telegram-chat-id', 'shared-skills', 'provider-gate', 'provider-accepting', 'provider-daily-limit', 'provider-whitelist', 'provider-blacklist'];
+    const allowedKeys = ['registry', 'tier1', 'tier2', 'reserve', 'idle-threshold', 'conductor-public', 'telegram-notifications', 'telegram-bot-token', 'telegram-chat-id', 'shared-skills', 'provider-gate', 'provider-accepting', 'provider-daily-limit', 'provider-whitelist', 'provider-blacklist', 'notification-filters'];
     if (!allowedKeys.includes(key)) {
       console.error(`Unknown config key: ${key}. Valid keys: ${allowedKeys.join(', ')}`);
       process.exit(1);
@@ -1452,6 +1452,14 @@ configCmd
       saveConfig(config);
       const display = config.provider_blacklist.length > 0 ? config.provider_blacklist.join(', ') : '(empty)';
       console.log(`Set provider-blacklist: ${display}`);
+      return;
+    }
+
+    if (key === 'notification-filters') {
+      config.notification_filters = value.trim() === '' ? [] : value.split(',').map((s) => s.trim()).filter(Boolean);
+      saveConfig(config);
+      const display = config.notification_filters.length > 0 ? config.notification_filters.join(', ') : '(none — all events notified)';
+      console.log(`Set notification-filters: ${display}`);
       return;
     }
 
