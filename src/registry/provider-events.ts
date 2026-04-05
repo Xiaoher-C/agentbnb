@@ -158,7 +158,7 @@ const PERIOD_MS: Record<string, number> = {
  * @returns Aggregated stats.
  */
 export function getProviderStats(db: Database.Database, period: '24h' | '7d' | '30d' = '7d'): ProviderStats {
-  const cutoff = new Date(Date.now() - PERIOD_MS[period]).toISOString();
+  const cutoff = new Date(Date.now() - (PERIOD_MS[period] ?? PERIOD_MS['7d']!)).toISOString();
 
   // Earnings + execution counts
   const summary = db.prepare(`

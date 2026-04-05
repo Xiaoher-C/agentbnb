@@ -101,7 +101,7 @@ export function formatEventMessage(event: ProviderEvent, balance?: number): stri
     case 'session.ended': {
       const totalMsgs = meta['total_messages'] ?? '?';
       const durationMin = Math.round(event.duration_ms / 60000);
-      const refunded = meta['refunded'] ?? 0;
+      const refunded = Number(meta['refunded'] ?? 0);
       return [
         `${emoji} [AgentBnB] Session ended`,
         `Session: ${event.session_id?.slice(0, 8)}...`,

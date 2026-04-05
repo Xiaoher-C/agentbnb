@@ -18,11 +18,10 @@ export interface ConversationMessage {
  */
 export class OpenClawConversationHistory {
   private messages: ConversationMessage[] = [];
-  private maxMessages: number;
   private compressThreshold: number;
 
   constructor(config?: { maxMessages?: number; compressThreshold?: number }) {
-    this.maxMessages = config?.maxMessages ?? 20;
+    // maxMessages reserved for future truncation logic
     this.compressThreshold = config?.compressThreshold ?? 10;
   }
 
