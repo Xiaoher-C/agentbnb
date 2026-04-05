@@ -80,6 +80,12 @@ export async function startMcpServer(): Promise<void> {
   registerConductTool(server, ctx);
   registerServeSkillTool(server, ctx);
 
+  // Session tools (agent-to-agent interactive sessions)
+  const { registerSessionOpenTool, registerSessionSendTool, registerSessionEndTool } = await import('./tools/session.js');
+  registerSessionOpenTool(server, ctx);
+  registerSessionSendTool(server, ctx);
+  registerSessionEndTool(server, ctx);
+
   // Connect via stdio transport
   const transport = new StdioServerTransport();
   await server.connect(transport);

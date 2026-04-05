@@ -27,6 +27,8 @@ import { handleJobRelayResponse } from '../hub-agent/relay-bridge.js';
 import { AgentBnBError, AnyCardSchema } from '../types/index.js';
 import { attachCanonicalAgentId } from '../registry/store.js';
 import { loadCoreConfig } from '../core-config.js';
+import { SessionManager } from '../session/session-manager.js';
+import { attachSessionHandler } from '../session/session-relay.js';
 
 const coreRelay = loadCoreConfig<{
   rate_limit_max?: number;
@@ -368,6 +370,31 @@ export function registerWebSocketRelay(
     }
   }
 
+  // ---------------------------------------------------------------------------
+  // Session support
+  // ---------------------------------------------------------------------------
+
+  /** Send a JSON message to an agent by their connection key (owner or agent_id). */
+  function sendToAgentByKey(agentKey: string, msg: unknown): void {
+    const connKey = resolveConnectionKey(agentKey);
+    const ws = connKey ? connections.get(connKey) : undefined;
+    if (ws && ws.readyState === 1) {
+      ws.send(JSON.stringify(msg));
+    }
+  }
+
+  const sessionManager = creditDb
+    ? new SessionManager({
+        creditDb,
+        sendToAgent: sendToAgentByKey,
+        isAgentOnline: (key) => !!resolveConnectionKey(key),
+      })
+    : undefined;
+
+  const sessionHandler = sessionManager
+    ? attachSessionHandler({ sessionManager })
+    : undefined;
+
   /**
    * Handle an agent registration message.
    * Upserts the primary card, then any additional cards from the `cards` array.
@@ -685,6 +712,11 @@ export function registerWebSocketRelay(
     }
     markOwnerOffline(owner);
 
+    // End any active sessions for this agent
+    if (sessionManager) {
+      sessionManager.handleDisconnect(owner);
+    }
+
     // Fail any pending requests targeting this now-disconnected provider
     // Also clean up requests that originated FROM this agent
     for (const [reqId, pending] of pendingRequests) {
@@ -930,6 +962,14 @@ export function registerWebSocketRelay(
             break;
 
           default:
+            // Try session handler for session_* message types
+            if (sessionHandler && registeredOwner) {
+              const handled = sessionHandler.handleSessionMessage(
+                msg as { type: string; [key: string]: unknown },
+                registeredOwner,
+              );
+              if (handled) break;
+            }
             // Ignore other message types from agents
             break;
         }
@@ -967,6 +1007,7 @@ export function registerWebSocketRelay(
       pendingRequests.clear();
       rateLimits.clear();
       agentCapacities.clear();
+      if (sessionManager) sessionManager.shutdown();
     },
     setOnAgentOnline: (cb: (owner: string) => void) => {
       onAgentOnlineCallback = cb;

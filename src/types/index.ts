@@ -403,3 +403,16 @@ export class AgentBnBError extends Error {
  * not_found     — card or skill ID not found in registry
  */
 export type FailureReason = 'bad_execution' | 'overload' | 'timeout' | 'auth_error' | 'not_found';
+
+// ---------------------------------------------------------------------------
+// Session types (re-exported from src/session/)
+// ---------------------------------------------------------------------------
+
+export type {
+  Session,
+  SessionMessage,
+  SessionStatus,
+  SessionPricingModel,
+  SessionEndReason,
+  SessionConfig,
+} from '../session/session-types.js';
