@@ -5,6 +5,21 @@ import { loadCoreConfig } from '../core-config.js';
 // Session configuration — loaded from @agentbnb/core or fallback defaults
 // ---------------------------------------------------------------------------
 
+/**
+ * Configuration for OpenClaw-based session engines.
+ * Passed to OpenClawSessionExecutor to control agent routing and behavior.
+ */
+export interface OpenClawSessionEngineConfig {
+  /** OpenClaw agent name (maps to brains/ directory). Defaults to workspace default. */
+  agent?: string;
+  /** Limit loaded plugins to this list. If omitted, all agent plugins are used. */
+  plugins?: string[];
+  /** Number of SOUL.md lines to use for core identity summary on turn 2+. Default 10. */
+  soul_summary_lines?: number;
+  /** Override message timeout in milliseconds. Default 90_000. */
+  timeout_ms?: number;
+}
+
 /** Session configuration shape (mirrors config/session.json in agentbnb-core). */
 export interface SessionConfig {
   pricing: {

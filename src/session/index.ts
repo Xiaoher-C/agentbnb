@@ -5,6 +5,7 @@ export {
   type SessionPricingModel,
   type SessionEndReason,
   type SessionConfig,
+  type OpenClawSessionEngineConfig,
   type SessionOpenMessage,
   type SessionAckMessage,
   type SessionMessageMessage,
