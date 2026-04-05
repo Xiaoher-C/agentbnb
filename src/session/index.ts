@@ -30,3 +30,7 @@ export { SessionExecutor } from './session-executor.js';
 export { SessionClient, type SessionOpenOptions } from './session-client.js';
 export { SessionEscrow } from './session-escrow.js';
 export { attachSessionHandler } from './session-relay.js';
+export {
+  OpenClawConversationHistory,
+  type ConversationMessage,
+} from './openclaw-history.js';
