@@ -11,7 +11,7 @@ const DEFAULT_TIMEOUT_MS = 60_000;
 /**
  * Shape of a single payload entry in the OpenClaw `--json` output.
  */
-interface OpenClawPayload {
+export interface OpenClawPayload {
   text: string | null;
   mediaUrl: string | null;
 }
@@ -20,7 +20,7 @@ interface OpenClawPayload {
  * Shape of the OpenClaw `--json` agent response.
  * `openclaw agent --json` wraps the agent's reply in this envelope.
  */
-interface OpenClawJsonResponse {
+export interface OpenClawJsonResponse {
   payloads: OpenClawPayload[];
   meta: {
     durationMs?: number;
@@ -36,7 +36,7 @@ interface OpenClawJsonResponse {
 /**
  * Type guard: checks whether a parsed value matches the OpenClaw `--json` envelope format.
  */
-function isOpenClawJsonResponse(value: unknown): value is OpenClawJsonResponse {
+export function isOpenClawJsonResponse(value: unknown): value is OpenClawJsonResponse {
   return (
     typeof value === 'object' &&
     value !== null &&
@@ -170,7 +170,7 @@ async function executeWebhook(
  * Validates an agent name to prevent command injection.
  * Only allows alphanumeric, hyphens, underscores, and dots.
  */
-function validateAgentName(name: string): boolean {
+export function validateAgentName(name: string): boolean {
   return /^[a-zA-Z0-9._-]+$/.test(name);
 }
 

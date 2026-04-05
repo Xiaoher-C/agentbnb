@@ -26,6 +26,7 @@ export {
 
 export { SessionManager, type SessionManagerOptions } from './session-manager.js';
 export { SessionExecutor } from './session-executor.js';
+export { OpenClawSessionExecutor } from './openclaw-session-executor.js';
 export { SessionClient, type SessionOpenOptions } from './session-client.js';
 export { SessionEscrow } from './session-escrow.js';
 export { attachSessionHandler } from './session-relay.js';

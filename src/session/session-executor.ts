@@ -3,6 +3,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 import type { SessionMessage } from './session-types.js';
+import { OpenClawSessionExecutor } from './openclaw-session-executor.js';
 
 const SESSIONS_DIR = join(homedir(), '.agentbnb', 'sessions');
 
@@ -16,6 +17,9 @@ const SESSIONS_DIR = join(homedir(), '.agentbnb', 'sessions');
 export class SessionExecutor {
   /** sessionId → accumulated message history */
   private histories = new Map<string, SessionMessage[]>();
+
+  /** Lazy-initialized OpenClaw session executor for 'openclaw' engine. */
+  private openclawExecutor?: OpenClawSessionExecutor;
 
   /**
    * Handle an incoming session message and produce a response.
@@ -54,6 +58,7 @@ export class SessionExecutor {
    */
   cleanup(sessionId: string): void {
     this.histories.delete(sessionId);
+    this.openclawExecutor?.cleanup(sessionId);
   }
 
   // -------------------------------------------------------------------------
@@ -90,27 +95,18 @@ export class SessionExecutor {
   }
 
   /**
-   * OpenClaw engine — delegates to openclaw agent.
+   * OpenClaw engine — delegates to OpenClawSessionExecutor for multi-turn support.
    */
   private async executeOpenClaw(
-    _sessionId: string,
+    sessionId: string,
     skillId: string,
     message: string,
     history: SessionMessage[],
   ): Promise<string> {
-    const prompt = buildOpenClawPrompt(skillId, message, history);
-    const escaped = prompt.replace(/"/g, '\\"').replace(/\$/g, '\\$');
-
-    try {
-      const result = execSync(
-        `openclaw agent --agent "${skillId}" --message "${escaped}" --json --local`,
-        { encoding: 'utf-8', timeout: 90_000, stdio: ['pipe', 'pipe', 'pipe'] },
-      );
-      return parseOpenClawResponse(result);
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err);
-      return `[OpenClaw executor error: ${msg}]`;
+    if (!this.openclawExecutor) {
+      this.openclawExecutor = new OpenClawSessionExecutor();
     }
+    return this.openclawExecutor.execute(sessionId, skillId, message, history);
   }
 
   /**
@@ -138,33 +134,3 @@ function buildContextFromHistory(skillId: string, history: SessionMessage[]): st
   return context;
 }
 
-/**
- * Build an OpenClaw prompt with session context.
- */
-function buildOpenClawPrompt(
-  skillId: string,
-  message: string,
-  history: SessionMessage[],
-): string {
-  if (history.length <= 1) return message;
-
-  let prompt = `[Session context for ${skillId}]\n`;
-  for (const msg of history.slice(0, -1)) {
-    const role = msg.sender === 'requester' ? 'User' : 'Agent';
-    prompt += `${role}: ${msg.content}\n`;
-  }
-  prompt += `\nUser: ${message}`;
-  return prompt;
-}
-
-/**
- * Parse OpenClaw JSON response to extract content.
- */
-function parseOpenClawResponse(raw: string): string {
-  try {
-    const parsed = JSON.parse(raw.trim());
-    return parsed.response ?? parsed.result ?? parsed.message ?? raw.trim();
-  } catch {
-    return raw.trim();
-  }
-}
