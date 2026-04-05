@@ -87,11 +87,18 @@ function MyAgentDropdown(): JSX.Element {
       {open && (
         <div className="absolute top-full right-0 mt-1 bg-hub-surface border border-white/[0.08] rounded-lg py-1 z-50 min-w-[140px] shadow-lg">
           <NavLink
+            to="/dashboard"
+            onClick={() => { setOpen(false); }}
+            className="block px-3 py-2 text-sm text-hub-text-secondary hover:text-hub-text-primary hover:bg-white/[0.04] transition-colors"
+          >
+            Provider
+          </NavLink>
+          <NavLink
             to="/myagent"
             onClick={() => { setOpen(false); }}
             className="block px-3 py-2 text-sm text-hub-text-secondary hover:text-hub-text-primary hover:bg-white/[0.04] transition-colors"
           >
-            Dashboard
+            My Agent
           </NavLink>
           <NavLink
             to="/share"
