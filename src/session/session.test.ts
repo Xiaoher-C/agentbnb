@@ -7,6 +7,8 @@ import type { SessionConfig, SessionOpenMessage } from './session-types.js';
 import { DEFAULT_SESSION_CONFIG, SESSION_MESSAGE_TYPES } from './session-types.js';
 import { attachSessionHandler } from './session-relay.js';
 import { SessionExecutor } from './session-executor.js';
+import { OpenClawSessionExecutor } from './openclaw-session-executor.js';
+import { validateAgentName } from '../skills/openclaw-bridge.js';
 
 // ---------------------------------------------------------------------------
 // SessionEscrow tests
@@ -449,5 +451,83 @@ describe('loadSessionConfig', () => {
     expect(config.pricing.per_message_base_rate).toBe(2);
     expect(config.timeouts.idle_timeout_ms).toBe(120_000);
     expect(config.abuse.max_concurrent_sessions_per_agent).toBe(5);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// OpenClawSessionExecutor tests
+// ---------------------------------------------------------------------------
+
+describe('OpenClawSessionExecutor', () => {
+  it('validates agent name format via shared utility', () => {
+    expect(validateAgentName('valid-agent')).toBe(true);
+    expect(validateAgentName('agent_123')).toBe(true);
+    expect(validateAgentName('agent.name')).toBe(true);
+    expect(validateAgentName('invalid agent')).toBe(false);
+    expect(validateAgentName('bad;name')).toBe(false);
+    expect(validateAgentName('$(inject)')).toBe(false);
+    expect(validateAgentName('')).toBe(false);
+  });
+
+  it('returns error for invalid agent name', async () => {
+    const executor = new OpenClawSessionExecutor();
+    const result = await executor.execute('sess-1', 'bad;agent', 'test', []);
+    expect(result).toContain('[OpenClaw session error:');
+    expect(result).toContain('invalid agent name');
+  });
+
+  it('cleanup does not throw on unknown session', () => {
+    const executor = new OpenClawSessionExecutor();
+    expect(() => executor.cleanup('nonexistent')).not.toThrow();
+  });
+
+  it('parseResponse handles JSON payloads format', () => {
+    const executor = new OpenClawSessionExecutor();
+    const json = JSON.stringify({
+      payloads: [{ text: 'hello', mediaUrl: null }],
+      meta: {},
+    });
+    expect(executor.parseResponse(json)).toBe('hello');
+  });
+
+  it('parseResponse handles multi-payload format', () => {
+    const executor = new OpenClawSessionExecutor();
+    const json = JSON.stringify({
+      payloads: [
+        { text: 'Part 1', mediaUrl: null },
+        { text: 'Part 2', mediaUrl: null },
+      ],
+      meta: {},
+    });
+    expect(executor.parseResponse(json)).toBe('Part 1\n\nPart 2');
+  });
+
+  it('parseResponse handles plain text fallback', () => {
+    const executor = new OpenClawSessionExecutor();
+    expect(executor.parseResponse('just text')).toBe('just text');
+  });
+
+  it('parseResponse handles JSON with response field', () => {
+    const executor = new OpenClawSessionExecutor();
+    expect(executor.parseResponse(JSON.stringify({ response: 'resp' }))).toBe('resp');
+  });
+
+  it('parseResponse handles empty payloads', () => {
+    const executor = new OpenClawSessionExecutor();
+    const json = JSON.stringify({
+      payloads: [{ text: null, mediaUrl: null }],
+      meta: {},
+    });
+    expect(executor.parseResponse(json)).toBe('');
+  });
+
+  it('parseResponse handles JSON preceded by log lines', () => {
+    const executor = new OpenClawSessionExecutor();
+    const json = JSON.stringify({
+      payloads: [{ text: 'response text', mediaUrl: null }],
+      meta: {},
+    });
+    const rawWithLogs = `[INFO] Starting agent...\n[DEBUG] Loading model...\n${json}`;
+    expect(executor.parseResponse(rawWithLogs)).toBe('response text');
   });
 });
