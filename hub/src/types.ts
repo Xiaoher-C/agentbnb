@@ -104,7 +104,7 @@ export type SortOption = 'popular' | 'rated' | 'cheapest' | 'newest';
 /** Shared context passed from App layout to route pages via Outlet context */
 export interface AppOutletContext {
   apiKey: string | null;
-  login: (key: string) => void;
+  login: (key: string | null) => void;
   setSelectedCard: (card: HubCard | null) => void;
 }
 

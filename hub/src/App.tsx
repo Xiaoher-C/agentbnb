@@ -30,21 +30,26 @@ export default function App(): JSX.Element {
   const [selectedCard, setSelectedCard] = useState<HubCard | null>(null);
   const [balance, setBalance] = useState<number | null>(null);
 
-  // Fetch credit balance when authenticated
+  // Fetch credit balance when authenticated (works for both Bearer and DID modes)
   useEffect(() => {
     if (!apiKey) {
       setBalance(null);
       return;
     }
 
-    fetch('/me', {
-      headers: { Authorization: `Bearer ${apiKey}` },
-    })
+    const isDid = apiKey === '__did__';
+    const fetchPromise = isDid
+      ? import('./lib/authHeaders.js').then((m) => m.authedFetch('/me'))
+      : fetch('/me', { headers: { Authorization: `Bearer ${apiKey}` } });
+
+    fetchPromise
       .then(async (res) => {
         if (!res.ok) return;
-        const data = await res.json() as { credits?: number };
-        if (typeof data.credits === 'number') {
-          setBalance(data.credits);
+        // Server returns `{ owner, balance }` (see server.ts /me endpoint)
+        const data = await res.json() as { balance?: number; credits?: number };
+        const b = typeof data.balance === 'number' ? data.balance : data.credits;
+        if (typeof b === 'number') {
+          setBalance(b);
         }
       })
       .catch(() => {

@@ -1,31 +1,30 @@
 /**
- * AuthGate — Conditional wrapper that shows LoginForm or children based on auth state.
+ * AuthGate — Conditional wrapper that shows HubAuthForm or children based on auth state.
  *
- * Used at the top level of the owner dashboard to gate all authenticated content
- * behind an API key prompt.
+ * Supports both legacy Bearer (API key) and new DID-based auth flows via the
+ * unified HubAuthForm component.
  */
 import type { ReactNode } from 'react';
-import LoginForm from './LoginForm.js';
+import HubAuthForm from './HubAuthForm.js';
 
 export interface AuthGateProps {
   /** Current API key from useAuth(). Pass null or undefined when not authenticated. */
   apiKey: string | null | undefined;
-  /** Called when the user submits the LoginForm. Should invoke useAuth().login(). */
-  onLogin: (key: string) => void;
+  /**
+   * Called when the user completes authentication. Pass a key for Bearer mode,
+   * or null for DID mode (session was saved via saveSession before calling).
+   */
+  onLogin: (key: string | null) => void;
   /** The authenticated dashboard content to render when apiKey is present. */
   children: ReactNode;
 }
 
 /**
- * Renders children when apiKey is present, otherwise shows LoginForm.
- *
- * @param props.apiKey  - API key string, or null/undefined when unauthenticated.
- * @param props.onLogin - Forwarded to LoginForm's onLogin prop.
- * @param props.children - Protected content shown when authenticated.
+ * Renders children when apiKey is present, otherwise shows HubAuthForm.
  */
 export default function AuthGate({ apiKey, onLogin, children }: AuthGateProps): JSX.Element {
   if (!apiKey) {
-    return <LoginForm onLogin={onLogin} />;
+    return <HubAuthForm onLogin={onLogin} />;
   }
   return <>{children}</>;
 }

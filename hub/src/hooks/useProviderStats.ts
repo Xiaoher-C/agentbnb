@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { authedFetch } from '../lib/authHeaders.js';
 
 export interface ProviderStats {
   total_earnings: number;
@@ -38,9 +39,10 @@ export function useProviderStats(apiKey: string | null, period: '24h' | '7d' | '
   const fetchStats = useCallback(async () => {
     if (!apiKey) return;
     try {
-      const res = await fetch(`/me/stats?period=${period}`, {
-        headers: { Authorization: `Bearer ${apiKey}` },
-      });
+      const isDid = apiKey === '__did__';
+      const res = isDid
+        ? await authedFetch(`/me/stats?period=${period}`)
+        : await fetch(`/me/stats?period=${period}`, { headers: { Authorization: `Bearer ${apiKey}` } });
       if (!res.ok) return;
       const data = (await res.json()) as ProviderStats;
       setStats(data);

@@ -16,23 +16,23 @@ describe('AuthGate', () => {
     expect(screen.getByText('Dashboard Content')).toBeInTheDocument();
   });
 
-  it('renders LoginForm when apiKey is null', () => {
+  it('renders HubAuthForm landing when apiKey is null', () => {
     render(
       <AuthGate apiKey={null} onLogin={() => {}}>
         <div>Dashboard Content</div>
       </AuthGate>,
     );
     expect(screen.queryByText('Dashboard Content')).not.toBeInTheDocument();
-    expect(screen.getByPlaceholderText('Paste your API key')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Create new agent' })).toBeInTheDocument();
   });
 
-  it('renders LoginForm when apiKey is undefined', () => {
+  it('renders HubAuthForm landing when apiKey is undefined', () => {
     render(
       <AuthGate apiKey={undefined} onLogin={() => {}}>
         <div>Dashboard Content</div>
       </AuthGate>,
     );
     expect(screen.queryByText('Dashboard Content')).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Connect' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Sign in to existing agent' })).toBeInTheDocument();
   });
 });

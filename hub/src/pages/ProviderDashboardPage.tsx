@@ -24,6 +24,7 @@ import type { ProviderEvent } from '../hooks/useProviderEvents.js';
 import type { AppOutletContext } from '../types.js';
 import AuthGate from '../components/AuthGate.js';
 import { Skeleton } from '../components/Skeleton.js';
+import { authedFetch } from '../lib/authHeaders.js';
 
 /** Emoji prefix for event types. */
 const EVENT_EMOJI: Record<string, string> = {
@@ -122,7 +123,10 @@ function ProviderDashboardInner({ apiKey }: { apiKey: string }) {
     let cancelled = false;
     const fetchBalance = async () => {
       try {
-        const res = await fetch('/me', { headers: { Authorization: `Bearer ${apiKey}` } });
+        const isDid = apiKey === '__did__';
+        const res = isDid
+          ? await authedFetch('/me')
+          : await fetch('/me', { headers: { Authorization: `Bearer ${apiKey}` } });
         if (!res.ok) return;
         const data = await res.json() as { balance?: number };
         if (!cancelled && typeof data.balance === 'number') setBalance(data.balance);
@@ -214,42 +218,55 @@ function ProviderDashboardInner({ apiKey }: { apiKey: string }) {
         />
       </div>
 
-      {/* 7-day earnings chart */}
-      {stats.earnings_timeline.length > 0 && (
-        <div className="rounded-xl border border-hub-border bg-hub-card p-4">
-          <div className="mb-3 text-sm font-semibold text-hub-text">Earnings — Last 7 Days</div>
-          <div className="h-40">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={stats.earnings_timeline}>
-                <defs>
-                  <linearGradient id="earningsGradient" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#10b981" stopOpacity={0.4} />
-                    <stop offset="100%" stopColor="#10b981" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <XAxis
-                  dataKey="date"
-                  tickFormatter={(d) => d.slice(5)}
-                  stroke="#6b7280"
-                  fontSize={11}
-                />
-                <YAxis stroke="#6b7280" fontSize={11} />
-                <Tooltip
-                  contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: 6 }}
-                  labelStyle={{ color: '#9ca3af' }}
-                />
-                <Area
-                  type="monotone"
-                  dataKey="earnings"
-                  stroke="#10b981"
-                  fill="url(#earningsGradient)"
-                  strokeWidth={2}
-                />
-              </AreaChart>
-            </ResponsiveContainer>
+      {/* 7-day earnings chart (or empty state) */}
+      {(() => {
+        const totalEarnings = stats.earnings_timeline.reduce((sum, d) => sum + d.earnings, 0);
+        if (totalEarnings === 0) {
+          return (
+            <div className="rounded-xl border border-dashed border-hub-border bg-hub-card/30 p-6 text-center">
+              <div className="text-sm font-semibold text-hub-text">Earnings — Last 7 Days</div>
+              <div className="mt-2 text-xs text-hub-text-muted">
+                Start earning to see trends here. Your skills will appear once rented.
+              </div>
+            </div>
+          );
+        }
+        return (
+          <div className="rounded-xl border border-hub-border bg-hub-card p-4">
+            <div className="mb-3 text-sm font-semibold text-hub-text">Earnings — Last 7 Days</div>
+            <div className="h-40">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={stats.earnings_timeline}>
+                  <defs>
+                    <linearGradient id="earningsGradient" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#10b981" stopOpacity={0.4} />
+                      <stop offset="100%" stopColor="#10b981" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <XAxis
+                    dataKey="date"
+                    tickFormatter={(d) => d.slice(5)}
+                    stroke="#6b7280"
+                    fontSize={11}
+                  />
+                  <YAxis stroke="#6b7280" fontSize={11} />
+                  <Tooltip
+                    contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: 6 }}
+                    labelStyle={{ color: '#9ca3af' }}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="earnings"
+                    stroke="#10b981"
+                    fill="url(#earningsGradient)"
+                    strokeWidth={2}
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Skill performance */}
       {stats.top_skills.length > 0 && (

@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { authedFetch } from '../lib/authHeaders.js';
 
 export interface ProviderEvent {
   id: string;
@@ -27,9 +28,11 @@ export function useProviderEvents(apiKey: string | null) {
       const params = new URLSearchParams({ limit: '50' });
       if (lastSeenRef.current) params.set('since', lastSeenRef.current);
 
-      const res = await fetch(`/me/events?${params}`, {
-        headers: { Authorization: `Bearer ${apiKey}` },
-      });
+      // Use authedFetch for DID mode, fall back to Bearer for legacy key
+      const isDid = apiKey === '__did__';
+      const res = isDid
+        ? await authedFetch(`/me/events?${params}`)
+        : await fetch(`/me/events?${params}`, { headers: { Authorization: `Bearer ${apiKey}` } });
       if (!res.ok) return;
 
       const data = (await res.json()) as { events: ProviderEvent[] };
