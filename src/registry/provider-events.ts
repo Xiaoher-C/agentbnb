@@ -66,6 +66,8 @@ export type EmitEventInput = Omit<ProviderEvent, 'id' | 'created_at'>;
 /** Aggregated provider stats for a time period. */
 export interface ProviderStats {
   total_earnings: number;
+  total_spending: number;
+  net_pnl: number;
   total_executions: number;
   success_count: number;
   failure_count: number;
@@ -73,6 +75,8 @@ export interface ProviderStats {
   active_sessions: number;
   top_skills: Array<{ skill_id: string; count: number; earnings: number }>;
   top_requesters: Array<{ requester: string; count: number }>;
+  /** Daily earnings for the last 7 days (oldest first). */
+  earnings_timeline: Array<{ date: string; earnings: number }>;
 }
 
 // ---------------------------------------------------------------------------
@@ -204,12 +208,33 @@ export function getProviderStats(db: Database.Database, period: '24h' | '7d' | '
     LIMIT 10
   `).all(cutoff) as Array<{ requester: string; count: number }>;
 
+  // Earnings timeline — last 7 days, grouped by date (UTC)
+  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+  const timelineRows = db.prepare(`
+    SELECT DATE(created_at) as date, COALESCE(SUM(credits), 0) as earnings
+    FROM provider_events
+    WHERE event_type = 'skill.executed' AND created_at >= ?
+    GROUP BY DATE(created_at)
+    ORDER BY date ASC
+  `).all(sevenDaysAgo) as Array<{ date: string; earnings: number }>;
+
+  // Fill missing days with 0
+  const timelineMap = new Map(timelineRows.map((r) => [r.date, r.earnings]));
+  const earnings_timeline: Array<{ date: string; earnings: number }> = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(Date.now() - i * 24 * 60 * 60 * 1000);
+    const dateStr = d.toISOString().slice(0, 10);
+    earnings_timeline.push({ date: dateStr, earnings: timelineMap.get(dateStr) ?? 0 });
+  }
+
   const successRate = summary.total_executions > 0
     ? summary.success_count / summary.total_executions
     : 1.0;
 
   return {
     total_earnings: summary.total_earnings,
+    total_spending: 0, // Filled by API layer (reads credit_transactions)
+    net_pnl: summary.total_earnings,
     total_executions: summary.total_executions,
     success_count: summary.success_count,
     failure_count: summary.failure_count,
@@ -217,6 +242,7 @@ export function getProviderStats(db: Database.Database, period: '24h' | '7d' | '
     active_sessions: activeSessions.cnt,
     top_skills: topSkills,
     top_requesters: topRequesters,
+    earnings_timeline,
   };
 }
 

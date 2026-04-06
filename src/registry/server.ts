@@ -1925,6 +1925,22 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
         const query = request.query as Record<string, string | undefined>;
         const period = (query.period as '24h' | '7d' | '30d') ?? '7d';
         const stats = getStats(db, period);
+
+        // Compute spending from credit_transactions (outflows: escrow_hold, voucher_hold, network_fee)
+        if (opts.creditDb) {
+          const periodMs = { '24h': 86_400_000, '7d': 604_800_000, '30d': 2_592_000_000 }[period];
+          const cutoff = new Date(Date.now() - periodMs).toISOString();
+          try {
+            const row = opts.creditDb.prepare(`
+              SELECT COALESCE(SUM(CASE WHEN amount < 0 AND reason IN ('escrow_hold', 'voucher_hold', 'network_fee') THEN -amount ELSE 0 END), 0) as spent
+              FROM credit_transactions
+              WHERE owner = ? AND created_at >= ?
+            `).get(ownerName, cutoff) as { spent: number } | undefined;
+            stats.total_spending = row?.spent ?? 0;
+            stats.net_pnl = stats.total_earnings - stats.total_spending;
+          } catch { /* silent — keep zeros */ }
+        }
+
         return reply.send(stats);
       });
     });

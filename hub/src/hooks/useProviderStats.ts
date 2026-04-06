@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback } from 'react';
 
 export interface ProviderStats {
   total_earnings: number;
+  total_spending: number;
+  net_pnl: number;
   total_executions: number;
   success_count: number;
   failure_count: number;
@@ -9,10 +11,13 @@ export interface ProviderStats {
   active_sessions: number;
   top_skills: Array<{ skill_id: string; count: number; earnings: number }>;
   top_requesters: Array<{ requester: string; count: number }>;
+  earnings_timeline: Array<{ date: string; earnings: number }>;
 }
 
 const EMPTY_STATS: ProviderStats = {
   total_earnings: 0,
+  total_spending: 0,
+  net_pnl: 0,
   total_executions: 0,
   success_count: 0,
   failure_count: 0,
@@ -20,6 +25,7 @@ const EMPTY_STATS: ProviderStats = {
   active_sessions: 0,
   top_skills: [],
   top_requesters: [],
+  earnings_timeline: [],
 };
 
 /**

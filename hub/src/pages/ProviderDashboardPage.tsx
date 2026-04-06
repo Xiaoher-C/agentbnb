@@ -8,8 +8,16 @@
  *
  * Requires authentication via AuthGate (wrapped in main.tsx).
  */
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useOutletContext } from 'react-router';
+import {
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+} from 'recharts';
 import { useProviderEvents } from '../hooks/useProviderEvents.js';
 import { useProviderStats } from '../hooks/useProviderStats.js';
 import type { ProviderEvent } from '../hooks/useProviderEvents.js';
@@ -43,11 +51,27 @@ const EVENT_LABEL: Record<string, string> = {
 
 const ALL_EVENT_TYPES = Object.keys(EVENT_EMOJI);
 
-function StatCard({ label, value, sub }: { label: string; value: string | number; sub?: string }) {
+function StatCard({
+  label,
+  value,
+  sub,
+  hero,
+  tone,
+}: {
+  label: string;
+  value: string | number;
+  sub?: string;
+  hero?: boolean;
+  tone?: 'positive' | 'negative' | 'neutral';
+}) {
+  const toneClass =
+    tone === 'positive' ? 'text-emerald-400'
+    : tone === 'negative' ? 'text-rose-400'
+    : 'text-hub-text';
   return (
     <div className="rounded-xl border border-hub-border bg-hub-card p-4">
       <div className="text-sm text-hub-text-muted">{label}</div>
-      <div className="mt-1 text-2xl font-bold text-hub-text">{value}</div>
+      <div className={`mt-1 font-bold ${hero ? 'text-4xl' : 'text-2xl'} ${toneClass}`}>{value}</div>
       {sub && <div className="mt-0.5 text-xs text-hub-text-muted">{sub}</div>}
     </div>
   );
@@ -88,9 +112,26 @@ function EventRow({ event }: { event: ProviderEvent }) {
 function ProviderDashboardInner({ apiKey }: { apiKey: string }) {
   const [period, setPeriod] = useState<'24h' | '7d' | '30d'>('7d');
   const [visibleTypes, setVisibleTypes] = useState<Set<string>>(new Set(ALL_EVENT_TYPES));
+  const [balance, setBalance] = useState<number | null>(null);
 
   const { stats, loading: statsLoading } = useProviderStats(apiKey, period);
   const { events, loading: eventsLoading } = useProviderEvents(apiKey);
+
+  // Fetch balance from /me, poll every 15s
+  useEffect(() => {
+    let cancelled = false;
+    const fetchBalance = async () => {
+      try {
+        const res = await fetch('/me', { headers: { Authorization: `Bearer ${apiKey}` } });
+        if (!res.ok) return;
+        const data = await res.json() as { balance?: number };
+        if (!cancelled && typeof data.balance === 'number') setBalance(data.balance);
+      } catch { /* silent */ }
+    };
+    fetchBalance();
+    const interval = setInterval(fetchBalance, 15000);
+    return () => { cancelled = true; clearInterval(interval); };
+  }, [apiKey]);
 
   const filteredEvents = events.filter((e) => visibleTypes.has(e.event_type));
 
@@ -139,27 +180,76 @@ function ProviderDashboardInner({ apiKey }: { apiKey: string }) {
         </div>
       </div>
 
-      {/* Stats cards */}
+      {/* Hero: Balance */}
+      <StatCard
+        label="Current Balance"
+        value={balance !== null ? `${balance} cr` : '—'}
+        sub={stats.active_sessions > 0 ? `${stats.active_sessions} active session${stats.active_sessions > 1 ? 's' : ''} running` : 'No active sessions'}
+        hero
+      />
+
+      {/* P&L row */}
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
         <StatCard
-          label="Earnings"
+          label={`Earned (${period})`}
           value={`+${stats.total_earnings} cr`}
-          sub={`${period} period`}
+          sub={`${stats.success_count} successful execution${stats.success_count !== 1 ? 's' : ''}`}
+          tone="positive"
         />
         <StatCard
-          label="Executions"
-          value={stats.total_executions}
-          sub={`${stats.success_count} success / ${stats.failure_count} failed`}
+          label={`Spent (${period})`}
+          value={`-${stats.total_spending} cr`}
+          sub="Escrow holds + fees"
+          tone="negative"
+        />
+        <StatCard
+          label={`Net P&L (${period})`}
+          value={`${stats.net_pnl >= 0 ? '+' : ''}${stats.net_pnl} cr`}
+          tone={stats.net_pnl >= 0 ? 'positive' : 'negative'}
         />
         <StatCard
           label="Success Rate"
           value={`${Math.round(stats.success_rate * 100)}%`}
-        />
-        <StatCard
-          label="Active Sessions"
-          value={stats.active_sessions}
+          sub={`${stats.failure_count} failed`}
         />
       </div>
+
+      {/* 7-day earnings chart */}
+      {stats.earnings_timeline.length > 0 && (
+        <div className="rounded-xl border border-hub-border bg-hub-card p-4">
+          <div className="mb-3 text-sm font-semibold text-hub-text">Earnings — Last 7 Days</div>
+          <div className="h-40">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={stats.earnings_timeline}>
+                <defs>
+                  <linearGradient id="earningsGradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#10b981" stopOpacity={0.4} />
+                    <stop offset="100%" stopColor="#10b981" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <XAxis
+                  dataKey="date"
+                  tickFormatter={(d) => d.slice(5)}
+                  stroke="#6b7280"
+                  fontSize={11}
+                />
+                <YAxis stroke="#6b7280" fontSize={11} />
+                <Tooltip
+                  contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: 6 }}
+                  labelStyle={{ color: '#9ca3af' }}
+                />
+                <Area
+                  type="monotone"
+                  dataKey="earnings"
+                  stroke="#10b981"
+                  fill="url(#earningsGradient)"
+                  strokeWidth={2}
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      )}
 
       {/* Skill performance */}
       {stats.top_skills.length > 0 && (
