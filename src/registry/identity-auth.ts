@@ -272,6 +272,86 @@ export function signRequest(
   };
 }
 
+/**
+ * Non-blocking identity verification for routes that support both DID and Bearer auth.
+ *
+ * Unlike identityAuthPlugin which is a preHandler hook, this function:
+ * - Returns { valid: true, agentId, publicKey } on success
+ * - Returns { valid: false, reason } on failure (does NOT send 401)
+ * - Allows the caller to fall back to another auth mechanism (e.g. Bearer token)
+ *
+ * Used by /me/* endpoints that accept either DID headers (new Hub flow) or
+ * Authorization: Bearer <api_key> (legacy CLI flow).
+ *
+ * @param request - Fastify request with headers to verify.
+ * @param options - Optional agentDb for cross-checking known agents.
+ * @returns Verification result.
+ */
+export async function tryVerifyIdentity(
+  request: FastifyRequest,
+  options: IdentityAuthOptions = {},
+): Promise<{ valid: true; agentId: string; publicKey: string } | { valid: false; reason: string }> {
+  const agentIdHeader = request.headers['x-agent-id'] as string | undefined;
+  const publicKeyHeader = request.headers['x-agent-publickey'] as string | undefined;
+  const signatureHeader = request.headers['x-agent-signature'] as string | undefined;
+  const timestampHeader = request.headers['x-agent-timestamp'] as string | undefined;
+  const agentId = agentIdHeader?.trim();
+  const publicKeyHex = publicKeyHeader?.trim();
+  const signature = signatureHeader?.trim();
+  const timestamp = timestampHeader?.trim();
+
+  if (!agentId || !publicKeyHex || !signature || !timestamp) {
+    return { valid: false, reason: 'missing_headers' };
+  }
+
+  const requestTime = new Date(timestamp).getTime();
+  if (isNaN(requestTime) || Math.abs(Date.now() - requestTime) > MAX_REQUEST_AGE_MS) {
+    return { valid: false, reason: 'expired' };
+  }
+
+  if (!/^[0-9a-fA-F]+$/.test(publicKeyHex) || publicKeyHex.length % 2 !== 0) {
+    return { valid: false, reason: 'invalid_key' };
+  }
+
+  let expectedAgentId: string;
+  try {
+    expectedAgentId = deriveAgentId(publicKeyHex);
+  } catch {
+    return { valid: false, reason: 'invalid_key' };
+  }
+  if (agentId !== expectedAgentId) {
+    return { valid: false, reason: 'agent_id_mismatch' };
+  }
+
+  let publicKeyBuffer: Buffer;
+  try {
+    publicKeyBuffer = Buffer.from(publicKeyHex, 'hex');
+  } catch {
+    return { valid: false, reason: 'invalid_key' };
+  }
+
+  const knownAgent = options.agentDb ? lookupAgent(options.agentDb, agentId) : null;
+  if (knownAgent && knownAgent.public_key.toLowerCase() !== publicKeyHex.toLowerCase()) {
+    return { valid: false, reason: 'key_drift' };
+  }
+
+  const payload = buildIdentityPayload(
+    request.method,
+    request.url,
+    timestamp,
+    publicKeyHex,
+    agentId,
+    request.body,
+  );
+
+  const valid = verifyEscrowReceipt(payload, signature, publicKeyBuffer);
+  if (!valid) {
+    return { valid: false, reason: 'invalid_signature' };
+  }
+
+  return { valid: true, agentId, publicKey: publicKeyHex };
+}
+
 // Extend FastifyRequest type to include agentPublicKey
 declare module 'fastify' {
   interface FastifyRequest {

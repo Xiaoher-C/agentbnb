@@ -28,6 +28,17 @@ import {
   getAgentGuarantor,
   initiateGithubAuth,
 } from '../identity/guarantor.js';
+import {
+  ensureHubIdentitiesTables,
+  createChallenge,
+  consumeChallenge,
+  pruneChallenges,
+  registerHubIdentity,
+  getHubIdentityByEmail,
+  getHubIdentityByAgentId,
+  deriveAgentId as deriveHubAgentId,
+} from './hub-identities.js';
+import { tryVerifyIdentity } from './identity-auth.js';
 import { creditRoutesPlugin } from './credit-routes.js';
 import { hubAgentRoutesPlugin } from '../hub-agent/routes.js';
 import { createRelayBridge } from '../hub-agent/relay-bridge.js';
@@ -1187,6 +1198,171 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
     }
   });
 
+  // ─── Hub-first agent registration ──────────────────────────────────────
+  // These endpoints let users create agents from the Hub browser UI without
+  // needing the CLI. Keys are generated in the browser (WebCrypto) and stored
+  // server-side as passphrase-encrypted blobs.
+  ensureHubIdentitiesTables(db);
+  // Prune expired challenges on startup
+  try { pruneChallenges(db); } catch { /* silent */ }
+
+  /**
+   * GET /api/agents/challenge — Issue a one-time challenge for registration.
+   * Client signs the challenge with their private key to prove possession.
+   */
+  api.get('/api/agents/challenge', {
+    schema: {
+      tags: ['hub-auth'],
+      summary: 'Get a registration challenge',
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            challenge: { type: 'string' },
+            expires_at: { type: 'string' },
+          },
+        },
+      },
+    },
+  }, async (_request, reply) => {
+    const { challenge, expires_at } = createChallenge(db);
+    return reply.send({ challenge, expires_at });
+  });
+
+  /**
+   * POST /api/agents/register — Register a new Hub-managed agent identity.
+   *
+   * Body: { email, public_key (hex), encrypted_private_key (base64),
+   *         kdf_salt (base64), display_name, challenge, signature (base64url) }
+   *
+   * Server verifies: challenge is valid + signature proves possession of private key.
+   * Returns: { agent_id, did, created_at }
+   */
+  api.post('/api/agents/register', {
+    schema: {
+      tags: ['hub-auth'],
+      summary: 'Register a new Hub-managed agent identity',
+      body: {
+        type: 'object',
+        required: ['email', 'public_key', 'encrypted_private_key', 'kdf_salt', 'display_name', 'challenge', 'signature'],
+        properties: {
+          email: { type: 'string', format: 'email' },
+          public_key: { type: 'string' },
+          encrypted_private_key: { type: 'string' },
+          kdf_salt: { type: 'string' },
+          display_name: { type: 'string' },
+          challenge: { type: 'string' },
+          signature: { type: 'string' },
+        },
+      },
+      response: {
+        201: { type: 'object', additionalProperties: true },
+        400: { type: 'object', properties: { error: { type: 'string' } } },
+        409: { type: 'object', properties: { error: { type: 'string' } } },
+      },
+    },
+  }, async (request, reply) => {
+    const body = request.body as {
+      email: string;
+      public_key: string;
+      encrypted_private_key: string;
+      kdf_salt: string;
+      display_name: string;
+      challenge: string;
+      signature: string;
+    };
+
+    // Validate challenge
+    if (!consumeChallenge(db, body.challenge)) {
+      return reply.code(400).send({ error: 'Invalid or expired challenge' });
+    }
+
+    // Validate key format
+    if (!/^[0-9a-fA-F]+$/.test(body.public_key) || body.public_key.length % 2 !== 0) {
+      return reply.code(400).send({ error: 'Invalid public_key format' });
+    }
+
+    // Verify signature of the challenge (proves possession of private key)
+    try {
+      const { verifyEscrowReceipt } = await import('../credit/signing.js');
+      const publicKeyBuffer = Buffer.from(body.public_key, 'hex');
+      // Sign the challenge as a string payload for simplicity
+      const valid = verifyEscrowReceipt({ challenge: body.challenge }, body.signature, publicKeyBuffer);
+      if (!valid) {
+        return reply.code(400).send({ error: 'Invalid signature' });
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return reply.code(400).send({ error: `Signature verification failed: ${msg}` });
+    }
+
+    // Check for duplicate email
+    const existing = getHubIdentityByEmail(db, body.email.toLowerCase());
+    if (existing) {
+      return reply.code(409).send({ error: 'Email already registered' });
+    }
+
+    // Check for duplicate agent_id (someone registered the same key)
+    const agent_id = deriveHubAgentId(body.public_key);
+    const existingByAgentId = getHubIdentityByAgentId(db, agent_id);
+    if (existingByAgentId) {
+      return reply.code(409).send({ error: 'Agent already registered' });
+    }
+
+    // Register
+    const identity = registerHubIdentity(db, {
+      email: body.email.toLowerCase(),
+      public_key: body.public_key,
+      encrypted_private_key: body.encrypted_private_key,
+      kdf_salt: body.kdf_salt,
+      display_name: body.display_name,
+    });
+
+    return reply.code(201).send({
+      agent_id: identity.agent_id,
+      did: `did:agentbnb:${identity.agent_id}`,
+      created_at: identity.created_at,
+    });
+  });
+
+  /**
+   * POST /api/agents/login — Fetch encrypted identity blob for passphrase decryption.
+   *
+   * Body: { email }
+   * Returns: { agent_id, public_key, encrypted_private_key, kdf_salt, display_name }
+   *
+   * Client decrypts the private key locally with the passphrase. Server never
+   * sees plaintext private keys.
+   */
+  api.post('/api/agents/login', {
+    schema: {
+      tags: ['hub-auth'],
+      summary: 'Fetch encrypted identity blob for login',
+      body: {
+        type: 'object',
+        required: ['email'],
+        properties: { email: { type: 'string', format: 'email' } },
+      },
+      response: {
+        200: { type: 'object', additionalProperties: true },
+        404: { type: 'object', properties: { error: { type: 'string' } } },
+      },
+    },
+  }, async (request, reply) => {
+    const body = request.body as { email: string };
+    const identity = getHubIdentityByEmail(db, body.email.toLowerCase());
+    if (!identity) {
+      return reply.code(404).send({ error: 'Identity not found' });
+    }
+    return reply.send({
+      agent_id: identity.agent_id,
+      public_key: identity.public_key,
+      encrypted_private_key: identity.encrypted_private_key,
+      kdf_salt: identity.kdf_salt,
+      display_name: identity.display_name,
+    });
+  });
+
   /**
    * POST /api/identity/link — Link an agent to a human guarantor.
    *
@@ -1594,15 +1770,40 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
 
     void api.register(async (ownerRoutes) => {
       /**
-       * Auth hook: validates Bearer token against ownerApiKey.
-       * Responds with 401 Unauthorized if missing or incorrect.
+       * Auth hook: accepts either Bearer token (legacy CLI flow) OR DID auth
+       * headers (new Hub flow via registered hub_identities).
+       *
+       * Bearer mode: Authorization: Bearer <ownerApiKey>
+       * DID mode: X-Agent-Id + X-Agent-PublicKey + X-Agent-Signature + X-Agent-Timestamp
+       *          — must match a registered Hub identity in hub_identities.
+       *
+       * On success, sets request.agentId (Bearer mode uses ownerName as pseudo-agent_id).
        */
-      ownerRoutes.addHook('onRequest', async (request, reply) => {
+      ownerRoutes.addHook('preHandler', async (request, reply) => {
+        // Try Bearer auth first (legacy path)
         const auth = request.headers.authorization;
         const token = auth?.startsWith('Bearer ') ? auth.slice(7).trim() : null;
-        if (!token || token !== ownerApiKey) {
-          return reply.status(401).send({ error: 'Unauthorized' });
+        if (token === ownerApiKey) {
+          // Valid bearer — use ownerName as the effective identity
+          request.agentId = ownerName;
+          return;
         }
+
+        // Fall through to DID auth
+        const didResult = await tryVerifyIdentity(request, {});
+        if (didResult.valid) {
+          // Cross-check: must be a registered Hub identity
+          const hubIdentity = getHubIdentityByAgentId(db, didResult.agentId);
+          if (!hubIdentity) {
+            return reply.status(401).send({ error: 'Agent not registered on this Hub' });
+          }
+          request.agentId = didResult.agentId;
+          request.agentPublicKey = didResult.publicKey;
+          return;
+        }
+
+        // Neither worked
+        return reply.status(401).send({ error: 'Unauthorized' });
       });
 
       /**
@@ -1618,13 +1819,15 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
             200: { type: 'object', properties: { owner: { type: 'string' }, balance: { type: 'number' } } },
           },
         },
-      }, async (_request, reply) => {
+      }, async (request, reply) => {
+        // Use request.agentId set by auth hook (either ownerName for Bearer or agent_id for DID)
+        const identity = request.agentId ?? ownerName;
         let balance = 0;
         if (opts.creditDb) {
           const ledger = createLedger({ db: opts.creditDb });
-          balance = await ledger.getBalance(ownerName);
+          balance = await ledger.getBalance(identity);
         }
-        return reply.send({ owner: ownerName, balance });
+        return reply.send({ owner: identity, balance });
       });
 
       /**
