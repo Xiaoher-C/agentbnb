@@ -1,9 +1,37 @@
 import { spawn, type ChildProcess } from 'child_process';
+import { readFileSync, statSync } from 'node:fs';
+import { basename, extname } from 'node:path';
 import type { ExecutorMode, ExecutionResult } from './executor.js';
 import type { SkillConfig, CommandSkillConfig } from './skill-config.js';
 
 /** Grace period (ms) between SIGTERM and SIGKILL on timeout. */
 const KILL_GRACE_MS = 5000;
+
+/** Maximum file size for base64 inlining (5 MB). */
+const MAX_INLINE_FILE_BYTES = 5 * 1024 * 1024;
+
+/** Common MIME type mapping by extension. */
+const MIME_TYPES: Record<string, string> = {
+  '.mp3': 'audio/mpeg',
+  '.wav': 'audio/wav',
+  '.ogg': 'audio/ogg',
+  '.m4a': 'audio/mp4',
+  '.pdf': 'application/pdf',
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.gif': 'image/gif',
+  '.webp': 'image/webp',
+  '.svg': 'image/svg+xml',
+  '.json': 'application/json',
+  '.txt': 'text/plain',
+  '.md': 'text/markdown',
+  '.csv': 'text/csv',
+};
+
+function guessMimeType(filePath: string): string {
+  return MIME_TYPES[extname(filePath).toLowerCase()] ?? 'application/octet-stream';
+}
 
 /**
  * Shell-escapes a string value to prevent injection.
@@ -320,8 +348,37 @@ export class CommandExecutor implements ExecutorMode {
         }
       }
 
-      case 'file':
-        return { success: true, result: { file_path: rawOutput } };
+      case 'file': {
+        // Read the file from the path in stdout and inline as base64 (< 5MB).
+        // Remote requesters can't access the provider's filesystem, so we must
+        // ship file bytes through the relay.
+        try {
+          const stats = statSync(rawOutput);
+          if (stats.size > MAX_INLINE_FILE_BYTES) {
+            return {
+              success: false,
+              error: `File too large for inline return: ${stats.size} bytes (max ${MAX_INLINE_FILE_BYTES})`,
+            };
+          }
+          const buffer = readFileSync(rawOutput);
+          return {
+            success: true,
+            result: {
+              file: {
+                name: basename(rawOutput),
+                mime_type: guessMimeType(rawOutput),
+                size_bytes: stats.size,
+                data_base64: buffer.toString('base64'),
+              },
+              // Keep file_path for backward compat (local workflows)
+              file_path: rawOutput,
+            },
+          };
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          return { success: false, error: `Failed to read file "${rawOutput}": ${msg}` };
+        }
+      }
 
       default:
         return {

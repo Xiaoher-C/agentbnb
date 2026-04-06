@@ -42,12 +42,57 @@ describe('CommandExecutor', () => {
     expect(result.result).toEqual({ key: 'val' });
   });
 
-  it('returns file_path object when output_type is file', async () => {
+  it('reads file and returns base64-encoded content when output_type is file', async () => {
+    const { writeFileSync, unlinkSync } = await import('node:fs');
+    const { tmpdir } = await import('node:os');
+    const { join: pathJoin } = await import('node:path');
+    const tmpFile = pathJoin(tmpdir(), `agentbnb-test-${Date.now()}.txt`);
+    writeFileSync(tmpFile, 'hello world');
+
+    try {
+      executor = new CommandExecutor();
+      const config = makeConfig({ command: `echo ${tmpFile}`, output_type: 'file' });
+      const result = await executor.execute(config, {});
+
+      expect(result.success).toBe(true);
+      const data = result.result as Record<string, unknown>;
+      expect(data.file_path).toBe(tmpFile);
+      const file = data.file as Record<string, unknown>;
+      expect(file.name).toMatch(/agentbnb-test-\d+\.txt/);
+      expect(file.mime_type).toBe('text/plain');
+      expect(file.size_bytes).toBe(11);
+      // base64 of "hello world" is "aGVsbG8gd29ybGQ="
+      expect(file.data_base64).toBe('aGVsbG8gd29ybGQ=');
+    } finally {
+      try { unlinkSync(tmpFile); } catch { /* ignore */ }
+    }
+  });
+
+  it('rejects files larger than 5MB when output_type is file', async () => {
+    const { writeFileSync, unlinkSync } = await import('node:fs');
+    const { tmpdir } = await import('node:os');
+    const { join: pathJoin } = await import('node:path');
+    const tmpFile = pathJoin(tmpdir(), `agentbnb-big-${Date.now()}.bin`);
+    // Create a 6MB file
+    writeFileSync(tmpFile, Buffer.alloc(6 * 1024 * 1024));
+
+    try {
+      executor = new CommandExecutor();
+      const config = makeConfig({ command: `echo ${tmpFile}`, output_type: 'file' });
+      const result = await executor.execute(config, {});
+      expect(result.success).toBe(false);
+      expect(result.error).toMatch(/too large/i);
+    } finally {
+      try { unlinkSync(tmpFile); } catch { /* ignore */ }
+    }
+  });
+
+  it('returns error when file does not exist', async () => {
     executor = new CommandExecutor();
-    const config = makeConfig({ command: 'echo /tmp/output.mp3', output_type: 'file' });
+    const config = makeConfig({ command: 'echo /tmp/does-not-exist-xyz.mp3', output_type: 'file' });
     const result = await executor.execute(config, {});
-    expect(result.success).toBe(true);
-    expect(result.result).toEqual({ file_path: '/tmp/output.mp3' });
+    expect(result.success).toBe(false);
+    expect(result.error).toMatch(/Failed to read file/);
   });
 
   it('blocks command not in allowed_commands list', async () => {
