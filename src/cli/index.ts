@@ -1645,13 +1645,30 @@ openclaw
       process.exit(1);
     }
 
-    // Resolve SOUL.md path: explicit flag > findSoulMd() > ./SOUL.md fallback
+    // Resolve SOUL.md path: explicit flag > findSoulMd(derived agent name) > ./SOUL.md fallback
+    //
+    // The OpenClaw brains/<name>/SOUL.md uses the OpenClaw agent directory name
+    // (e.g. "genesis-bot"), not the human owner ("Cheng Wen Chen"). When running
+    // with AGENTBNB_DIR=~/.openclaw/agents/<agent>/.agentbnb, we can derive the
+    // agent name from the directory structure.
     let resolvedSoulPath: string;
     if (opts.soulPath) {
       resolvedSoulPath = opts.soulPath;
     } else {
       const { findSoulMd, getOpenClawWorkspaceDir } = await import('../workspace/scanner.js');
-      const found = findSoulMd(config.owner);
+      const { basename: baseName, dirname: dirName } = await import('node:path');
+
+      // Derive agent name from AGENTBNB_DIR if it matches .../openclaw/agents/<name>/.agentbnb
+      const agentbnbDir = process.env['AGENTBNB_DIR'];
+      let derivedAgentName: string | null = null;
+      if (agentbnbDir && agentbnbDir.includes('.openclaw/agents/')) {
+        // e.g. /Users/x/.openclaw/agents/genesis-bot/.agentbnb → genesis-bot
+        derivedAgentName = baseName(dirName(agentbnbDir));
+      }
+
+      const searchName = derivedAgentName ?? config.owner;
+      // Try derived agent name first, fall back to owner
+      const found = findSoulMd(searchName) ?? (searchName !== config.owner ? findSoulMd(config.owner) : null);
       if (found) {
         resolvedSoulPath = found;
       } else if (existsSync('./SOUL.md')) {
@@ -1660,10 +1677,10 @@ openclaw
         const { homedir } = await import('node:os');
         const home = homedir();
         const workspaceDir = getOpenClawWorkspaceDir();
-        console.error(`No SOUL.md found for agent "${config.owner}".`);
+        console.error(`No SOUL.md found for agent "${searchName}".`);
         console.error('Searched:');
-        console.error(`  - ${join(workspaceDir, 'brains', config.owner, 'SOUL.md')}`);
-        console.error(`  - ${join(home, '.openclaw', 'agents', config.owner, 'SOUL.md')}`);
+        console.error(`  - ${join(workspaceDir, 'brains', searchName, 'SOUL.md')}`);
+        console.error(`  - ${join(home, '.openclaw', 'agents', searchName, 'SOUL.md')}`);
         console.error(`  - ${join(workspaceDir, 'SOUL.md')}`);
         console.error(`  - ./SOUL.md`);
         console.error('');
