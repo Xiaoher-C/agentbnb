@@ -18,6 +18,12 @@ import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { Cron } from 'croner';
 import { syncCreditsFromRegistry } from '../credit/registry-sync.js';
+import { probeRegistry } from '../utils/network-probe.js';
+import { withTimeout, TimeoutError } from '../utils/with-timeout.js';
+import { shouldSkipNetwork } from '../utils/runtime-mode.js';
+
+/** Hard upper bound on the startup credit sync. */
+const STARTUP_SYNC_BUDGET_MS = 3_000;
 
 export interface ServiceOptions {
   port?: number;
@@ -297,11 +303,31 @@ export class ServiceCoordinator {
     console.log('IdleMonitor started (60s poll interval, 70% idle threshold)');
 
     if (this.config.registry) {
-      const startupSync = await syncCreditsFromRegistry(this.config, this.runtime.creditDb);
-      if (startupSync.synced) {
-        console.log(`[agentbnb] credits synced: ${startupSync.remoteBalance} (was ${startupSync.localWas})`);
+      // Best-effort startup sync. Hard-bounded to keep `agentbnb serve` from
+      // hanging when the registry is offline. Background cron will retry every
+      // 5 minutes once the daemon is up.
+      if (shouldSkipNetwork()) {
+        console.warn('[agentbnb] credit sync skipped: test/offline mode');
       } else {
-        console.warn(`[agentbnb] credit sync skipped: ${startupSync.error}`);
+        const reachable = await probeRegistry(this.config.registry);
+        if (!reachable) {
+          console.warn('[agentbnb] credit sync skipped: registry unreachable (will retry every 5m)');
+        } else {
+          try {
+            const startupSync = await withTimeout(
+              syncCreditsFromRegistry(this.config, this.runtime.creditDb),
+              STARTUP_SYNC_BUDGET_MS,
+            );
+            if (startupSync.synced) {
+              console.log(`[agentbnb] credits synced: ${startupSync.remoteBalance} (was ${startupSync.localWas})`);
+            } else {
+              console.warn(`[agentbnb] credit sync skipped: ${startupSync.error}`);
+            }
+          } catch (err) {
+            const reason = err instanceof TimeoutError ? `timeout after ${STARTUP_SYNC_BUDGET_MS}ms` : (err as Error).message;
+            console.warn(`[agentbnb] credit sync skipped: ${reason} (will retry every 5m)`);
+          }
+        }
       }
 
       this.creditSyncJob = new Cron('*/5 * * * *', async () => {

@@ -26,6 +26,12 @@ import { createLedger } from '../credit/create-ledger.js';
 import { syncCreditsFromRegistry } from '../credit/registry-sync.js';
 import { requestCapability } from '../gateway/client.js';
 import type { RequestTimeoutHint } from '../gateway/client.js';
+import { probeRegistry } from '../utils/network-probe.js';
+import { withTimeout, TimeoutError } from '../utils/with-timeout.js';
+import { shouldSkipNetwork } from '../utils/runtime-mode.js';
+
+/** Hard upper bound on best-effort registry HTTP calls (publish push, sync push, status, batch, etc). */
+const REGISTRY_HTTP_BUDGET_MS = 5_000;
 import { discoverLocalAgents } from '../discovery/mdns.js';
 import type { CapabilityCard } from '../types/index.js';
 import {
@@ -289,21 +295,26 @@ program
       console.log(`Published locally: ${cardName} (${card.id})`);
     }
 
-    // Also POST to remote registry if configured (explicit --registry or config.registry)
+    // Also POST to remote registry if configured (explicit --registry or config.registry).
+    // Best-effort: hard-bounded by REGISTRY_HTTP_BUDGET_MS so a slow/offline registry
+    // cannot block local publish.
     const registryUrl = opts.registry ?? config.registry;
     let remoteSuccess = false;
-    if (registryUrl) {
+    if (registryUrl && !shouldSkipNetwork()) {
       const url = `${registryUrl.replace(/\/$/, '')}/cards`;
       // Inject gateway_url so remote agents know where to send requests
       const remoteCard =
         config.agent_id && localCard.owner === config.owner && localCard.agent_id !== config.agent_id
           ? { ...localCard, agent_id: config.agent_id, gateway_url: config.gateway_url }
           : { ...localCard, gateway_url: config.gateway_url };
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), REGISTRY_HTTP_BUDGET_MS);
       try {
         const response = await fetch(url, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(remoteCard),
+          signal: controller.signal,
         });
         if (!response.ok) {
           const body = await response.text();
@@ -315,7 +326,11 @@ program
           }
         }
       } catch (err) {
-        console.error(`Warning: cannot reach registry at ${url}: ${(err as Error).message}`);
+        const isAbort = (err as Error).name === 'AbortError';
+        const reason = isAbort ? `timeout after ${REGISTRY_HTTP_BUDGET_MS}ms` : (err as Error).message;
+        console.error(`Warning: cannot reach registry at ${url}: ${reason}`);
+      } finally {
+        clearTimeout(timer);
       }
     }
 
@@ -461,16 +476,33 @@ program
     let failed = 0;
     const results: Array<{ id: string; name: string; ok: boolean; error?: string }> = [];
 
+    // Pre-probe registry once to fail fast on N cards × ~5s each.
+    if (!shouldSkipNetwork()) {
+      const reachable = await probeRegistry(registryUrl);
+      if (!reachable) {
+        if (!opts.json) {
+          console.error(`Error: cannot reach registry at ${registryUrl}. Try again when online.`);
+        }
+        if (opts.json) {
+          console.log(JSON.stringify({ synced: 0, failed: localCards.length, registry: registryUrl, error: 'unreachable' }, null, 2));
+        }
+        process.exit(1);
+      }
+    }
+
     for (const card of localCards) {
       const { _internal: _, ...publicCard } = card;
       // Inject gateway_url so remote agents know where to send requests
       const remoteCard = { ...publicCard, gateway_url: config.gateway_url };
       const displayName = card.name ?? (card as unknown as { agent_name?: string }).agent_name ?? card.id;
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), REGISTRY_HTTP_BUDGET_MS);
       try {
         const response = await fetch(url, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(remoteCard),
+          signal: controller.signal,
         });
         if (response.ok) {
           synced++;
@@ -488,11 +520,14 @@ program
         }
       } catch (err) {
         failed++;
-        const msg = err instanceof Error ? err.message : String(err);
+        const isAbort = (err as Error).name === 'AbortError';
+        const msg = isAbort ? `timeout after ${REGISTRY_HTTP_BUDGET_MS}ms` : (err instanceof Error ? err.message : String(err));
         results.push({ id: card.id, name: displayName, ok: false, error: msg });
         if (!opts.json) {
           console.error(`  Failed: ${displayName} — ${msg}`);
         }
+      } finally {
+        clearTimeout(timer);
       }
     }
 
@@ -691,18 +726,22 @@ program
       process.exit(1);
     }
 
-    // Sync credits from registry before request (ensures local escrow hold uses accurate remote balance)
-    if (config.registry) {
-      const creditDb = openCreditDb(config.credit_db_path);
-      try {
-        const syncResult = await syncCreditsFromRegistry(config, creditDb);
-        if (syncResult.synced && syncResult.remoteBalance !== undefined) {
-          console.log(`Credits synced: ${syncResult.remoteBalance} [registry]`);
+    // Sync credits from registry before request (ensures local escrow hold uses accurate remote balance).
+    // Pre-probe to skip the 10s ledger timeout when offline. Bounded to 3s overall.
+    if (config.registry && !shouldSkipNetwork()) {
+      const reachable = await probeRegistry(config.registry);
+      if (reachable) {
+        const creditDb = openCreditDb(config.credit_db_path);
+        try {
+          const syncResult = await withTimeout(syncCreditsFromRegistry(config, creditDb), 3_000);
+          if (syncResult.synced && syncResult.remoteBalance !== undefined) {
+            console.log(`Credits synced: ${syncResult.remoteBalance} [registry]`);
+          }
+        } catch {
+          // Non-fatal — proceed with local balance
+        } finally {
+          creditDb.close();
         }
-      } catch {
-        // Non-fatal — proceed with local balance
-      } finally {
-        creditDb.close();
       }
     }
 
@@ -724,6 +763,11 @@ program
       }
 
       const batchUrl = `${registryUrl.replace(/\/$/, '')}/api/request/batch`;
+      // Batch can hold many sub-requests so allow a more generous budget than
+      // simple registry calls — but still bounded to keep failures fast.
+      const BATCH_BUDGET_MS = 60_000;
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), BATCH_BUDGET_MS);
       let batchResp: Response;
       let batchResult: unknown;
       try {
@@ -734,11 +778,16 @@ program
             Authorization: `Bearer ${config.owner}`,
           },
           body: JSON.stringify(batchPayload),
+          signal: controller.signal,
         });
         batchResult = await batchResp.json();
       } catch (err) {
-        console.error(`Error: batch request failed: ${(err as Error).message}`);
+        const isAbort = (err as Error).name === 'AbortError';
+        const reason = isAbort ? `timeout after ${BATCH_BUDGET_MS}ms` : (err as Error).message;
+        console.error(`Error: batch request failed: ${reason}`);
         process.exit(1);
+      } finally {
+        clearTimeout(timer);
       }
 
       if (opts.json) {
@@ -887,16 +936,22 @@ program
 
         const cardUrl = `${registryUrl.replace(/\/$/, '')}/cards/${cardId}`;
         let remoteCard: Record<string, unknown>;
+        const cardController = new AbortController();
+        const cardTimer = setTimeout(() => cardController.abort(), REGISTRY_HTTP_BUDGET_MS);
         try {
-          const resp = await fetch(cardUrl);
+          const resp = await fetch(cardUrl, { signal: cardController.signal });
           if (!resp.ok) {
             console.error(`Error: card ${cardId} not found on remote registry (${resp.status}).`);
             process.exit(1);
           }
           remoteCard = await resp.json() as Record<string, unknown>;
         } catch (err) {
-          console.error(`Error: cannot reach registry: ${(err as Error).message}`);
+          const isAbort = (err as Error).name === 'AbortError';
+          const reason = isAbort ? `timeout after ${REGISTRY_HTTP_BUDGET_MS}ms` : (err as Error).message;
+          console.error(`Error: cannot reach registry: ${reason}`);
           process.exit(1);
+        } finally {
+          clearTimeout(cardTimer);
         }
 
         targetOwner = (remoteCard.owner ?? remoteCard.agent_name) as string | undefined;
@@ -1041,23 +1096,40 @@ program
 
     const hasRegistry = config.registry != null;
 
-    if (hasRegistry) {
-      const statusIdentityAuth = loadIdentityAuth(config.owner);
-      const statusLedger = createLedger({
-        registryUrl: config.registry!,
-        ownerPublicKey: statusIdentityAuth.publicKey,
-        privateKey: statusIdentityAuth.privateKey,
-      });
-      try {
-        registryBalance = await statusLedger.getBalance(config.owner);
-        transactions = await statusLedger.getHistory(config.owner, 5);
-      } catch (err) {
+    if (hasRegistry && !shouldSkipNetwork()) {
+      // Pre-probe to skip the 10s ledger timeout when offline.
+      const reachable = await probeRegistry(config.registry!);
+      if (!reachable) {
         registryUnavailable = true;
-        const msg = err instanceof Error ? err.message : String(err);
-        if (!opts.json) {
-          console.warn(`Note: could not fetch balance from registry (${msg}). Run \`agentbnb init\` if this is a new agent.`);
+      } else {
+        const statusIdentityAuth = loadIdentityAuth(config.owner);
+        const statusLedger = createLedger({
+          registryUrl: config.registry!,
+          ownerPublicKey: statusIdentityAuth.publicKey,
+          privateKey: statusIdentityAuth.privateKey,
+        });
+        try {
+          // Run balance + history in parallel under a 5s overall budget.
+          const [balance, history] = await withTimeout(
+            Promise.all([
+              statusLedger.getBalance(config.owner),
+              statusLedger.getHistory(config.owner, 5),
+            ]),
+            REGISTRY_HTTP_BUDGET_MS,
+          );
+          registryBalance = balance;
+          transactions = history;
+        } catch (err) {
+          registryUnavailable = true;
+          const msg = err instanceof TimeoutError ? `timeout after ${REGISTRY_HTTP_BUDGET_MS}ms` : (err instanceof Error ? err.message : String(err));
+          if (!opts.json) {
+            console.warn(`Note: could not fetch balance from registry (${msg}). Run \`agentbnb init\` if this is a new agent.`);
+          }
         }
       }
+    } else if (hasRegistry) {
+      // shouldSkipNetwork() — silently use local balance.
+      registryUnavailable = true;
     }
 
     const syncNeeded = hasRegistry && !registryUnavailable && registryBalance !== null && Math.abs(registryBalance - localBalance) > 1;
