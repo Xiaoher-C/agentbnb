@@ -19,6 +19,12 @@ import { publishFromSoulV2 } from '../openclaw/index.js';
 import type { CapabilityCard } from '../types/index.js';
 import { createInterface } from 'node:readline';
 import type Database from 'better-sqlite3';
+import { isTestMode, isOfflineMode } from '../utils/runtime-mode.js';
+import { probeRegistry } from '../utils/network-probe.js';
+import { withTimeout } from '../utils/with-timeout.js';
+
+/** Hard upper bound on the registry credit grant + balance fetch during init. */
+const REGISTRY_GRANT_BUDGET_MS = 3_000;
 
 /** Options accepted by performInit(). */
 export interface InitOptions {
@@ -223,20 +229,53 @@ export async function performInit(opts: InitOptions): Promise<InitResult> {
   registryDb.close();
   creditDb.close();
 
-  // Grant 50 credits on remote Registry if configured
+  // Grant 50 credits on remote Registry if configured.
+  //
+  // This is best-effort: the agent has already received 100 local credits via
+  // bootstrapAgent above and is fully operational without these. We pre-probe
+  // the registry with a 2s budget; if reachable, run grant + getBalance under
+  // a single 3s overall budget. Worst case for offline init is therefore
+  // ~5 seconds, not the previous 10–20.
   let registryBalance: number | undefined;
+  let registrySkipReason: string | undefined;
+
   if (config.registry) {
-    try {
-      const identityAuth = loadIdentityAuth(owner);
-      const ledger = createLedger({
-        registryUrl: config.registry as string,
-        ownerPublicKey: identityAuth.publicKey,
-        privateKey: identityAuth.privateKey,
-      });
-      await ledger.grant(owner, 50);
-      registryBalance = await ledger.getBalance(owner);
-    } catch (err) {
-      console.warn(`Warning: could not connect to Registry for credit grant: ${(err as Error).message}`);
+    if (isTestMode()) {
+      registrySkipReason = 'test mode';
+    } else if (isOfflineMode()) {
+      registrySkipReason = 'offline mode (AGENTBNB_OFFLINE=1)';
+    } else {
+      if (!opts.json) process.stdout.write('Connecting to registry... ');
+      const reachable = await probeRegistry(config.registry as string);
+      if (!reachable) {
+        registrySkipReason = 'unreachable';
+        if (!opts.json) console.log('offline');
+      } else {
+        if (!opts.json) console.log('ok');
+        try {
+          const identityAuth = loadIdentityAuth(owner);
+          const ledger = createLedger({
+            registryUrl: config.registry as string,
+            ownerPublicKey: identityAuth.publicKey,
+            privateKey: identityAuth.privateKey,
+          });
+          registryBalance = await withTimeout(
+            (async () => {
+              await ledger.grant(owner, 50);
+              return ledger.getBalance(owner);
+            })(),
+            REGISTRY_GRANT_BUDGET_MS,
+          );
+        } catch (err) {
+          registrySkipReason = (err as Error).message;
+        }
+      }
+    }
+
+    if (registrySkipReason && !opts.json) {
+      console.log(`Registry credits: skipped (${registrySkipReason})`);
+      console.log('  Local balance: 100 credits (ready to use)');
+      console.log('  Run `agentbnb credits sync` once online to claim 50 bonus credits');
     }
   }
 

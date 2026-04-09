@@ -9,6 +9,7 @@ export default defineConfig({
     pool: 'forks',
     testTimeout: 20_000,
     hookTimeout: 20_000,
+    setupFiles: ['./test/setup-env.ts'],
   },
   define: {
     AGENTBNB_VERSION: JSON.stringify(pkg.version),
