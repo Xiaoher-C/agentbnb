@@ -2,7 +2,7 @@ app = 'agentbnb-adapter'
 primary_region = 'nrt'
 
 [build]
-  dockerfile = 'packages/managed-agents-adapter/Dockerfile'
+  dockerfile = 'Dockerfile'
 
 [http_service]
   internal_port = 7702
