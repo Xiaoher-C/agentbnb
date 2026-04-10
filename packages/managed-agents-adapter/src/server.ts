@@ -29,9 +29,9 @@ export async function buildServer() {
     { capabilities: { tools: {} } },
   );
 
-  registerSearchSkillsTool(mcpServer);
-  registerRentSkillTool(mcpServer);
-  registerGetResultTool(mcpServer);
+  registerSearchSkillsTool(mcpServer, config);
+  registerRentSkillTool(mcpServer, config);
+  registerGetResultTool(mcpServer, config);
 
   // Session tracking for billing guardrail
   const sessions = new Map<string, { costAccumulated: number }>();
