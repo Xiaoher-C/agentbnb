@@ -9,6 +9,7 @@ import { randomUUID } from 'node:crypto';
 import { createInterface } from 'node:readline';
 import { getConfigDir, loadConfig } from './config.js';
 import { ensureIdentity } from '../identity/identity.js';
+import { shouldSkipNetwork } from '../utils/runtime-mode.js';
 
 /**
  * Open a session and enter interactive mode.
@@ -23,17 +24,28 @@ export async function sessionOpen(
     process.exit(1);
   }
 
+  if (shouldSkipNetwork()) {
+    console.error('Error: session open requires network access (currently in offline/test mode).');
+    process.exit(1);
+  }
+
   const configDir = getConfigDir();
   const identity = ensureIdentity(configDir, config.owner);
   const agentId = identity.agent_id ?? identity.owner;
 
-  // Connect to relay
+  // Connect to relay with a 10s connection timeout
   const relayUrl = config.registry.replace(/^http/, 'ws') + '/ws';
   const WebSocket = (await import('ws')).default;
   const ws = new WebSocket(relayUrl);
 
   await new Promise<void>((resolve, reject) => {
+    const connectTimer = setTimeout(() => {
+      ws.close();
+      reject(new Error('WebSocket connection timeout (10s)'));
+    }, 10_000);
+
     ws.on('open', () => {
+      clearTimeout(connectTimer);
       // Register on relay
       ws.send(JSON.stringify({
         type: 'register',
@@ -44,7 +56,10 @@ export async function sessionOpen(
       }));
       resolve();
     });
-    ws.on('error', reject);
+    ws.on('error', (err) => {
+      clearTimeout(connectTimer);
+      reject(err);
+    });
   });
 
   const sessionId = randomUUID();

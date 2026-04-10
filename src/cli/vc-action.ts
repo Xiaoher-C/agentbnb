@@ -1,5 +1,6 @@
 import { getConfigDir, loadConfig } from './config.js';
 import { loadIdentity } from '../identity/identity.js';
+import { shouldSkipNetwork } from '../utils/runtime-mode.js';
 
 /**
  * CLI action: agentbnb vc show
@@ -20,14 +21,22 @@ export async function vcShow(opts: { json?: boolean }): Promise<void> {
     process.exit(1);
   }
 
+  if (shouldSkipNetwork()) {
+    console.log('VC show: skipped (offline or test mode). Run again when online.');
+    return;
+  }
+
   const registryUrl = config.registry.replace(/\/$/, '');
   const agentId = identity.agent_id;
 
   let res: Response;
   try {
-    res = await fetch(`${registryUrl}/api/credentials/${encodeURIComponent(agentId)}`);
+    res = await fetch(`${registryUrl}/api/credentials/${encodeURIComponent(agentId)}`, {
+      signal: AbortSignal.timeout(10_000),
+    });
   } catch (err) {
-    console.error('Error: failed to connect to registry —', (err as Error).message);
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`Error: failed to connect to registry — ${msg}`);
     process.exit(1);
   }
 

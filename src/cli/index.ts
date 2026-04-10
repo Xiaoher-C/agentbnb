@@ -2023,9 +2023,11 @@ feedback
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(result.data),
+        signal: AbortSignal.timeout(10_000),
       });
     } catch (err) {
-      console.error('Error: failed to connect to registry —', (err as Error).message);
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`Error: failed to connect to registry — ${msg}`);
       process.exit(1);
     }
     const body = (await res.json()) as Record<string, unknown>;
@@ -2055,9 +2057,10 @@ feedback
     const url = `${registryUrl}/api/feedback/${encodeURIComponent(opts.skill)}?limit=20`;
     let res: Response;
     try {
-      res = await fetch(url);
+      res = await fetch(url, { signal: AbortSignal.timeout(10_000) });
     } catch (err) {
-      console.error('Error: failed to connect to registry —', (err as Error).message);
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`Error: failed to connect to registry — ${msg}`);
       process.exit(1);
     }
     const body = (await res.json()) as Record<string, unknown>;

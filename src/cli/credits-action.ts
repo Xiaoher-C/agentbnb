@@ -8,6 +8,7 @@ import { join } from 'node:path';
 import { getConfigDir, loadConfig } from './config.js';
 import { openCreditDb, getBalance, getTransactions } from '../credit/ledger.js';
 import { syncCreditsFromRegistry } from '../credit/registry-sync.js';
+import { shouldSkipNetwork } from '../utils/runtime-mode.js';
 import type { CreditTransaction } from '../credit/ledger.js';
 
 /**
@@ -22,6 +23,10 @@ export async function creditsSync(): Promise<void> {
   if (!config.registry) {
     console.error('Error: no registry configured. Run `agentbnb config set registry <url>`');
     process.exit(1);
+  }
+  if (shouldSkipNetwork()) {
+    console.log('Credits sync: skipped (offline or test mode)');
+    return;
   }
 
   const creditDbPath = join(getConfigDir(), 'credit.db');
@@ -128,9 +133,11 @@ export async function creditsGrant(agentId: string, amount: string): Promise<voi
         'Authorization': `Bearer ${adminToken}`,
       },
       body: JSON.stringify({ agent_id: agentId, amount: credits }),
+      signal: AbortSignal.timeout(10_000),
     });
   } catch (err) {
-    console.error('Error: failed to connect to registry —', (err as Error).message);
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`Error: failed to connect to registry — ${msg}`);
     process.exit(1);
   }
 

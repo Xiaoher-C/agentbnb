@@ -15,6 +15,8 @@ import { loadPeers } from './peers.js';
 import { loadConfig } from './config.js';
 import { openDatabase, listCards } from '../registry/store.js';
 import { openCreditDb } from '../credit/ledger.js';
+import { shouldSkipNetwork } from '../utils/runtime-mode.js';
+import { withTimeout, TimeoutError } from '../utils/with-timeout.js';
 import type { MatchResult } from '../conductor/types.js';
 
 /**
@@ -164,7 +166,7 @@ export async function conductAction(
 
   // Create relay client for remote agent execution when registry is configured
   let relay: RelayClient | undefined;
-  if (config.registry) {
+  if (config.registry && !shouldSkipNetwork()) {
     relay = new RelayClient({
       registryUrl: config.registry,
       owner: config.owner,
@@ -174,9 +176,12 @@ export async function conductAction(
       silent: true,
     });
     try {
-      await relay.connect();
-    } catch {
+      await withTimeout(relay.connect(), 10_000);
+    } catch (err) {
       // Relay connect failure is not fatal — local peers can still be used
+      if (err instanceof TimeoutError) {
+        // RelayClient has its own 10s timeout, but withTimeout provides a hard outer bound
+      }
       relay = undefined;
     }
   }
