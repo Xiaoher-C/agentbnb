@@ -144,6 +144,17 @@ async function relayRequest(opts: {
 }
 
 /**
+ * Cumulative credit spend tracker for billing guardrail.
+ * Resets on adapter restart. Prevents runaway costs in a single deployment cycle.
+ */
+let cumulativeCreditsSpent = 0;
+
+/** Exported for testing. */
+export function getCumulativeCreditsSpent(): number {
+  return cumulativeCreditsSpent;
+}
+
+/**
  * Register the agentbnb_rent_skill tool on the MCP server.
  * Executes a skill via the AgentBnB protocol's relay + escrow flow.
  */
@@ -160,6 +171,24 @@ export function registerRentSkillTool(server: McpServer, config: AdapterConfig):
     async (args) => {
       try {
         const registryUrl = config.registryUrl.replace(/\/$/, '');
+
+        // Billing guardrail: check cumulative spend against MAX_SESSION_COST
+        // Approximate: 1 credit ~= $0.01 for cost comparison
+        const estimatedCostUsd = cumulativeCreditsSpent * 0.01;
+        if (estimatedCostUsd >= config.maxSessionCost) {
+          return {
+            content: [{
+              type: 'text' as const,
+              text: JSON.stringify({
+                error: 'billing_guardrail',
+                cumulative_credits_spent: cumulativeCreditsSpent,
+                estimated_cost_usd: estimatedCostUsd.toFixed(2),
+                max_session_cost_usd: config.maxSessionCost.toFixed(2),
+                message: `Cumulative spend ($${estimatedCostUsd.toFixed(2)}) has reached the billing guardrail ($${config.maxSessionCost.toFixed(2)}). Restart the adapter or increase MAX_SESSION_COST to continue.`,
+              }),
+            }],
+          };
+        }
 
         // Step 1: Fetch the card to get pricing and provider info
         const cardRes = await fetch(`${registryUrl}/cards/${args.card_id}`, {
@@ -246,6 +275,9 @@ export function registerRentSkillTool(server: McpServer, config: AdapterConfig):
           };
         }
 
+        // Track cumulative spend for billing guardrail
+        cumulativeCreditsSpent += creditsRequired;
+
         return {
           content: [{
             type: 'text' as const,
@@ -255,6 +287,7 @@ export function registerRentSkillTool(server: McpServer, config: AdapterConfig):
               card_id: args.card_id,
               skill_id: args.skill_id,
               credits_charged: creditsRequired,
+              cumulative_credits_spent: cumulativeCreditsSpent,
             }, null, 2),
           }],
         };
