@@ -1,0 +1,32 @@
+{
+  "name": "@agentbnb/managed-agents-adapter",
+  "version": "0.1.0",
+  "description": "MCP adapter for Claude Managed Agents — bridges Anthropic's managed agent runtime with the AgentBnB protocol",
+  "type": "module",
+  "main": "dist/server.js",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "tsup",
+    "start": "node dist/server.js",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "fastify": "^5.1.0",
+    "@fastify/cors": "^10.0.0",
+    "@modelcontextprotocol/sdk": "^1.11.0",
+    "zod": "^3.23.8",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0",
+    "tsup": "^8.3.0",
+    "tsx": "^4.19.0",
+    "vitest": "^2.1.0",
+    "@types/node": "^22.0.0",
+    "@types/ws": "^8.5.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
