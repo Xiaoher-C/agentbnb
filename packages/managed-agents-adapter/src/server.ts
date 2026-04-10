@@ -3,6 +3,7 @@ import cors from '@fastify/cors';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { loadAdapterConfig } from './config.js';
+import { ensureServiceAccount } from './auth/service-account.js';
 import { registerSearchSkillsTool } from './tools/search-skills.js';
 import { registerRentSkillTool } from './tools/rent-skill.js';
 import { registerGetResultTool } from './tools/get-result.js';
@@ -16,11 +17,20 @@ export async function buildServer() {
   const config = loadAdapterConfig();
   const app = Fastify({ logger: true });
 
+  // Initialize service-account identity (generates Ed25519 keypair on first boot)
+  const serviceAccount = ensureServiceAccount(config.keystorePath, config.serviceAccountOwner);
+  app.log.info(`Service account: ${serviceAccount.did} (agent_id: ${serviceAccount.agentId})`);
+
   await app.register(cors);
 
   // --- Health endpoint ---
   app.get('/health', async () => {
-    return { status: 'ok', version: VERSION, uptime: process.uptime() };
+    return {
+      status: 'ok',
+      version: VERSION,
+      uptime: process.uptime(),
+      service_account: { did: serviceAccount.did, agent_id: serviceAccount.agentId },
+    };
   });
 
   // --- MCP server setup ---

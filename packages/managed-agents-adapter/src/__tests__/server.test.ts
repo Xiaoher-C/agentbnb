@@ -1,16 +1,29 @@
-import { describe, it, expect, afterAll } from 'vitest';
+import { describe, it, expect, afterAll, beforeAll } from 'vitest';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 import { buildServer } from '../server.js';
 
 describe('Managed Agents Adapter Server', () => {
   let app: Awaited<ReturnType<typeof buildServer>>['app'];
+  let tmpDir: string;
+
+  beforeAll(() => {
+    // Use a temp directory for the keystore during tests
+    tmpDir = mkdtempSync(join(tmpdir(), 'adapter-test-'));
+    process.env['KEYSTORE_PATH'] = tmpDir;
+  });
 
   afterAll(async () => {
     if (app) {
       await app.close();
     }
+    // Clean up temp keystore
+    try { rmSync(tmpDir, { recursive: true }); } catch { /* ignore */ }
+    delete process.env['KEYSTORE_PATH'];
   });
 
-  it('GET /health returns 200 with status ok', async () => {
+  it('GET /health returns 200 with status ok and service account', async () => {
     const server = await buildServer();
     app = server.app;
 
@@ -24,9 +37,12 @@ describe('Managed Agents Adapter Server', () => {
     expect(body.status).toBe('ok');
     expect(body.version).toBe('0.1.0');
     expect(typeof body.uptime).toBe('number');
+    expect(body.service_account).toBeDefined();
+    expect(body.service_account.did).toMatch(/^did:agentbnb:/);
+    expect(body.service_account.agent_id).toHaveLength(16);
   });
 
-  it('POST /mcp with tools/list JSON-RPC returns tools', async () => {
+  it('POST /mcp with initialize JSON-RPC returns 200', async () => {
     const server = await buildServer();
     app = server.app;
 
@@ -49,9 +65,6 @@ describe('Managed Agents Adapter Server', () => {
       },
     });
 
-    // The StreamableHTTPServerTransport hijacks the response,
-    // so we verify it does not return a Fastify error (404/500).
-    // Status 200 means the transport handled the request.
     expect(response.statusCode).toBe(200);
   });
 });
