@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import type Database from 'better-sqlite3';
-import { holdEscrow, settleEscrow, releaseEscrow } from '../credit/escrow.js';
+import { holdEscrow, settleEscrow, releaseEscrow, getEscrowStatus } from '../credit/escrow.js';
 import { bootstrapAgent, getBalance, getTransactions, migrateOwner } from '../credit/ledger.js';
 import { AgentBnBError } from '../types/index.js';
 import { identityAuthPlugin } from './identity-auth.js';
@@ -156,6 +156,47 @@ export async function creditRoutesPlugin(
 
     const transactions = getTransactions(creditDb, owner, { limit, after: since });
     return reply.send({ owner, transactions, limit });
+  });
+
+  /**
+   * GET /api/credits/escrow/:id
+   * Returns: { id, owner, amount, card_id, status, created_at, settled_at }
+   *
+   * Public escrow status lookup. Used by the managed-agents adapter's
+   * agentbnb_get_result tool to poll async execution results.
+   */
+  fastify.get('/api/credits/escrow/:id', {
+    schema: {
+      tags: ['credits'],
+      summary: 'Get escrow status by ID (public, no auth required)',
+      params: {
+        type: 'object',
+        properties: { id: { type: 'string' } },
+        required: ['id'],
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            id: { type: 'string' },
+            owner: { type: 'string' },
+            amount: { type: 'number' },
+            card_id: { type: 'string' },
+            status: { type: 'string' },
+            created_at: { type: 'string' },
+            settled_at: { type: ['string', 'null'] },
+          },
+        },
+        404: { type: 'object', properties: { error: { type: 'string' } } },
+      },
+    },
+  }, async (request: FastifyRequest, reply: FastifyReply) => {
+    const { id } = request.params as { id: string };
+    const escrow = getEscrowStatus(creditDb, id);
+    if (!escrow) {
+      return reply.code(404).send({ error: 'Escrow record not found' });
+    }
+    return reply.send(escrow);
   });
 
   // -------------------------------------------------------------------------
