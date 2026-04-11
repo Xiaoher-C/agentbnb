@@ -21,6 +21,14 @@ skills/*.zip
 .private/
 .planning/
 
+# AI agent instructions (internal workflow)
+AGENTS.md
+V8-IMPLEMENTATION-PLAN.md
+v7.0-milestone-plan.md
+
 # One-off scripts
 scripts/text-to-video.ts
 scripts/keyword-scraper.py
+expense_tracker.py
+web_summarizer.py
+AUDIT_REPORT.md
