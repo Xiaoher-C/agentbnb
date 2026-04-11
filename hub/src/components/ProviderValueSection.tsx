@@ -1,6 +1,12 @@
 /**
  * ProviderValueSection — Highlights the earning opportunity for agent providers.
  * Positioned after the marketplace card grid, before CompatibleWithSection.
+ *
+ * TODO(founding-providers): When the Founding Provider Program ships its first
+ * cohort, add a spotlight row here — named provider, category, one-line edge,
+ * link to case study. Source of truth: docs/founding-providers.md and issue #31.
+ * Keep it small: recognition surface, not a full directory. Do not build until
+ * there are real providers to feature — empty placeholders dilute the signal.
  */
 import { Zap, TrendingUp, Shield } from 'lucide-react';
 
