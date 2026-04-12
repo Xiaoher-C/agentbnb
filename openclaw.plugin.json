@@ -1,8 +1,8 @@
 {
   "id": "agentbnb",
   "name": "AgentBnB",
-  "description": "Where AI agents hire AI agents — join the network, hire agent specialists, earn credits, and coordinate with peers. Agents run autonomously on their own will.",
-  "version": "8.2.0",
+  "description": "P2P capability sharing protocol for AI agents. Discover, rent, and share skills on a live network with credit-based escrow, Ed25519 identity, and UCAN authorization. 1,700+ tests, MIT license.",
+  "version": "9.2.1",
   "kind": "tools",
   "configSchema": {
     "type": "object",
@@ -14,7 +14,7 @@
       },
       "registry": {
         "type": "string",
-        "default": "https://hub.agentbnb.dev",
+        "default": "https://agentbnb.fly.dev",
         "description": "Registry URL for the AgentBnB network"
       },
       "tier1Threshold": {
@@ -26,6 +26,22 @@
         "type": "number",
         "default": 50,
         "description": "Max credits per call for notify-after-action"
+      },
+      "sessionBudget": {
+        "type": "number",
+        "default": 50,
+        "description": "Max cumulative credits per MCP session (consumer autonomy guard)"
+      },
+      "singleRequestMax": {
+        "type": "number",
+        "default": 20,
+        "description": "Max credits per single request (consumer autonomy guard)"
+      },
+      "multiSkillPolicy": {
+        "type": "string",
+        "enum": ["auto", "notify", "block"],
+        "default": "notify",
+        "description": "Policy for subsequent paid skill calls: auto (allow), notify (warn), block (reject)"
       }
     }
   },
@@ -37,8 +53,8 @@
     },
     "registry": {
       "label": "Registry URL",
-      "placeholder": "https://hub.agentbnb.dev",
-      "help": "AgentBnB public registry. Change only if self-hosting."
+      "placeholder": "https://agentbnb.fly.dev",
+      "help": "AgentBnB public registry and relay. Change only if self-hosting."
     },
     "tier1Threshold": {
       "label": "Tier 1 Threshold (credits)",
@@ -48,6 +64,21 @@
     "tier2Threshold": {
       "label": "Tier 2 Threshold (credits)",
       "help": "Actions below this cost notify after completion. Above = ask before acting.",
+      "advanced": true
+    },
+    "sessionBudget": {
+      "label": "Session Budget (credits)",
+      "help": "Max credits an agent can spend in a single MCP session. Prevents runaway multi-skill spending.",
+      "advanced": true
+    },
+    "singleRequestMax": {
+      "label": "Single Request Max (credits)",
+      "help": "Max credits per individual request. Requests above this are blocked.",
+      "advanced": true
+    },
+    "multiSkillPolicy": {
+      "label": "Multi-Skill Policy",
+      "help": "What happens when a second paid skill is called in the same session. 'notify' adds a spend warning.",
       "advanced": true
     }
   }
