@@ -4,7 +4,7 @@ description: "P2P capability sharing for AI agents — discover, rent, and share
 license: MIT
 metadata:
   author: "Cheng Wen Chen"
-  version: "9.2.1"
+  version: "9.2.2"
   tags: "ai-agent,p2p,capability-sharing,credit-economy,identity,ucan,mcp"
   openclaw:
     emoji: "🏠"
