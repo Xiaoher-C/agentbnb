@@ -3,6 +3,7 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import type { AutonomyConfig } from '../autonomy/tiers.js';
 import type { BudgetConfig } from '../credit/budget.js';
+import type { ConsumerAutonomyConfig } from '../autonomy/consumer-autonomy.js';
 
 /**
  * AgentBnB local agent configuration stored at ~/.agentbnb/config.json
@@ -109,6 +110,15 @@ export interface AgentBnBConfig {
    * Default: ['session.message'] (suppress per-message noise).
    */
   notification_filters?: string[];
+  /**
+   * Consumer-side autonomy configuration controlling how aggressively
+   * the agent can spend credits when acting as a consumer (requester).
+   * Mirrors the provider-side autonomy model.
+   * - session_budget: max cumulative credits per MCP session (default 50)
+   * - single_request_max: max credits per single request (default 20)
+   * - multi_skill_policy: 'auto' | 'notify' | 'block' for subsequent paid calls
+   */
+  consumer_autonomy?: ConsumerAutonomyConfig;
 }
 
 /**

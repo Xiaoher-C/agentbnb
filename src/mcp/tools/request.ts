@@ -10,6 +10,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { AutoRequestor } from '../../autonomy/auto-request.js';
 import { BudgetManager, DEFAULT_BUDGET_CONFIG } from '../../credit/budget.js';
 import { DEFAULT_AUTONOMY_CONFIG } from '../../autonomy/tiers.js';
+import { checkConsumerBudget, recordConsumerSpend, createSessionState, DEFAULT_CONSUMER_AUTONOMY } from '../../autonomy/consumer-autonomy.js';
 import { openDatabase } from '../../registry/store.js';
 import { openCreditDb } from '../../credit/ledger.js';
 import { loadKeyPair } from '../../credit/signing.js';
@@ -79,9 +80,23 @@ export async function handleRequest(
 ): Promise<{ content: Array<{ type: 'text'; text: string }> }> {
   try {
     const maxCost = args.max_cost ?? 50;
+    const consumerConfig = ctx.config.consumer_autonomy ?? DEFAULT_CONSUMER_AUTONOMY;
+
+    // Lazily initialize consumer session state (persists across calls within an MCP session)
+    if (!ctx.consumerSession) {
+      ctx.consumerSession = createSessionState();
+    }
 
     // Auto-request mode: search + execute via AutoRequestor
     if (args.query) {
+      // Consumer autonomy check: use maxCost as estimated cost for auto-request
+      const budgetCheck = checkConsumerBudget(consumerConfig, ctx.consumerSession, maxCost);
+      if (!budgetCheck.allowed) {
+        return {
+          content: [{ type: 'text' as const, text: JSON.stringify({ success: false, error: budgetCheck.error, budget_exceeded: true }) }],
+        };
+      }
+
       const registryDb = openDatabase(ctx.config.db_path);
       const creditDb = openCreditDb(ctx.config.credit_db_path);
       registryDb.pragma('busy_timeout = 5000');
@@ -108,8 +123,14 @@ export async function handleRequest(
           params: args.params,
         });
 
+        // Record spend in session state
+        const creditsUsed = typeof result?.credits === 'number' ? result.credits : 0;
+        recordConsumerSpend(ctx.consumerSession, creditsUsed);
+
+        const response: Record<string, unknown> = { success: true, ...result };
+        if (budgetCheck.warning) response.spend_warning = budgetCheck.warning;
         return {
-          content: [{ type: 'text' as const, text: JSON.stringify({ success: true, ...result }, null, 2) }],
+          content: [{ type: 'text' as const, text: JSON.stringify(response, null, 2) }],
         };
       } finally {
         registryDb.close();
@@ -191,25 +212,33 @@ export async function handleRequest(
       const gatewayUrl = remoteCard['gateway_url'] as string | undefined;
       const timeoutHint = deriveTimeoutHintFromCard(remoteCard, args.skill_id);
 
+      // Extract pricing from remote card for consumer budget check and escrow
+      let remoteCost = 0;
+      const remoteSkills = remoteCard['skills'] as Array<{ id: string; pricing: { credits_per_call: number } }> | undefined;
+      if (Array.isArray(remoteSkills)) {
+        const matchedSkill = args.skill_id
+          ? remoteSkills.find((s) => s.id === args.skill_id)
+          : remoteSkills[0];
+        remoteCost = matchedSkill?.pricing?.credits_per_call ?? 0;
+      } else {
+        const remotePricing = remoteCard['pricing'] as { credits_per_call: number } | undefined;
+        remoteCost = remotePricing?.credits_per_call ?? 0;
+      }
+
       // Direct HTTP request to provider gateway.
       // Match CLI behavior: local SQLite escrow + signed receipt for cross-machine
       // credit verification. The provider gateway verifies the receipt and skips
       // its own credit check (see execute.ts receipt path).
       if (gatewayUrl) {
-        // Extract pricing from remote card for escrow amount
-        let remoteCost = 0;
-        const remoteSkills = remoteCard['skills'] as Array<{ id: string; pricing: { credits_per_call: number } }> | undefined;
-        if (Array.isArray(remoteSkills)) {
-          const matchedSkill = args.skill_id
-            ? remoteSkills.find((s) => s.id === args.skill_id)
-            : remoteSkills[0];
-          remoteCost = matchedSkill?.pricing?.credits_per_call ?? 0;
-        } else {
-          const remotePricing = remoteCard['pricing'] as { credits_per_call: number } | undefined;
-          remoteCost = remotePricing?.credits_per_call ?? 0;
-        }
-
         if (remoteCost > 0) {
+          // Consumer autonomy check before paid execution
+          const budgetCheck = checkConsumerBudget(consumerConfig, ctx.consumerSession, remoteCost);
+          if (!budgetCheck.allowed) {
+            return {
+              content: [{ type: 'text' as const, text: JSON.stringify({ success: false, error: budgetCheck.error, budget_exceeded: true }) }],
+            };
+          }
+
           // Paid skill: route via relay so the Hub handles escrow + network fee.
           // This avoids the fee bypass bug in the signed receipt path (see settlement.ts).
           if (!targetOwner) {
@@ -228,8 +257,12 @@ export async function handleRequest(
             params: { ...(args.params ?? {}), ...(args.skill_id ? { skill_id: args.skill_id } : {}), requester: ctx.config.owner },
             timeoutMs: args.timeout_ms,
           });
+          // Record spend in session state
+          recordConsumerSpend(ctx.consumerSession, remoteCost);
+          const response: Record<string, unknown> = { success: true, result, creditsSpent: remoteCost };
+          if (budgetCheck.warning) response.spend_warning = budgetCheck.warning;
           return {
-            content: [{ type: 'text' as const, text: JSON.stringify({ success: true, result }, null, 2) }],
+            content: [{ type: 'text' as const, text: JSON.stringify(response, null, 2) }],
           };
         } else {
           // Free skill: no escrow needed
@@ -250,6 +283,16 @@ export async function handleRequest(
 
       // Relay-only: no gateway_url, relay handles credits server-side
       if (targetOwner) {
+        // Consumer autonomy check before relay-routed request
+        if (remoteCost > 0) {
+          const budgetCheck = checkConsumerBudget(consumerConfig, ctx.consumerSession, remoteCost);
+          if (!budgetCheck.allowed) {
+            return {
+              content: [{ type: 'text' as const, text: JSON.stringify({ success: false, error: budgetCheck.error, budget_exceeded: true }) }],
+            };
+          }
+        }
+
         const result = await requestViaTemporaryRelay({
           registryUrl: ctx.config.registry,
           owner: ctx.config.owner,
@@ -261,8 +304,14 @@ export async function handleRequest(
           params: { ...(args.params ?? {}), ...(args.skill_id ? { skill_id: args.skill_id } : {}) },
           timeoutMs: args.timeout_ms,
         });
+        // Record spend in session state
+        if (remoteCost > 0) {
+          recordConsumerSpend(ctx.consumerSession, remoteCost);
+        }
+        const response: Record<string, unknown> = { success: true, result };
+        if (remoteCost > 0) response.creditsSpent = remoteCost;
         return {
-          content: [{ type: 'text' as const, text: JSON.stringify({ success: true, result }, null, 2) }],
+          content: [{ type: 'text' as const, text: JSON.stringify(response, null, 2) }],
         };
       }
 

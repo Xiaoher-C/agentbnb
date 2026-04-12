@@ -66,11 +66,12 @@ export async function handleServeSkill(
           const result = await executeCapabilityRequest({
             registryDb,
             creditDb,
-            cardId: req.params?.card_id as string ?? card.id,
-            skillId: req.params?.skill_id as string | undefined,
-            params: (req.params?.params as Record<string, unknown>) ?? {},
-            requester: req.params?.requester as string ?? 'unknown',
+            cardId: req.card_id ?? card.id,
+            skillId: req.skill_id,
+            params: req.params as Record<string, unknown>,
+            requester: req.requester ?? req.from_owner ?? 'unknown',
             handlerUrl,
+            relayAuthorized: true,
           });
 
           if (result.success) {

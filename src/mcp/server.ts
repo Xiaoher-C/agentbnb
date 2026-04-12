@@ -15,6 +15,8 @@ import { ensureIdentity } from '../identity/identity.js';
 import type { AgentBnBConfig } from '../cli/config.js';
 import type { AgentIdentity } from '../identity/identity.js';
 import type { RelayClient } from '../relay/websocket-client.js';
+import { createSessionState } from '../autonomy/consumer-autonomy.js';
+import type { ConsumerSessionState } from '../autonomy/consumer-autonomy.js';
 
 import { registerDiscoverTool } from './tools/discover.js';
 import { registerStatusTool } from './tools/status.js';
@@ -37,6 +39,8 @@ export interface McpServerContext {
   identity: AgentIdentity;
   /** Active relay client for serve_skill tool (set at runtime). */
   relayClient?: RelayClient;
+  /** Consumer-side session spend state. Tracks cumulative credits across tool calls. */
+  consumerSession?: ConsumerSessionState;
 }
 
 /**
@@ -64,6 +68,7 @@ export async function startMcpServer(): Promise<void> {
     configDir,
     config,
     identity,
+    consumerSession: createSessionState(),
   };
 
   // Register all 6 tools
