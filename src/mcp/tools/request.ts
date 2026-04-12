@@ -124,7 +124,7 @@ export async function handleRequest(
         });
 
         // Record spend in session state
-        const creditsUsed = typeof result?.credits === 'number' ? result.credits : 0;
+        const creditsUsed = typeof result?.creditsSpent === 'number' ? result.creditsSpent : 0;
         recordConsumerSpend(ctx.consumerSession, creditsUsed);
 
         const response: Record<string, unknown> = { success: true, ...result };
