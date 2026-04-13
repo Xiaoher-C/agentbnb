@@ -35,6 +35,7 @@ import GenesisPage from './pages/GenesisPage.js';
 import CreditPolicyPage from './pages/CreditPolicyPage.js';
 import FleetConsolePage from './pages/FleetConsolePage.js';
 import ProviderDashboardPage from './pages/ProviderDashboardPage.js';
+import SignupPage from './pages/SignupPage.js';
 import type { AppOutletContext } from './types.js';
 
 /** Wrapper: reads apiKey from outlet context and passes it to SharePage */
@@ -59,6 +60,7 @@ const router = createHashRouter([
     element: <App />,
     children: [
       { index: true, element: <DiscoverPage /> },
+      { path: 'signup', element: <SignupPage /> },
       {
         path: 'agents',
         element: <AgentList />,
