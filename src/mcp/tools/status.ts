@@ -9,7 +9,7 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { createLedger } from '../../credit/create-ledger.js';
-import { openCreditDb, getBalance } from '../../credit/ledger.js';
+import { openCreditDb, getBalanceSnapshot } from '../../credit/ledger.js';
 import { loadKeyPair } from '../../credit/signing.js';
 import type { McpServerContext } from '../server.js';
 
@@ -19,14 +19,17 @@ const statusInputSchema = {
 };
 
 /**
- * Returns 0 on any error (e.g. fresh install with no DB yet).
+ * Returns a local balance snapshot on any error (e.g. fresh install with no DB yet).
  */
-function readLocalBalance(creditDbPath: string, creditKey: string): number {
+function readLocalBalanceSnapshot(
+  creditDbPath: string,
+  creditKey: string,
+): { balance: number; updated_at: string | null } {
   const creditDb = openCreditDb(creditDbPath);
   try {
-    return getBalance(creditDb, creditKey);
+    return getBalanceSnapshot(creditDb, creditKey);
   } catch {
-    return 0;
+    return { balance: 0, updated_at: null };
   } finally {
     creditDb.close();
   }
@@ -48,10 +51,12 @@ export async function handleStatus(
     // owner is kept as fallback for agents that pre-date the v8 agent_id migration.
     const creditKey = ctx.identity.agent_id ?? ctx.identity.owner;
 
-    const local_balance = readLocalBalance(ctx.config.credit_db_path, creditKey);
+    const localSnapshot = readLocalBalanceSnapshot(ctx.config.credit_db_path, creditKey);
+    const local_balance = localSnapshot.balance;
 
     let registry_balance: number | null = null;
     let sync_needed = false;
+    let registry_error: string | null = null;
 
     if (ctx.config.registry) {
       try {
@@ -63,12 +68,19 @@ export async function handleStatus(
         });
         registry_balance = await ledger.getBalance(creditKey);
         sync_needed = Math.abs(registry_balance - local_balance) > 1;
-      } catch {
-        // Registry unreachable — fall through with registry_balance = null.
+      } catch (err) {
+        registry_error = err instanceof Error ? err.message : String(err);
       }
     }
 
     const balance = registry_balance ?? local_balance;
+    const balance_warning = ctx.config.registry
+      ? registry_balance === null
+        ? 'Using local balance because registry balance is unavailable. Local snapshot may be stale.'
+        : sync_needed
+          ? `Local balance is stale. Registry and local differ by ${Math.abs(registry_balance - local_balance)} credits.`
+          : null
+      : null;
 
     const result = {
       agent_id: ctx.identity.agent_id,
@@ -76,7 +88,8 @@ export async function handleStatus(
       public_key: ctx.identity.public_key,
       balance,
       local_balance,
-      ...(ctx.config.registry ? { registry_balance, sync_needed } : {}),
+      local_balance_updated_at: localSnapshot.updated_at,
+      ...(ctx.config.registry ? { registry_balance, sync_needed, registry_error, balance_warning } : {}),
       registry_url: ctx.config.registry ?? null,
       config_dir: ctx.configDir,
     };

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { openCreditDb, getBalance, bootstrapAgent, getTransactions, getActiveVoucher, getProviderNumber, registerProvider } from './ledger.js';
+import { openCreditDb, getBalance, getBalanceSnapshot, bootstrapAgent, getTransactions, getActiveVoucher, getProviderNumber, registerProvider } from './ledger.js';
 import { holdEscrow, settleEscrow, releaseEscrow, getEscrowStatus } from './escrow.js';
 import type Database from 'better-sqlite3';
 import { createAgentRecord } from '../identity/agent-identity.js';
@@ -30,6 +30,21 @@ describe('ledger', () => {
   it('getBalance returns correct balance after bootstrap', () => {
     bootstrapAgent(db, 'agent-bob', 250);
     expect(getBalance(db, 'agent-bob')).toBe(250);
+  });
+
+  it('getBalanceSnapshot returns null updated_at for unknown agent', () => {
+    expect(getBalanceSnapshot(db, 'unknown-agent')).toEqual({
+      balance: 0,
+      updated_at: null,
+    });
+  });
+
+  it('getBalanceSnapshot returns balance and updated_at after bootstrap', () => {
+    bootstrapAgent(db, 'agent-snapshot', 125);
+    const snapshot = getBalanceSnapshot(db, 'agent-snapshot');
+    expect(snapshot.balance).toBe(125);
+    expect(typeof snapshot.updated_at).toBe('string');
+    expect(snapshot.updated_at).toContain('T');
   });
 
   it('getTransactions returns chronological transaction log (newest first)', () => {

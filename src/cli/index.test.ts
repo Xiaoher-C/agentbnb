@@ -120,6 +120,18 @@ describe('CLI: init', () => {
     expect(statusOut).toContain('100');
   });
 
+  it('status --json includes local balance snapshot metadata', () => {
+    const { status } = runCli('init --owner snapshot-agent', tmpDir);
+    expect(status).toBe(0);
+
+    const { stdout, status: statusCode } = runCli('status --json', tmpDir);
+    expect(statusCode).toBe(0);
+
+    const parsed = JSON.parse(stdout) as Record<string, unknown>;
+    expect(typeof parsed['local_balance']).toBe('number');
+    expect(typeof parsed['local_balance_updated_at']).toBe('string');
+  });
+
   it('outputs JSON with --json flag', () => {
     const { status, stdout } = runCli('init --owner json-agent --json', tmpDir);
     expect(status).toBe(0);

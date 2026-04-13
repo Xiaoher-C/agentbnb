@@ -150,7 +150,7 @@ describe('agentbnb_status handler', () => {
     expect(parsed['registry_url']).toBeNull();
   });
 
-  it('includes local_balance when no registry configured', async () => {
+  it('includes local balance snapshot when no registry configured', async () => {
     const { handleStatus } = await import('./tools/status.js');
     const ctx = createMockContext({ registry: undefined });
 
@@ -159,12 +159,13 @@ describe('agentbnb_status handler', () => {
 
     expect(typeof parsed['local_balance']).toBe('number');
     expect(typeof parsed['balance']).toBe('number');
+    expect(parsed['local_balance_updated_at']).toBeNull();
     // No registry fields when registry is not set
     expect(parsed['registry_balance']).toBeUndefined();
     expect(parsed['sync_needed']).toBeUndefined();
   });
 
-  it('includes registry_balance and sync_needed when registry is configured but unreachable', async () => {
+  it('includes stale warning when registry is configured but unreachable', async () => {
     const { handleStatus } = await import('./tools/status.js');
     // Use a registry URL that will fail (no real server)
     const ctx = createMockContext({ registry: 'http://localhost:19999' });
@@ -175,8 +176,11 @@ describe('agentbnb_status handler', () => {
     // Registry unreachable: registry_balance is null, sync_needed is false
     expect(parsed['registry_balance']).toBeNull();
     expect(parsed['sync_needed']).toBe(false);
+    expect(typeof parsed['registry_error']).toBe('string');
+    expect(parsed['balance_warning']).toBe('Using local balance because registry balance is unavailable. Local snapshot may be stale.');
     // local_balance is always present
     expect(typeof parsed['local_balance']).toBe('number');
+    expect(parsed).toHaveProperty('local_balance_updated_at');
     // balance falls back to local when registry is unreachable
     expect(parsed['balance']).toBe(parsed['local_balance']);
   });

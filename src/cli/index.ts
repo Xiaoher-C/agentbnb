@@ -21,7 +21,7 @@ import { AnyCardSchema } from '../types/index.js';
 import { openDatabase, insertCard, listCards, getCard, deleteCard, attachCanonicalAgentId } from '../registry/store.js';
 import { searchCards, filterCards } from '../registry/matcher.js';
 import { getPricingStats } from '../registry/pricing.js';
-import { openCreditDb, getBalance, getTransactions } from '../credit/ledger.js';
+import { openCreditDb, getBalanceSnapshot, getTransactions } from '../credit/ledger.js';
 import { createLedger } from '../credit/create-ledger.js';
 import { syncCreditsFromRegistry } from '../credit/registry-sync.js';
 import { requestCapability } from '../gateway/client.js';
@@ -1079,13 +1079,17 @@ program
 
     const creditDb = openCreditDb(config.credit_db_path);
     let localBalance = 0;
+    let localBalanceUpdatedAt: string | null = null;
     let registryBalance: number | null = null;
     let registryUnavailable = false;
+    let registryError: string | null = null;
     let transactions: import('../credit/ledger.js').CreditTransaction[] = [];
     let heldEscrows: Array<{ id: string; amount: number; card_id: string; created_at: string }> = [];
 
     try {
-      localBalance = getBalance(creditDb, config.owner);
+      const localSnapshot = getBalanceSnapshot(creditDb, config.owner);
+      localBalance = localSnapshot.balance;
+      localBalanceUpdatedAt = localSnapshot.updated_at;
       transactions = getTransactions(creditDb, config.owner, 5);
       heldEscrows = creditDb
         .prepare('SELECT id, amount, card_id, created_at FROM credit_escrow WHERE owner = ? AND status = ?')
@@ -1122,6 +1126,7 @@ program
         } catch (err) {
           registryUnavailable = true;
           const msg = err instanceof TimeoutError ? `timeout after ${REGISTRY_HTTP_BUDGET_MS}ms` : (err instanceof Error ? err.message : String(err));
+          registryError = msg;
           if (!opts.json) {
             console.warn(`Note: could not fetch balance from registry (${msg}). Run \`agentbnb init\` if this is a new agent.`);
           }
@@ -1136,10 +1141,19 @@ program
     const displayBalance = registryBalance ?? localBalance;
 
     if (opts.json) {
+      const balanceWarning = !hasRegistry
+        ? null
+        : registryUnavailable
+          ? 'Using local balance because registry balance is unavailable. Local snapshot may be stale.'
+          : syncNeeded
+            ? `Local balance is stale. Registry and local differ by ${Math.abs(registryBalance! - localBalance)} credits.`
+            : null;
+
       const output: Record<string, unknown> = {
         owner: config.owner,
         balance: displayBalance,
         local_balance: localBalance,
+        local_balance_updated_at: localBalanceUpdatedAt,
         held_escrows: heldEscrows,
         recent_transactions: transactions,
       };
@@ -1147,6 +1161,8 @@ program
       if (hasRegistry) {
         output['registry_balance'] = registryBalance;
         output['sync_needed'] = syncNeeded;
+        output['registry_error'] = registryError;
+        output['balance_warning'] = balanceWarning;
       }
       console.log(JSON.stringify(output, null, 2));
       return;
@@ -1162,12 +1178,22 @@ program
 
     if (!hasRegistry) {
       console.log(`Balance:  ${localBalance} credits [local]`);
+      if (localBalanceUpdatedAt) {
+        console.log(`Local snapshot: ${localBalanceUpdatedAt}`);
+      }
     } else if (registryUnavailable) {
       console.log(`Balance:  ${localBalance} credits [local — registry unavailable]`);
+      if (localBalanceUpdatedAt) {
+        console.log(`Local snapshot: ${localBalanceUpdatedAt}`);
+      }
+      console.log('\n⚠ Registry balance unavailable, local balance may be stale');
     } else if (syncNeeded) {
       const diff = Math.abs(registryBalance! - localBalance);
       console.log(`Balance:  ${registryBalance} credits [registry]`);
       console.log(`Local:    ${localBalance} credits [stale — run: agentbnb sync]`);
+      if (localBalanceUpdatedAt) {
+        console.log(`Local snapshot: ${localBalanceUpdatedAt}`);
+      }
       console.log(`\n⚠ Local balance out of sync (off by ${diff} credits)`);
     } else {
       console.log(`Balance:  ${displayBalance} credits [registry, in sync]`);

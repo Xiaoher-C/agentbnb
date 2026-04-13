@@ -139,12 +139,31 @@ export function bootstrapAgent(
  * @param owner - Agent identifier.
  * @returns Current balance in credits.
  */
-export function getBalance(db: Database.Database, owner: string): number {
+export interface CreditBalanceSnapshot {
+  /** Current local balance. */
+  balance: number;
+  /** Last time the local balance row was written, or null if no row exists yet. */
+  updated_at: string | null;
+}
+
+export function getBalanceSnapshot(db: Database.Database, owner: string): CreditBalanceSnapshot {
   const canonicalOwner = canonicalizeCreditOwner(db, owner);
   const row = db
-    .prepare('SELECT balance FROM credit_balances WHERE owner = ?')
-    .get(canonicalOwner) as { balance: number } | undefined;
-  return row?.balance ?? 0;
+    .prepare('SELECT balance, updated_at FROM credit_balances WHERE owner = ?')
+    .get(canonicalOwner) as { balance: number; updated_at: string } | undefined;
+
+  if (!row) {
+    return { balance: 0, updated_at: null };
+  }
+
+  return {
+    balance: row.balance,
+    updated_at: row.updated_at,
+  };
+}
+
+export function getBalance(db: Database.Database, owner: string): number {
+  return getBalanceSnapshot(db, owner).balance;
 }
 
 /**
