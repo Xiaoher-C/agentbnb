@@ -50,6 +50,10 @@ export class RegistryCreditLedger implements CreditLedger {
     this.config = config;
   }
 
+  private encodeOwnerPath(owner: string): string {
+    return encodeURIComponent(owner);
+  }
+
   /**
    * Holds credits in escrow during capability execution.
    *
@@ -113,7 +117,8 @@ export class RegistryCreditLedger implements CreditLedger {
     if (this.config.mode === 'direct') {
       return getBalance(this.config.db, owner);
     }
-    const data = await this.get<{ balance: number }>(`/api/credits/${owner}`, owner);
+    const ownerPath = this.encodeOwnerPath(owner);
+    const data = await this.get<{ balance: number }>(`/api/credits/${ownerPath}`, owner);
     return data.balance;
   }
 
@@ -128,8 +133,9 @@ export class RegistryCreditLedger implements CreditLedger {
     if (this.config.mode === 'direct') {
       return getTransactions(this.config.db, owner, limit);
     }
+    const ownerPath = this.encodeOwnerPath(owner);
     const data = await this.get<{ transactions: CreditTransaction[] }>(
-      `/api/credits/${owner}/history?limit=${limit}`,
+      `/api/credits/${ownerPath}/history?limit=${limit}`,
       owner,
     );
     return data.transactions;

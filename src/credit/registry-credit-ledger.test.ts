@@ -3,6 +3,7 @@ import { openCreditDb } from './ledger.js';
 import { RegistryCreditLedger } from './registry-credit-ledger.js';
 import type { CreditLedger } from './credit-ledger.js';
 import { AgentBnBError } from '../types/index.js';
+import * as identityAuth from '../registry/identity-auth.js';
 import Database from 'better-sqlite3';
 import { generateKeyPair } from './signing.js';
 
@@ -263,6 +264,24 @@ describe('RegistryCreditLedger (HTTP client mode)', () => {
       expect(opts.method).toBe('GET');
       expect(balance).toBe(250);
     });
+
+    it('URL-encodes owner path segments before signing GET balance requests', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse({ balance: 71 }));
+      const signSpy = vi.spyOn(identityAuth, 'signRequest');
+
+      const balance = await ledger.getBalance('Cheng Wen Chen');
+
+      const [url] = mockFetch.mock.calls[0] as [string, RequestInit];
+      expect(url).toBe(`${REGISTRY_URL}/api/credits/Cheng%20Wen%20Chen`);
+      expect(signSpy).toHaveBeenCalledWith(
+        'GET',
+        '/api/credits/Cheng%20Wen%20Chen',
+        null,
+        privateKey,
+        ownerPublicKey,
+      );
+      expect(balance).toBe(71);
+    });
   });
 
   describe('getHistory()', () => {
@@ -278,6 +297,23 @@ describe('RegistryCreditLedger (HTTP client mode)', () => {
       expect(url).toBe(`${REGISTRY_URL}/api/credits/agent-carol/history?limit=50`);
       expect(opts.method).toBe('GET');
       expect(result).toEqual(transactions);
+    });
+
+    it('URL-encodes owner path segments before signing GET history requests', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse({ transactions: [] }));
+      const signSpy = vi.spyOn(identityAuth, 'signRequest');
+
+      await ledger.getHistory('Cheng Wen Chen', 50);
+
+      const [url] = mockFetch.mock.calls[0] as [string, RequestInit];
+      expect(url).toBe(`${REGISTRY_URL}/api/credits/Cheng%20Wen%20Chen/history?limit=50`);
+      expect(signSpy).toHaveBeenCalledWith(
+        'GET',
+        '/api/credits/Cheng%20Wen%20Chen/history?limit=50',
+        null,
+        privateKey,
+        ownerPublicKey,
+      );
     });
 
     it('defaults to limit=100 when not specified', async () => {
