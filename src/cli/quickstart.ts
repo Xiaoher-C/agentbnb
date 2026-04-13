@@ -271,5 +271,7 @@ export async function runQuickstart(opts: QuickstartOpts): Promise<void> {
     console.log('  Consumer: In Claude Code, use agentbnb_discover and agentbnb_request');
     console.log('  Provider: Your claude -p skills are live and accepting requests');
     console.log(`  Dashboard: http://localhost:7701/hub/#/myagent`);
+    console.log('');
+    console.log('  Verify:  Run `agentbnb doctor` to validate your provider setup');
   }
 }

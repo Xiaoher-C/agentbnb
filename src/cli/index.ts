@@ -42,6 +42,7 @@ import {
 } from '../openclaw/index.js';
 import { performInit } from './init-action.js';
 import { runQuickstart } from './quickstart.js';
+import { runDoctor } from './doctor.js';
 
 /** Package version — injected at build time, falls back for dev mode. */
 const VERSION =
@@ -2269,6 +2270,20 @@ sessionCmd
   .action(async (sessionId: string) => {
     const { sessionStatus } = await import('./session-action.js');
     await sessionStatus(sessionId);
+  });
+
+// ---------------------------------------------------------------------------
+// doctor
+// ---------------------------------------------------------------------------
+
+program
+  .command('doctor')
+  .description('Validate provider readiness — setup, skills, connectivity, discoverability')
+  .option('--json', 'Output as JSON')
+  .option('--test-hire', 'Run a self-hire smoke test to prove end-to-end execution')
+  .option('--skill <id>', 'Specific skill to test with --test-hire')
+  .action(async (opts: { json?: boolean; testHire?: boolean; skill?: string }) => {
+    await runDoctor(opts);
   });
 
 // ---------------------------------------------------------------------------
