@@ -17,7 +17,7 @@ import { ProcessGuard, type PidFileContent } from '../runtime/process-guard.js';
 import { openDatabase, listCards } from '../registry/store.js';
 import { openCreditDb, getBalance } from '../credit/ledger.js';
 import { probeRegistry } from '../utils/network-probe.js';
-import { requestViaTemporaryRelay } from '../gateway/relay-dispatch.js';
+import { requestViaTemporaryRelay, RelayDispatchError } from '../gateway/relay-dispatch.js';
 import type { AgentBnBConfig } from './config.js';
 
 // ---------------------------------------------------------------------------
@@ -372,6 +372,15 @@ function checkRelay(config: AgentBnBConfig, daemonRunning: boolean): CheckResult
 // Test hire
 // ---------------------------------------------------------------------------
 
+/** Actionable hints keyed by relay error kind, shown when test-hire fails. */
+const RELAY_ERROR_HINTS: Record<string, string> = {
+  CONNECT_FAILED: 'Registry relay unreachable — check registry URL and network connectivity',
+  PROVIDER_OFFLINE: 'Your agent is not registered with the relay — ensure `agentbnb serve` is running',
+  PROVIDER_TIMEOUT: 'Skill execution timed out — try a simpler skill or increase timeout',
+  HANDSHAKE_REJECTED: 'Relay rejected the connection — check agent identity and registration',
+  EXECUTION_ERROR: 'Skill execution failed — check skill configuration',
+};
+
 async function runTestHire(
   config: AgentBnBConfig,
   configDir: string,
@@ -520,13 +529,18 @@ async function runTestHire(
       latency_ms: Date.now() - start,
     };
   } catch (err) {
+    const kind = err instanceof RelayDispatchError ? err.kind : 'UNKNOWN';
+    const hint = RELAY_ERROR_HINTS[kind];
+    const baseMsg = err instanceof Error ? err.message : String(err);
+    const errorMsg = hint ? `${baseMsg} (${hint})` : baseMsg;
+
     return {
       success: false,
       skillId: selectedSkillId || selectedCard.name || selectedCard.id,
       selectionReason,
       creditsSpent: 0,
       latency_ms: Date.now() - start,
-      error: err instanceof Error ? err.message : String(err),
+      error: errorMsg,
     };
   }
 }

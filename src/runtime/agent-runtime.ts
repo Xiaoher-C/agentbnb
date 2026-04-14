@@ -12,6 +12,15 @@ import { OpenClawBridge } from '../skills/openclaw-bridge.js';
 import { CommandExecutor } from '../skills/command-executor.js';
 
 /**
+ * Represents a known peer agent with at least a name and URL.
+ * Used by peersProvider to decouple from CLI peers.json.
+ */
+export interface PeerEntry {
+  name: string;
+  url: string;
+}
+
+/**
  * Options for constructing an AgentRuntime instance.
  */
 export interface RuntimeOptions {
@@ -42,6 +51,13 @@ export interface RuntimeOptions {
    * Only used when conductorEnabled is true.
    */
   conductorToken?: string;
+  /**
+   * Optional provider of peer agent entries, decoupling conductor setup from CLI peers.json.
+   * When provided, this function is called instead of dynamically importing loadPeers from
+   * ../cli/peers.js. Returns all known peers as an array.
+   * When omitted, falls back to dynamic import of loadPeers (backward-compatible).
+   */
+  peersProvider?: () => PeerEntry[];
 }
 
 /**
@@ -82,6 +98,7 @@ export class AgentRuntime {
   private readonly skillsYamlPath?: string;
   private readonly conductorEnabled: boolean;
   private readonly conductorToken: string;
+  private readonly peersProvider?: () => PeerEntry[];
 
   /**
    * Creates a new AgentRuntime instance.
@@ -96,6 +113,7 @@ export class AgentRuntime {
     this.skillsYamlPath = options.skillsYamlPath;
     this.conductorEnabled = options.conductorEnabled ?? false;
     this.conductorToken = options.conductorToken ?? '';
+    this.peersProvider = options.peersProvider;
 
     // Open databases with schema migrations (WAL + foreign_keys already applied by these functions)
     this.registryDb = openDatabase(options.registryDbPath);
@@ -161,14 +179,22 @@ export class AgentRuntime {
     if (this.conductorEnabled) {
       const { ConductorMode } = await import('../conductor/conductor-mode.js');
       const { registerConductorCard, CONDUCTOR_OWNER } = await import('../conductor/card.js');
-      const { loadPeers } = await import('../cli/peers.js');
+
+      // Load peers: prefer injected peersProvider, fall back to CLI dynamic import
+      let loadPeersFn: () => PeerEntry[];
+      if (this.peersProvider) {
+        loadPeersFn = this.peersProvider;
+      } else {
+        const { loadPeers } = await import('../cli/peers.js');
+        loadPeersFn = loadPeers;
+      }
 
       // Register the Conductor card in the registry
       registerConductorCard(this.registryDb);
 
-      // Build resolveAgentUrl from loadPeers()
+      // Build resolveAgentUrl from loaded peers
       const resolveAgentUrl = (owner: string): { url: string; cardId: string } => {
-        const peers = loadPeers();
+        const peers = loadPeersFn();
         const matchingCards = listCards(this.registryDb, owner);
         const candidateNames = new Set<string>([owner.toLowerCase()]);
         for (const card of matchingCards) {

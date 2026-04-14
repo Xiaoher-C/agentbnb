@@ -7,7 +7,6 @@ import { insertRequestLog } from '../registry/request-log.js';
 import { AgentBnBError } from '../types/index.js';
 import type { CapabilityCardV2, EscrowReceipt, FailureReason } from '../types/index.js';
 import type { SkillExecutor, ProgressCallback } from '../skills/executor.js';
-import { loadConfig } from '../cli/config.js';
 import { syncCreditsFromRegistry } from '../credit/registry-sync.js';
 import { emitProviderEvent } from '../registry/provider-events.js';
 import { notifyProviderEvent } from './provider-notifier.js';
@@ -123,6 +122,23 @@ export interface ExecuteRequestOptions {
    * Used for relay-routed requests where the Hub relay has already held credits.
    */
   relayAuthorized?: boolean;
+
+  // ── Provider config injection (decouples from CLI loadConfig) ────────────
+  // When provided, these override the corresponding loadConfig() values.
+  // When omitted, loadConfig() is called as a backward-compatible fallback.
+
+  /** Registry URL for credit sync. Replaces `loadConfig().registry`. */
+  registryUrl?: string;
+  /** Whitelist of agent IDs that bypass provider gates. Replaces `loadConfig().provider_whitelist`. */
+  providerWhitelist?: string[];
+  /** When false, reject all non-whitelisted requests. Replaces `loadConfig().provider_accepting`. */
+  providerAccepting?: boolean;
+  /** Blocked agent IDs. Replaces `loadConfig().provider_blacklist`. */
+  providerBlacklist?: string[];
+  /** Daily execution limit (0 = unlimited). Replaces `loadConfig().provider_daily_limit`. */
+  providerDailyLimit?: number;
+  /** Provider gate mode for events. Replaces `loadConfig().provider_gate`. */
+  providerGate?: 'auto' | 'notify';
 }
 
 /**
@@ -131,6 +147,19 @@ export interface ExecuteRequestOptions {
 export type ExecuteResult =
   | { success: true; result: unknown }
   | { success: false; error: { code: number; message: string; data?: Record<string, unknown> } };
+
+/**
+ * Lazily loads CLI config only when injected options are not provided.
+ * Returns null if the CLI config module is unavailable or the config file is missing.
+ */
+async function loadConfigFallback(): Promise<import('../cli/config.js').AgentBnBConfig | null> {
+  try {
+    const { loadConfig } = await import('../cli/config.js');
+    return loadConfig();
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Executes a capability request with full escrow, reputation, and logging.
@@ -225,18 +254,41 @@ export async function executeCapabilityRequest(opts: ExecuteRequestOptions): Pro
       };
     }
   } else {
-    // Sync local balance from registry before checking (graceful — if sync fails, use local balance)
-    const cfg = loadConfig();
-    if (cfg?.registry) {
+    // Sync local balance from registry before checking (graceful — if sync fails, use local balance).
+    // Prefer injected registryUrl; fall back to loadConfig() for backward compatibility.
+    const registryUrl = opts.registryUrl;
+    if (registryUrl) {
+      // registryUrl provided — attempt sync using a dynamic import of syncCreditsFromRegistry.
+      // We still need the full config for syncCreditsFromRegistry (it reads identity files),
+      // but the caller signaled a registry URL, so try to load config and override.
       try {
-        await Promise.race([
-          syncCreditsFromRegistry(cfg, creditDb),
-          new Promise<never>((_, reject) =>
-            setTimeout(() => reject(new Error('sync timeout')), 2000),
-          ),
-        ]);
+        const fallbackCfg = await loadConfigFallback();
+        if (fallbackCfg) {
+          const cfgWithOverride = { ...fallbackCfg, registry: registryUrl };
+          await Promise.race([
+            syncCreditsFromRegistry(cfgWithOverride, creditDb),
+            new Promise<never>((_, reject) =>
+              setTimeout(() => reject(new Error('sync timeout')), 2000),
+            ),
+          ]);
+        }
       } catch {
         // Non-fatal: proceed with local balance
+      }
+    } else {
+      // No registryUrl injected — fall back to loadConfig()
+      const cfg = await loadConfigFallback();
+      if (cfg?.registry) {
+        try {
+          await Promise.race([
+            syncCreditsFromRegistry(cfg, creditDb),
+            new Promise<never>((_, reject) =>
+              setTimeout(() => reject(new Error('sync timeout')), 2000),
+            ),
+          ]);
+        } catch {
+          // Non-fatal: proceed with local balance
+        }
       }
     }
     try {
@@ -252,20 +304,45 @@ export async function executeCapabilityRequest(opts: ExecuteRequestOptions): Pro
   }
 
   // ── Provider-side execution gate ──────────────────────────────────────────
-  const providerCfg = loadConfig();
-  const providerWhitelist = providerCfg?.provider_whitelist ?? [];
+  // Prefer injected provider config; fall back to loadConfig() for backward compatibility.
+  const hasInjectedProviderConfig =
+    opts.providerWhitelist !== undefined ||
+    opts.providerAccepting !== undefined ||
+    opts.providerBlacklist !== undefined ||
+    opts.providerDailyLimit !== undefined;
+
+  let providerWhitelist: string[];
+  let providerAccepting: boolean;
+  let providerBlacklist: string[];
+  let providerDailyLimit: number;
+  let providerGate: string;
+
+  if (hasInjectedProviderConfig) {
+    providerWhitelist = opts.providerWhitelist ?? [];
+    providerAccepting = opts.providerAccepting ?? true;
+    providerBlacklist = opts.providerBlacklist ?? [];
+    providerDailyLimit = opts.providerDailyLimit ?? 0;
+    providerGate = opts.providerGate ?? 'auto';
+  } else {
+    const providerCfg = await loadConfigFallback();
+    providerWhitelist = providerCfg?.provider_whitelist ?? [];
+    providerAccepting = providerCfg?.provider_accepting ?? true;
+    providerBlacklist = providerCfg?.provider_blacklist ?? [];
+    providerDailyLimit = providerCfg?.provider_daily_limit ?? 0;
+    providerGate = providerCfg?.provider_gate ?? 'auto';
+  }
+
   const isWhitelisted = providerWhitelist.includes(requester);
 
   // Global accepting switch. Whitelisted agents bypass.
-  if (providerCfg?.provider_accepting === false && !isWhitelisted) {
+  if (providerAccepting === false && !isWhitelisted) {
     if (escrowId) releaseEscrow(creditDb, escrowId);
     return { success: false, error: { code: -32098, message: 'Provider is not accepting requests' } };
   }
 
   // Blacklist check. Applied even if whitelisted (blacklist takes priority would be weird, so whitelist wins).
   if (!isWhitelisted) {
-    const blacklist = providerCfg?.provider_blacklist ?? [];
-    if (blacklist.includes(requester)) {
+    if (providerBlacklist.includes(requester)) {
       if (escrowId) releaseEscrow(creditDb, escrowId);
       try { emitProviderEvent(registryDb, { event_type: 'skill.rejected', skill_id: resolvedSkillId ?? null, session_id: null, requester, credits: 0, duration_ms: 0, metadata: { reason: 'blacklisted' } }); } catch { /* silent */ }
       return { success: false, error: { code: -32097, message: 'Requester is blocked by provider' } };
@@ -274,23 +351,22 @@ export async function executeCapabilityRequest(opts: ExecuteRequestOptions): Pro
 
   // Daily execution limit (0 = unlimited). Whitelisted agents bypass.
   if (!isWhitelisted) {
-    const dailyLimit = providerCfg?.provider_daily_limit ?? 0;
-    if (dailyLimit > 0) {
+    if (providerDailyLimit > 0) {
       const { countTodayExecutions } = await import('../registry/request-log.js');
       const todayCount = countTodayExecutions(registryDb);
-      if (todayCount >= dailyLimit) {
+      if (todayCount >= providerDailyLimit) {
         if (escrowId) releaseEscrow(creditDb, escrowId);
-        try { emitProviderEvent(registryDb, { event_type: 'skill.rejected', skill_id: resolvedSkillId ?? null, session_id: null, requester, credits: 0, duration_ms: 0, metadata: { reason: 'daily_limit', limit: dailyLimit } }); } catch { /* silent */ }
+        try { emitProviderEvent(registryDb, { event_type: 'skill.rejected', skill_id: resolvedSkillId ?? null, session_id: null, requester, credits: 0, duration_ms: 0, metadata: { reason: 'daily_limit', limit: providerDailyLimit } }); } catch { /* silent */ }
         return {
           success: false,
-          error: { code: -32099, message: `Provider daily execution limit reached (${dailyLimit}/day)` },
+          error: { code: -32099, message: `Provider daily execution limit reached (${providerDailyLimit}/day)` },
         };
       }
     }
   }
 
   // Emit skill.received event + Telegram notification
-  const receivedEvent = { event_type: 'skill.received' as const, skill_id: resolvedSkillId ?? null, session_id: null, requester, credits: creditsNeeded, duration_ms: 0, metadata: { gate_mode: providerCfg?.provider_gate ?? 'auto' } };
+  const receivedEvent = { event_type: 'skill.received' as const, skill_id: resolvedSkillId ?? null, session_id: null, requester, credits: creditsNeeded, duration_ms: 0, metadata: { gate_mode: providerGate } };
   try {
     const emitted = emitProviderEvent(registryDb, receivedEvent);
     notifyProviderEvent(emitted, creditDb, card.owner).catch(() => {});

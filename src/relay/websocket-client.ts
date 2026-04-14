@@ -44,6 +44,8 @@ export interface RelayClientOptions {
   onRequest: (req: IncomingRequestMessage) => Promise<RelayHandlerResult>;
   /** Suppress logging. Default false. */
   silent?: boolean;
+  /** Callback fired when the client connection state changes */
+  onStateChange?: (state: 'connecting' | 'connected' | 'disconnected' | 'reconnecting') => void;
 }
 
 /** Options for making a relay request to another agent */
@@ -97,6 +99,8 @@ export class RelayClient {
     return new Promise((resolve, reject) => {
       this.intentionalClose = false;
       this.registered = false;
+
+      this.opts.onStateChange?.('connecting');
 
       const wsUrl = this.buildWsUrl();
       this.ws = new WebSocket(wsUrl);
@@ -161,20 +165,46 @@ export class RelayClient {
 
   /**
    * Disconnect from the registry relay.
+   *
+   * If `drainTimeoutMs` is provided and there are pending requests, waits up to
+   * that many milliseconds for them to resolve/reject naturally before
+   * force-rejecting the remainder. If omitted or 0, pending requests are
+   * rejected immediately (backward-compatible behavior).
    */
-  disconnect(): void {
+  async disconnect(drainTimeoutMs?: number): Promise<void> {
     this.intentionalClose = true;
     this.cleanup();
+
+    if (drainTimeoutMs && drainTimeoutMs > 0 && this.pendingRequests.size > 0) {
+      // Graceful drain: wait for pending requests to settle or timeout
+      await new Promise<void>((resolve) => {
+        const checkInterval = setInterval(() => {
+          if (this.pendingRequests.size === 0) {
+            clearInterval(checkInterval);
+            resolve();
+          }
+        }, 20);
+
+        setTimeout(() => {
+          clearInterval(checkInterval);
+          resolve();
+        }, drainTimeoutMs);
+      });
+    }
+
     if (this.ws) {
       try { this.ws.close(1000, 'Client disconnect'); } catch { /* ignore */ }
       this.ws = null;
     }
-    // Reject all pending requests
+
+    // Force-reject all remaining pending requests
     for (const [id, pending] of this.pendingRequests) {
       clearTimeout(pending.timeout);
       pending.reject(new Error('Client disconnected'));
       this.pendingRequests.delete(id);
     }
+
+    this.opts.onStateChange?.('disconnected');
   }
 
   /**
@@ -285,6 +315,7 @@ export class RelayClient {
     switch (msg.type) {
       case 'registered':
         this.registered = true;
+        this.opts.onStateChange?.('connected');
         if (!this.opts.silent) {
           console.log(`  ✓ Registered with registry (agent_id: ${msg.agent_id})`);
         }
@@ -428,8 +459,11 @@ export class RelayClient {
     if (this.intentionalClose) return;
     if (this.reconnectTimer) return;
 
-    // Exponential backoff: 1s, 2s, 4s, 8s, 16s, 30s cap
-    const delay = Math.min(1000 * Math.pow(2, this.reconnectAttempts), 30_000);
+    this.opts.onStateChange?.('reconnecting');
+
+    // Exponential backoff: 1s, 2s, 4s, 8s, 16s, 30s cap + 0-30% jitter
+    const baseDelay = Math.min(1000 * Math.pow(2, this.reconnectAttempts), 30_000);
+    const delay = Math.round(baseDelay * (1 + Math.random() * 0.3));
     this.reconnectAttempts++;
 
     if (!this.opts.silent) {
