@@ -52,6 +52,11 @@ import { executeCapabilityBatch } from '../gateway/execute.js';
 /**
  * Options for creating the public registry server.
  */
+// Tier threshold constants — used for trust/reputation tier computation
+const TIER_1_MIN_EXEC = 10;
+const TIER_2_MIN_EXEC = 50;
+const TIER_2_MIN_SUCCESS_RATE = 0.85;
+
 export interface RegistryServerOptions {
   /** Open SQLite database instance for the capability card registry. */
   registryDb: Database.Database;
@@ -143,7 +148,9 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
     uiConfig: { docExpansion: 'list', deepLinking: true },
   });
 
-  // Register CORS — allow all origins for public marketplace discovery, including preflight
+  // Register CORS — origin: true is intentional for a public registry read API.
+  // Write endpoints (POST /cards, batch, identity) are protected by Ed25519 signed headers
+  // which cannot be forged cross-origin, providing equivalent CSRF protection.
   void server.register(cors, {
     origin: true,
     methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
@@ -428,8 +435,8 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
         const successExec = row.success_exec ?? 0;
         const successRate = terminalExec > 0 ? successExec / terminalExec : 0;
         let tier: 0 | 1 | 2 = 0;
-        if (row.total_exec > 10) tier = 1;
-        if (row.total_exec > 50 && successRate >= 0.85) tier = 2;
+        if (row.total_exec > TIER_1_MIN_EXEC) tier = 1;
+        if (row.total_exec > TIER_2_MIN_EXEC && successRate >= TIER_2_MIN_SUCCESS_RATE) tier = 2;
         ownerTrustMap.set(row.owner, {
           performance_tier: tier,
           authority_source: 'self', // Phase 1: all self-declared
@@ -823,6 +830,12 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
     const creditsRows = creditsStmt.all() as Array<{ owner: string; credits_earned: number }>;
     const creditsMap = new Map(creditsRows.map((r) => [r.owner, r.credits_earned ?? 0]));
 
+    // Batch member_since query — single SQL instead of per-owner loop (N+1 fix)
+    const memberSinceRows = db.prepare(
+      'SELECT owner, MIN(created_at) as earliest FROM capability_cards GROUP BY owner'
+    ).all() as Array<{ owner: string; earliest: string }>;
+    const memberSinceMap = new Map(memberSinceRows.map((r) => [r.owner, r.earliest]));
+
     // Build agent profiles
     const agents = Array.from(ownerMap.entries()).map(([owner, cards]) => {
       const skillCount = cards.reduce((sum, card) => sum + ((card as unknown as CapabilityCardV2).skills?.length ?? 1), 0);
@@ -834,18 +847,12 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
           ? successRates.reduce((a, b) => a + b, 0) / successRates.length
           : null;
 
-      // member_since: use MIN of created_at from the SQL table (not from parsed JSON)
-      const memberStmt = db.prepare(
-        'SELECT MIN(created_at) as earliest FROM capability_cards WHERE owner = ?'
-      );
-      const memberRow = memberStmt.get(owner) as { earliest: string } | undefined;
-
       return {
         owner,
         skill_count: skillCount,
         success_rate: avgSuccessRate,
         total_earned: creditsMap.get(owner) ?? 0,
-        member_since: memberRow?.earliest ?? new Date().toISOString(),
+        member_since: memberSinceMap.get(owner) ?? new Date().toISOString(),
       };
     });
 
@@ -956,8 +963,8 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
 
     // --- Performance Tier (metrics-only, no verification implication) ---
     let performanceTier: 0 | 1 | 2 = 0;
-    if (totalExec > 10) performanceTier = 1;
-    if (totalExec > 50 && successRate >= 0.85) performanceTier = 2;
+    if (totalExec > TIER_1_MIN_EXEC) performanceTier = 1;
+    if (totalExec > TIER_2_MIN_EXEC && successRate >= TIER_2_MIN_SUCCESS_RATE) performanceTier = 2;
 
     // --- Execution Proofs (last 10, proof_source='request_log' in phase 1) ---
     const proofsStmt = db.prepare(`
@@ -1415,6 +1422,7 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
       response: {
         200: { type: 'object', additionalProperties: true },
         400: { type: 'object', properties: { error: { type: 'string' } } },
+        401: { type: 'object', properties: { error: { type: 'string' } } },
         404: { type: 'object', properties: { error: { type: 'string' } } },
         409: { type: 'object', properties: { error: { type: 'string' } } },
         503: { type: 'object', properties: { error: { type: 'string' } } },
@@ -1424,11 +1432,23 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
     if (!opts.creditDb) {
       return reply.code(503).send({ error: 'Credit database not configured' });
     }
+
+    // Identity verification — only the agent itself can link to a guarantor
+    const authResult = await tryVerifyIdentity(request, { agentDb: db });
+    if (!authResult.valid) {
+      return reply.code(401).send({ error: 'Missing or invalid identity headers' });
+    }
+
     const body = request.body as Record<string, unknown>;
     const agentId = typeof body.agent_id === 'string' ? body.agent_id.trim() : '';
     const githubLogin = typeof body.github_login === 'string' ? body.github_login.trim() : '';
     if (!agentId || !githubLogin) {
       return reply.code(400).send({ error: 'agent_id and github_login are required' });
+    }
+
+    // Verify caller is linking their own agent, not someone else's
+    if (agentId !== authResult.agentId) {
+      return reply.code(401).send({ error: 'Cannot link an agent you do not own' });
     }
     try {
       const record = linkAgentToGuarantor(opts.creditDb, agentId, githubLogin);
@@ -1492,15 +1512,14 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
     },
   }, async (request, reply) => {
     const { agent_id } = request.params as { agent_id: string };
-    const allCards = listCards(opts.registryDb);
-    const agentCard = allCards.find((c) => {
-      const parsed = AnyCardSchema.safeParse(c);
-      return parsed.success && parsed.data.agent_id === agent_id;
-    });
-    if (!agentCard) {
+    // Direct SQL query instead of loading all cards and filtering in-memory
+    const cardRow = opts.registryDb.prepare(
+      "SELECT data FROM capability_cards WHERE json_extract(data, '$.agent_id') = ?"
+    ).get(agent_id) as { data: string } | undefined;
+    if (!cardRow) {
       return reply.code(404).send({ error: `Agent ${agent_id} not found` });
     }
-    const parsed = AnyCardSchema.parse(agentCard);
+    const parsed = AnyCardSchema.parse(JSON.parse(cardRow.data));
     const didId = `did:agentbnb:${agent_id}`;
     const didDocument: Record<string, unknown> = {
       '@context': ['https://www.w3.org/ns/did/v1', 'https://w3id.org/security/suites/ed25519-2020/v1'],
@@ -1533,18 +1552,16 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
     const db = opts.registryDb;
     const did = `did:agentbnb:${agent_id}`;
 
-    // Find agent's cards
-    const allCards = listCards(db);
-    const ownerCards = allCards.filter((c) => {
-      const parsed = AnyCardSchema.safeParse(c);
-      return parsed.success && parsed.data.agent_id === agent_id;
-    });
+    // Direct SQL query instead of loading all cards and filtering in-memory
+    const ownerCards = db.prepare(
+      "SELECT data FROM capability_cards WHERE json_extract(data, '$.agent_id') = ?"
+    ).all(agent_id) as Array<{ data: string }>;
 
     if (ownerCards.length === 0) {
       return reply.send({ agent_id, did, credentials: [] });
     }
 
-    const cardIds = ownerCards.map((c) => (c as Record<string, unknown>)['id'] as string);
+    const cardIds = ownerCards.map((c) => (JSON.parse(c.data) as Record<string, unknown>)['id'] as string);
     const cardIdPlaceholders = cardIds.map(() => '?').join(',');
 
     // Aggregate execution metrics
@@ -2246,6 +2263,51 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
     const { owner } = request.params as { owner: string };
     const cards = listCards(db, owner);
 
+    // Batch request stats per card (N+1 fix) — single query for all cards
+    const cardIds = cards.map((c) => c.id);
+    const cardIdPlaceholders = cardIds.map(() => '?').join(',');
+
+    // Batch success/failure counts
+    const statsMap = new Map<string, { successes: number; failures: number }>();
+    if (cardIds.length > 0) {
+      const statsRows = db.prepare(`
+        SELECT card_id,
+               SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END) as successes,
+               SUM(CASE WHEN status IN ('failure', 'timeout', 'refunded') THEN 1 ELSE 0 END) as failures
+        FROM request_log
+        WHERE card_id IN (${cardIdPlaceholders}) AND (action_type IS NULL OR action_type = 'auto_share')
+        GROUP BY card_id
+      `).all(...cardIds) as Array<{ card_id: string; successes: number; failures: number }>;
+      for (const row of statsRows) {
+        statsMap.set(row.card_id, { successes: row.successes, failures: row.failures });
+      }
+    }
+
+    // Batch failure breakdown
+    const failureMap = new Map<string, Record<string, number>>();
+    if (cardIds.length > 0) {
+      try {
+        const failureRows = db.prepare(`
+          SELECT card_id, failure_reason, COUNT(*) as cnt
+          FROM request_log
+          WHERE card_id IN (${cardIdPlaceholders}) AND status IN ('failure', 'timeout', 'refunded') AND failure_reason IS NOT NULL
+          GROUP BY card_id, failure_reason
+        `).all(...cardIds) as Array<{ card_id: string; failure_reason: string; cnt: number }>;
+        for (const fr of failureRows) {
+          const existing = failureMap.get(fr.card_id) ?? {};
+          existing[fr.failure_reason] = fr.cnt;
+          failureMap.set(fr.card_id, existing);
+        }
+      } catch {
+        // failure_reason column may not exist in older schemas
+      }
+    }
+
+    // Hoist reliability metrics import outside the loop
+    const reliabilityModule = opts.creditDb
+      ? await import('../credit/reliability-metrics.js')
+      : null;
+
     const agents = [];
     for (const card of cards) {
       try {
@@ -2269,36 +2331,19 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
           spend = spendRow.total;
         }
 
-        // Per-agent request stats from request_log
-        const successCount = (db.prepare(
-          "SELECT COUNT(*) as cnt FROM request_log WHERE card_id = ? AND status = 'success' AND (action_type IS NULL OR action_type = 'auto_share')",
-        ).get(card.id) as { cnt: number }).cnt;
-
-        const failureCount = (db.prepare(
-          "SELECT COUNT(*) as cnt FROM request_log WHERE card_id = ? AND status IN ('failure', 'timeout', 'refunded') AND (action_type IS NULL OR action_type = 'auto_share')",
-        ).get(card.id) as { cnt: number }).cnt;
-
+        // Use batched stats instead of per-card queries
+        const stats = statsMap.get(card.id) ?? { successes: 0, failures: 0 };
+        const successCount = stats.successes;
+        const failureCount = stats.failures;
         const totalExec = successCount + failureCount;
         const successRate = totalExec > 0 ? successCount / totalExec : 0;
 
-        // Failure breakdown by failure_reason
-        let failureBreakdown: Record<string, number> = {};
-        try {
-          const failureRows = db.prepare(
-            "SELECT failure_reason, COUNT(*) as cnt FROM request_log WHERE card_id = ? AND status IN ('failure', 'timeout', 'refunded') AND failure_reason IS NOT NULL GROUP BY failure_reason",
-          ).all(card.id) as Array<{ failure_reason: string; cnt: number }>;
-          for (const fr of failureRows) {
-            failureBreakdown[fr.failure_reason] = fr.cnt;
-          }
-        } catch {
-          // failure_reason column may not exist in older schemas
-        }
+        const failureBreakdown = failureMap.get(card.id) ?? {};
 
-        // Reliability metrics
+        // Reliability metrics (import hoisted outside loop)
         let reliability = null;
-        if (opts.creditDb) {
-          const { getReliabilityMetrics } = await import('../credit/reliability-metrics.js');
-          reliability = getReliabilityMetrics(opts.creditDb, providerIdentity);
+        if (reliabilityModule) {
+          reliability = reliabilityModule.getReliabilityMetrics(opts.creditDb!, providerIdentity);
         }
 
         agents.push({

@@ -154,6 +154,11 @@ export function getCumulativeCreditsSpent(): number {
   return cumulativeCreditsSpent;
 }
 
+/** Reset cumulative spend. Exported for testing. */
+export function resetCumulativeCreditsSpent(): void {
+  cumulativeCreditsSpent = 0;
+}
+
 /**
  * Register the agentbnb_rent_skill tool on the MCP server.
  * Executes a skill via the AgentBnB protocol's relay + escrow flow.
@@ -172,7 +177,7 @@ export function registerRentSkillTool(server: McpServer, config: AdapterConfig):
       try {
         const registryUrl = config.registryUrl.replace(/\/$/, '');
 
-        // Billing guardrail: check cumulative spend against MAX_SESSION_COST
+        // Billing guardrail: early check against cumulative spend before fetching card
         // Approximate: 1 credit ~= $0.01 for cost comparison
         const estimatedCostUsd = cumulativeCreditsSpent * 0.01;
         if (estimatedCostUsd >= config.maxSessionCost) {
@@ -217,6 +222,24 @@ export function registerRentSkillTool(server: McpServer, config: AdapterConfig):
         } else {
           const pricing = card['pricing'] as { credits_per_call: number } | undefined;
           creditsRequired = pricing?.credits_per_call ?? 0;
+        }
+
+        // Billing guardrail: check if this request would push cumulative spend over the cap
+        const projectedCostUsd = (cumulativeCreditsSpent + creditsRequired) * 0.01;
+        if (projectedCostUsd > config.maxSessionCost) {
+          return {
+            content: [{
+              type: 'text' as const,
+              text: JSON.stringify({
+                error: 'billing_guardrail',
+                credits_required: creditsRequired,
+                cumulative_credits_spent: cumulativeCreditsSpent,
+                projected_cost_usd: projectedCostUsd.toFixed(2),
+                max_session_cost_usd: config.maxSessionCost.toFixed(2),
+                message: `This request (${creditsRequired} credits) would push cumulative spend to $${projectedCostUsd.toFixed(2)}, exceeding the billing guardrail ($${config.maxSessionCost.toFixed(2)}). Restart the adapter or increase MAX_SESSION_COST to continue.`,
+              }),
+            }],
+          };
         }
 
         if (creditsRequired > (args.max_credits ?? 20)) {

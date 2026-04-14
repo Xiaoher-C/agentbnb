@@ -43,10 +43,17 @@ export function encrypt(plaintext: string, masterKey: Buffer): string {
  * @throws Error if the key is wrong or data has been tampered with.
  */
 export function decrypt(encrypted: string, masterKey: Buffer): string {
-  const [ivHex, authTagHex, ciphertextHex] = encrypted.split(':');
-  const iv = Buffer.from(ivHex!, 'hex');
-  const authTag = Buffer.from(authTagHex!, 'hex');
-  const ciphertext = Buffer.from(ciphertextHex!, 'hex');
+  const parts = encrypted.split(':');
+  if (parts.length !== 3) {
+    throw new Error('Invalid encrypted data format: expected iv:authTag:ciphertext');
+  }
+  // Length check above guarantees all three indices are defined
+  const ivHex = parts[0] as string;
+  const authTagHex = parts[1] as string;
+  const ciphertextHex = parts[2] as string;
+  const iv = Buffer.from(ivHex, 'hex');
+  const authTag = Buffer.from(authTagHex, 'hex');
+  const ciphertext = Buffer.from(ciphertextHex, 'hex');
 
   const decipher = createDecipheriv('aes-256-gcm', masterKey, iv);
   decipher.setAuthTag(authTag);
