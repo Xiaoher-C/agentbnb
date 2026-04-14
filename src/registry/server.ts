@@ -1,5 +1,6 @@
 import Fastify, { type FastifyInstance } from 'fastify';
 import cors from '@fastify/cors';
+import rateLimit from '@fastify/rate-limit';
 import swagger from '@fastify/swagger';
 import swaggerUi from '@fastify/swagger-ui';
 import fastifyStatic from '@fastify/static';
@@ -40,8 +41,9 @@ import {
 } from './hub-identities.js';
 import { tryVerifyIdentity } from './identity-auth.js';
 import { creditRoutesPlugin } from './credit-routes.js';
-import { hubAgentRoutesPlugin } from '../hub-agent/routes.js';
-import { createRelayBridge } from '../hub-agent/relay-bridge.js';
+// Hub Agent imports disabled — subsystem deprecated (ADR-002/003/010 violation)
+// import { hubAgentRoutesPlugin } from '../hub-agent/routes.js';
+// import { createRelayBridge } from '../hub-agent/relay-bridge.js';
 import { convertToGptActions } from './openapi-gpt-actions.js';
 import feedbackPlugin from '../feedback/api.js';
 import evolutionPlugin from '../evolution/api.js';
@@ -148,6 +150,12 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Agent-Id', 'X-Agent-PublicKey', 'X-Agent-Signature', 'X-Agent-Timestamp'],
   });
 
+  // Global rate limit — 100 requests per minute per IP to prevent abuse
+  void server.register(rateLimit, {
+    max: 100,
+    timeWindow: '1 minute',
+  });
+
   // Register WebSocket support for relay
   void server.register(fastifyWebsocket);
 
@@ -163,22 +171,22 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
     void server.register(creditRoutesPlugin, { creditDb: opts.creditDb });
   }
 
-  // Register Hub Agent CRUD endpoints -- requires HUB_MASTER_KEY env var for secret encryption
-  if (opts.creditDb) {
-    void server.register(hubAgentRoutesPlugin, { registryDb: db, creditDb: opts.creditDb });
-
-    // Wire relay bridge: auto-dispatch queued jobs when agents reconnect
-    if (relayState?.setOnAgentOnline && relayState.getConnections && relayState.getPendingRequests && relayState.sendMessage) {
-      const bridge = createRelayBridge({
-        registryDb: db,
-        creditDb: opts.creditDb,
-        sendMessage: relayState.sendMessage,
-        pendingRequests: relayState.getPendingRequests(),
-        connections: relayState.getConnections(),
-      });
-      relayState.setOnAgentOnline(bridge.onAgentOnline);
-    }
-  }
+  // Hub Agent routes DISABLED — violates P2P principles (ADR-002, ADR-003, ADR-010).
+  // Hub Agent centralizes execution on the Registry server, bypasses agentbnb init identity,
+  // and uses a hardcoded ownerPublicKey. See decisions/2026-04-14-hub-agent-violates-p2p-principles.
+  // if (opts.creditDb) {
+  //   void server.register(hubAgentRoutesPlugin, { registryDb: db, creditDb: opts.creditDb });
+  //   if (relayState?.setOnAgentOnline && relayState.getConnections && relayState.getPendingRequests && relayState.sendMessage) {
+  //     const bridge = createRelayBridge({
+  //       registryDb: db,
+  //       creditDb: opts.creditDb,
+  //       sendMessage: relayState.sendMessage,
+  //       pendingRequests: relayState.getPendingRequests(),
+  //       connections: relayState.getConnections(),
+  //     });
+  //     relayState.setOnAgentOnline(bridge.onAgentOnline);
+  //   }
+  // }
 
   // Register static file serving for the hub SPA (optional — skipped if hub not built)
   // Resolve hub/dist/ relative to this file's compiled location in dist/registry/server.js
@@ -652,9 +660,18 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
       response: {
         201: { type: 'object', properties: { ok: { type: 'boolean' }, id: { type: 'string' } } },
         400: { type: 'object', properties: { error: { type: 'string' }, issues: { type: 'array' } } },
+        401: { type: 'object', properties: { error: { type: 'string' } } },
       },
     },
   }, async (request, reply) => {
+    // Identity verification — only authenticated agents can publish cards
+    const authResult = await tryVerifyIdentity(request, { agentDb: db });
+    if (!authResult.valid) {
+      return reply.code(401).send({ error: 'Missing or invalid identity headers' });
+    }
+    request.agentId = authResult.agentId;
+    request.agentPublicKey = authResult.publicKey;
+
     const body = request.body as Record<string, unknown>;
     // Default spec_version to '1.0' if missing (AnyCardSchema requires discriminator)
     if (!body.spec_version) {
@@ -670,6 +687,11 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
     }
 
     const card = result.data;
+
+    // Verify the card's owner matches the authenticated agent identity
+    if (card.owner !== authResult.agentId) {
+      return reply.code(401).send({ error: 'Card owner does not match authenticated identity' });
+    }
     const now = new Date().toISOString();
 
     // Card quality gate — prevent garbage cards on the registry
@@ -1162,6 +1184,9 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
    * Returns the created GuarantorRecord. GitHub OAuth verification is stubbed.
    */
   api.post('/api/identity/register', {
+    config: {
+      rateLimit: { max: 5, timeWindow: '1 minute' },
+    },
     schema: {
       tags: ['identity'],
       summary: 'Register a human guarantor via GitHub login',
@@ -1239,6 +1264,9 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
    * Returns: { agent_id, did, created_at }
    */
   api.post('/api/agents/register', {
+    config: {
+      rateLimit: { max: 5, timeWindow: '1 minute' },
+    },
     schema: {
       tags: ['hub-auth'],
       summary: 'Register a new Hub-managed agent identity',
@@ -1292,8 +1320,8 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
         return reply.code(400).send({ error: 'Invalid signature' });
       }
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      return reply.code(400).send({ error: `Signature verification failed: ${msg}` });
+      request.log.warn({ err }, 'Signature verification failed');
+      return reply.code(400).send({ error: 'Invalid signature' });
     }
 
     // Check for duplicate email
@@ -1335,6 +1363,9 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
    * sees plaintext private keys.
    */
   api.post('/api/agents/login', {
+    config: {
+      rateLimit: { max: 5, timeWindow: '1 minute' },
+    },
     schema: {
       tags: ['hub-auth'],
       summary: 'Fetch encrypted identity blob for login',
@@ -1658,7 +1689,7 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
    *   - `sequential`  — requests run one at a time; stops on first failure
    *   - `best_effort` — all run concurrently; partial success is acceptable
    *
-   * Auth: reads `owner` from `Authorization: Bearer <owner>` header.
+   * Auth: Ed25519 identity headers (preferred) or admin Bearer token (ownerApiKey).
    * Budget: sum(max_credits) must be <= total_budget or the call is rejected immediately.
    *
    * Body: { requests: [{ skill_id, params, max_credits }], strategy, total_budget }
@@ -1682,11 +1713,23 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
       return reply.code(503).send({ error: 'Credit database not configured' });
     }
 
-    // Extract owner from Bearer token header
-    const auth = request.headers.authorization;
-    const owner = auth?.startsWith('Bearer ') ? auth.slice(7).trim() : null;
+    // Authenticate caller: prefer Ed25519 identity, fall back to admin Bearer token.
+    let owner: string | null = null;
+
+    const didResult = await tryVerifyIdentity(request, {});
+    if (didResult.valid) {
+      owner = didResult.agentId;
+    } else {
+      // Fall back to Bearer token — only accept the server's ownerApiKey (admin path).
+      const auth = request.headers.authorization;
+      const token = auth?.startsWith('Bearer ') ? auth.slice(7).trim() : null;
+      if (token && opts.ownerApiKey && token === opts.ownerApiKey && opts.ownerName) {
+        owner = opts.ownerName;
+      }
+    }
+
     if (!owner) {
-      return reply.code(401).send({ error: 'Authorization header with Bearer <owner> is required' });
+      return reply.code(401).send({ error: 'Valid identity headers or admin Bearer token required' });
     }
 
     // Validate request body with Zod

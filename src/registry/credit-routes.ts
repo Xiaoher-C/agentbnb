@@ -343,6 +343,9 @@ export async function creditRoutesPlugin(
      * Deduplication is by Ed25519 public key (request.agentPublicKey set by identityAuthPlugin).
      */
     scope.post('/api/credits/grant', {
+      config: {
+        rateLimit: { max: 10, timeWindow: '1 minute' },
+      },
       schema: {
         tags: ['credits'],
         summary: 'Bootstrap grant of 50 credits (once per identity)',
