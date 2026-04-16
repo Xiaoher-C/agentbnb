@@ -46,6 +46,11 @@ const GUARANTOR_SCHEMA = `
     linked_at TEXT NOT NULL,
     FOREIGN KEY (guarantor_id) REFERENCES guarantors(id)
   );
+
+  CREATE TABLE IF NOT EXISTS oauth_states (
+    state TEXT PRIMARY KEY,
+    created_at TEXT NOT NULL
+  );
 `;
 
 /**
@@ -217,19 +222,85 @@ export function getAgentGuarantor(db: Database.Database, agentId: string): Guara
 }
 
 // ---------------------------------------------------------------------------
-// GitHub OAuth stub
+// GitHub OAuth
 // ---------------------------------------------------------------------------
 
 /**
  * Initiates a GitHub OAuth flow for guarantor verification.
- * This is a STUB — returns placeholder values. Actual OAuth implementation
- * is deferred to a future version.
+ * Generates a CSRF state token, persists it in the database, and returns
+ * the GitHub authorization URL the client should redirect to.
  *
+ * @param db - The credit database instance (stores OAuth state tokens).
  * @returns Object with auth_url and state for the OAuth flow.
+ * @throws {AgentBnBError} with code 'CONFIG_ERROR' if GITHUB_CLIENT_ID is not set.
  */
-export function initiateGithubAuth(): { auth_url: string; state: string } {
-  return {
-    auth_url: 'https://github.com/login/oauth/authorize?client_id=PLACEHOLDER&scope=read:user',
-    state: randomUUID(),
-  };
+export function initiateGithubAuth(db: Database.Database): { auth_url: string; state: string } {
+  const clientId = process.env.GITHUB_CLIENT_ID;
+  if (!clientId) {
+    throw new AgentBnBError('GITHUB_CLIENT_ID environment variable not set', 'CONFIG_ERROR');
+  }
+
+  const state = randomUUID();
+  db.prepare('INSERT INTO oauth_states (state, created_at) VALUES (?, ?)').run(state, new Date().toISOString());
+
+  // Clean up expired states (>10 min old)
+  db.prepare("DELETE FROM oauth_states WHERE datetime(created_at) < datetime('now', '-10 minutes')").run();
+
+  const redirectUri = process.env.GITHUB_REDIRECT_URI ?? 'http://localhost:7701/api/identity/github/callback';
+  const auth_url = `https://github.com/login/oauth/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&state=${state}&scope=read:user`;
+
+  return { auth_url, state };
+}
+
+/**
+ * Exchanges a GitHub OAuth authorization code for a verified user login.
+ * Validates the CSRF state token, exchanges the code for an access token,
+ * then fetches the authenticated user's GitHub profile.
+ *
+ * @param code - The authorization code from GitHub's callback.
+ * @param state - The CSRF state token to validate.
+ * @param db - The credit database instance.
+ * @returns The verified GitHub login and verification status.
+ * @throws {AgentBnBError} with code 'AUTH_ERROR' if state is invalid or token exchange fails.
+ * @throws {AgentBnBError} with code 'CONFIG_ERROR' if OAuth credentials are not configured.
+ */
+export async function exchangeGithubCode(
+  code: string, state: string, db: Database.Database
+): Promise<{ github_login: string; verified: boolean }> {
+  // Validate state
+  const stateRow = db.prepare('SELECT state FROM oauth_states WHERE state = ?').get(state) as
+    | Record<string, unknown>
+    | undefined;
+  if (!stateRow) {
+    throw new AgentBnBError('Invalid or expired OAuth state', 'AUTH_ERROR');
+  }
+  db.prepare('DELETE FROM oauth_states WHERE state = ?').run(state);
+
+  const clientId = process.env.GITHUB_CLIENT_ID;
+  const clientSecret = process.env.GITHUB_CLIENT_SECRET;
+  if (!clientId || !clientSecret) {
+    throw new AgentBnBError('GitHub OAuth credentials not configured', 'CONFIG_ERROR');
+  }
+
+  // Exchange code for access token
+  const tokenRes = await fetch('https://github.com/login/oauth/access_token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify({ client_id: clientId, client_secret: clientSecret, code }),
+  });
+  const tokenData = await tokenRes.json() as { access_token?: string; error?: string };
+  if (!tokenData.access_token) {
+    throw new AgentBnBError(`GitHub token exchange failed: ${tokenData.error ?? 'unknown'}`, 'AUTH_ERROR');
+  }
+
+  // Fetch verified user info
+  const userRes = await fetch('https://api.github.com/user', {
+    headers: { Authorization: `Bearer ${tokenData.access_token}`, Accept: 'application/json' },
+  });
+  const userData = await userRes.json() as { login?: string };
+  if (!userData.login) {
+    throw new AgentBnBError('Failed to fetch GitHub user info', 'AUTH_ERROR');
+  }
+
+  return { github_login: userData.login, verified: true };
 }

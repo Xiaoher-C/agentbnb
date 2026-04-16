@@ -1,5 +1,7 @@
 import type Database from 'better-sqlite3';
 import type { FailureReason } from '../types/index.js';
+import { runPendingMigrations } from '../migrations/runner.js';
+import { registryMigrations } from '../migrations/registry-migrations.js';
 
 /**
  * A single entry in the request log table.
@@ -100,57 +102,10 @@ export function createRequestLogTable(db: Database.Database): void {
       ON request_log (created_at DESC);
   `);
 
-  // Add skill_id column if it does not already exist.
-  // ALTER TABLE ADD COLUMN is idempotent via try/catch — SQLite will throw if the
-  // column already exists, which we silently ignore.
-  try {
-    db.exec('ALTER TABLE request_log ADD COLUMN skill_id TEXT');
-  } catch {
-    // Column already exists — ignore
-  }
-
-  // Add action_type column for autonomy audit events (Phase 5+).
-  try {
-    db.exec('ALTER TABLE request_log ADD COLUMN action_type TEXT');
-  } catch {
-    // Column already exists — ignore
-  }
-
-  // Add tier_invoked column for autonomy audit events (Phase 5+).
-  try {
-    db.exec('ALTER TABLE request_log ADD COLUMN tier_invoked INTEGER');
-  } catch {
-    // Column already exists — ignore
-  }
-
-  // Add failure_reason column for categorizing terminal failures (Phase 51+).
-  // Existing rows (no failure_reason) are treated as bad_execution by default.
-  try {
-    db.exec('ALTER TABLE request_log ADD COLUMN failure_reason TEXT');
-  } catch {
-    // Column already exists — ignore
-  }
-
-  // Add team_id column for team-originated executions (Phase 53+).
-  try {
-    db.exec('ALTER TABLE request_log ADD COLUMN team_id TEXT');
-  } catch {
-    // Column already exists — ignore
-  }
-
-  // Add role column for team role context (Phase 53+).
-  try {
-    db.exec('ALTER TABLE request_log ADD COLUMN role TEXT');
-  } catch {
-    // Column already exists — ignore
-  }
-
-  // Add capability_type column for capability-first team context (Phase 52 refactor+).
-  try {
-    db.exec('ALTER TABLE request_log ADD COLUMN capability_type TEXT');
-  } catch {
-    // Column already exists — ignore
-  }
+  // Column additions are handled by the centralized migration runner.
+  // We run it here so that callers using createRequestLogTable directly
+  // (e.g., tests) get a fully-migrated table without extra setup.
+  runPendingMigrations(db, registryMigrations);
 }
 
 /**

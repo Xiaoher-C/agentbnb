@@ -6,6 +6,7 @@ import {
   linkAgentToGuarantor,
   getAgentGuarantor,
   initiateGithubAuth,
+  exchangeGithubCode,
 } from '../identity/guarantor.js';
 import {
   ensureHubIdentitiesTables,
@@ -36,6 +37,7 @@ export interface IdentityRoutesOptions {
  *   GET  /api/identity/:agent_id   — Get guarantor info for an agent
  *   GET  /api/did/:agent_id        — Resolve agent DID Document
  *   GET  /api/credentials/:agent_id — Get Verifiable Credentials for an agent
+ *   GET  /api/identity/github/callback — GitHub OAuth callback
  */
 export async function identityRoutesPlugin(
   fastify: FastifyInstance,
@@ -79,7 +81,7 @@ export async function identityRoutesPlugin(
     }
     try {
       const record = registerGuarantor(creditDb, githubLogin);
-      const auth = initiateGithubAuth();
+      const auth = initiateGithubAuth(creditDb);
       return reply.code(201).send({ guarantor: record, oauth: auth });
     } catch (err) {
       if (err instanceof AgentBnBError && err.code === 'GUARANTOR_EXISTS') {
@@ -510,5 +512,38 @@ export async function identityRoutesPlugin(
     }
 
     return reply.send({ agent_id, did, credentials });
+  });
+
+  /**
+   * GET /api/identity/github/callback — GitHub OAuth callback.
+   * Exchanges authorization code for access token, verifies user login.
+   */
+  fastify.get('/api/identity/github/callback', {
+    schema: {
+      tags: ['identity'],
+      summary: 'GitHub OAuth callback',
+      querystring: {
+        type: 'object',
+        properties: {
+          code: { type: 'string' },
+          state: { type: 'string' },
+        },
+        required: ['code', 'state'],
+      },
+    },
+  }, async (request, reply) => {
+    if (!creditDb) {
+      return reply.code(503).send({ error: 'Credit database not configured' });
+    }
+    const { code, state } = request.query as { code: string; state: string };
+    try {
+      const { github_login, verified } = await exchangeGithubCode(code, state, creditDb);
+      return reply.send({ github_login, verified, message: 'GitHub identity verified successfully' });
+    } catch (err) {
+      if (err instanceof AgentBnBError) {
+        return reply.code(400).send({ error: err.message });
+      }
+      throw err;
+    }
   });
 }

@@ -124,10 +124,27 @@ describe('guarantor', () => {
   });
 
   describe('initiateGithubAuth', () => {
-    it('returns an auth_url and state (stub)', () => {
-      const auth = initiateGithubAuth();
-      expect(auth.auth_url).toContain('github.com');
-      expect(auth.state).toBeTruthy();
+    it('throws when GITHUB_CLIENT_ID is not set', () => {
+      const original = process.env.GITHUB_CLIENT_ID;
+      delete process.env.GITHUB_CLIENT_ID;
+      try {
+        expect(() => initiateGithubAuth(db)).toThrow(/GITHUB_CLIENT_ID/);
+      } finally {
+        if (original !== undefined) process.env.GITHUB_CLIENT_ID = original;
+      }
+    });
+
+    it('returns an auth_url with client_id and stores state when configured', () => {
+      process.env.GITHUB_CLIENT_ID = 'test-client-id';
+      try {
+        const auth = initiateGithubAuth(db);
+        expect(auth.auth_url).toContain('github.com');
+        expect(auth.auth_url).toContain('client_id=test-client-id');
+        expect(auth.auth_url).toContain(`state=${auth.state}`);
+        expect(auth.state).toBeTruthy();
+      } finally {
+        delete process.env.GITHUB_CLIENT_ID;
+      }
     });
   });
 

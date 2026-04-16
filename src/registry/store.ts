@@ -6,6 +6,8 @@ import { initFeedbackTable } from '../feedback/store.js';
 import { initEvolutionTable } from '../evolution/store.js';
 import { ensureAgentsTable, resolveCanonicalIdentity } from '../identity/agent-identity.js';
 import { ensureProviderEventsTable } from './provider-events.js';
+import { runPendingMigrations } from '../migrations/runner.js';
+import { registryMigrations } from '../migrations/registry-migrations.js';
 
 export type { Database };
 
@@ -277,6 +279,9 @@ export function openDatabase(path = ':memory:'): Database.Database {
 
   // Run schema migrations — installs v2.0 FTS triggers and migrates v1.0 cards
   runMigrations(db);
+
+  // Run centralized migrations (request_log column additions, backfill entries)
+  runPendingMigrations(db, registryMigrations);
 
   return db;
 }
