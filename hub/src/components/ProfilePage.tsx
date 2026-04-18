@@ -18,8 +18,16 @@ import { useEffect, useState } from 'react';
 import { Check, Copy } from 'lucide-react';
 import { useAgentProfile } from '../hooks/useAgents.js';
 import { useDidDocument } from '../hooks/useDidDocument.js';
+import {
+  useCredentials,
+  type VerifiableCredential,
+  type ReputationCredentialSubject,
+  type SkillCredentialSubject,
+  type TeamCredentialSubject,
+} from '../hooks/useCredentials.js';
 import type { AppOutletContext, ExecutionProof, HubCard } from '../types.js';
 import CapabilityCard from './CapabilityCard.js';
+import CredentialBadge from './CredentialBadge.js';
 
 function timeAgo(dateString: string): string {
   const now = Date.now();
@@ -150,6 +158,66 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
   );
 }
 
+type VcKind = 'reputation' | 'skill' | 'team' | 'unknown';
+
+function classifyVc(vc: VerifiableCredential): VcKind {
+  if (vc.type.includes('AgentReputationCredential')) return 'reputation';
+  if (vc.type.includes('AgentSkillCredential')) return 'skill';
+  if (vc.type.includes('AgentTeamCredential')) return 'team';
+  return 'unknown';
+}
+
+function CredentialsList({ credentials }: { credentials: VerifiableCredential[] }) {
+  return (
+    <div className="flex flex-wrap gap-2">
+      {credentials.map((vc, i) => {
+        const kind = classifyVc(vc);
+        const verified = Boolean(vc.proof);
+        if (kind === 'reputation') {
+          const s = vc.credentialSubject as ReputationCredentialSubject;
+          return (
+            <CredentialBadge
+              key={i}
+              type="reputation"
+              successRate={s.successRate}
+              totalTransactions={s.totalTransactions}
+              issuedAt={vc.issuanceDate}
+              verified={verified}
+            />
+          );
+        }
+        if (kind === 'skill') {
+          const s = vc.credentialSubject as SkillCredentialSubject;
+          return (
+            <CredentialBadge
+              key={i}
+              type="skill"
+              skillName={s.skillId}
+              milestone={s.milestone}
+              issuedAt={vc.issuanceDate}
+              verified={verified}
+            />
+          );
+        }
+        if (kind === 'team') {
+          const s = vc.credentialSubject as TeamCredentialSubject;
+          return (
+            <CredentialBadge
+              key={i}
+              type="team"
+              teamRole={s.teamRole}
+              teamSize={s.teamSize}
+              issuedAt={vc.issuanceDate}
+              verified={verified}
+            />
+          );
+        }
+        return null;
+      })}
+    </div>
+  );
+}
+
 function ProofSourceBadge({ source }: { source: ExecutionProof['proof_source'] }) {
   if (source === 'signed_receipt') {
     return <span className="text-[10px] text-emerald-400 bg-emerald-400/10 border border-emerald-400/20 rounded px-1.5 py-0.5">🔐 Signed</span>;
@@ -165,6 +233,8 @@ export default function ProfilePage(): JSX.Element {
   const navigate = useNavigate();
   const { setSelectedCard } = useOutletContext<AppOutletContext>();
   const { profileV2, loading, error } = useAgentProfile(owner ?? '');
+  const agentId = profileV2?.skills.find((s) => s.agent_id)?.agent_id;
+  const { credentials, loading: credsLoading, error: credsError } = useCredentials(agentId);
 
   useEffect(() => {
     if (!owner) void navigate('/agents');
@@ -487,6 +557,25 @@ export default function ProfilePage(): JSX.Element {
               )}
             </div>
           </div>
+
+          {/* ── Credentials (Verifiable Credentials) ── */}
+          {agentId && !credsError && (
+            <div className="bg-hub-surface border border-hub-border rounded-xl p-6">
+              <SectionTitle>Credentials</SectionTitle>
+              {credsLoading ? (
+                <div className="space-y-2">
+                  <div className="bg-white/[0.04] animate-pulse rounded-full h-6 w-32" />
+                  <div className="bg-white/[0.04] animate-pulse rounded-full h-6 w-40" />
+                </div>
+              ) : credentials.length === 0 ? (
+                <p className="text-hub-text-muted text-sm">
+                  No credentials issued yet — credentials are issued after successful executions and refreshed weekly.
+                </p>
+              ) : (
+                <CredentialsList credentials={credentials} />
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>
