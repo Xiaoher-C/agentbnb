@@ -1,13 +1,13 @@
 /**
- * GenesisPage — Genesis network health dashboard at route /genesis.
+ * EvolutionPage — Agent evolution dashboard at route /evolution.
  *
  * Public page (no auth required). Shows:
- *   1. Network Stats bar — total agents, daily transactions, avg fitness, latest version
+ *   1. Network Stats bar — active agents, total transactions, avg fitness, latest version
  *   2. Evolution Timeline — version history with fitness deltas
  *   3. Getting Started — quick install instructions
  */
-import { useGenesisStats } from '../hooks/useGenesis.js';
-import type { TemplateEvolution } from '../hooks/useGenesis.js';
+import { useEvolutionStats } from '../hooks/useEvolution.js';
+import type { TemplateEvolution } from '../hooks/useEvolution.js';
 
 /** Format a fitness improvement delta for display with sign and color class. */
 function FitnessDelta({ value }: { value: number }): JSX.Element {
@@ -60,10 +60,10 @@ function StatCard({ label, value, sub }: { label: string; value: string; sub?: s
 }
 
 /**
- * Genesis Dashboard page — shows network health and template evolution history.
- * Route: /genesis (hash-based: /#/genesis)
+ * Evolution dashboard page — shows network health and template evolution history.
+ * Route: /evolution (hash-based: /#/evolution)
  */
-export default function GenesisPage(): JSX.Element {
+export default function EvolutionPage(): JSX.Element {
   const {
     totalAgents,
     dailyTransactions,
@@ -72,15 +72,15 @@ export default function GenesisPage(): JSX.Element {
     evolutions,
     loading,
     error,
-  } = useGenesisStats();
+  } = useEvolutionStats();
 
   return (
     <div className="space-y-8">
       {/* Page header */}
       <div>
-        <h2 className="text-2xl font-semibold text-hub-text-primary mb-1">Genesis Network</h2>
+        <h2 className="text-2xl font-semibold text-hub-text-primary mb-1">Agent Evolution</h2>
         <p className="text-hub-text-muted text-sm">
-          Live health of the Genesis flywheel — agents evolving together.
+          Track how agents improve capability templates — version history with fitness deltas.
         </p>
       </div>
 
@@ -108,7 +108,7 @@ export default function GenesisPage(): JSX.Element {
         ) : (
           <div className="flex gap-3 flex-wrap">
             <StatCard
-              label="Genesis Agents"
+              label="Active Agents"
               value={totalAgents.toLocaleString()}
               sub="agents online"
             />
@@ -125,7 +125,7 @@ export default function GenesisPage(): JSX.Element {
             <StatCard
               label="Latest Template"
               value={latestVersion ?? 'none'}
-              sub={latestVersion ? 'genesis-template' : 'no evolutions yet'}
+              sub={latestVersion ? 'template package: genesis-template' : 'no evolutions yet'}
             />
           </div>
         )}
@@ -169,7 +169,7 @@ export default function GenesisPage(): JSX.Element {
               No evolutions yet — be the first to evolve.
             </p>
             <p className="text-hub-text-tertiary text-xs mt-2">
-              Publish a template evolution using the genesis-evolution skill to appear here.
+              Publish an improved template version via the evolution API to appear here.
             </p>
           </div>
         ) : (
@@ -188,19 +188,22 @@ export default function GenesisPage(): JSX.Element {
         </h3>
         <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-5 space-y-3">
           <p className="text-hub-text-secondary text-sm leading-relaxed">
-            The Genesis Template gives your agent a structured foundation — core memory, autonomy rules,
-            and skill definitions — out of the box. Agents evolve by publishing improvements back to the
-            network, making every future agent smarter.
+            Templates give your agent a starting set of core memory, autonomy rules, and skills.
+            Agents evolve by publishing improved template versions back to the network — each version
+            is scored with a fitness delta so the whole ecosystem can see what&apos;s working.
           </p>
           <div>
-            <p className="text-hub-text-tertiary text-xs mb-2">Install the genesis template:</p>
+            <p className="text-hub-text-tertiary text-xs mb-2">Install the starter template:</p>
             <div className="bg-black/40 border border-white/[0.08] rounded-lg px-4 py-3 font-mono text-sm text-emerald-400 select-all">
               npx @agentbnb/genesis-template init
             </div>
+            <p className="text-hub-text-tertiary text-xs mt-2">
+              Package name <code className="font-mono">@agentbnb/genesis-template</code> is the npm identifier.
+            </p>
           </div>
           <p className="text-hub-text-tertiary text-xs">
-            After initialization, your agent will automatically join the Genesis network and can
-            contribute evolved templates back via the Evolution API.
+            After initialization, your agent automatically begins tracking its capability evolution
+            and contributes new versions as it improves.
           </p>
         </div>
       </section>

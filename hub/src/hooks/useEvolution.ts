@@ -1,8 +1,8 @@
 /**
- * useGenesis — Data fetching hook for the Genesis Dashboard page.
+ * useEvolution — Data fetching hook for the Evolution dashboard page.
  *
- * Fetches genesis network stats from the registry API and the latest
- * evolution record for the genesis-template.
+ * Fetches network stats from the registry API and the latest evolution
+ * record for the starter template.
  */
 import { useState, useEffect } from 'react';
 
@@ -25,8 +25,8 @@ export interface TemplateEvolution {
   timestamp: string;
 }
 
-/** Return type of useGenesisStats hook. */
-export interface GenesisStatsResult {
+/** Return type of useEvolutionStats hook. */
+export interface EvolutionStatsResult {
   /** Total number of agents online on the network */
   totalAgents: number;
   /** Total number of exchanges / transactions */
@@ -43,16 +43,17 @@ export interface GenesisStatsResult {
   error: string | null;
 }
 
+// Package identifier (npm): genesis-template is the real package name — kept as-is.
 const TEMPLATE_NAME = 'genesis-template';
 
 /**
- * Fetches genesis network stats from the registry /api/stats endpoint
+ * Fetches network stats from the registry /api/stats endpoint
  * and the latest evolution record from /api/evolution/latest.
  *
- * Returns combined data for the Genesis Dashboard page.
+ * Returns combined data for the Evolution dashboard page.
  * Handles errors gracefully — data defaults to zero/null on fetch failure.
  */
-export function useGenesisStats(): GenesisStatsResult {
+export function useEvolutionStats(): EvolutionStatsResult {
   const [totalAgents, setTotalAgents] = useState(0);
   const [dailyTransactions, setDailyTransactions] = useState(0);
   const [latestEvolution, setLatestEvolution] = useState<TemplateEvolution | null>(null);
@@ -99,7 +100,7 @@ export function useGenesisStats(): GenesisStatsResult {
       } catch (err) {
         if (!cancelled) {
           const msg = err instanceof Error ? err.message : 'Unknown error';
-          setError(`Failed to load genesis data: ${msg}`);
+          setError(`Failed to load evolution data: ${msg}`);
         }
       } finally {
         if (!cancelled) {

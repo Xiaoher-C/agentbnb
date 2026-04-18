@@ -17,7 +17,7 @@
  */
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import { createHashRouter, RouterProvider, useOutletContext } from 'react-router';
+import { Navigate, createHashRouter, RouterProvider, useOutletContext } from 'react-router';
 import './index.css';
 import App from './App.js';
 import DiscoverPage from './pages/DiscoverPage.js';
@@ -31,7 +31,7 @@ import DocsPage from './components/DocsPage.js';
 import HubAgentListPage from './pages/HubAgentListPage.js';
 import CreateAgentPage from './pages/CreateAgentPage.js';
 import HubAgentDashboardPage from './pages/HubAgentDashboardPage.js';
-import GenesisPage from './pages/GenesisPage.js';
+import EvolutionPage from './pages/EvolutionPage.js';
 import CreditPolicyPage from './pages/CreditPolicyPage.js';
 import FleetConsolePage from './pages/FleetConsolePage.js';
 import ProviderDashboardPage from './pages/ProviderDashboardPage.js';
@@ -89,7 +89,8 @@ const router = createHashRouter([
         path: 'docs',
         element: <DocsPage />,
       },
-      { path: 'genesis', element: <GenesisPage /> },
+      { path: 'evolution', element: <EvolutionPage /> },
+      { path: 'genesis', element: <Navigate to="/evolution" replace /> },
       { path: 'credit-policy', element: <CreditPolicyPage /> },
       { path: 'fleet', element: <FleetConsolePage /> },
       { path: 'dashboard', element: <ProviderDashboardPage /> },
