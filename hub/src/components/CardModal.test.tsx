@@ -58,8 +58,21 @@ describe('CardModal — MODAL-01: Request this skill button', () => {
     );
     // Section label
     expect(screen.getByText('Request this skill')).toBeInTheDocument();
-    // CopyButton renders the CLI command text
-    expect(screen.getByText(`agentbnb request ${card.id}`)).toBeInTheDocument();
+    // CopyButton renders the CLI command — full UUID is preserved as the
+    // argument, with a trailing "# <slug>" bash comment for readability.
+    // testing-library normalizes whitespace, so match with a regex against
+    // the single-space-normalized form.
+    const commandEl = screen.getByText(
+      new RegExp(`^agentbnb request ${card.id} # text-summarizer$`),
+    );
+    expect(commandEl).toBeInTheDocument();
+    // Sanity: the raw rendered text still contains the full card id (not a
+    // truncated slug or short id) and starts with "agentbnb request".
+    const rendered = commandEl.textContent ?? '';
+    expect(rendered.startsWith('agentbnb request ')).toBe(true);
+    expect(rendered).toContain(card.id);
+    // Trailing bash comment with the slug renders
+    expect(rendered).toContain('# text-summarizer');
   });
 });
 

@@ -192,7 +192,13 @@ export default function CardModal({ card, onClose }: CardModalProps) {
   const successRate = card.metadata?.success_rate;
   const latency = card.metadata?.avg_latency_ms;
   const idleRate = card.metadata?.idle_rate;
-  const cliCommand = `agentbnb request ${card.id}`;
+  const toSlug = (s: string): string =>
+    s.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  const shortId = card.id.slice(0, 8);
+  const slug = toSlug(card.name) || 'agent';
+  // Full UUID is kept as the argument; trailing "# <slug>" is a bash comment
+  // and is safely ignored by the shell when the user pastes the command.
+  const cliCommand = `agentbnb request ${card.id}  # ${slug}`;
 
   /** Determine idle rate text color: emerald if > 70% (highly available), yellow if < 30% (busy). */
   function idleRateClass(): string {
@@ -484,6 +490,9 @@ export default function CardModal({ card, onClose }: CardModalProps) {
         <div className="mt-5">
           <p className="text-[11px] font-medium uppercase tracking-wider text-hub-text-muted mb-2">
             Request this skill
+          </p>
+          <p className="text-[11px] font-mono text-hub-text-muted mb-1">
+            {slug} · <span className="opacity-80">{shortId}</span>
           </p>
           <CopyButton text={cliCommand} />
         </div>
