@@ -3,7 +3,8 @@
  * Covers all 5 requirements: MODAL-01 (request button), MODAL-02 (availability),
  * MODAL-03 (owner profile link), POLISH-02 (44px tap targets), POLISH-05 (iOS scroll lock).
  */
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { MemoryRouter } from 'react-router';
 import CardModal from './CardModal.js';
@@ -49,17 +50,80 @@ afterEach(() => {
 });
 
 describe('CardModal — MODAL-01: Request this skill button', () => {
-  it('renders "Request this skill" section with CopyButton containing CLI command', () => {
+  it('renders "Request this skill" section with CopyButton containing exact CLI command', () => {
     const card = makeCard();
     render(
       <MemoryRouter>
         <CardModal card={card} onClose={() => {}} />
       </MemoryRouter>,
     );
-    // Section label
     expect(screen.getByText('Request this skill')).toBeInTheDocument();
-    // CopyButton renders the CLI command text
-    expect(screen.getByText(`agentbnb request ${card.id}`)).toBeInTheDocument();
+
+    // The visible code pill shows exactly the CLI command — no trailing
+    // bash comment. The slug is shown separately (see next test).
+    const commandEl = screen.getByText(
+      new RegExp(`^agentbnb request ${card.id}$`),
+    );
+    expect(commandEl).toBeInTheDocument();
+    const rendered = commandEl.textContent ?? '';
+    expect(rendered).toBe(`agentbnb request ${card.id}`);
+    expect(rendered).not.toContain('#');
+    expect(rendered).not.toContain('text-summarizer');
+  });
+
+  it('renders the human-readable slug + short id label separately, above the copy pill', () => {
+    const card = makeCard();
+    render(
+      <MemoryRouter>
+        <CardModal card={card} onClose={() => {}} />
+      </MemoryRouter>,
+    );
+    // Visible slug + short id label — this is decoration, not clipboard content.
+    // The label paragraph contains "<slug> · <shortId>". Scope the query to
+    // that paragraph so we don't match the full id inside the copy pill.
+    const shortId = card.id.slice(0, 8);
+    const labelEl = screen.getByText((_, node) => {
+      const text = node?.textContent ?? '';
+      return text === `text-summarizer · ${shortId}`;
+    });
+    expect(labelEl).toBeInTheDocument();
+    expect(within(labelEl).getByText(shortId)).toBeInTheDocument();
+  });
+});
+
+describe('CardModal — MODAL-01 (regression): clipboard payload vs visible label', () => {
+  it('writes the exact CLI command to the clipboard, not the visible slug label', async () => {
+    const card = makeCard();
+
+    // userEvent.setup() installs its own clipboard stub; install ours AFTER
+    // so it wins, and keep it configurable for cleanup.
+    const user = userEvent.setup();
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText },
+    });
+
+    render(
+      <MemoryRouter>
+        <CardModal card={card} onClose={() => {}} />
+      </MemoryRouter>,
+    );
+
+    // Visible slug label is present (proof the label can change without
+    // affecting clipboard payload).
+    expect(screen.getByText(/text-summarizer/)).toBeInTheDocument();
+
+    // Click the copy icon button. CopyButton fires handleCopy() via `void`,
+    // so we wait for the microtask to flush before asserting.
+    const copyBtn = screen.getByTitle('Copy to clipboard');
+    await user.click(copyBtn);
+    await waitFor(() => {
+      expect(writeText).toHaveBeenCalledTimes(1);
+    });
+
+    // Clipboard received the exact CLI command — no comment, no slug.
+    expect(writeText).toHaveBeenCalledWith(`agentbnb request ${card.id}`);
   });
 });
 
