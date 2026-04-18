@@ -14,15 +14,15 @@ AgentBnB is a P2P agent capability sharing protocol. Agent owners publish what t
 
 ## Current State
 
-- **Version**: 8.4.7 (package.json), v9.0 identity protocol shipped
-- **Milestones shipped**: v1.1 → v2.x → v3.0 (SkillExecutor, Conductor, Signed Escrow) → v3.1 (WebSocket Relay) → v4.0 (Agent Economy Platform) → v5.0 (Genesis Flywheel) → v5.1 (OpenClaw Hardening) → v6.0 (Team Formation Protocol) → v7.0 (Agent Economy Infrastructure) → v8.x (V8 Identity Convergence) → **v9.0 (Agent Identity Protocol, shipped 2026-04-03)**
-- **v9.0 shipped**: Three-layer identity stack (DID + UCAN + Verifiable Credentials)
-  - Phase 1: DID Envelope (did:key + did:agentbnb, rotation, revocation, EVM bridge) ✅
-  - Phase 2: UCAN Token Engine (create/verify/delegate, escrow binding, gateway/relay/conductor integration) ✅
-  - Phase 3: Verifiable Credentials (reputation/skill/team VCs, weekly scheduler, selective disclosure) ✅
-  - Phase 4: Cross-Platform Federation (DID rotation, VC presentation, EVM bridge) ✅
-  - Phase 5: BLS Team Proofs → deferred to v10
-- **Tests**: 1,700+
+- **Version**: 1.0.0 (V1.0 conceptual restart — see [docs/V1.0-RESET.md](docs/V1.0-RESET.md))
+- **Internal lineage** (preserved for context): v1.1 → v2.x → v3.0 (SkillExecutor, Conductor, Signed Escrow) → v3.1 (WebSocket Relay) → v4.0 (Agent Economy Platform) → v5.0 (Genesis Flywheel) → v5.1 (OpenClaw Hardening) → v6.0 (Team Formation Protocol) → v7.0 (Agent Economy Infrastructure) → v8.x (V8 Identity Convergence) → v9.x (Agent Identity Protocol). V1.0 reframes this as one coherent product.
+- **V1.0 capabilities**: Three-layer identity stack (DID + UCAN + Verifiable Credentials) operational
+  - DID Envelope (did:key + did:agentbnb, rotation, revocation, EVM bridge) ✅
+  - UCAN Token Engine (create/verify/delegate, escrow binding, gateway/relay/conductor integration) ✅
+  - Verifiable Credentials (reputation/skill/team VCs, weekly scheduler, selective disclosure) ✅
+  - Cross-Platform Federation (DID rotation, VC presentation, EVM bridge) ✅
+  - BLS Team Proofs → roadmap (post-V1.0)
+- **Tests**: 1,800+
 
 ## Tech Stack
 
@@ -85,7 +85,7 @@ Per-skill fields: `capability_types[]`, `requires_capabilities[]`, `visibility` 
 
 Full interfaces: `src/types/index.ts` (CapabilityCard, CapabilityCardV2, Skill)
 
-## Agent Identity Protocol (v9)
+## Agent Identity Protocol
 
 Three-layer identity stack for autonomous agents:
 
@@ -169,8 +169,8 @@ Two-axis trust model:
 - **`verification_badges`** — external grants only (Phase 2+, currently `[]`)
 - **`authority_source`** (`self` | `platform` | `org`)
 - **FailureReason**: `bad_execution` | `overload` | `timeout` | `auth_error` | `not_found` — non-quality failures excluded from reputation
-- **Verifiable Credentials** (v9): Portable trust — `AgentReputationCredential`, `AgentSkillCredential`, `AgentTeamCredential` issued from execution data
-- **UCAN Authorization** (v9): Scoped, time-bound, delegatable auth tokens bound to escrow lifecycle
+- **Verifiable Credentials**: Portable trust — `AgentReputationCredential`, `AgentSkillCredential`, `AgentTeamCredential` issued from execution data
+- **UCAN Authorization**: Scoped, time-bound, delegatable auth tokens bound to escrow lifecycle
 
 See `docs/hub-v2-trust-signals.md` for design rationale and `docs/adr/020-ucan-token.md` for UCAN spec.
 
@@ -202,11 +202,11 @@ This project uses **pnpm**. Never use npm or yarn in the project root.
 
 ## Important Context
 
-- v9.0 Agent Identity Protocol shipped (2026-04-03). Three-layer identity stack fully operational.
+- V1.0 framing established (2026-04-18); the underlying Agent Identity Protocol shipped 2026-04-03 and is fully operational.
 - Agent-first philosophy: every feature must pass "Does this require human intervention? If yes, redesign."
 - Hub at `/hub` is the recruiting tool — must be visually polished.
 - Founder (Cheng Wen Chen) is the primary developer using vibe coding with Claude Code + GSD.
-- Key new directories: `src/auth/` (UCAN), `src/credentials/` (VC) — added in v9.0.
+- Key directories: `src/auth/` (UCAN), `src/credentials/` (VC) — part of the V1.0 identity layer.
 - Gateway supports 3 auth methods: Bearer token, Ed25519 identity headers, UCAN tokens.
 - v10 planned: BLS signature aggregation, x402 credit bridge, ERC-8004 on-chain identity.
 

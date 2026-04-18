@@ -167,11 +167,11 @@ The A2A-compatible view is a **generated projection**, not a separate card. `GET
 |---------|-------------|-------|-------------|
 | **A2A Protocol** | Discovery interop | Every A2A agent is a potential consumer | V8.1 (Phase 7A) |
 | **MCP Official Registry** | Cross-listing | MCP consumers discover AgentBnB skills | V8.1 (Phase 7B) |
-| **MCP Gateway** | Federation | Multi-registry sync, semantic discovery | V9 (research) |
+| **MCP Gateway** | Federation | Multi-registry sync, semantic discovery | Roadmap (research) |
 | **Agent-Hub-MCP** | Feature model reference | Task decomposition patterns for Conductor | Reference only |
 | **Agent-MCP (rinadelph)** | Task linearization | Alternative to DAG execution for Conductor | Reference only |
 | **mcp-agent (lastmile)** | Agent-as-Server pattern | Formalize provider-as-MCP-server | V8.1 (Phase 7C) |
-| **Atrest.ai (ERC-8004)** | Reputation portability | Export reliability metrics on-chain | V9+ (if crypto demand) |
+| **Atrest.ai (ERC-8004)** | Reputation portability | Export reliability metrics on-chain | Future (if crypto demand) |
 | **ClawHub incident** | Security reference | Malicious agent detection patterns | V8 Phase 6 (health probe) |
 
 ### Supply Opportunities (providers AgentBnB can attract)
@@ -195,8 +195,8 @@ The A2A-compatible view is a **generated projection**, not a separate card. `GET
 1. **Full A2A Agent Card generation** — build the converter when Phase 7A starts
 2. **Card signing (JWS)** — requires card schema v3 to be stable first
 3. **MCP Registry cross-listing** — needs stable agent_id (Phase 1 must ship first)
-4. **Semantic discovery** — deferred to V9
-5. **Knowledge graph** — deferred to V9
+4. **Semantic discovery** — roadmap
+5. **Knowledge graph** — roadmap
 
 ---
 
