@@ -13,7 +13,7 @@ import type { AppOutletContext, HubCard } from '../types.js';
 import CapabilityCard from '../components/CapabilityCard.js';
 import CardGrid from '../components/CardGrid.js';
 import EmptyState from '../components/EmptyState.js';
-import ErrorState from '../components/ErrorState.js';
+import ErrorState, { InlineErrorBanner } from '../components/ErrorState.js';
 import SearchFilter from '../components/SearchFilter.js';
 import SkeletonCard from '../components/SkeletonCard.js';
 import HeroSection from '../components/HeroSection.js';
@@ -235,12 +235,15 @@ export default function DiscoverPage(): JSX.Element {
               <SkeletonCard key={i} />
             ))}
           </CardGrid>
-        ) : error ? (
-          <ErrorState onRetry={retry} />
+        ) : error && cards.length === 0 ? (
+          <ErrorState onRetry={retry} message={error} />
         ) : cards.length === 0 ? (
           <EmptyState />
         ) : (
           <>
+            {/* Inline banner when we have stale data alongside an error */}
+            {error ? <InlineErrorBanner onRetry={retry} message={error} /> : null}
+
             {/* Section label */}
             <p className="text-[11px] text-hub-text-muted uppercase tracking-wider mb-3">
               {query ? `Results for "${query}"` : activeTab === 'agents' ? 'All agents' : 'All skills'} · {filteredTotal}
