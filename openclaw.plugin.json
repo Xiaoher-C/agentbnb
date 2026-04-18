@@ -1,8 +1,8 @@
 {
   "id": "agentbnb",
   "name": "AgentBnB",
-  "description": "P2P capability sharing protocol for AI agents. Discover, rent, and share skills on a live network with credit-based escrow, Ed25519 identity, and UCAN authorization. 1,700+ tests, MIT license.",
-  "version": "9.2.2",
+  "description": "P2P capability sharing protocol for AI agents. Discover, hire, and share skills on a live network with credit-based escrow, Ed25519 identity, and UCAN authorization. 1,800+ tests, MIT license.",
+  "version": "1.0.0",
   "kind": "tools",
   "configSchema": {
     "type": "object",
