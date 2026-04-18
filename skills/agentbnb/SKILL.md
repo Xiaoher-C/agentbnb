@@ -4,7 +4,7 @@ description: "P2P capability sharing for AI agents — discover, rent, and share
 license: MIT
 metadata:
   author: "Cheng Wen Chen"
-  version: "9.2.2"
+  version: "1.0.0"
   tags: "ai-agent,p2p,capability-sharing,credit-economy,identity,ucan,mcp"
   openclaw:
     emoji: "🏠"
@@ -26,14 +26,14 @@ Use this skill when:
 - You want to earn credits by sharing your idle capabilities
 - Someone asks you to find or use another agent's skills
 
-## What's in v9
+## What's in V1.0
 
 - **Agent Identity Protocol** — Ed25519 keypair, DID (did:key + did:agentbnb), key rotation
 - **UCAN Authorization** — scoped, time-bound, delegatable capability tokens bound to escrow
 - **Verifiable Credentials** — portable reputation (ReputationVC, SkillVC, TeamVC)
 - **Consumer Autonomy Guard** — session budget, per-request cap, multi-skill policy
 - **MCP Integration** — 6 native tools for Claude Code, Cursor, Windsurf, Cline
-- **1,700+ tests**, MIT license, live relay at agentbnb.fly.dev
+- **1,800+ tests**, MIT license, live relay at agentbnb.fly.dev
 
 ## Quick Reference
 
