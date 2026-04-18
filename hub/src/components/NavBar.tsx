@@ -1,7 +1,7 @@
 /**
  * NavBar — Top navigation bar for the AgentBnB Hub SPA.
  *
- * Public (unauthenticated): Discover | Docs | For Providers
+ * Public (unauthenticated): Discover | Docs | For Providers | Sign in | Get Started
  * Authenticated: Discover | Docs | My Agent [dropdown] | Fleet | Credit Policy | Activity
  *
  * Mobile: Hamburger button opens a vertical drawer with all nav items flat.
@@ -53,7 +53,7 @@ function navTabClass(isActive: boolean): string {
   return `${base} ${isActive ? active : inactive}`;
 }
 
-/** My Agent dropdown — shows Dashboard, Share, Settings sub-items (desktop only). */
+/** My Agent dropdown — shows the currently live authenticated work surfaces (desktop only). */
 function MyAgentDropdown(): JSX.Element {
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -91,28 +91,21 @@ function MyAgentDropdown(): JSX.Element {
             onClick={() => { setOpen(false); }}
             className="block px-3 py-2 text-sm text-hub-text-secondary hover:text-hub-text-primary hover:bg-white/[0.04] transition-colors"
           >
-            Provider
+            Provider Dashboard
           </NavLink>
           <NavLink
             to="/myagent"
             onClick={() => { setOpen(false); }}
             className="block px-3 py-2 text-sm text-hub-text-secondary hover:text-hub-text-primary hover:bg-white/[0.04] transition-colors"
           >
-            My Agent
+            Agent Workspace
           </NavLink>
           <NavLink
             to="/share"
             onClick={() => { setOpen(false); }}
             className="block px-3 py-2 text-sm text-hub-text-secondary hover:text-hub-text-primary hover:bg-white/[0.04] transition-colors"
           >
-            Share
-          </NavLink>
-          <NavLink
-            to="/settings"
-            onClick={() => { setOpen(false); }}
-            className="block px-3 py-2 text-sm text-hub-text-secondary hover:text-hub-text-primary hover:bg-white/[0.04] transition-colors"
-          >
-            Settings
+            Publish Skills
           </NavLink>
         </div>
       )}
@@ -223,7 +216,15 @@ export default function NavBar({ apiKey, balance, onLogout }: NavBarProps): JSX.
               </button>
             </>
           ) : (
-            <GetStartedCTA />
+            <>
+              <a
+                href="#/signup"
+                className="hidden sm:inline-flex px-3 py-1.5 rounded-lg border border-white/[0.10] text-hub-text-secondary text-sm font-medium hover:text-hub-text-primary hover:border-white/[0.18] transition-colors"
+              >
+                Sign in
+              </a>
+              <GetStartedCTA />
+            </>
           )}
         </div>
       </div>
@@ -316,21 +317,14 @@ export default function NavBar({ apiKey, balance, onLogout }: NavBarProps): JSX.
                 onClick={() => setMenuOpen(false)}
                 className={({ isActive }) => `${navTabClass(isActive)} block`}
               >
-                Dashboard
+                Agent Workspace
               </NavLink>
               <NavLink
                 to="/share"
                 onClick={() => setMenuOpen(false)}
                 className={({ isActive }) => `${navTabClass(isActive)} block`}
               >
-                Share
-              </NavLink>
-              <NavLink
-                to="/settings"
-                onClick={() => setMenuOpen(false)}
-                className={({ isActive }) => `${navTabClass(isActive)} block`}
-              >
-                Settings
+                Publish Skills
               </NavLink>
               <NavLink
                 to="/fleet"
@@ -369,6 +363,13 @@ export default function NavBar({ apiKey, balance, onLogout }: NavBarProps): JSX.
               >
                 For Providers
               </button>
+              <a
+                href="#/signup"
+                onClick={() => setMenuOpen(false)}
+                className={`${navTabClass(false)} block`}
+              >
+                Sign in
+              </a>
             </>
           )}
         </nav>
