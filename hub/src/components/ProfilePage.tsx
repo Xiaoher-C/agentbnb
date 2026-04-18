@@ -233,8 +233,8 @@ export default function ProfilePage(): JSX.Element {
   const navigate = useNavigate();
   const { setSelectedCard } = useOutletContext<AppOutletContext>();
   const { profileV2, loading, error } = useAgentProfile(owner ?? '');
-  const agentId = profileV2?.skills.find((s) => s.agent_id)?.agent_id;
-  const { credentials, loading: credsLoading, error: credsError } = useCredentials(agentId);
+  const credentialsAgentId = profileV2?.skills.find((s) => s.agent_id)?.agent_id;
+  const { credentials, loading: credsLoading, error: credsError } = useCredentials(credentialsAgentId);
 
   useEffect(() => {
     if (!owner) void navigate('/agents');
