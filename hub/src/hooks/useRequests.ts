@@ -6,6 +6,7 @@
  * and an empty result is returned immediately.
  */
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { authedFetch } from '../lib/authHeaders.js';
 
 const POLL_INTERVAL_MS = 30_000;
 
@@ -71,9 +72,12 @@ export function useRequests(
       const params = new URLSearchParams({ limit: '10' });
       if (since) params.set('since', since);
 
-      const res = await fetch(`/requests?${params.toString()}`, {
-        headers: { Authorization: `Bearer ${apiKey}` },
-      });
+      const isDid = apiKey === '__did__';
+      const res = isDid
+        ? await authedFetch(`/requests?${params.toString()}`)
+        : await fetch(`/requests?${params.toString()}`, {
+            headers: { Authorization: `Bearer ${apiKey}` },
+          });
 
       if (res.status === 401) {
         setError('Invalid API key');

@@ -7,6 +7,10 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { useRequests } from './useRequests.js';
 import type { RequestLogEntry } from './useRequests.js';
 
+vi.mock('../lib/authHeaders.js', () => ({
+  authedFetch: vi.fn(),
+}));
+
 const mockEntry: RequestLogEntry = {
   id: 'req-001',
   card_id: 'card-abc',
@@ -84,5 +88,23 @@ describe('useRequests', () => {
     await waitFor(() => expect(result.current.error).toBeTruthy());
 
     expect(result.current.error).toBe('Invalid API key');
+  });
+
+  it('uses DID auth flow when apiKey is __did__', async () => {
+    const { authedFetch } = await import('../lib/authHeaders.js');
+    vi.mocked(authedFetch).mockResolvedValue({
+      ok: true,
+      json: async () => ({ items: [mockEntry], limit: 10 }),
+    } as Response);
+
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { result } = renderHook(() => useRequests('__did__', '24h'));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    expect(authedFetch).toHaveBeenCalledWith(expect.stringContaining('/requests?'));
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(result.current.requests).toHaveLength(1);
   });
 });

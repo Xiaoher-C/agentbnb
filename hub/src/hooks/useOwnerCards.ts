@@ -8,6 +8,7 @@
  */
 import { useState, useEffect } from 'react';
 import type { HubCard, CardsResponse } from '../types.js';
+import { authedFetch } from '../lib/authHeaders.js';
 
 export interface UseOwnerCardsResult {
   ownerName: string | null;
@@ -45,9 +46,12 @@ export function useOwnerCards(apiKey: string | null): UseOwnerCardsResult {
     const run = async (): Promise<void> => {
       try {
         // Fetch /me to get owner identity and credit balance
-        const meRes = await fetch('/me', {
-          headers: { Authorization: `Bearer ${apiKey}` },
-        });
+        const isDid = apiKey === '__did__';
+        const meRes = isDid
+          ? await authedFetch('/me')
+          : await fetch('/me', {
+              headers: { Authorization: `Bearer ${apiKey}` },
+            });
 
         if (!meRes.ok) {
           if (meRes.status === 401) {

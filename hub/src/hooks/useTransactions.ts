@@ -7,6 +7,7 @@
  */
 import { useState, useEffect, useCallback, useRef } from 'react';
 import type { CreditTransaction } from '../types.js';
+import { authedFetch } from '../lib/authHeaders.js';
 
 const POLL_INTERVAL_MS = 30_000;
 
@@ -37,9 +38,12 @@ export function useTransactions(
     try {
       const params = new URLSearchParams({ limit: String(limit) });
 
-      const res = await fetch(`/me/transactions?${params.toString()}`, {
-        headers: { Authorization: `Bearer ${apiKey}` },
-      });
+      const isDid = apiKey === '__did__';
+      const res = isDid
+        ? await authedFetch(`/me/transactions?${params.toString()}`)
+        : await fetch(`/me/transactions?${params.toString()}`, {
+            headers: { Authorization: `Bearer ${apiKey}` },
+          });
 
       if (res.status === 401) {
         setError('Invalid API key');

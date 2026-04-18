@@ -6,6 +6,10 @@ import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import SharePage from './SharePage.js';
 
+vi.mock('../lib/authHeaders.js', () => ({
+  authedFetch: vi.fn(),
+}));
+
 describe('SharePage', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
@@ -118,5 +122,24 @@ describe('SharePage', () => {
     await waitFor(() => {
       expect(screen.getByText(/No draft cards detected/i)).toBeInTheDocument();
     });
+  });
+
+  it('uses DID auth flow for draft fetches', async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce({ ok: true, json: async () => ({ status: 'ok' }) });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { authedFetch } = await import('../lib/authHeaders.js');
+    vi.mocked(authedFetch).mockResolvedValue({
+      ok: true,
+      json: async () => ({ cards: [] }),
+    } as Response);
+
+    render(<SharePage apiKey="__did__" />);
+
+    await waitFor(() => {
+      expect(screen.getByText(/No draft cards detected/i)).toBeInTheDocument();
+    });
+
+    expect(authedFetch).toHaveBeenCalledWith('/draft');
   });
 });

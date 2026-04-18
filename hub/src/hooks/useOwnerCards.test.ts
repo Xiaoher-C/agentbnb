@@ -7,6 +7,10 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { useOwnerCards } from './useOwnerCards.js';
 import type { HubCard } from '../types.js';
 
+vi.mock('../lib/authHeaders.js', () => ({
+  authedFetch: vi.fn(),
+}));
+
 const aliceCard: HubCard = {
   id: 'card-001',
   owner: 'alice',
@@ -109,5 +113,27 @@ describe('useOwnerCards', () => {
     expect(fetchMock).not.toHaveBeenCalled();
     expect(result.current.cards).toHaveLength(0);
     expect(result.current.balance).toBeNull();
+  });
+
+  it('uses DID auth flow when apiKey is __did__', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ total: 1, limit: 100, offset: 0, items: [aliceCard] }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { authedFetch } = await import('../lib/authHeaders.js');
+    vi.mocked(authedFetch).mockResolvedValue({
+      ok: true,
+      json: async () => ({ owner: 'alice', balance: 321 }),
+    } as Response);
+
+    const { result } = renderHook(() => useOwnerCards('__did__'));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    expect(authedFetch).toHaveBeenCalledWith('/me');
+    expect(fetchMock).toHaveBeenCalledWith('/cards?limit=100');
+    expect(result.current.ownerName).toBe('alice');
+    expect(result.current.balance).toBe(321);
   });
 });

@@ -14,6 +14,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { HubCard } from '../types.js';
 import { Skeleton } from './Skeleton.js';
+import { authedFetch } from '../lib/authHeaders.js';
 
 export interface SharePageProps {
   /** Current API key from useAuth(). null when not authenticated. */
@@ -74,9 +75,12 @@ export default function SharePage({ apiKey }: SharePageProps): JSX.Element {
     setDraftError(null);
 
     try {
-      const res = await fetch('/draft', {
-        headers: { Authorization: `Bearer ${apiKey}` },
-      });
+      const isDid = apiKey === '__did__';
+      const res = isDid
+        ? await authedFetch('/draft')
+        : await fetch('/draft', {
+            headers: { Authorization: `Bearer ${apiKey}` },
+          });
 
       if (!res.ok) {
         throw new Error(`/draft returned ${res.status}`);
@@ -118,14 +122,23 @@ export default function SharePage({ apiKey }: SharePageProps): JSX.Element {
         pricing: { ...form.original.pricing, credits_per_call: form.credits_per_call },
       };
 
-      const res = await fetch('/cards', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${apiKey ?? ''}`,
-        },
-        body: JSON.stringify(cardPayload),
-      });
+      const isDid = apiKey === '__did__';
+      const res = isDid
+        ? await authedFetch('/cards', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(cardPayload),
+          })
+        : await fetch('/cards', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${apiKey ?? ''}`,
+            },
+            body: JSON.stringify(cardPayload),
+          });
 
       if (!res.ok) throw new Error(`POST /cards returned ${res.status}`);
 
@@ -181,7 +194,7 @@ export default function SharePage({ apiKey }: SharePageProps): JSX.Element {
           <p className="text-sm font-medium text-slate-300">Server Running</p>
         </div>
         <p className="text-sm text-slate-400">
-          Log in via the <strong className="text-slate-300">My Agent</strong> tab to publish your capabilities.
+          Sign in to your dashboard to publish your capabilities.
         </p>
       </div>
     );

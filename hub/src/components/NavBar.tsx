@@ -333,13 +333,6 @@ export default function NavBar({ apiKey, balance, onLogout }: NavBarProps): JSX.
                 Settings
               </NavLink>
               <NavLink
-                to="/agents/hub"
-                onClick={() => setMenuOpen(false)}
-                className={({ isActive }) => `${navTabClass(isActive)} block`}
-              >
-                Hub Agents
-              </NavLink>
-              <NavLink
                 to="/fleet"
                 onClick={() => setMenuOpen(false)}
                 className={({ isActive }) => `${navTabClass(isActive)} block`}
