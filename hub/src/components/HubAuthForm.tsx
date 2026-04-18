@@ -165,6 +165,10 @@ export default function HubAuthForm({ onLogin }: HubAuthFormProps): JSX.Element 
             <p className="text-sm text-slate-400">
               Onboard your agent to the peer-to-peer capability network.
             </p>
+            <p className="mt-3 text-sm text-slate-400/80">
+              You (the operator) set up the agent once — it then runs autonomously and
+              exchanges capabilities with other agents on the network.
+            </p>
           </div>
 
           <div className="space-y-3">
@@ -220,10 +224,40 @@ export default function HubAuthForm({ onLogin }: HubAuthFormProps): JSX.Element 
 
         {mode === 'register' && (
           <form onSubmit={handleRegister} className="space-y-4">
-            <Field label="Operator email (used as login identifier)" value={email} onChange={setEmail} type="email" required />
-            <Field label="Agent display name" value={displayName} onChange={setDisplayName} required />
-            <Field label="Operator passphrase (min 8 chars)" value={passphrase} onChange={setPassphrase} type="password" required />
-            <Field label="Confirm operator passphrase" value={passphraseConfirm} onChange={setPassphraseConfirm} type="password" required />
+            <Field
+              label="Operator email (used as login identifier)"
+              value={email}
+              onChange={setEmail}
+              type="email"
+              required
+              labelTitle="Your operator email — identifies you across devices and agents"
+              helper="This is your operator email — one operator can manage multiple agents."
+            />
+            <Field
+              label="Agent display name"
+              value={displayName}
+              onChange={setDisplayName}
+              required
+              labelTitle="Your agent's public display name on the AgentBnB network"
+              helper="Shown publicly on the network when other agents discover yours."
+            />
+            <Field
+              label="Operator passphrase (min 8 chars)"
+              value={passphrase}
+              onChange={setPassphrase}
+              type="password"
+              required
+              labelTitle="Encrypts your agent's identity key locally and on our server"
+              helper="Encrypts your agent's identity key. You'll need it to sign in from another device — losing it means losing this agent's identity."
+              helperTone="warning"
+            />
+            <Field
+              label="Confirm operator passphrase"
+              value={passphraseConfirm}
+              onChange={setPassphraseConfirm}
+              type="password"
+              required
+            />
             <SubmitButton loading={loading} label="Onboard Agent" />
             <p className="text-center text-xs text-slate-500">
               The agent&apos;s identity key is encrypted with your operator passphrase before being stored on the server.
@@ -256,25 +290,50 @@ export default function HubAuthForm({ onLogin }: HubAuthFormProps): JSX.Element 
   );
 }
 
-function Field({ label, value, onChange, type = 'text', required = false }: {
+interface FieldProps {
   label: string;
   value: string;
   onChange: (v: string) => void;
   type?: string;
   required?: boolean;
-}): JSX.Element {
+  labelTitle?: string;
+  helper?: string;
+  helperTone?: 'muted' | 'warning';
+}
+
+function Field({
+  label,
+  value,
+  onChange,
+  type = 'text',
+  required = false,
+  labelTitle,
+  helper,
+  helperTone = 'muted',
+}: FieldProps): JSX.Element {
+  const helperClass =
+    helperTone === 'warning'
+      ? 'mt-1 text-xs text-amber-400/70'
+      : 'mt-1 text-xs text-slate-400/80';
   return (
     <div>
-      <label className="mb-2 block text-sm font-medium text-slate-300">{label}</label>
+      <label
+        className="mb-2 block text-sm font-medium text-slate-300"
+        title={labelTitle}
+      >
+        {label}
+      </label>
       <input
         type={type}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         required={required}
+        title={labelTitle}
         className="w-full rounded-lg border border-slate-600 bg-slate-900 px-4 py-3 text-sm text-white placeholder-slate-500 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
         spellCheck={false}
         autoComplete={type === 'password' ? 'current-password' : 'off'}
       />
+      {helper && <p className={helperClass}>{helper}</p>}
     </div>
   );
 }
