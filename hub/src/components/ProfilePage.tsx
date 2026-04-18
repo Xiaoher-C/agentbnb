@@ -14,9 +14,11 @@
  */
 import Avatar from 'boring-avatars';
 import { Link, useNavigate, useOutletContext, useParams } from 'react-router';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
+import { Check, Copy } from 'lucide-react';
 import { useAgentProfile } from '../hooks/useAgents.js';
-import type { AppOutletContext, ExecutionProof } from '../types.js';
+import { useDidDocument } from '../hooks/useDidDocument.js';
+import type { AppOutletContext, ExecutionProof, HubCard } from '../types.js';
 import CapabilityCard from './CapabilityCard.js';
 
 function timeAgo(dateString: string): string {
@@ -31,6 +33,81 @@ function timeAgo(dateString: string): string {
   if (diffMin < 60) return `${diffMin}m ago`;
   if (diffHour < 24) return `${diffHour}h ago`;
   return `${diffDay}d ago`;
+}
+
+/**
+ * Returns the first skill's agent_id. v2.0 cards carry an Ed25519 pubkey hash;
+ * v1.0 cards do not, so this can be undefined.
+ */
+function findAgentId(skills: HubCard[]): string | undefined {
+  return skills.find((s) => s.agent_id)?.agent_id;
+}
+
+/** Shortens an agent_id to `first8…last4` for DID chip display. */
+function shortenAgentId(agentId: string): string {
+  if (agentId.length <= 12) return agentId;
+  return `${agentId.slice(0, 8)}…${agentId.slice(-4)}`;
+}
+
+/**
+ * DidIdentity — Renders the v9.0 DID chip, copy button, and (optionally)
+ * the resolved gateway endpoint line.
+ *
+ * Silent no-op when agent_id is undefined (v1.0 cards, or agents without
+ * cryptographic identity published). Clipboard failures are swallowed —
+ * the button stays in its resting state.
+ */
+function DidIdentity({ agentId }: { agentId: string }): JSX.Element {
+  const [copied, setCopied] = useState(false);
+  const { gatewayEndpoint } = useDidDocument(agentId);
+  const did = `did:agentbnb:${agentId}`;
+  const displayDid = `did:agentbnb:${shortenAgentId(agentId)}`;
+
+  const handleCopy = async (): Promise<void> => {
+    try {
+      await navigator.clipboard.writeText(did);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Clipboard API unavailable — leave button in resting state.
+    }
+  };
+
+  return (
+    <div className="mt-2 flex flex-col gap-1">
+      <div className="flex items-center gap-2">
+        <span
+          className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-white/[0.05] border border-hub-border text-hub-text-secondary"
+          title={did}
+        >
+          {displayDid}
+        </span>
+        <button
+          type="button"
+          onClick={() => { void handleCopy(); }}
+          className="text-hub-text-muted hover:text-hub-text-primary transition-colors"
+          aria-label={copied ? 'DID copied' : 'Copy DID'}
+          title={copied ? 'Copied' : 'Copy DID'}
+        >
+          {copied ? (
+            <Check className="w-3.5 h-3.5 text-emerald-400" />
+          ) : (
+            <Copy className="w-3.5 h-3.5" />
+          )}
+        </button>
+        {copied && (
+          <span className="text-[11px] text-emerald-400" role="status">
+            Copied
+          </span>
+        )}
+      </div>
+      {gatewayEndpoint && (
+        <p className="text-[11px] font-mono text-hub-text-muted truncate" title={gatewayEndpoint}>
+          {gatewayEndpoint}
+        </p>
+      )}
+    </div>
+  );
 }
 
 const TIER_CONFIG: Record<0 | 1 | 2, { label: string; cls: string }> = {
@@ -123,6 +200,7 @@ export default function ProfilePage(): JSX.Element {
   const { trust_metrics: tm, execution_proofs, authority, suitability, learning, verification_badges, performance_tier } = profileV2;
   const tierCfg = TIER_CONFIG[performance_tier];
   const displayName = profileV2.agent_name ?? profileV2.owner;
+  const agentId = findAgentId(profileV2.skills);
 
   return (
     <div className="max-w-4xl mx-auto">
@@ -157,6 +235,7 @@ export default function ProfilePage(): JSX.Element {
             {profileV2.short_description && (
               <p className="text-hub-text-secondary mt-1 text-sm">{profileV2.short_description}</p>
             )}
+            {agentId && <DidIdentity agentId={agentId} />}
             <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-xs text-hub-text-tertiary">
               <span>@{profileV2.owner}</span>
               <span>Joined {new Date(profileV2.joined_at).toLocaleDateString()}</span>
