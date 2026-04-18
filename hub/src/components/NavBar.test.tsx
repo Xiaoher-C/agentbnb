@@ -79,6 +79,12 @@ describe('NavBar', () => {
     expect(screen.getByText(/cr 42/)).toBeInTheDocument();
   });
 
+  it('does not expose the retired Hub Agents entry in the authenticated dropdown', () => {
+    renderNavBar({ ...defaultProps, apiKey: 'sk-test', balance: 42 });
+    fireEvent.click(screen.getByRole('button', { name: /my agent/i }));
+    expect(screen.queryByRole('link', { name: /hub agents/i })).not.toBeInTheDocument();
+  });
+
   it('uses position-fixed scroll lock when drawer is open (iOS-safe)', () => {
     renderNavBar();
     const hamburger = screen.getByRole('button', { name: /toggle menu/i });

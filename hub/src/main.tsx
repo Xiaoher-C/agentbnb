@@ -28,9 +28,6 @@ import AgentList from './components/AgentList.js';
 import ProfilePage from './components/ProfilePage.js';
 import ActivityFeed from './components/ActivityFeed.js';
 import DocsPage from './components/DocsPage.js';
-import HubAgentListPage from './pages/HubAgentListPage.js';
-import CreateAgentPage from './pages/CreateAgentPage.js';
-import HubAgentDashboardPage from './pages/HubAgentDashboardPage.js';
 import EvolutionPage from './pages/EvolutionPage.js';
 import CreditPolicyPage from './pages/CreditPolicyPage.js';
 import FleetConsolePage from './pages/FleetConsolePage.js';
@@ -67,15 +64,15 @@ const router = createHashRouter([
       },
       {
         path: 'agents/hub',
-        element: <HubAgentListPage />,
+        element: <Navigate to="/dashboard" replace />,
       },
       {
         path: 'agents/hub/new',
-        element: <CreateAgentPage />,
+        element: <Navigate to="/dashboard" replace />,
       },
       {
         path: 'agents/hub/:agentId',
-        element: <HubAgentDashboardPage />,
+        element: <Navigate to="/dashboard" replace />,
       },
       {
         path: 'agents/:owner',

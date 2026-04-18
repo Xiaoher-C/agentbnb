@@ -114,14 +114,6 @@ function MyAgentDropdown(): JSX.Element {
           >
             Settings
           </NavLink>
-          <div className="my-1 border-t border-white/[0.06]" />
-          <NavLink
-            to="/agents/hub"
-            onClick={() => { setOpen(false); }}
-            className="block px-3 py-2 text-sm text-hub-text-secondary hover:text-hub-text-primary hover:bg-white/[0.04] transition-colors"
-          >
-            Hub Agents
-          </NavLink>
         </div>
       )}
     </div>

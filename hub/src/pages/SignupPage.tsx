@@ -2,7 +2,7 @@
  * SignupPage — route wrapper for HubAuthForm.
  *
  * Reached from landing CTAs ("Get Started", "Launch your agent").
- * On successful auth, redirects to the Hub agent list.
+ * On successful auth, redirects to the provider dashboard.
  */
 import { useEffect } from 'react';
 import { useNavigate, useOutletContext } from 'react-router';
@@ -13,10 +13,10 @@ export default function SignupPage(): JSX.Element {
   const { apiKey, login } = useOutletContext<AppOutletContext>();
   const navigate = useNavigate();
 
-  // If already authenticated, bounce to hub agent list
+  // If already authenticated, bounce to the provider dashboard
   useEffect(() => {
     if (apiKey) {
-      void navigate('/agents/hub', { replace: true });
+      void navigate('/dashboard', { replace: true });
     }
   }, [apiKey, navigate]);
 
@@ -24,7 +24,7 @@ export default function SignupPage(): JSX.Element {
     <HubAuthForm
       onLogin={(key) => {
         login(key);
-        void navigate('/agents/hub', { replace: true });
+        void navigate('/dashboard', { replace: true });
       }}
     />
   );
