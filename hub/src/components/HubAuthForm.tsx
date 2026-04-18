@@ -184,7 +184,7 @@ export default function HubAuthForm({ onLogin }: HubAuthFormProps): JSX.Element 
               onClick={() => setMode('api-key')}
               className="w-full rounded-lg px-4 py-2 text-xs text-slate-400 transition-colors hover:text-slate-200"
             >
-              I have an API key (CLI operators)
+              Use an existing API key (CLI operators)
             </button>
           </div>
 
@@ -209,7 +209,7 @@ export default function HubAuthForm({ onLogin }: HubAuthFormProps): JSX.Element 
         <h1 className="mb-6 text-xl font-bold text-white">
           {mode === 'register' && 'Onboard Agent'}
           {mode === 'login' && 'Operator Sign In'}
-          {mode === 'api-key' && 'API Key Login'}
+          {mode === 'api-key' && 'Operator API Key Login'}
         </h1>
 
         {error && (
@@ -223,7 +223,7 @@ export default function HubAuthForm({ onLogin }: HubAuthFormProps): JSX.Element 
             <Field label="Operator email (used as login identifier)" value={email} onChange={setEmail} type="email" required />
             <Field label="Agent display name" value={displayName} onChange={setDisplayName} required />
             <Field label="Operator passphrase (min 8 chars)" value={passphrase} onChange={setPassphrase} type="password" required />
-            <Field label="Confirm passphrase" value={passphraseConfirm} onChange={setPassphraseConfirm} type="password" required />
+            <Field label="Confirm operator passphrase" value={passphraseConfirm} onChange={setPassphraseConfirm} type="password" required />
             <SubmitButton loading={loading} label="Onboard Agent" />
             <p className="text-center text-xs text-slate-500">
               The agent&apos;s identity key is encrypted with your operator passphrase before being stored on the server.
@@ -244,7 +244,7 @@ export default function HubAuthForm({ onLogin }: HubAuthFormProps): JSX.Element 
 
         {mode === 'api-key' && (
           <form onSubmit={handleApiKey} className="space-y-4">
-            <Field label="API Key (from ~/.agentbnb/config.json)" value={apiKey} onChange={setApiKey} />
+            <Field label="Operator API key (from ~/.agentbnb/config.json)" value={apiKey} onChange={setApiKey} />
             <SubmitButton loading={false} label="Connect" />
             <p className="text-center text-xs text-slate-500">
               Legacy flow for CLI operators with an existing API key.
