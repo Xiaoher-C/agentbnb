@@ -23,7 +23,7 @@ describe('AuthGate', () => {
       </AuthGate>,
     );
     expect(screen.queryByText('Dashboard Content')).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Create new agent' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Onboard a new agent' })).toBeInTheDocument();
   });
 
   it('renders HubAuthForm landing when apiKey is undefined', () => {
@@ -33,6 +33,6 @@ describe('AuthGate', () => {
       </AuthGate>,
     );
     expect(screen.queryByText('Dashboard Content')).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Sign in to existing agent' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Sign in as operator' })).toBeInTheDocument();
   });
 });

@@ -163,7 +163,7 @@ export default function HubAuthForm({ onLogin }: HubAuthFormProps): JSX.Element 
           <div className="mb-8 text-center">
             <h1 className="mb-2 text-2xl font-bold text-white">AgentBnB Hub</h1>
             <p className="text-sm text-slate-400">
-              Your agent&apos;s home in the P2P agent economy.
+              Onboard your agent to the peer-to-peer capability network.
             </p>
           </div>
 
@@ -172,24 +172,24 @@ export default function HubAuthForm({ onLogin }: HubAuthFormProps): JSX.Element 
               onClick={() => setMode('register')}
               className="w-full rounded-lg bg-emerald-600 px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-emerald-500"
             >
-              Create new agent
+              Onboard a new agent
             </button>
             <button
               onClick={() => setMode('login')}
               className="w-full rounded-lg border border-slate-600 bg-slate-700 px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-slate-600"
             >
-              Sign in to existing agent
+              Sign in as operator
             </button>
             <button
               onClick={() => setMode('api-key')}
               className="w-full rounded-lg px-4 py-2 text-xs text-slate-400 transition-colors hover:text-slate-200"
             >
-              I have an API key (CLI users)
+              Use an existing API key (CLI operators)
             </button>
           </div>
 
           <p className="mt-6 text-center text-xs text-slate-500">
-            No CLI needed. Your keys are generated in your browser and never sent to the server unencrypted.
+            No CLI needed. Keys are generated in your browser and stay operator-controlled — never sent to the server unencrypted.
           </p>
         </div>
       </div>
@@ -207,9 +207,9 @@ export default function HubAuthForm({ onLogin }: HubAuthFormProps): JSX.Element 
         </button>
 
         <h1 className="mb-6 text-xl font-bold text-white">
-          {mode === 'register' && 'Create Agent'}
-          {mode === 'login' && 'Sign In'}
-          {mode === 'api-key' && 'API Key Login'}
+          {mode === 'register' && 'Onboard Agent'}
+          {mode === 'login' && 'Operator Sign In'}
+          {mode === 'api-key' && 'Operator API Key Login'}
         </h1>
 
         {error && (
@@ -220,34 +220,34 @@ export default function HubAuthForm({ onLogin }: HubAuthFormProps): JSX.Element 
 
         {mode === 'register' && (
           <form onSubmit={handleRegister} className="space-y-4">
-            <Field label="Email (used as login identifier)" value={email} onChange={setEmail} type="email" required />
-            <Field label="Display name" value={displayName} onChange={setDisplayName} required />
-            <Field label="Passphrase (min 8 chars)" value={passphrase} onChange={setPassphrase} type="password" required />
-            <Field label="Confirm passphrase" value={passphraseConfirm} onChange={setPassphraseConfirm} type="password" required />
-            <SubmitButton loading={loading} label="Create Agent" />
+            <Field label="Operator email (used as login identifier)" value={email} onChange={setEmail} type="email" required />
+            <Field label="Agent display name" value={displayName} onChange={setDisplayName} required />
+            <Field label="Operator passphrase (min 8 chars)" value={passphrase} onChange={setPassphrase} type="password" required />
+            <Field label="Confirm operator passphrase" value={passphraseConfirm} onChange={setPassphraseConfirm} type="password" required />
+            <SubmitButton loading={loading} label="Onboard Agent" />
             <p className="text-center text-xs text-slate-500">
-              Your private key is encrypted with your passphrase and stored on our server.
-              You need the passphrase to sign in from another device.
+              The agent&apos;s identity key is encrypted with your operator passphrase before being stored on the server.
+              You&apos;ll need this passphrase to sign in from another device.
               <br />
-              <strong className="text-amber-400">If you forget the passphrase, your identity cannot be recovered.</strong>
+              <strong className="text-amber-400">If you forget this passphrase, the agent&apos;s identity cannot be recovered.</strong>
             </p>
           </form>
         )}
 
         {mode === 'login' && (
           <form onSubmit={handleLogin} className="space-y-4">
-            <Field label="Email" value={email} onChange={setEmail} type="email" required />
-            <Field label="Passphrase" value={passphrase} onChange={setPassphrase} type="password" required />
-            <SubmitButton loading={loading} label="Sign In" />
+            <Field label="Operator email" value={email} onChange={setEmail} type="email" required />
+            <Field label="Operator passphrase" value={passphrase} onChange={setPassphrase} type="password" required />
+            <SubmitButton loading={loading} label="Sign in as operator" />
           </form>
         )}
 
         {mode === 'api-key' && (
           <form onSubmit={handleApiKey} className="space-y-4">
-            <Field label="API Key (from ~/.agentbnb/config.json)" value={apiKey} onChange={setApiKey} />
+            <Field label="Operator API key (from ~/.agentbnb/config.json)" value={apiKey} onChange={setApiKey} />
             <SubmitButton loading={false} label="Connect" />
             <p className="text-center text-xs text-slate-500">
-              Legacy flow for existing CLI users.
+              Legacy flow for CLI operators with an existing API key.
             </p>
           </form>
         )}
