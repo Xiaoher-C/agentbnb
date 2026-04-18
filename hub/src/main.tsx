@@ -17,7 +17,7 @@
  */
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import { createHashRouter, RouterProvider, useOutletContext } from 'react-router';
+import { Navigate, createHashRouter, RouterProvider, useOutletContext } from 'react-router';
 import './index.css';
 import App from './App.js';
 import DiscoverPage from './pages/DiscoverPage.js';
@@ -90,6 +90,7 @@ const router = createHashRouter([
         element: <DocsPage />,
       },
       { path: 'evolution', element: <EvolutionPage /> },
+      { path: 'genesis', element: <Navigate to="/evolution" replace /> },
       { path: 'credit-policy', element: <CreditPolicyPage /> },
       { path: 'fleet', element: <FleetConsolePage /> },
       { path: 'dashboard', element: <ProviderDashboardPage /> },
