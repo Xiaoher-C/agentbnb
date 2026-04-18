@@ -120,32 +120,6 @@ export default function DiscoverPage(): JSX.Element {
           </span>
         </div>
 
-        {/* By Agent / By Skill — segmented control */}
-        <div className="flex items-center gap-1 mb-5 bg-white/[0.04] rounded-lg p-1 w-fit">
-          <button
-            onClick={() => setActiveTab('agents')}
-            className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${
-              activeTab === 'agents'
-                ? 'bg-white/[0.08] text-hub-text-primary'
-                : 'text-hub-text-muted hover:text-hub-text-secondary'
-            }`}
-          >
-            <span>By Agent</span>
-            <span className="ml-1.5 text-[10px] text-hub-text-muted font-normal">browse providers</span>
-          </button>
-          <button
-            onClick={() => setActiveTab('skills')}
-            className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${
-              activeTab === 'skills'
-                ? 'bg-white/[0.08] text-hub-text-primary'
-                : 'text-hub-text-muted hover:text-hub-text-secondary'
-            }`}
-          >
-            <span>By Skill</span>
-            <span className="ml-1.5 text-[10px] text-hub-text-muted font-normal">browse rentable capabilities</span>
-          </button>
-        </div>
-
         {/* SearchFilter */}
         <SearchFilter
           query={query}
@@ -228,6 +202,43 @@ export default function DiscoverPage(): JSX.Element {
           </div>
         )}
 
+        {/* Section label + inline By Agent / By Skill toggle — always rendered */}
+        <div className="flex flex-col sm:flex-row sm:items-baseline sm:justify-between gap-2 sm:gap-3 mb-3">
+          <p className="text-[11px] text-hub-text-muted uppercase tracking-wider">
+            {(() => {
+              if (loading) return 'Loading…';
+              if (error && cards.length === 0) return 'Registry temporarily unavailable';
+              if (cards.length === 0) return query ? `No results for "${query}"` : 'No agents yet';
+              return `${query ? `Results for "${query}"` : activeTab === 'agents' ? 'All agents' : 'All skills'} · ${filteredTotal}`;
+            })()}
+          </p>
+          <div className="flex items-center gap-3 text-[11px] self-start sm:self-auto">
+            <button
+              type="button"
+              onClick={() => setActiveTab('agents')}
+              className={`transition-colors ${
+                activeTab === 'agents'
+                  ? 'text-hub-text-primary font-medium'
+                  : 'text-hub-text-muted hover:text-hub-text-secondary'
+              }`}
+            >
+              By Agent
+            </button>
+            <span className="text-hub-text-muted" aria-hidden="true">·</span>
+            <button
+              type="button"
+              onClick={() => setActiveTab('skills')}
+              className={`transition-colors ${
+                activeTab === 'skills'
+                  ? 'text-hub-text-primary font-medium'
+                  : 'text-hub-text-muted hover:text-hub-text-secondary'
+              }`}
+            >
+              By Skill
+            </button>
+          </div>
+        </div>
+
         {/* Card Grid */}
         {loading ? (
           <CardGrid>
@@ -243,11 +254,6 @@ export default function DiscoverPage(): JSX.Element {
           <>
             {/* Inline banner when we have stale data alongside an error */}
             {error ? <InlineErrorBanner onRetry={retry} message={error} /> : null}
-
-            {/* Section label */}
-            <p className="text-[11px] text-hub-text-muted uppercase tracking-wider mb-3">
-              {query ? `Results for "${query}"` : activeTab === 'agents' ? 'All agents' : 'All skills'} · {filteredTotal}
-            </p>
             <CardGrid>
               {cards.map((card) => (
                 <CapabilityCard
