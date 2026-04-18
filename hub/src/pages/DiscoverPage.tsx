@@ -202,7 +202,7 @@ export default function DiscoverPage(): JSX.Element {
           </div>
         )}
 
-        {/* Section label + inline By Agent / By Skill toggle */}
+        {/* Section label + inline By Agent / By Skill toggle — always rendered */}
         <div className="flex flex-col sm:flex-row sm:items-baseline sm:justify-between gap-2 sm:gap-3 mb-3">
           <p className="text-[11px] text-hub-text-muted uppercase tracking-wider">
             {(() => {
