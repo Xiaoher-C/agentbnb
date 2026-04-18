@@ -4,10 +4,12 @@
  * Structure (top → bottom):
  *   Hero → HowItWorks → Trust chip + tabs + filters + cards → ProviderValue → Compatible → FAQ → ValueProp
  */
-import { useOutletContext } from 'react-router';
+import { useMemo } from 'react';
+import { useNavigate, useOutletContext } from 'react-router';
 import { Shield } from 'lucide-react';
+import Avatar from 'boring-avatars';
 import { useCards } from '../hooks/useCards.js';
-import type { AppOutletContext } from '../types.js';
+import type { AppOutletContext, HubCard } from '../types.js';
 import CapabilityCard from '../components/CapabilityCard.js';
 import CardGrid from '../components/CardGrid.js';
 import EmptyState from '../components/EmptyState.js';
@@ -22,6 +24,19 @@ import { FAQSection } from '../components/FAQSection.js';
 import { ValuePropSection } from '../components/ValuePropSection.js';
 
 const SKELETON_COUNT = 6;
+const MATCHING_AGENTS_MAX = 6;
+const AGENT_NAME_MAX_LEN = 16;
+
+const AVATAR_COLORS = ['#10B981', '#059669', '#047857', '#065F46', '#064E3B'];
+
+const TIER_CHIP_CONFIG = {
+  1: { label: 'Active', cls: 'text-blue-400 bg-blue-400/[0.08]' },
+  2: { label: 'Trusted', cls: 'text-emerald-400 bg-emerald-400/[0.08]' },
+} as const;
+
+function truncateName(name: string): string {
+  return name.length > AGENT_NAME_MAX_LEN ? `${name.slice(0, AGENT_NAME_MAX_LEN - 1)}…` : name;
+}
 
 const USE_CASES = [
   { label: 'Reserve inventory', query: 'reserve inventory' },
@@ -34,6 +49,7 @@ const USE_CASES = [
 
 export default function DiscoverPage(): JSX.Element {
   const { setSelectedCard } = useOutletContext<AppOutletContext>();
+  const navigate = useNavigate();
 
   const {
     cards,
@@ -64,6 +80,22 @@ export default function DiscoverPage(): JSX.Element {
     availableCategories,
     retry,
   } = useCards();
+
+  // Derive matching agents from the current skill tiles — same signal as the grid,
+  // deduped by owner, preserving rank order. Only shown when searching on the Skills tab.
+  const showMatchingAgents = query.trim().length > 0 && activeTab === 'skills';
+  const matchingAgents = useMemo<HubCard[]>(() => {
+    if (!showMatchingAgents) return [];
+    const seen = new Set<string>();
+    const result: HubCard[] = [];
+    for (const card of cards) {
+      if (seen.has(card.owner)) continue;
+      seen.add(card.owner);
+      result.push(card);
+      if (result.length >= MATCHING_AGENTS_MAX) break;
+    }
+    return result;
+  }, [cards, showMatchingAgents]);
 
   return (
     <>
@@ -158,6 +190,43 @@ export default function DiscoverPage(): JSX.Element {
             )}
           </div>
         </div>
+
+        {/* Agents-matching strip — capability search routes to agent browsing */}
+        {showMatchingAgents && matchingAgents.length > 0 && (
+          <div className="mb-6">
+            <p className="text-[11px] text-hub-text-muted uppercase tracking-wider mb-2">
+              Agents with this capability ({matchingAgents.length})
+            </p>
+            <div className="flex items-center gap-2 overflow-x-auto pb-1">
+              {matchingAgents.map((agent) => {
+                const tier = agent.performance_tier;
+                const tierChip = tier === 1 || tier === 2 ? TIER_CHIP_CONFIG[tier] : null;
+                return (
+                  <button
+                    key={agent.owner}
+                    onClick={() => void navigate(`/agents/${agent.owner}`)}
+                    className="flex items-center gap-2 rounded-full bg-white/[0.05] px-3 py-1.5 hover:bg-white/[0.08] transition-colors flex-shrink-0"
+                  >
+                    <Avatar size={28} name={agent.owner} variant="marble" colors={AVATAR_COLORS} />
+                    <span className="text-sm text-hub-text-primary">{truncateName(agent.name)}</span>
+                    {tierChip ? (
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded ${tierChip.cls}`}>
+                        {tierChip.label}
+                      </span>
+                    ) : (
+                      <span
+                        className={`w-1.5 h-1.5 rounded-full ${
+                          agent.availability.online ? 'bg-hub-accent' : 'bg-hub-text-tertiary'
+                        }`}
+                        aria-label={agent.availability.online ? 'Online' : 'Offline'}
+                      />
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {/* Card Grid */}
         {loading ? (
