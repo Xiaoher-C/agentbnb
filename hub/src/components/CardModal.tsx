@@ -196,9 +196,9 @@ export default function CardModal({ card, onClose }: CardModalProps) {
     s.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
   const shortId = card.id.slice(0, 8);
   const slug = toSlug(card.name) || 'agent';
-  // Full UUID is kept as the argument; trailing "# <slug>" is a bash comment
-  // and is safely ignored by the shell when the user pastes the command.
-  const cliCommand = `agentbnb request ${card.id}  # ${slug}`;
+  // Clipboard payload is the exact CLI command — no trailing comment. The
+  // human-readable slug + short id is rendered separately above the copy pill.
+  const cliCommand = `agentbnb request ${card.id}`;
 
   /** Determine idle rate text color: emerald if > 70% (highly available), yellow if < 30% (busy). */
   function idleRateClass(): string {
