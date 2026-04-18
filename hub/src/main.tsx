@@ -95,11 +95,7 @@ const router = createHashRouter([
       { path: 'myagent', element: <MyAgentWrapper /> },
       {
         path: 'settings',
-        element: (
-          <div className="text-hub-text-muted py-12 text-center">
-            Settings — coming soon
-          </div>
-        ),
+        element: <Navigate to="/dashboard" replace />,
       },
     ],
   },
