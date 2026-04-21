@@ -1,0 +1,36 @@
+{
+  "name": "@agentbnb/skill-inspector",
+  "version": "0.1.0",
+  "description": "Read-only Skill Inspector for AgentBnB — parses SKILL.md files into a node graph with risk + provenance overlays. 'skill' here means the SKILL.md file format (Claude Code construct), NOT the deprecated AgentBnB marketplace-skill concept.",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsup",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "mdast-util-to-string": "^4.0.0",
+    "remark": "^15.0.1",
+    "remark-parse": "^11.0.0",
+    "unified": "^11.0.5"
+  },
+  "devDependencies": {
+    "@types/mdast": "^4.0.4",
+    "@types/node": "^22.0.0",
+    "tsup": "^8.3.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0",
+    "vitest": "^2.1.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
