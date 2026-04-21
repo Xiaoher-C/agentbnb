@@ -8,6 +8,9 @@ importers:
 
   .:
     dependencies:
+      '@agentbnb/skill-inspector':
+        specifier: workspace:*
+        version: link:packages/skill-inspector
       '@anthropic-ai/sdk':
         specifier: ^0.80.0
         version: 0.80.0(zod@3.25.76)
