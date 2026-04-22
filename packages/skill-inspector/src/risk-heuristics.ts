@@ -98,8 +98,8 @@ const deadSection: RiskRule = {
   id: 'dead.section',
   severity: 'dead',
   description:
-    'Section has zero non-trigger incoming edges and zero outgoing edges — may be dead weight.',
-  defaultEnabled: true,
+    'Section has zero non-trigger incoming edges and zero outgoing edges — may be dead weight. Opt-in only: most SKILL.md files use implicit top-to-bottom flow rather than explicit cross-section references, so this fires on ~20% of nodes in real Anthropic-format skills. Re-evaluate once a v0.2 edge-inference pass can model implicit document flow.',
+  defaultEnabled: false,
   apply(graph) {
     const issues: RiskIssue[] = [];
     for (const node of graph.nodes) {

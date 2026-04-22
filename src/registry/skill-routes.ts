@@ -224,7 +224,7 @@ export async function skillRoutesPlugin(
 
   fastify.get('/api/skills/:skillId/inspect', {
     config: {
-      rateLimit: { max: 30, timeWindow: '1 minute' },
+      rateLimit: { max: 120, timeWindow: '1 minute' },
     },
     schema: {
       tags: ['system'],

@@ -73,7 +73,7 @@ describe('listRules', () => {
       .filter((r) => r.defaultEnabled)
       .map((r) => r.id)
       .sort();
-    expect(enabled).toEqual(['complexity.long-section', 'dead.section', 'dead.tool'].sort());
+    expect(enabled).toEqual(['complexity.long-section', 'dead.tool'].sort());
   });
 });
 
