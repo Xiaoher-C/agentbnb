@@ -33,6 +33,7 @@ import CreditPolicyPage from './pages/CreditPolicyPage.js';
 import FleetConsolePage from './pages/FleetConsolePage.js';
 import ProviderDashboardPage from './pages/ProviderDashboardPage.js';
 import SignupPage from './pages/SignupPage.js';
+import SkillsInspectorRoute from './routes/SkillsInspector.js';
 import type { AppOutletContext } from './types.js';
 
 /** Wrapper: reads apiKey from outlet context and passes it to SharePage */
@@ -93,6 +94,7 @@ const router = createHashRouter([
       { path: 'dashboard', element: <ProviderDashboardPage /> },
       { path: 'share', element: <SharePageWrapper /> },
       { path: 'myagent', element: <MyAgentWrapper /> },
+      { path: 'skills-inspector', element: <SkillsInspectorRoute /> },
       {
         path: 'settings',
         element: <Navigate to="/dashboard" replace />,

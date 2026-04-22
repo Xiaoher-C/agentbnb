@@ -19,6 +19,7 @@ import { batchRoutesPlugin } from './batch-routes.js';
 import { identityRoutesPlugin } from './identity-routes.js';
 import { cardRoutesPlugin } from './card-routes.js';
 import { ownerRoutesPlugin } from './owner-routes.js';
+import { skillRoutesPlugin } from './skill-routes.js';
 import feedbackPlugin from '../feedback/api.js';
 import evolutionPlugin from '../evolution/api.js';
 
@@ -250,6 +251,9 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
 
   // Provider reliability and fleet routes (extracted to provider-routes.ts)
   void api.register(providerRoutesPlugin, { registryDb: db, creditDb: opts.creditDb });
+
+  // Skill Inspector v0.1 — read-only SKILL.md parser + risk overlay (skill-routes.ts)
+  void api.register(skillRoutesPlugin, { registryDb: db });
 
   }); // end of API routes plugin
 
