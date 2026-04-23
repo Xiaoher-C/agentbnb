@@ -2,15 +2,15 @@ import { unified } from 'unified';
 import remarkParse from 'remark-parse';
 import type { Root } from 'mdast';
 import { extractNodes } from './nodes.js';
-import type { SkillGraph, SkillMetadata } from './types.js';
+import type { SkillGraph, SkillMetadata, InstallSource, SkillSource } from './types.js';
 
 export interface ParseSkillOptions {
   path?: string;
   loadedBy?: string[];
-  source?: 'skill_md' | 'soul_md';
+  source?: SkillSource;
   skillId?: string;
   gitSha?: string;
-  installSource?: string;
+  installSource?: InstallSource;
   provenanceState?: SkillMetadata['provenanceState'];
 }
 

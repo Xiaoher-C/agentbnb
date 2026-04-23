@@ -7,7 +7,7 @@ export type NodeType =
   | 'reference'
   | 'output-shape';
 
-export type ProvenanceState = 'tracked' | 'untracked' | 'pinned';
+export type ProvenanceState = 'tracked' | 'untracked' | 'pinned' | 'registered';
 
 export type RiskSeverity = 'misleading' | 'complexity' | 'dead';
 
@@ -16,16 +16,38 @@ export interface SourceRange {
   endLine: number;
 }
 
+export type SkillSource = 'skill_md' | 'soul_md' | 'skills_yaml';
+
+export type InstallSource =
+  | 'pnpm-workspace'
+  | 'manual-copy'
+  | 'openclaw-import'
+  | 'agentbnb-skill'
+  | 'node_modules'
+  | 'agentbnb-data-dir'
+  | 'openclaw-agent-dir';
+
 export interface SkillMetadata {
   name: string;
   description: string;
   path: string;
-  source: 'soul_md' | 'skill_md';
+  source: SkillSource;
   provenanceState: ProvenanceState;
   gitSha?: string;
   version?: string;
-  installSource?: string;
+  installSource?: InstallSource;
   loadedBy: string[];
+}
+
+/** Parsed entry from a skills.yaml registry file. */
+export interface SkillsYamlEntry {
+  id: string;
+  name: string;
+  type: 'command' | 'api' | 'conductor' | 'skill-md';
+  command?: string;
+  endpoint?: string;
+  description?: string;
+  version?: string;
 }
 
 export type HintValue = string | number | boolean | string[];

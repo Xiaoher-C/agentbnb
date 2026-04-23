@@ -34,7 +34,7 @@ interface ListedSkill {
   description: string;
   path: string;
   canonicalPath: string;
-  source: 'skill_md';
+  source: 'skill_md' | 'soul_md' | 'skills_yaml';
   provenanceState: ProvenanceState;
   gitSha?: string;
   version?: string;

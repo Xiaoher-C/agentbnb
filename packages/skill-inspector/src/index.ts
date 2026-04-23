@@ -32,4 +32,7 @@ export type {
   RiskIssue,
   RiskReport,
   HintValue,
+  SkillSource,
+  InstallSource,
+  SkillsYamlEntry,
 } from './types.js';
