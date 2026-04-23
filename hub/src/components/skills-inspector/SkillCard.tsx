@@ -36,6 +36,10 @@ const PROVENANCE_STYLES: Record<ProvenanceState, { label: string; className: str
     label: 'untracked',
     className: 'bg-amber-500/15 text-amber-300 border-amber-500/30',
   },
+  registered: {
+    label: 'registered',
+    className: 'bg-slate-500/15 text-slate-400 border-slate-500/30 border-dashed',
+  },
 };
 
 /** Count distinct *agent* identities (not source kinds) for the conflict badge. */
@@ -130,6 +134,11 @@ export default function SkillCard({ skill, selected, onSelect }: SkillCardProps)
             <span className="text-hub-text-muted">v{skill.version}</span>
           )}
         </div>
+        {skill.provenanceState === 'registered' && (
+          <div className="text-[10px] italic text-hub-text-muted">
+            Command skill — no SKILL.md to inspect
+          </div>
+        )}
       </div>
     </button>
   );

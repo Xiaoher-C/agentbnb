@@ -1,4 +1,4 @@
-export const SKILL_INSPECTOR_VERSION = '0.1.0-alpha';
+export const SKILL_INSPECTOR_VERSION = '0.1.1';
 
 export { parseSkill, extractFrontmatter } from './parser.js';
 export type {
@@ -18,6 +18,13 @@ export type {
 
 export { lookupProvenance, applyProvenance } from './provenance.js';
 export type { ProvenanceLookupResult } from './provenance.js';
+
+export {
+  parseSkillsYaml,
+  resolveCommandToSkillPath,
+  synthesizeRegisteredSkill,
+} from './skills-yaml.js';
+export type { RegisteredSkillEntry } from './skills-yaml.js';
 
 export type {
   NodeType,
