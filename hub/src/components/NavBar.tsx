@@ -242,6 +242,19 @@ export default function NavBar({ apiKey, balance, onLogout }: NavBarProps): JSX.
           Discover
         </NavLink>
 
+        <NavLink
+          to="/work-network"
+          className={({ isActive }) => navTabClass(isActive)}
+        >
+          Network
+        </NavLink>
+        <NavLink
+          to="/skills-inspector"
+          className={({ isActive }) => navTabClass(isActive)}
+        >
+          Skill Inspector
+        </NavLink>
+
         {isAuthed ? (
           <>
             <NavLink
@@ -301,6 +314,20 @@ export default function NavBar({ apiKey, balance, onLogout }: NavBarProps): JSX.
             className={({ isActive }) => `${navTabClass(isActive)} block`}
           >
             Discover
+          </NavLink>
+          <NavLink
+            to="/work-network"
+            onClick={() => setMenuOpen(false)}
+            className={({ isActive }) => `${navTabClass(isActive)} block`}
+          >
+            Network
+          </NavLink>
+          <NavLink
+            to="/skills-inspector"
+            onClick={() => setMenuOpen(false)}
+            className={({ isActive }) => `${navTabClass(isActive)} block`}
+          >
+            Skill Inspector
           </NavLink>
 
           {isAuthed ? (

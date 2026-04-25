@@ -27,6 +27,10 @@ const STATE_STYLES: Record<ProvenanceState, { label: string; className: string }
     label: 'Untracked',
     className: 'bg-amber-500/20 text-amber-200 border-amber-500/50',
   },
+  registered: {
+    label: 'Registered',
+    className: 'bg-slate-500/20 text-slate-300 border-slate-500/50 border-dashed',
+  },
 };
 
 function distinctAgents(loadedBy: readonly string[]): number {
@@ -40,7 +44,7 @@ export default function ProvenanceBanner({ metadata }: ProvenanceBannerProps): J
   const agentCount = distinctAgents(metadata.loadedBy);
 
   return (
-    <div className="pointer-events-none absolute left-4 top-4 z-10 max-w-md rounded-xl border border-hub-border bg-hub-bg/95 p-4 text-xs shadow-xl backdrop-blur">
+    <div className="pointer-events-none absolute left-4 top-4 z-10 max-w-md rounded-xl border border-hub-border-emphasis bg-hub-surface-2/95 p-4 text-xs shadow-[0_8px_32px_rgba(0,0,0,0.5)] backdrop-blur">
       <div className="flex items-start justify-between gap-3">
         <div>
           <div className="text-[10px] font-semibold uppercase tracking-wider text-hub-text-muted">

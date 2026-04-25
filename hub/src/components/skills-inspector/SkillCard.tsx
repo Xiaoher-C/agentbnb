@@ -65,11 +65,12 @@ export default function SkillCard({ skill, selected, onSelect }: SkillCardProps)
       type="button"
       onClick={onSelect}
       className={[
-        'w-full text-left rounded-lg border px-4 py-3 transition-colors',
+        'w-full text-left rounded-lg border px-4 py-3',
+        'transition-[background-color,border-color,transform] duration-200 ease-out',
         'focus:outline-none focus-visible:ring-2 focus-visible:ring-hub-accent/50',
         selected
-          ? 'border-hub-accent/50 bg-hub-surface-hover'
-          : 'border-hub-border bg-hub-surface hover:bg-hub-surface-hover hover:border-hub-border-hover',
+          ? 'border-violet-500/40 bg-violet-500/[0.08]'
+          : 'border-hub-border-default bg-hub-surface-0 hover:translate-x-[2px] hover:bg-hub-surface-1 hover:border-hub-border-emphasis',
       ].join(' ')}
       aria-pressed={selected}
     >

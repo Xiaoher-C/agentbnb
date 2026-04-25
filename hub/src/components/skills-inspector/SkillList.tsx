@@ -44,7 +44,7 @@ export default function SkillList({
 
   return (
     <div className="flex h-full flex-col">
-      <div className="border-b border-hub-border p-3">
+      <div className="border-b border-hub-border-hairline p-3">
         <input
           type="search"
           value={query}

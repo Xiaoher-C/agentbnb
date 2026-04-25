@@ -6,12 +6,17 @@
  * layout.ts) and user-moved nodes would desync from SKILL.md structure.
  * Clicking a node raises onNodeSelect so the right-hand NodeDetailPanel can
  * render its detail + risks + dismiss controls.
+ *
+ * v0.1.3 — edges inherit the source node's type colour @ 40% opacity so the
+ * flow reads continuously across the now-per-type-coloured cards. Reference
+ * edges stay dashed grey (they cross the grain of flow).
  */
 import { useMemo } from 'react';
 import ReactFlow, {
   Background,
   BackgroundVariant,
   Controls,
+  MarkerType,
   MiniMap,
   type Node as RFNode,
   type Edge as RFEdge,
@@ -19,11 +24,12 @@ import ReactFlow, {
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 
-import type { SkillGraph, RiskReport } from '../../lib/skillsApi.js';
+import type { SkillGraph, RiskReport, NodeType } from '../../lib/skillsApi.js';
 import { InspectorContext, type InspectorContextValue } from './InspectorContext.js';
 import { nodeTypes } from './nodeTypes.js';
 import { layoutGraph } from './layout.js';
 import type { OverlayMode } from './nodes/BaseNode.js';
+import { NODE_TYPE_CONFIG, configFor } from './nodeTypeConfig.js';
 import ProvenanceBanner from './ProvenanceBanner.js';
 
 interface FlowCanvasProps {
@@ -63,7 +69,37 @@ export default function FlowCanvas({
     () => nodes.map((n) => ({ ...n, selected: n.id === selectedNodeId })),
     [nodes, selectedNodeId],
   );
-  const rfEdges: RFEdge[] = edges;
+
+  // Edges inherit the source node's type colour (@ 40%) so flow reads as one
+  // continuous path. Reference edges override to grey-dashed — they cross the
+  // grain of the source order and shouldn't fight for visual attention.
+  const rfEdges: RFEdge[] = useMemo(() => {
+    const typeById = new Map<string, NodeType>();
+    for (const node of nodes) {
+      if (node.type) typeById.set(node.id, node.type as NodeType);
+    }
+    return edges.map((edge) => {
+      const sourceType = typeById.get(edge.source);
+      const color = sourceType ? configFor(sourceType).color : '#6B7280';
+      const isReference = edge.data?.kind === 'reference';
+      const stroke = isReference ? '#6B7280' : `${color}66`;
+      return {
+        ...edge,
+        style: {
+          ...edge.style,
+          stroke,
+          strokeWidth: 1.5,
+          strokeDasharray: isReference ? '5 5' : undefined,
+        },
+        markerEnd: {
+          type: MarkerType.ArrowClosed,
+          color: stroke,
+          width: 12,
+          height: 12,
+        },
+      };
+    });
+  }, [edges, nodes]);
 
   const contextValue: InspectorContextValue = useMemo(
     () => ({
@@ -71,8 +107,9 @@ export default function FlowCanvas({
       provenanceState: graph.metadata.provenanceState,
       risksByNode,
       onNodeSelect,
+      selectedNodeId,
     }),
-    [overlay, graph.metadata.provenanceState, risksByNode, onNodeSelect],
+    [overlay, graph.metadata.provenanceState, risksByNode, onNodeSelect, selectedNodeId],
   );
 
   const handleNodeClick: NodeMouseHandler = (_event, node) => {
@@ -118,15 +155,11 @@ export default function FlowCanvas({
 
 type RiskIssueArray = RiskReport['issues'];
 
+/** MiniMap pulls colour from the same config — one source of truth. */
 function nodeMiniColor(type: string | undefined): string {
-  switch (type) {
-    case 'trigger': return '#10B981';
-    case 'decision': return '#F59E0B';
-    case 'instruction': return '#60A5FA';
-    case 'tool-call': return '#C084FC';
-    case 'example': return '#94A3B8';
-    case 'reference': return '#38BDF8';
-    case 'output-shape': return '#34D399';
-    default: return '#64748B';
-  }
+  if (!type) return '#64748B';
+  return (
+    (NODE_TYPE_CONFIG as Record<string, { color: string } | undefined>)[type]
+      ?.color ?? '#64748B'
+  );
 }

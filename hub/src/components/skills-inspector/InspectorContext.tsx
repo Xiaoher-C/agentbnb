@@ -13,6 +13,8 @@ export interface InspectorContextValue {
   provenanceState: ProvenanceState;
   risksByNode: ReadonlyMap<string, readonly RiskIssue[]>;
   onNodeSelect: (nodeId: string) => void;
+  /** Currently selected node id — drives the dimmed state on unselected nodes. */
+  selectedNodeId: string | null;
 }
 
 const defaultValue: InspectorContextValue = {
@@ -20,6 +22,7 @@ const defaultValue: InspectorContextValue = {
   provenanceState: 'untracked',
   risksByNode: new Map(),
   onNodeSelect: () => {},
+  selectedNodeId: null,
 };
 
 export const InspectorContext = createContext<InspectorContextValue>(defaultValue);
