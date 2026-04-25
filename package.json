@@ -42,7 +42,7 @@
   },
   "scripts": {
     "build": "tsup",
-    "build:hub": "cd hub && pnpm install && pnpm build",
+    "build:hub": "cd hub && pnpm install --ignore-workspace && pnpm build",
     "build:all": "pnpm build && pnpm build:hub",
     "dev": "tsx watch src/cli/index.ts",
     "test": "vitest run",
