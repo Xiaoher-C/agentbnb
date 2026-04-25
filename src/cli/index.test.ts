@@ -616,7 +616,10 @@ describe('CLI: discover --registry (integration)', () => {
         serverProcess?.off('exit', handleExit);
       };
 
-      serverProcess = spawn('npx', ['tsx', serverScript, portFile], {
+      // Use `pnpm exec` rather than `npx` — pnpm's strict isolation means tsx
+      // is not always reachable via npx in CI, where npx falls through to the
+      // network and downloads tsx@latest mid-test, blowing the 10s deadline.
+      serverProcess = spawn('pnpm', ['exec', 'tsx', serverScript, portFile], {
         stdio: 'ignore',
         detached: false,
       });
@@ -787,11 +790,11 @@ describe('CLI: serve — registry server with API key', () => {
     // Find a free port for registry
     registryPort = 17800 + Math.floor(Math.random() * 1000);
 
-    // Start the registry server via serve command
+    // Start the registry server via serve command. See note above re: pnpm exec.
     const cliPath = join(import.meta.dirname ?? __dirname, 'index.ts');
     serveProcess = spawn(
-      'npx',
-      ['tsx', cliPath, 'serve', '--port', '17799', '--registry-port', String(registryPort)],
+      'pnpm',
+      ['exec', 'tsx', cliPath, 'serve', '--port', '17799', '--registry-port', String(registryPort)],
       {
         env: { ...process.env, AGENTBNB_DIR: tmpDir },
         stdio: 'pipe',
