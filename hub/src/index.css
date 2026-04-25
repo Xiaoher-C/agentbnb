@@ -14,6 +14,27 @@
   --color-text-secondary: rgba(255, 255, 255, 0.55);
   --color-text-tertiary: rgba(255, 255, 255, 0.30);
   --color-text-muted: rgba(255, 255, 255, 0.40);
+
+  /* Surface tiers (same hue, luminance only) */
+  --color-surface-sunken: #04040A;
+  --color-surface-0: #0D0D15;
+  --color-surface-1: #13131E;
+  --color-surface-2: #1A1A28;
+
+  /* Border tiers */
+  --color-border-hairline: rgba(255, 255, 255, 0.04);
+  --color-border-default: rgba(255, 255, 255, 0.08);
+  --color-border-emphasis: rgba(255, 255, 255, 0.14);
+  --color-border-hero: rgba(255, 255, 255, 0.24);
+
+  /* Semantic tone anchors */
+  --color-live: #10B981;
+  --color-pinned: #0EA5E9;
+  --color-team: #8B5CF6;
+  --color-warn: #F59E0B;
+  --color-danger: #F43F5E;
+  --color-mute: #94A3B8;
+
   --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
   --font-mono: 'JetBrains Mono', 'SF Mono', ui-monospace, monospace;
   --radius-card: 16px;
@@ -43,5 +64,44 @@
     background-size: 60px 60px;
     pointer-events: none;
     z-index: 0;
+  }
+}
+
+/* ============================================================
+   Motion system — compositor-friendly only (transform / opacity).
+   Honours prefers-reduced-motion at the bottom of this block.
+   ============================================================ */
+@keyframes hub-shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+@keyframes hub-pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%      { opacity: 0.55; transform: scale(0.92); }
+}
+@keyframes hub-fade-up {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes hub-slide-in-right {
+  from { opacity: 0; transform: translateX(16px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes hub-slide-in-left {
+  from { opacity: 0; transform: translateX(-8px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes hub-glow-breathe {
+  0%, 100% { box-shadow: 0 0 0 1px rgba(16,185,129,0.20), 0 0 12px rgba(16,185,129,0.20); }
+  50%      { box-shadow: 0 0 0 1px rgba(16,185,129,0.32), 0 0 22px rgba(16,185,129,0.32); }
+}
+
+/* Respect user preference — collapse animations + transitions to a tick. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
   }
 }

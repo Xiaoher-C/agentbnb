@@ -34,8 +34,8 @@ export default function NodeDetailPanel({
   if (!selectedNode) return null;
 
   return (
-    <aside className="flex h-full w-[380px] shrink-0 flex-col border-l border-hub-border bg-hub-bg/95">
-      <header className="flex items-start justify-between gap-3 border-b border-hub-border p-4">
+    <aside className="flex h-full w-[380px] shrink-0 animate-hub-slide-in-right flex-col border-l border-hub-border-emphasis bg-hub-surface-2 shadow-[-8px_0_32px_rgba(0,0,0,0.4)]">
+      <header className="flex items-start justify-between gap-3 border-b border-hub-border-default p-4">
         <div className="min-w-0">
           <div className="text-[10px] font-semibold uppercase tracking-wider text-hub-text-muted">
             {selectedNode.type.replace('-', ' ')}

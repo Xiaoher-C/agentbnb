@@ -1,12 +1,12 @@
 import { execFileSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { dirname, isAbsolute, join, sep } from 'node:path';
-import type { SkillMetadata, ProvenanceState } from './types.js';
+import type { SkillMetadata, ProvenanceState, InstallSource } from './types.js';
 
 export interface ProvenanceLookupResult {
   provenanceState: ProvenanceState;
   gitSha?: string;
-  installSource?: string;
+  installSource?: InstallSource;
 }
 
 /**
@@ -84,7 +84,7 @@ function gitShaForPath(gitRoot: string, skillPath: string): string | undefined {
   }
 }
 
-function inferInstallSource(skillPath: string, gitRoot: string): string | undefined {
+function inferInstallSource(skillPath: string, gitRoot: string): InstallSource | undefined {
   const rel = skillPath.slice(gitRoot.length);
   if (rel.startsWith(`${sep}packages${sep}`)) return 'pnpm-workspace';
   if (rel.startsWith(`${sep}skills${sep}`)) return 'agentbnb-skill';

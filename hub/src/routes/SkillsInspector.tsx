@@ -114,9 +114,9 @@ export default function SkillsInspectorRoute(): JSX.Element {
   );
 
   return (
-    <div className="fixed inset-x-0 bottom-0 top-14 flex">
-      {/* Left panel — skill list */}
-      <div className="w-[340px] shrink-0 border-r border-hub-border bg-hub-bg">
+    <div className="-mx-4 flex h-[calc(100vh-12rem)] min-h-[600px] animate-hub-fade-up overflow-hidden border-y border-hub-border-hairline">
+      {/* Left panel — skill list (sunken back-panel) */}
+      <div className="w-[340px] shrink-0 animate-hub-slide-in-left border-r border-hub-border-hairline bg-hub-surface-sunken">
         <SkillList
           skills={skills}
           selectedSkillId={selectedSkillId}
@@ -126,9 +126,9 @@ export default function SkillsInspectorRoute(): JSX.Element {
         />
       </div>
 
-      {/* Center — canvas */}
-      <div className="relative flex min-w-0 flex-1 flex-col">
-        <header className="flex items-center justify-between gap-4 border-b border-hub-border bg-hub-bg/95 px-4 py-3">
+      {/* Center — canvas (base tier) */}
+      <div className="relative flex min-w-0 flex-1 flex-col bg-hub-surface-0">
+        <header className="flex items-center justify-between gap-4 border-b border-hub-border-default bg-hub-surface-0/95 px-4 py-3">
           <div className="min-w-0">
             <h1 className="truncate text-sm font-semibold text-hub-text-primary">
               {selectedSkill ? selectedSkill.name : 'Skill Inspector'}

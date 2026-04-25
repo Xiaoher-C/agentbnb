@@ -1,37 +1,43 @@
 /**
- * BaseNode — the one concrete React Flow node body shared by all seven
- * Skill node specializations.
+ * BaseNode — the one concrete React Flow node body shared by every Skill
+ * node variant.
  *
- * Each of the 7 per-type components in this directory is a thin wrapper that
- * fixes the colour accent and type label before delegating here. The shared
- * body handles Handle placement, overlay decoration, and selected-state
- * styling so individual type files stay under 20 lines.
+ * Visual spec v0.1.3 — Node Type Visual Differentiation:
+ *   - Header band  : bg = accent @ 15%, icon + uppercase type label @ 100%
+ *   - Body         : neutral dark surface, title (white) + content (light grey)
+ *   - Footer       : provenance dot + line range + risk dot when applicable
+ *   - State        : default → border @ 40% / hover → 70% / selected → 100% + glow
+ *   - Dimmed       : any sibling node is selected → 50% opacity
+ *
+ * Variants pass an `accent` + `icon` + `label` + optional `subTypeChip`.
+ * Risk severity breakdown still lives in NodeDetailPanel; the node surface
+ * only flags "has risks" with a single amber dot.
  */
+import { useState } from 'react';
 import { Handle, Position, type NodeProps } from 'reactflow';
+import { AlertTriangle, type LucideIcon } from 'lucide-react';
 import type { SkillFlowNodeData } from '../layout.js';
-import type { RiskIssue } from '../../../lib/skillsApi.js';
+import type { ProvenanceState, RiskIssue } from '../../../lib/skillsApi.js';
 
 export type OverlayMode = 'risk' | 'provenance' | 'none';
 
 export interface BaseNodeRenderProps extends NodeProps<SkillFlowNodeData> {
   accent: string;
   typeLabel: string;
-  icon: string;
+  icon: LucideIcon;
+  borderStyle: 'solid' | 'dashed' | 'dotted';
+  subTypeChip?: string;
   risks: readonly RiskIssue[];
   overlay: OverlayMode;
-  provenanceState: 'tracked' | 'untracked' | 'pinned';
+  provenanceState: ProvenanceState;
+  isAnySelected: boolean;
 }
 
-const SEVERITY_STYLES: Record<RiskIssue['severity'], string> = {
-  misleading: 'bg-amber-500/20 text-amber-200 border-amber-500/40',
-  complexity: 'bg-violet-500/20 text-violet-200 border-violet-500/40',
-  dead: 'bg-rose-500/20 text-rose-200 border-rose-500/40',
-};
-
-const PROVENANCE_BORDER: Record<'tracked' | 'untracked' | 'pinned', string> = {
-  tracked: 'border-emerald-500/60',
-  untracked: 'border-amber-500/50',
-  pinned: 'border-sky-500/60',
+const PROVENANCE_DOT: Record<ProvenanceState, string> = {
+  tracked: '#10B981',
+  pinned: '#3B82F6',
+  untracked: '#F59E0B',
+  registered: '#64748B',
 };
 
 export default function BaseNode({
@@ -39,76 +45,120 @@ export default function BaseNode({
   selected,
   accent,
   typeLabel,
-  icon,
+  icon: Icon,
+  borderStyle,
+  subTypeChip,
   risks,
   overlay,
   provenanceState,
+  isAnySelected,
 }: BaseNodeRenderProps): JSX.Element {
   const { node } = data;
+  const [hover, setHover] = useState(false);
+  const hasRisk = risks.length > 0;
+  const dimmed = isAnySelected && !selected;
 
-  // Summarise risks for the badge cluster — one count per severity.
-  const severityCounts = risks.reduce<Record<RiskIssue['severity'], number>>(
-    (acc, r) => {
-      acc[r.severity] = (acc[r.severity] ?? 0) + 1;
-      return acc;
-    },
-    { misleading: 0, complexity: 0, dead: 0 },
-  );
+  // Border opacity: default 40%, hover 70%, selected 100%.
+  const borderOpacity = selected ? 'ff' : hover ? 'b3' : '66';
+  const borderColor = `${accent}${borderOpacity}`;
 
-  const borderClass = overlay === 'provenance'
-    ? PROVENANCE_BORDER[provenanceState]
-    : selected
-      ? 'border-hub-accent/70'
-      : 'border-hub-border';
+  // Selected nodes get a small "punched in" scale on top of the glow so the
+  // focus moment reads through the canvas's noise. Hover lifts -1px with a
+  // softer shadow; both transforms are combined via a single `transform`.
+  const transform = selected
+    ? 'scale(1.015)'
+    : hover
+      ? 'translateY(-1px)'
+      : 'translateY(0)';
+
+  const cardStyle: React.CSSProperties = {
+    width: 280,
+    borderStyle,
+    borderWidth: 2,
+    borderColor,
+    opacity: dimmed ? 0.5 : 1,
+    cursor: 'pointer',
+    transformOrigin: 'center',
+    transition:
+      'opacity 200ms cubic-bezier(0.16, 1, 0.3, 1), border-color 160ms, box-shadow 220ms cubic-bezier(0.16, 1, 0.3, 1), transform 200ms cubic-bezier(0.16, 1, 0.3, 1)',
+    transform,
+    boxShadow: selected
+      ? `0 0 0 2px ${accent}, 0 0 24px ${accent}55, 0 8px 32px rgba(0,0,0,0.35)`
+      : hover
+        ? '0 4px 16px rgba(0,0,0,0.35)'
+        : undefined,
+  };
+
+  const headerBg = `${accent}26`; // ~15% opacity
+  const chipBg = `${accent}1A`; // ~10% opacity
 
   return (
     <div
-      className={[
-        'rounded-xl border-2 bg-hub-surface/90 px-3 py-2 shadow-sm transition-colors',
-        borderClass,
-      ].join(' ')}
-      style={{ borderLeftColor: accent, borderLeftWidth: '4px' }}
+      className="animate-hub-fade-up rounded-lg bg-[#1F2937]"
+      style={cardStyle}
+      data-node-type={node.type}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
     >
-      <Handle type="target" position={Position.Top} className="!bg-hub-border" />
-      <div className="flex items-center justify-between gap-2">
-        <span className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider" style={{ color: accent }}>
-          <span aria-hidden>{icon}</span>
-          <span>{typeLabel}</span>
+      <Handle type="target" position={Position.Top} className="!bg-transparent !border-0" />
+
+      {/* Header band */}
+      <div
+        className="flex items-center gap-2 px-3 py-1.5"
+        style={{ background: headerBg, borderTopLeftRadius: 6, borderTopRightRadius: 6 }}
+      >
+        <Icon size={14} style={{ color: accent }} aria-hidden="true" />
+        <span
+          className="text-[10px] font-semibold uppercase tracking-wider"
+          style={{ color: accent }}
+        >
+          {typeLabel}
         </span>
-        <span className="text-[9px] text-hub-text-muted">
+        {subTypeChip && (
+          <span
+            className="ml-auto rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide"
+            style={{ background: chipBg, color: accent }}
+          >
+            {subTypeChip}
+          </span>
+        )}
+      </div>
+
+      {/* Body */}
+      <div className="px-3 py-2">
+        <div className="line-clamp-2 text-sm font-medium text-[#F9FAFB]">
+          {node.label || '(unlabeled)'}
+        </div>
+        {node.content && (
+          <div className="mt-1 line-clamp-3 text-[13px] leading-snug text-[#D1D5DB]">
+            {node.content}
+          </div>
+        )}
+      </div>
+
+      {/* Footer metadata */}
+      <div className="flex items-center gap-2 border-t border-white/[0.06] px-3 py-1.5 text-[11px] text-[#9CA3AF]">
+        <span
+          className="inline-block h-1.5 w-1.5 rounded-full"
+          style={{ background: PROVENANCE_DOT[provenanceState] }}
+          aria-hidden="true"
+        />
+        <span className="capitalize">{provenanceState}</span>
+        <span className="font-mono text-[#6B7280]">
           L{node.sourceRange.startLine + 1}–{node.sourceRange.endLine + 1}
         </span>
+        {hasRisk && (
+          <span
+            className="ml-auto inline-flex items-center gap-1 text-amber-400"
+            title={`${risks.length} risk finding${risks.length === 1 ? '' : 's'}${overlay === 'risk' ? '' : ' — switch to Risk overlay for detail'}`}
+          >
+            <AlertTriangle size={12} aria-hidden="true" />
+            {overlay === 'risk' && <span className="font-mono">×{risks.length}</span>}
+          </span>
+        )}
       </div>
 
-      <div className="mt-1 line-clamp-2 text-sm font-medium text-hub-text-primary">
-        {node.label || '(unlabeled)'}
-      </div>
-
-      {node.content && (
-        <div className="mt-1 line-clamp-3 text-[11px] text-hub-text-secondary">
-          {node.content}
-        </div>
-      )}
-
-      {overlay === 'risk' && risks.length > 0 && (
-        <div className="mt-2 flex flex-wrap gap-1" aria-label={`${risks.length} risk finding${risks.length === 1 ? '' : 's'}`}>
-          {(Object.entries(severityCounts) as Array<[RiskIssue['severity'], number]>)
-            .filter(([, n]) => n > 0)
-            .map(([sev, n]) => (
-              <span
-                key={sev}
-                className={[
-                  'rounded-md border px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide',
-                  SEVERITY_STYLES[sev],
-                ].join(' ')}
-              >
-                {sev} ×{n}
-              </span>
-            ))}
-        </div>
-      )}
-
-      <Handle type="source" position={Position.Bottom} className="!bg-hub-border" />
+      <Handle type="source" position={Position.Bottom} className="!bg-transparent !border-0" />
     </div>
   );
 }

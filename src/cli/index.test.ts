@@ -2,7 +2,23 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { execSync, spawn, type SpawnSyncReturns, type ChildProcess } from 'node:child_process';
 import { mkdtempSync, writeFileSync, existsSync, rmSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
+
+/**
+ * Absolute path to the locally installed tsx binary.
+ *
+ * Earlier iterations used `npx tsx` and `pnpm exec tsx` — both proved fragile
+ * in different environments:
+ *   - `npx tsx` falls through to a network install of tsx@latest in CI when
+ *     pnpm's strict isolation hides the bin from npm's resolution path,
+ *     blowing the integration-test ready-deadlines.
+ *   - `pnpm exec tsx` requires a pnpm context (a package.json/workspace
+ *     anchor) at the spawning cwd; tests that exec from a temp AGENTBNB_DIR
+ *     fail because no such anchor exists there.
+ *
+ * Resolving the bin path once at module load avoids both issues.
+ */
+const TSX_BIN = resolve(import.meta.dirname ?? __dirname, '../../node_modules/.bin/tsx');
 
 /**
  * Runs the CLI via tsx with a temp AGENTBNB_DIR.
@@ -11,7 +27,7 @@ import { join } from 'node:path';
 function runCli(args: string, agentbnbDir: string): { stdout: string; stderr: string; status: number } {
   const cliPath = join(import.meta.dirname ?? __dirname, 'index.ts');
   try {
-    const result = execSync(`npx tsx ${cliPath} ${args}`, {
+    const result = execSync(`${TSX_BIN} ${cliPath} ${args}`, {
       env: { ...process.env, AGENTBNB_DIR: agentbnbDir },
       encoding: 'utf-8',
       timeout: 15000,
@@ -373,7 +389,7 @@ describe('CLI: serve --registry-port', () => {
     try {
       // Use timeout to kill after 2s — we just need to see startup output
       es(
-        `timeout 2 npx tsx ${cliPath} serve --registry-port 0 --port 17700 --handler-url http://localhost:9999 2>&1 || true`,
+        `timeout 2 ${TSX_BIN} ${cliPath} serve --registry-port 0 --port 17700 --handler-url http://localhost:9999 2>&1 || true`,
         {
           env: { ...process.env, AGENTBNB_DIR: tmpDir },
           encoding: 'utf-8',
@@ -421,7 +437,7 @@ describe('CLI: init onboarding', () => {
   it('--yes with OPENAI_API_KEY publishes a draft card and stdout contains "OpenAI"', () => {
     const cliPath = join(import.meta.dirname ?? __dirname, 'index.ts');
     const result = execSync(
-      `npx tsx ${cliPath} init --owner test --yes`,
+      `${TSX_BIN} ${cliPath} init --owner test --yes`,
       {
         env: { ...process.env, AGENTBNB_DIR: tmpDir, OPENAI_API_KEY: 'test-key-value' },
         encoding: 'utf-8',
@@ -452,7 +468,7 @@ describe('CLI: init onboarding', () => {
 
     const cliPath = join(import.meta.dirname ?? __dirname, 'index.ts');
     const result = execSync(
-      `npx tsx ${cliPath} init --owner test --yes`,
+      `${TSX_BIN} ${cliPath} init --owner test --yes`,
       { env: cleanEnv, encoding: 'utf-8', timeout: 15000, cwd: tmpDir },
     ) as unknown as string;
     expect(result).toContain('No capabilities detected');
@@ -488,7 +504,7 @@ describe('CLI: init onboarding', () => {
     const cliPath = join(import.meta.dirname ?? __dirname, 'index.ts');
     // execSync spawns a child process (non-TTY), so this is naturally non-TTY
     const result = execSync(
-      `npx tsx ${cliPath} init --owner test`,
+      `${TSX_BIN} ${cliPath} init --owner test`,
       {
         env: { ...process.env, AGENTBNB_DIR: tmpDir, OPENAI_API_KEY: 'test-key-value' },
         encoding: 'utf-8',
@@ -616,7 +632,9 @@ describe('CLI: discover --registry (integration)', () => {
         serverProcess?.off('exit', handleExit);
       };
 
-      serverProcess = spawn('npx', ['tsx', serverScript, portFile], {
+      // Direct tsx bin avoids both npx network-fallback (CI) and pnpm-exec's
+      // need for a pnpm context at the spawn cwd. See TSX_BIN definition.
+      serverProcess = spawn(TSX_BIN, [serverScript, portFile], {
         stdio: 'ignore',
         detached: false,
       });
@@ -704,7 +722,7 @@ describe('CLI: discover --registry (integration)', () => {
     let exitStatus = 0;
     try {
       combinedOut = execSync(
-        `npx tsx ${cliPath} discover 2>&1`,
+        `${TSX_BIN} ${cliPath} discover 2>&1`,
         {
           env: { ...process.env, AGENTBNB_DIR: tmpDir },
           encoding: 'utf-8',
@@ -787,11 +805,11 @@ describe('CLI: serve — registry server with API key', () => {
     // Find a free port for registry
     registryPort = 17800 + Math.floor(Math.random() * 1000);
 
-    // Start the registry server via serve command
+    // Start the registry server via serve command. See TSX_BIN definition.
     const cliPath = join(import.meta.dirname ?? __dirname, 'index.ts');
     serveProcess = spawn(
-      'npx',
-      ['tsx', cliPath, 'serve', '--port', '17799', '--registry-port', String(registryPort)],
+      TSX_BIN,
+      [cliPath, 'serve', '--port', '17799', '--registry-port', String(registryPort)],
       {
         env: { ...process.env, AGENTBNB_DIR: tmpDir },
         stdio: 'pipe',

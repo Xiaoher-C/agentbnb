@@ -36,6 +36,11 @@ jobs:
       - name: Lint
         run: pnpm run lint
 
+      - name: Build skill-inspector package
+        # Backend integration tests spawn the CLI which imports
+        # @agentbnb/skill-inspector — its dist/ must exist before tests run.
+        run: pnpm -F @agentbnb/skill-inspector build
+
       - name: Test (backend)
         run: pnpm run test:run
 

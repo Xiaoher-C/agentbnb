@@ -37,14 +37,14 @@ export default function SkillList({
   }, [skills, query]);
 
   const provenanceCounts = useMemo(() => {
-    const counts = { tracked: 0, pinned: 0, untracked: 0 };
+    const counts = { tracked: 0, pinned: 0, untracked: 0, registered: 0 };
     for (const s of skills) counts[s.provenanceState]++;
     return counts;
   }, [skills]);
 
   return (
     <div className="flex h-full flex-col">
-      <div className="border-b border-hub-border p-3">
+      <div className="border-b border-hub-border-hairline p-3">
         <input
           type="search"
           value={query}
@@ -61,6 +61,9 @@ export default function SkillList({
           </span>
           <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-amber-300">
             untracked {provenanceCounts.untracked}
+          </span>
+          <span className="rounded-full border border-slate-500/30 bg-slate-500/10 px-2 py-0.5 text-slate-400 border-dashed">
+            registered {provenanceCounts.registered}
           </span>
         </div>
       </div>

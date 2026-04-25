@@ -2,7 +2,7 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import type Database from 'better-sqlite3';
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, readdirSync, realpathSync } from 'node:fs';
-import { homedir } from 'node:os';
+import { homedir, hostname } from 'node:os';
 import { join } from 'node:path';
 import {
   parseSkill,
@@ -11,9 +11,13 @@ import {
   applyProvenance,
   extractFrontmatter,
   listRules,
+  parseSkillsYaml,
+  resolveCommandToSkillPath,
+  synthesizeRegisteredSkill,
   type SkillGraph,
   type SkillMetadata,
   type ProvenanceState,
+  type InstallSource,
 } from '@agentbnb/skill-inspector';
 import { scanAgents, getOpenClawWorkspaceDir } from '../workspace/scanner.js';
 
@@ -34,11 +38,11 @@ interface ListedSkill {
   description: string;
   path: string;
   canonicalPath: string;
-  source: 'skill_md';
+  source: 'skill_md' | 'soul_md' | 'skills_yaml';
   provenanceState: ProvenanceState;
   gitSha?: string;
   version?: string;
-  installSource?: string;
+  installSource?: InstallSource;
   loadedBy: string[];
 }
 
@@ -99,6 +103,10 @@ function canonicalOrOriginal(path: string): string {
  * Discover every SKILL.md reachable from the configured sources, deduplicated by
  * canonical (symlink-resolved) path. `loadedBy` accumulates every discoverer so
  * cross-agent shares surface as `loadedBy.length > 1`.
+ *
+ * Also discovers skills from skills.yaml files (agentbnb-data-dir and
+ * openclaw-agent-dir sources). Skills with resolvable SKILL.md merge into the
+ * normal dedup map; skills without become `registered` entries.
  */
 function discoverSkills(): ListedSkill[] {
   const byCanonical = new Map<string, ListedSkill>();
@@ -132,6 +140,121 @@ function discoverSkills(): ListedSkill[] {
       }
       if (!entry.loadedBy.includes(source.label)) {
         entry.loadedBy.push(source.label);
+      }
+    }
+  }
+
+  // ── agentbnb-data-dir source ──────────────────────────────────────────
+  const dataDir = process.env.AGENTBNB_DIR || join(homedir(), '.agentbnb');
+  const dataDirYaml = join(dataDir, 'skills.yaml');
+  if (existsSync(dataDirYaml)) {
+    const entries = parseSkillsYaml(dataDirYaml);
+    const hostIdentity = `host:${hostname()}`;
+    for (const yamlEntry of entries) {
+      const resolvedPath = yamlEntry.command
+        ? resolveCommandToSkillPath(yamlEntry.command, dataDir)
+        : null;
+
+      if (resolvedPath && existsSync(join(resolvedPath, 'SKILL.md'))) {
+        // Resolvable → merge into normal skill_md flow
+        const skillMdPath = join(resolvedPath, 'SKILL.md');
+        const canonical = canonicalOrOriginal(skillMdPath);
+        let entry = byCanonical.get(canonical);
+        if (!entry) {
+          const body = safeReadFile(canonical);
+          if (body) {
+            const { frontmatter } = extractFrontmatter(body);
+            const prov = lookupProvenance(canonical);
+            entry = {
+              skillId: skillIdFor(canonical),
+              name: (frontmatter.name ?? yamlEntry.name).trim(),
+              description: (frontmatter.description ?? '').trim(),
+              path: skillMdPath,
+              canonicalPath: canonical,
+              source: 'skill_md',
+              provenanceState: prov.provenanceState,
+              loadedBy: [],
+            };
+            if (frontmatter.version) entry.version = frontmatter.version;
+            if (prov.gitSha) entry.gitSha = prov.gitSha;
+            if (prov.installSource) entry.installSource = prov.installSource;
+            byCanonical.set(canonical, entry);
+          }
+        }
+        if (entry && !entry.loadedBy.includes(hostIdentity)) {
+          entry.loadedBy.push(hostIdentity);
+        }
+      } else {
+        // Not resolvable → registered state
+        const reg = synthesizeRegisteredSkill(yamlEntry, dataDirYaml, [hostIdentity]);
+        const dedupKey = `registered:${reg.skillId}`;
+        if (!byCanonical.has(dedupKey)) {
+          byCanonical.set(dedupKey, reg as ListedSkill);
+        }
+      }
+    }
+  }
+
+  // ── openclaw-agent-dir source ─────────────────────────────────────────
+  const openclawAgentsDir = join(homedir(), '.openclaw', 'agents');
+  if (existsSync(openclawAgentsDir)) {
+    let agentNames: string[];
+    try {
+      agentNames = readdirSync(openclawAgentsDir, { withFileTypes: true })
+        .filter((e) => e.isDirectory())
+        .map((e) => e.name);
+    } catch {
+      agentNames = [];
+    }
+
+    for (const agentName of agentNames) {
+      const agentYaml = join(openclawAgentsDir, agentName, '.agentbnb', 'skills.yaml');
+      if (!existsSync(agentYaml)) continue;
+
+      const entries = parseSkillsYaml(agentYaml);
+      const agentIdentity = `agent:${agentName}`;
+      const agentDir = join(openclawAgentsDir, agentName, '.agentbnb');
+
+      for (const yamlEntry of entries) {
+        const resolvedPath = yamlEntry.command
+          ? resolveCommandToSkillPath(yamlEntry.command, agentDir)
+          : null;
+
+        if (resolvedPath && existsSync(join(resolvedPath, 'SKILL.md'))) {
+          const skillMdPath = join(resolvedPath, 'SKILL.md');
+          const canonical = canonicalOrOriginal(skillMdPath);
+          let entry = byCanonical.get(canonical);
+          if (!entry) {
+            const body = safeReadFile(canonical);
+            if (body) {
+              const { frontmatter } = extractFrontmatter(body);
+              const prov = lookupProvenance(canonical);
+              entry = {
+                skillId: skillIdFor(canonical),
+                name: (frontmatter.name ?? yamlEntry.name).trim(),
+                description: (frontmatter.description ?? '').trim(),
+                path: skillMdPath,
+                canonicalPath: canonical,
+                source: 'skill_md',
+                provenanceState: prov.provenanceState,
+                loadedBy: [],
+              };
+              if (frontmatter.version) entry.version = frontmatter.version;
+              if (prov.gitSha) entry.gitSha = prov.gitSha;
+              if (prov.installSource) entry.installSource = prov.installSource;
+              byCanonical.set(canonical, entry);
+            }
+          }
+          if (entry && !entry.loadedBy.includes(agentIdentity)) {
+            entry.loadedBy.push(agentIdentity);
+          }
+        } else {
+          const reg = synthesizeRegisteredSkill(yamlEntry, agentYaml, [agentIdentity]);
+          const dedupKey = `registered:${reg.skillId}`;
+          if (!byCanonical.has(dedupKey)) {
+            byCanonical.set(dedupKey, reg as ListedSkill);
+          }
+        }
       }
     }
   }

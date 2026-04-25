@@ -10,7 +10,7 @@
 import { authedFetch } from './authHeaders.js';
 
 /** Provenance state reported by the Layer 1 lookup. */
-export type ProvenanceState = 'tracked' | 'untracked' | 'pinned';
+export type ProvenanceState = 'tracked' | 'untracked' | 'pinned' | 'registered';
 
 /** Severity classes mapped directly from the RiskReport DSL. */
 export type RiskSeverity = 'misleading' | 'complexity' | 'dead';
@@ -55,7 +55,7 @@ export interface SkillMetadata {
   name: string;
   description: string;
   path: string;
-  source: 'soul_md' | 'skill_md';
+  source: 'soul_md' | 'skill_md' | 'skills_yaml';
   provenanceState: ProvenanceState;
   gitSha?: string;
   version?: string;
@@ -88,7 +88,7 @@ export interface ListedSkill {
   name: string;
   description: string;
   path: string;
-  source: 'skill_md';
+  source: 'skill_md' | 'soul_md' | 'skills_yaml';
   provenanceState: ProvenanceState;
   gitSha?: string;
   version?: string;
