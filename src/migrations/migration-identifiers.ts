@@ -42,7 +42,7 @@ export const ALLOWED_MIGRATION_COLUMNS: ReadonlySet<string> = new Set([
  * negative defaults). This rejects semicolons, angle brackets, and other
  * characters that have no place in a DDL constraint.
  */
-const TYPE_CONSTRAINTS_PATTERN = /^[A-Za-z0-9_ '(),.\-]+$/;
+const TYPE_CONSTRAINTS_PATTERN = /^[A-Za-z0-9_ '(),.-]+$/;
 /** Sequences that introduce SQL comments — never valid inside a column type clause. */
 const COMMENT_SEQUENCES = ['--', '/*', '*/'] as const;
 
