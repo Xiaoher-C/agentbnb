@@ -1,5 +1,14 @@
-import { describe, it, expect } from 'vitest';
-import { createUCAN, verifyUCAN, decodeUCAN, isExpired, mintSelfDelegatedSkillToken } from './ucan.js';
+import { describe, it, expect, beforeEach } from 'vitest';
+import {
+  createUCAN,
+  verifyUCAN,
+  decodeUCAN,
+  isExpired,
+  setRevocationSet,
+  mintSelfDelegatedSkillToken,
+} from './ucan.js';
+import { UCANRevocationSet } from './ucan-escrow.js';
+import { clearReplayCache } from './ucan-replay.js';
 import { generateKeyPair } from '../credit/signing.js';
 import type { UCANAttenuation } from './ucan.js';
 
@@ -11,6 +20,13 @@ describe('UCAN Token Engine', () => {
     { with: 'agentbnb://skill/summarize', can: 'invoke' },
   ];
   const futureExp = Math.floor(Date.now() / 1000) + 3600; // 1 hour from now
+
+  beforeEach(() => {
+    // Each test gets a clean replay cache and no revocation set so that the
+    // module-level state from one test does not leak into the next.
+    clearReplayCache();
+    setRevocationSet(null);
+  });
 
   describe('createUCAN + verifyUCAN round-trip', () => {
     it('creates and verifies a valid token', () => {
@@ -176,6 +192,119 @@ describe('UCAN Token Engine', () => {
     it('verifyUCAN returns invalid for wrong format', () => {
       const result = verifyUCAN('not-a-valid-token', keys.publicKey);
       expect(result.valid).toBe(false);
+    });
+  });
+
+  describe('jti replay protection', () => {
+    it('records the jti on first verify and rejects the second', () => {
+      const token = createUCAN({
+        issuerDid,
+        audienceDid,
+        attenuations,
+        signerKey: keys.privateKey,
+        expiresAt: futureExp,
+      });
+
+      const first = verifyUCAN(token, keys.publicKey);
+      expect(first.valid).toBe(true);
+
+      const second = verifyUCAN(token, keys.publicKey);
+      expect(second.valid).toBe(false);
+      expect(second.reason).toBe('replay_detected');
+    });
+
+    it('does not consult the replay cache when checkReplay is false', () => {
+      const token = createUCAN({
+        issuerDid,
+        audienceDid,
+        attenuations,
+        signerKey: keys.privateKey,
+        expiresAt: futureExp,
+      });
+
+      const first = verifyUCAN(token, keys.publicKey, { checkReplay: false });
+      const second = verifyUCAN(token, keys.publicKey, { checkReplay: false });
+      expect(first.valid).toBe(true);
+      expect(second.valid).toBe(true);
+    });
+
+    it('emits a fresh jti for every newly-created token', () => {
+      const token1 = createUCAN({
+        issuerDid,
+        audienceDid,
+        attenuations,
+        signerKey: keys.privateKey,
+        expiresAt: futureExp,
+      });
+      const token2 = createUCAN({
+        issuerDid,
+        audienceDid,
+        attenuations,
+        signerKey: keys.privateKey,
+        expiresAt: futureExp,
+      });
+
+      const decoded1 = decodeUCAN(token1);
+      const decoded2 = decodeUCAN(token2);
+      expect(decoded1.payload.jti).toBeTruthy();
+      expect(decoded2.payload.jti).toBeTruthy();
+      expect(decoded1.payload.jti).not.toBe(decoded2.payload.jti);
+    });
+  });
+
+  describe('issuer revocation', () => {
+    it('rejects a token whose issuer DID is in the revocation set', () => {
+      const set = new UCANRevocationSet();
+      set.revokeIssuer(issuerDid);
+      setRevocationSet(set);
+
+      const token = createUCAN({
+        issuerDid,
+        audienceDid,
+        attenuations,
+        signerKey: keys.privateKey,
+        expiresAt: futureExp,
+      });
+
+      const result = verifyUCAN(token, keys.publicKey);
+      expect(result.valid).toBe(false);
+      expect(result.reason).toBe('issuer_revoked');
+    });
+
+    it('rejects a token bound to a revoked escrow', () => {
+      const set = new UCANRevocationSet();
+      set.revokeByEscrow('esc-revoked-1');
+      setRevocationSet(set);
+
+      const token = createUCAN({
+        issuerDid,
+        audienceDid,
+        attenuations,
+        signerKey: keys.privateKey,
+        expiresAt: futureExp,
+        facts: { escrow_id: 'esc-revoked-1' },
+      });
+
+      const result = verifyUCAN(token, keys.publicKey);
+      expect(result.valid).toBe(false);
+      expect(result.reason).toBe('escrow_revoked');
+    });
+
+    it('honours checkRevocation: false to bypass the revocation set', () => {
+      const set = new UCANRevocationSet();
+      set.revokeIssuer(issuerDid);
+      setRevocationSet(set);
+
+      const token = createUCAN({
+        issuerDid,
+        audienceDid,
+        attenuations,
+        signerKey: keys.privateKey,
+        expiresAt: futureExp,
+      });
+
+      const result = verifyUCAN(token, keys.publicKey, { checkRevocation: false });
+      expect(result.valid).toBe(true);
     });
   });
 

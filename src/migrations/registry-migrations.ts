@@ -1,5 +1,6 @@
 import type Database from 'better-sqlite3';
 import type { Migration } from './runner.js';
+import { assertSafeMigrationIdentifiers } from './migration-identifiers.js';
 
 /**
  * Adds a column to a table only if it does not already exist.
@@ -9,6 +10,11 @@ import type { Migration } from './runner.js';
  * migration runner existed) will have the column but no `migration_metadata`
  * row. Checking first lets us safely mark the migration as applied without
  * erroring on `duplicate column name`.
+ *
+ * SQLite does not support binding table or column names through prepared
+ * statement parameters, so the names are interpolated into SQL. To keep this
+ * helper safe against future callers that might pass dynamic input, every
+ * identifier is validated against a strict allow-list before any SQL is built.
  */
 function addColumnIfNotExists(
   db: Database.Database,
@@ -16,6 +22,7 @@ function addColumnIfNotExists(
   column: string,
   type: string,
 ): void {
+  assertSafeMigrationIdentifiers(table, column, type);
   const columns = db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
   if (columns.some((c) => c.name === column)) return;
   db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);

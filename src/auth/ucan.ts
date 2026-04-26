@@ -10,6 +10,7 @@
 import { randomUUID } from 'node:crypto';
 import { sign, verify, createPrivateKey, createPublicKey } from 'node:crypto';
 import { canonicalize } from './canonical-json.js';
+import { checkAndRecordJti } from './ucan-replay.js';
 import { AgentBnBError } from '../types/index.js';
 
 export interface UCANHeader {
@@ -29,7 +30,8 @@ export interface UCANPayload {
   aud: string;     // audience DID
   exp: number;     // expiry (unix timestamp)
   nbf?: number;    // not-before (unix timestamp)
-  nnc: string;     // nonce (replay protection)
+  nnc: string;     // nonce (replay protection — legacy)
+  jti: string;     // JWT ID (replay protection — RFC 7519)
   att: UCANAttenuation[];   // attenuations (permissions)
   prf: string[];   // proof chain (parent token IDs)
   fct?: Record<string, unknown>;  // facts (metadata: escrow_id, task_description)
@@ -84,6 +86,7 @@ export function createUCAN(opts: {
     aud: opts.audienceDid,
     exp: opts.expiresAt,
     nnc: randomUUID(),
+    jti: randomUUID(),
     att: opts.attenuations,
     prf: opts.proofs ?? [],
   };
@@ -108,17 +111,39 @@ export function createUCAN(opts: {
 }
 
 /**
- * Verify a UCAN token's Ed25519 signature.
+ * Options that toggle the post-signature verification stages.
+ * Defaults are secure; tests and callers performing chain validation can
+ * disable them to inspect signature-only validity.
+ */
+export interface VerifyUCANOptions {
+  /** When false, skip the jti replay-cache consultation. Default: true. */
+  checkReplay?: boolean;
+  /** When false, skip the revocation-set consultation. Default: true. */
+  checkRevocation?: boolean;
+}
+
+/**
+ * Verify a UCAN token's Ed25519 signature plus replay/revocation status.
  * Does NOT verify the proof chain — use validateChain() for that.
+ *
+ * Verification stages, in order:
+ *   1. Token format + Ed25519 signature.
+ *   2. Issuer DID revocation check (if a revocation set is wired in).
+ *   3. jti replay-cache check (records on success).
  *
  * @param token - Encoded UCAN token string.
  * @param issuerPublicKey - DER-encoded Ed25519 public key.
+ * @param options - Optional flags to disable replay/revocation checks.
  * @returns Verification result with valid flag and optional reason.
  */
 export function verifyUCAN(
   token: string,
   issuerPublicKey: Buffer,
+  options: VerifyUCANOptions = {},
 ): { valid: boolean; reason?: string } {
+  const checkReplay = options.checkReplay ?? true;
+  const checkRevocation = options.checkRevocation ?? true;
+
   try {
     const parts = token.split('.');
     if (parts.length !== 3) {
@@ -133,6 +158,35 @@ export function verifyUCAN(
 
     if (!isValid) {
       return { valid: false, reason: 'Signature verification failed' };
+    }
+
+    // Stage 2 + 3 require the decoded payload. Decode once and reuse.
+    const decoded = decodeUCAN(token);
+
+    if (checkRevocation) {
+      const revocationSet = getRevocationSet();
+      if (revocationSet && revocationSet.isIssuerRevoked(decoded.payload.iss)) {
+        return { valid: false, reason: 'issuer_revoked' };
+      }
+      const escrowId = decoded.payload.fct?.escrow_id;
+      if (
+        revocationSet &&
+        typeof escrowId === 'string' &&
+        revocationSet.isRevoked(escrowId)
+      ) {
+        return { valid: false, reason: 'escrow_revoked' };
+      }
+    }
+
+    if (checkReplay) {
+      const jti = decoded.payload.jti ?? decoded.payload.nnc;
+      if (typeof jti !== 'string' || jti.length === 0) {
+        return { valid: false, reason: 'missing_jti' };
+      }
+      const recorded = checkAndRecordJti(jti, decoded.payload.exp);
+      if (!recorded) {
+        return { valid: false, reason: 'replay_detected' };
+      }
     }
 
     return { valid: true };
@@ -227,4 +281,33 @@ export function mintSelfDelegatedSkillToken(opts: {
     signerKey: opts.signerKey,
     expiresAt: now + ttl,
   });
+
+/**
+ * Minimal interface a revocation registry must implement to participate in
+ * UCAN verification. Implemented by `UCANRevocationSet` in `ucan-escrow.ts`.
+ */
+export interface UCANRevocationSetLike {
+  /** Whether the given escrow ID has been revoked. */
+  isRevoked(escrowId: string): boolean;
+  /** Whether the given issuer DID has been revoked. */
+  isIssuerRevoked(issuerDid: string): boolean;
+}
+
+let revocationSet: UCANRevocationSetLike | null = null;
+
+/**
+ * Inject the live revocation set used by `verifyUCAN`.
+ * Pass `null` to clear (mainly for tests).
+ *
+ * @param set - The revocation set, or null to clear.
+ */
+export function setRevocationSet(set: UCANRevocationSetLike | null): void {
+  revocationSet = set;
+}
+
+/**
+ * Read the currently-wired revocation set. Returns null when not wired.
+ */
+export function getRevocationSet(): UCANRevocationSetLike | null {
+  return revocationSet;
 }

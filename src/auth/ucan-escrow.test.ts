@@ -137,5 +137,38 @@ describe('UCAN Escrow Binding', () => {
 
       expect(revSet.listRevoked()).toHaveLength(1);
     });
+
+    it('tracks revoked issuer DIDs separately from revoked escrows', () => {
+      const revSet = new UCANRevocationSet();
+
+      expect(revSet.isIssuerRevoked('did:agentbnb:aaaa000011112222')).toBe(false);
+      revSet.revokeIssuer('did:agentbnb:aaaa000011112222');
+      expect(revSet.isIssuerRevoked('did:agentbnb:aaaa000011112222')).toBe(true);
+      expect(revSet.isIssuerRevoked('did:agentbnb:bbbb000011112222')).toBe(false);
+
+      // Issuer revocation does not bleed into escrow revocation.
+      expect(revSet.isRevoked('did:agentbnb:aaaa000011112222')).toBe(false);
+    });
+
+    it('lists revoked issuers separately', () => {
+      const revSet = new UCANRevocationSet();
+      revSet.revokeIssuer('did:agentbnb:aaaa000011112222');
+      revSet.revokeIssuer('did:agentbnb:bbbb000011112222');
+
+      const issuers = revSet.listRevokedIssuers();
+      expect(issuers).toHaveLength(2);
+      expect(issuers).toContain('did:agentbnb:aaaa000011112222');
+      expect(issuers).toContain('did:agentbnb:bbbb000011112222');
+    });
+
+    it('clear() also empties revoked issuers', () => {
+      const revSet = new UCANRevocationSet();
+      revSet.revokeByEscrow('esc-1');
+      revSet.revokeIssuer('did:agentbnb:aaaa000011112222');
+
+      revSet.clear();
+      expect(revSet.listRevoked()).toHaveLength(0);
+      expect(revSet.listRevokedIssuers()).toHaveLength(0);
+    });
   });
 });

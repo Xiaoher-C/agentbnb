@@ -143,7 +143,10 @@ export function validateChain(
       };
     }
 
-    const result = verifyUCAN(tokens[i]!, pubKey);
+    // Chain validation is idempotent and may be invoked many times for the
+    // same chain; suppress replay/revocation checks to avoid spurious failures
+    // (replay protection happens at the gateway entry point).
+    const result = verifyUCAN(tokens[i]!, pubKey, { checkReplay: false, checkRevocation: false });
     if (!result.valid) {
       return {
         valid: false,
