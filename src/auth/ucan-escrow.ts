@@ -82,29 +82,52 @@ export function createEscrowBoundUCAN(opts: {
 }
 
 /**
- * In-memory revocation set for settled/refunded escrows.
- * When escrow settles or refunds, all derived UCANs are revoked.
+ * In-memory revocation set covering both escrow-bound UCANs and revoked
+ * issuer DIDs. Consumed by `verifyUCAN` when wired via `setRevocationSet`.
+ *
+ * Two independent revocation domains are tracked:
+ *  - `revokeByEscrow(escrowId)` invalidates any UCAN whose `fct.escrow_id`
+ *    matches; called when an escrow settles, releases, or is abandoned.
+ *  - `revokeIssuer(did)` invalidates every UCAN issued by a DID; called
+ *    when a DID is permanently revoked.
  */
 export class UCANRevocationSet {
-  private readonly revoked = new Set<string>();
+  private readonly revokedEscrows = new Set<string>();
+  private readonly revokedIssuers = new Set<string>();
 
-  /** Revoke all UCANs for an escrow. */
+  /** Revoke all UCANs bound to an escrow. */
   revokeByEscrow(escrowId: string): void {
-    this.revoked.add(escrowId);
+    this.revokedEscrows.add(escrowId);
+  }
+
+  /** Revoke all UCANs issued by a DID. */
+  revokeIssuer(issuerDid: string): void {
+    this.revokedIssuers.add(issuerDid);
   }
 
   /** Check if a UCAN is revoked by escrow ID. */
   isRevoked(escrowId: string): boolean {
-    return this.revoked.has(escrowId);
+    return this.revokedEscrows.has(escrowId);
+  }
+
+  /** Check if an issuer DID has been revoked. */
+  isIssuerRevoked(issuerDid: string): boolean {
+    return this.revokedIssuers.has(issuerDid);
   }
 
   /** Get all revoked escrow IDs. */
   listRevoked(): string[] {
-    return [...this.revoked];
+    return [...this.revokedEscrows];
+  }
+
+  /** Get all revoked issuer DIDs. */
+  listRevokedIssuers(): string[] {
+    return [...this.revokedIssuers];
   }
 
   /** Clear all revocations. */
   clear(): void {
-    this.revoked.clear();
+    this.revokedEscrows.clear();
+    this.revokedIssuers.clear();
   }
 }
