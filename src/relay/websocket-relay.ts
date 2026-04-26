@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import type Database from 'better-sqlite3';
 import type { WebSocket } from 'ws';
-import { randomUUID } from 'node:crypto';
+import { randomUUID, timingSafeEqual } from 'node:crypto';
 import { insertRequestLog } from '../registry/request-log.js';
 import {
   RelayMessageSchema,
@@ -57,6 +57,44 @@ function readTimeoutOverride(envKey: string, fallbackMs: number): number {
   return Math.floor(parsed);
 }
 
+/** Default maximum WebSocket payload size in bytes (1 MiB). */
+const DEFAULT_MAX_PAYLOAD_BYTES = 1_048_576;
+
+/**
+ * Pre-encoded register-token secret captured once at module load. A zero-length
+ * buffer means the relay runs in dev mode (any non-empty token is accepted,
+ * with a one-time warning).
+ */
+const RELAY_AUTH_SECRET_BUFFER = Buffer.from(process.env.RELAY_AUTH_SECRET ?? '', 'utf8');
+
+/** Latch ensuring the dev-mode warning is logged at most once per process. */
+let devModeWarningLogged = false;
+
+/**
+ * Compare a caller-supplied register token against the configured secret in
+ * constant time. Empty tokens are always rejected. When no secret is set the
+ * comparator returns true for any non-empty token (dev-mode behavior).
+ */
+function isValidRegisterToken(token: string): boolean {
+  if (token.length === 0) return false;
+
+  if (RELAY_AUTH_SECRET_BUFFER.length === 0) {
+    if (!devModeWarningLogged) {
+      devModeWarningLogged = true;
+      console.warn(
+        '[relay] RELAY_AUTH_SECRET not set — accepting any non-empty register token (dev mode)',
+      );
+    }
+    return true;
+  }
+
+  // timingSafeEqual requires equal-length buffers; the secret length itself
+  // is not sensitive, so a length mismatch is a fast reject.
+  const provided = Buffer.from(token, 'utf8');
+  if (provided.length !== RELAY_AUTH_SECRET_BUFFER.length) return false;
+  return timingSafeEqual(provided, RELAY_AUTH_SECRET_BUFFER);
+}
+
 /**
  * Registers WebSocket relay on an existing Fastify instance.
  * Adds a `/ws` route that upgrades HTTP to WebSocket for agent relay.
@@ -73,6 +111,11 @@ export function registerWebSocketRelay(
   db: Database.Database,
   creditDb?: Database.Database,
 ): RelayState {
+  /** Maximum incoming WebSocket payload size, resolved once per relay setup. */
+  const maxPayloadBytes = readTimeoutOverride(
+    'RELAY_MAX_PAYLOAD_BYTES',
+    DEFAULT_MAX_PAYLOAD_BYTES,
+  );
   /** Active agent connections keyed by owner */
   const connections = new Map<string, WebSocket>();
   /** V8: Reverse lookup — agent_id → owner for dual-key routing */
@@ -397,10 +440,24 @@ export function registerWebSocketRelay(
 
   /**
    * Handle an agent registration message.
-   * Upserts the primary card, then any additional cards from the `cards` array.
-   * Only logs agent_joined once (for the primary card).
+   * Verifies the inbound token, upserts the primary card, then any additional
+   * cards from the `cards` array. Only logs agent_joined once (for the primary
+   * card). Returns true on a successful registration; false when the token is
+   * rejected so the dispatcher knows to drop `registeredOwner`.
    */
-  function handleRegister(ws: WebSocket, msg: RegisterMessage): void {
+  function handleRegister(ws: WebSocket, msg: RegisterMessage): boolean {
+    // Auth gate: reject before mutating any shared state. Without this, any
+    // peer could claim arbitrary identities and overwrite registry cards.
+    if (!isValidRegisterToken(msg.token)) {
+      sendMessage(ws, {
+        type: 'error',
+        code: 'unauthorized',
+        message: 'invalid register token',
+      });
+      try { ws.close(1008, 'unauthorized'); } catch { /* ignore */ }
+      return false;
+    }
+
     const { owner, card } = msg;
 
     // Close existing connection for this owner (reconnect case)
@@ -439,7 +496,7 @@ export function registerWebSocketRelay(
     if (isEphemeral) {
       const cardId = (card.id as string) ?? owner;
       sendMessage(ws, { type: 'registered', agent_id: cardId });
-      return;
+      return true;
     }
 
     // Upsert primary card into registry (non-fatal — agent stays connected even if card is invalid)
@@ -478,6 +535,7 @@ export function registerWebSocketRelay(
 
     // Send acknowledgment
     sendMessage(ws, { type: 'registered', agent_id: cardId });
+    return true;
   }
 
   /**
@@ -869,11 +927,33 @@ export function registerWebSocketRelay(
   }
 
   /**
-   * Handle a balance sync request — returns authoritative balance from relay.
+   * Handle a balance sync request — returns the authoritative balance for the
+   * caller's own agent only. The connection must be registered, and the
+   * requested `agent_id` must resolve to the same owner key as the caller.
    */
-  function handleBalanceSync(ws: WebSocket, msg: BalanceSyncMessage): void {
+  function handleBalanceSync(
+    ws: WebSocket,
+    msg: BalanceSyncMessage,
+    registeredOwner: string | undefined,
+  ): void {
     if (!creditDb) {
       sendMessage(ws, { type: 'error', code: 'no_credit_db', message: 'Credit system not available' });
+      return;
+    }
+
+    // Reject if the connection is anonymous, or if the requested agent_id
+    // does not belong to the caller. The single rejection branch avoids
+    // disclosing whether the agent_id is registered at all.
+    const ownerForAgentId = agentIdToOwner.get(msg.agent_id);
+    const isSelf =
+      registeredOwner !== undefined &&
+      (ownerForAgentId === registeredOwner || msg.agent_id === registeredOwner);
+    if (!isSelf) {
+      sendMessage(ws, {
+        type: 'error',
+        code: 'unauthorized',
+        message: 'cannot query other agents balance',
+      });
       return;
     }
 
@@ -893,6 +973,20 @@ export function registerWebSocketRelay(
     let registeredOwner: string | undefined;
 
     socket.on('message', (raw: Buffer | string) => {
+      // Bound payload size BEFORE JSON.parse to prevent OOM / parse-bomb
+      // attacks and short-circuit Zod validation on oversize input.
+      const rawByteLength =
+        typeof raw === 'string' ? Buffer.byteLength(raw, 'utf8') : raw.byteLength;
+      if (rawByteLength > maxPayloadBytes) {
+        sendMessage(socket, {
+          type: 'error',
+          code: 'payload_too_large',
+          message: `Message exceeds ${maxPayloadBytes} byte limit`,
+        });
+        try { socket.close(1009, 'message too big'); } catch { /* ignore */ }
+        return;
+      }
+
       void (async () => {
         let data: unknown;
         try {
@@ -915,10 +1009,15 @@ export function registerWebSocketRelay(
         const msg = parsed.data;
 
         switch (msg.type) {
-          case 'register':
-            registeredOwner = msg.owner;
-            handleRegister(socket, msg);
+          case 'register': {
+            // Only stamp registeredOwner once handleRegister accepts the
+            // token, so a rejected attempt cannot escalate later messages.
+            const accepted = handleRegister(socket, msg);
+            if (accepted) {
+              registeredOwner = msg.owner;
+            }
             break;
+          }
 
           case 'relay_request':
             if (!registeredOwner) {
@@ -958,7 +1057,7 @@ export function registerWebSocketRelay(
             break;
 
           case 'balance_sync':
-            handleBalanceSync(socket, msg);
+            handleBalanceSync(socket, msg, registeredOwner);
             break;
 
           default:
