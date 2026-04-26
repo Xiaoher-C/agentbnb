@@ -11,6 +11,10 @@ import { generateKeyPair, signEscrowReceipt } from '../credit/signing.js';
 import type { CapabilityCard, CapabilityCardV2, EscrowReceipt } from '../types/index.js';
 import type { SkillExecutor } from '../skills/executor.js';
 import type Database from 'better-sqlite3';
+import { createUCAN } from '../auth/ucan.js';
+import { createAgentRecord } from '../identity/agent-identity.js';
+import { deriveAgentId } from '../identity/identity.js';
+import { clearReplayCache } from '../auth/ucan-replay.js';
 
 // ─── Helper: insert a v2.0 card directly into the DB ─────────────────────────
 
@@ -1481,5 +1485,242 @@ describe('Gateway concurrency limits (max_concurrent)', () => {
     } finally {
       await gateway.close();
     }
+  });
+});
+
+// ─── Gateway UCAN authentication tests ──────────────────────────────────────
+
+describe('Gateway UCAN authentication', () => {
+  let registryDb: Database.Database;
+  let creditDb: Database.Database;
+  let gateway: FastifyInstance;
+  let mockHandler: { server: FastifyInstance; url: string };
+  let testCard: CapabilityCard;
+
+  beforeEach(async () => {
+    registryDb = openDatabase(':memory:');
+    creditDb = openCreditDb(':memory:');
+    bootstrapAgent(creditDb, 'requester-agent', 1000);
+    testCard = makeCard({ id: randomUUID() });
+    insertCard(registryDb, testCard);
+    mockHandler = await createMockHandler({ output: 'ucan-auth result' });
+    gateway = createGatewayServer({
+      registryDb,
+      creditDb,
+      tokens: ['unrelated-bearer'],
+      handlerUrl: mockHandler.url,
+      timeoutMs: 5000,
+      silent: true,
+    });
+    await gateway.ready();
+    clearReplayCache();
+  });
+
+  afterEach(async () => {
+    await gateway.close();
+    await mockHandler.server.close();
+    registryDb.close();
+    creditDb.close();
+    clearReplayCache();
+  });
+
+  it('rejects a UCAN whose issuer DID is unknown to the registry (unknown_issuer)', async () => {
+    const keys = generateKeyPair();
+    const orphanAgentId = deriveAgentId(keys.publicKey.toString('hex'));
+    // Note: we deliberately do NOT register this agent in creditDb.
+    const issuerDid = `did:agentbnb:${orphanAgentId}`;
+    const audienceDid = 'did:agentbnb:0000000000000000';
+    const ucan = createUCAN({
+      issuerDid,
+      audienceDid,
+      attenuations: [{ with: 'agentbnb://skill/**', can: 'invoke' }],
+      signerKey: keys.privateKey,
+      expiresAt: Math.floor(Date.now() / 1000) + 3600,
+    });
+
+    const res = await gateway.inject({
+      method: 'POST',
+      url: '/rpc',
+      headers: { authorization: `Bearer ucan.${ucan}` },
+      payload: {
+        jsonrpc: '2.0',
+        method: 'capability.execute',
+        params: { card_id: testCard.id, requester: 'requester-agent' },
+        id: 'ucan-1',
+      },
+    });
+
+    expect(res.statusCode).toBe(401);
+    const body = res.json<{ error: { message: string } }>();
+    expect(body.error.message).toBe('unknown_issuer');
+  });
+
+  it('rejects a UCAN when X-Agent-Public-Key disagrees with the registry-resolved key', async () => {
+    // Register a real agent.
+    const honestKeys = generateKeyPair();
+    const honestPubHex = honestKeys.publicKey.toString('hex');
+    const honestAgentId = deriveAgentId(honestPubHex);
+    createAgentRecord(creditDb, {
+      agent_id: honestAgentId,
+      display_name: 'honest-agent',
+      public_key: honestPubHex,
+    });
+
+    // Token signed by the honest agent.
+    const ucan = createUCAN({
+      issuerDid: `did:agentbnb:${honestAgentId}`,
+      audienceDid: 'did:agentbnb:0000000000000000',
+      attenuations: [{ with: 'agentbnb://skill/**', can: 'invoke' }],
+      signerKey: honestKeys.privateKey,
+      expiresAt: Math.floor(Date.now() / 1000) + 3600,
+    });
+
+    // Caller supplies a DIFFERENT public key in the header — should be rejected
+    // even though the UCAN signature itself would verify against the registry key.
+    const otherKeys = generateKeyPair();
+    const res = await gateway.inject({
+      method: 'POST',
+      url: '/rpc',
+      headers: {
+        authorization: `Bearer ucan.${ucan}`,
+        'x-agent-public-key': otherKeys.publicKey.toString('hex'),
+      },
+      payload: {
+        jsonrpc: '2.0',
+        method: 'capability.execute',
+        params: { card_id: testCard.id, requester: 'requester-agent' },
+        id: 'ucan-2',
+      },
+    });
+
+    expect(res.statusCode).toBe(401);
+    const body = res.json<{ error: { message: string } }>();
+    expect(body.error.message).toMatch(/public key mismatch/i);
+  });
+
+  it('blocks issuer impersonation: attacker key cannot authenticate as a registered agent', async () => {
+    // Register an honest agent.
+    const honestKeys = generateKeyPair();
+    const honestPubHex = honestKeys.publicKey.toString('hex');
+    const honestAgentId = deriveAgentId(honestPubHex);
+    createAgentRecord(creditDb, {
+      agent_id: honestAgentId,
+      display_name: 'honest-agent',
+      public_key: honestPubHex,
+    });
+
+    // Attacker forges a UCAN claiming to be the honest agent, but signs with their own key.
+    const attackerKeys = generateKeyPair();
+    const forgedUcan = createUCAN({
+      issuerDid: `did:agentbnb:${honestAgentId}`,
+      audienceDid: 'did:agentbnb:0000000000000000',
+      attenuations: [{ with: 'agentbnb://skill/**', can: 'invoke' }],
+      signerKey: attackerKeys.privateKey,
+      expiresAt: Math.floor(Date.now() / 1000) + 3600,
+    });
+
+    // Attacker also tries to supply their own pubkey in the header (the old vulnerability path).
+    const res = await gateway.inject({
+      method: 'POST',
+      url: '/rpc',
+      headers: {
+        authorization: `Bearer ucan.${forgedUcan}`,
+        'x-agent-public-key': attackerKeys.publicKey.toString('hex'),
+      },
+      payload: {
+        jsonrpc: '2.0',
+        method: 'capability.execute',
+        params: { card_id: testCard.id, requester: 'requester-agent' },
+        id: 'ucan-3',
+      },
+    });
+
+    // Either the header mismatch trips first or the signature verify fails with the
+    // registry key — either way, 401 and no impersonation.
+    expect(res.statusCode).toBe(401);
+  });
+
+  it('accepts a properly-signed UCAN when issuer DID resolves cleanly via the registry', async () => {
+    const keys = generateKeyPair();
+    const pubHex = keys.publicKey.toString('hex');
+    const agentId = deriveAgentId(pubHex);
+    createAgentRecord(creditDb, {
+      agent_id: agentId,
+      display_name: 'good-agent',
+      public_key: pubHex,
+    });
+
+    const ucan = createUCAN({
+      issuerDid: `did:agentbnb:${agentId}`,
+      audienceDid: 'did:agentbnb:0000000000000000',
+      attenuations: [{ with: 'agentbnb://skill/**', can: 'invoke' }],
+      signerKey: keys.privateKey,
+      expiresAt: Math.floor(Date.now() / 1000) + 3600,
+    });
+
+    const res = await gateway.inject({
+      method: 'POST',
+      url: '/rpc',
+      headers: { authorization: `Bearer ucan.${ucan}` },
+      payload: {
+        jsonrpc: '2.0',
+        method: 'capability.execute',
+        params: { card_id: testCard.id, requester: 'requester-agent' },
+        id: 'ucan-4',
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{ result?: unknown; error?: unknown }>();
+    expect(body.error).toBeUndefined();
+    expect(body.result).toBeDefined();
+  });
+
+  it('rejects a replayed UCAN (replay_detected) on the second request', async () => {
+    const keys = generateKeyPair();
+    const pubHex = keys.publicKey.toString('hex');
+    const agentId = deriveAgentId(pubHex);
+    createAgentRecord(creditDb, {
+      agent_id: agentId,
+      display_name: 'replay-agent',
+      public_key: pubHex,
+    });
+
+    const ucan = createUCAN({
+      issuerDid: `did:agentbnb:${agentId}`,
+      audienceDid: 'did:agentbnb:0000000000000000',
+      attenuations: [{ with: 'agentbnb://skill/**', can: 'invoke' }],
+      signerKey: keys.privateKey,
+      expiresAt: Math.floor(Date.now() / 1000) + 3600,
+    });
+
+    const first = await gateway.inject({
+      method: 'POST',
+      url: '/rpc',
+      headers: { authorization: `Bearer ucan.${ucan}` },
+      payload: {
+        jsonrpc: '2.0',
+        method: 'capability.execute',
+        params: { card_id: testCard.id, requester: 'requester-agent' },
+        id: 'replay-1',
+      },
+    });
+    expect(first.statusCode).toBe(200);
+
+    // Replay the same token — must be rejected.
+    const second = await gateway.inject({
+      method: 'POST',
+      url: '/rpc',
+      headers: { authorization: `Bearer ucan.${ucan}` },
+      payload: {
+        jsonrpc: '2.0',
+        method: 'capability.execute',
+        params: { card_id: testCard.id, requester: 'requester-agent' },
+        id: 'replay-2',
+      },
+    });
+    expect(second.statusCode).toBe(401);
+    const body = second.json<{ error: { message: string } }>();
+    expect(body.error.message).toMatch(/replay_detected/);
   });
 });
