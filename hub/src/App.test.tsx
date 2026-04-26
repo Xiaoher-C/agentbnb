@@ -85,14 +85,14 @@ describe('App layout shell', () => {
     expect(screen.getByRole('link', { name: /Discover/i })).toBeInTheDocument();
   });
 
-  it('renders Agents tab in nav', () => {
+  it('renders Network tab in nav', () => {
     renderApp();
-    expect(screen.getByRole('link', { name: /Agents/i })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Network/i })).toBeInTheDocument();
   });
 
-  it('renders Activity tab in nav', () => {
+  it('renders Skill Inspector tab in nav', () => {
     renderApp();
-    expect(screen.getByRole('link', { name: /Activity/i })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Skill Inspector/i })).toBeInTheDocument();
   });
 
   it('renders Docs tab in nav', () => {
@@ -100,13 +100,14 @@ describe('App layout shell', () => {
     expect(screen.getByRole('link', { name: /Docs/i })).toBeInTheDocument();
   });
 
-  it('renders My Agent dropdown button in nav', () => {
+  it('renders For Providers button in nav', () => {
     renderApp();
-    expect(screen.getByRole('button', { name: /My Agent/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /For Providers/i })).toBeInTheDocument();
   });
 
-  it('shows "Get Started" CTA button when not authenticated', () => {
+  it('shows "Get Started" CTA link when not authenticated', () => {
     renderApp();
-    expect(screen.getByRole('button', { name: /Get Started/i })).toBeInTheDocument();
+    // GetStartedCTA renders as an <a> tag, not a <button>
+    expect(screen.getByRole('link', { name: /Get Started/i })).toBeInTheDocument();
   });
 });
