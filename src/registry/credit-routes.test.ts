@@ -314,4 +314,129 @@ describe('credit routes', () => {
     expect(response.statusCode).toBe(400);
     expect(response.json()).toHaveProperty('error');
   });
+
+  // Test 16: POST /api/credits/settle as a non-owner returns 403
+  it('POST /api/credits/settle as a non-owner returns 403', async () => {
+    // Alice creates the escrow as the owner
+    const holdBody = { owner: 'alice', amount: 30, cardId: 'card-001' };
+    const holdResponse = await server.inject({
+      method: 'POST',
+      url: '/api/credits/hold',
+      headers: {
+        ...authHeaders('POST', '/api/credits/hold', holdBody),
+        'Content-Type': 'application/json',
+      },
+      payload: JSON.stringify(holdBody),
+    });
+    expect(holdResponse.statusCode).toBe(200);
+    const { escrowId } = holdResponse.json();
+
+    // Mallory (a different identity) tries to settle Alice's escrow.
+    const malloryKeys = generateKeyPair();
+    const malloryPubHex = malloryKeys.publicKey.toString('hex');
+    createAgentRecord(creditDb, {
+      agent_id: deriveAgentId(malloryPubHex),
+      display_name: 'mallory-agent',
+      public_key: malloryPubHex,
+      legacy_owner: 'mallory',
+    });
+    bootstrapAgent(creditDb, 'mallory', 50);
+
+    const settleBody = { escrowId, recipientOwner: 'mallory' };
+    const malloryHeaders = signRequest(
+      'POST',
+      '/api/credits/settle',
+      settleBody,
+      malloryKeys.privateKey,
+      malloryPubHex,
+    );
+
+    const response = await server.inject({
+      method: 'POST',
+      url: '/api/credits/settle',
+      headers: { ...malloryHeaders, 'Content-Type': 'application/json' },
+      payload: JSON.stringify(settleBody),
+    });
+
+    expect(response.statusCode).toBe(403);
+    expect(response.json()).toMatchObject({ error: 'forbidden_not_escrow_owner' });
+  });
+
+  // Test 17: POST /api/credits/release as a non-owner returns 403
+  it('POST /api/credits/release as a non-owner returns 403', async () => {
+    // Alice creates the escrow as the owner
+    const holdBody = { owner: 'alice', amount: 20, cardId: 'card-002' };
+    const holdResponse = await server.inject({
+      method: 'POST',
+      url: '/api/credits/hold',
+      headers: {
+        ...authHeaders('POST', '/api/credits/hold', holdBody),
+        'Content-Type': 'application/json',
+      },
+      payload: JSON.stringify(holdBody),
+    });
+    expect(holdResponse.statusCode).toBe(200);
+    const { escrowId } = holdResponse.json();
+
+    // Mallory (a different identity) tries to release Alice's escrow.
+    const malloryKeys = generateKeyPair();
+    const malloryPubHex = malloryKeys.publicKey.toString('hex');
+    createAgentRecord(creditDb, {
+      agent_id: deriveAgentId(malloryPubHex),
+      display_name: 'mallory-agent',
+      public_key: malloryPubHex,
+      legacy_owner: 'mallory',
+    });
+
+    const releaseBody = { escrowId };
+    const malloryHeaders = signRequest(
+      'POST',
+      '/api/credits/release',
+      releaseBody,
+      malloryKeys.privateKey,
+      malloryPubHex,
+    );
+
+    const response = await server.inject({
+      method: 'POST',
+      url: '/api/credits/release',
+      headers: { ...malloryHeaders, 'Content-Type': 'application/json' },
+      payload: JSON.stringify(releaseBody),
+    });
+
+    expect(response.statusCode).toBe(403);
+    expect(response.json()).toMatchObject({ error: 'forbidden_not_escrow_owner' });
+  });
+
+  // Test 18: POST /api/credits/settle for a non-existent escrow returns 404
+  it('POST /api/credits/settle for missing escrow returns 404', async () => {
+    const body = { escrowId: 'does-not-exist', recipientOwner: 'bob' };
+    const response = await server.inject({
+      method: 'POST',
+      url: '/api/credits/settle',
+      headers: {
+        ...authHeaders('POST', '/api/credits/settle', body),
+        'Content-Type': 'application/json',
+      },
+      payload: JSON.stringify(body),
+    });
+
+    expect(response.statusCode).toBe(404);
+  });
+
+  // Test 19: POST /api/credits/release for a non-existent escrow returns 404
+  it('POST /api/credits/release for missing escrow returns 404', async () => {
+    const body = { escrowId: 'does-not-exist' };
+    const response = await server.inject({
+      method: 'POST',
+      url: '/api/credits/release',
+      headers: {
+        ...authHeaders('POST', '/api/credits/release', body),
+        'Content-Type': 'application/json',
+      },
+      payload: JSON.stringify(body),
+    });
+
+    expect(response.statusCode).toBe(404);
+  });
 });
