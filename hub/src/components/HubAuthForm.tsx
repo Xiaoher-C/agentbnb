@@ -16,9 +16,8 @@ import {
   decryptPrivateKey,
   importPrivateKey,
   signPayload,
-  cryptoHelpers,
 } from '../lib/crypto.js';
-import { saveSession } from '../lib/authHeaders.js';
+import { saveSession, setHubPrivateKey } from '../lib/authHeaders.js';
 
 type Mode = 'landing' | 'register' | 'login' | 'api-key';
 
@@ -91,11 +90,16 @@ export default function HubAuthForm({ onLogin }: HubAuthFormProps): JSX.Element 
 
       const { agent_id } = await res.json() as { agent_id: string };
 
-      // 6. Store session (unencrypted in localStorage for session)
+      // Re-import the freshly generated key as non-extractable. generateKeypair
+      // returns an extractable key (needed to export PKCS#8 for server storage),
+      // so we discard that handle and keep only a non-extractable one in memory.
+      const nonExtractableKey = await importPrivateKey(kp.privateKeyBytes);
+      setHubPrivateKey(nonExtractableKey);
+
       saveSession({
         agentId: agent_id,
         publicKeyHex: kp.publicKeyHex,
-        privateKeyBase64: cryptoHelpers.bytesToBase64(new Uint8Array(kp.privateKeyBytes)),
+        createdAt: new Date().toISOString(),
       });
 
       onLogin(null); // DID mode — no API key
@@ -131,14 +135,16 @@ export default function HubAuthForm({ onLogin }: HubAuthFormProps): JSX.Element 
       // 2. Decrypt with passphrase
       const pkcs8 = await decryptPrivateKey(data.encrypted_private_key, data.kdf_salt, passphrase);
 
-      // 3. Verify by importing (will throw on invalid)
-      await importPrivateKey(pkcs8);
+      // importPrivateKey produces a non-extractable CryptoKey, so the raw
+      // PKCS#8 bytes cannot be read back from the DOM. The pkcs8 buffer falls
+      // out of scope below.
+      const nonExtractableKey = await importPrivateKey(pkcs8);
+      setHubPrivateKey(nonExtractableKey);
 
-      // 4. Save session
       saveSession({
         agentId: data.agent_id,
         publicKeyHex: data.public_key,
-        privateKeyBase64: cryptoHelpers.bytesToBase64(new Uint8Array(pkcs8)),
+        createdAt: new Date().toISOString(),
       });
 
       onLogin(null);

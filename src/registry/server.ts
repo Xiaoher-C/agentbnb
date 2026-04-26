@@ -165,6 +165,18 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
       prefix: '/hub/',
     });
 
+    // Apply a Content Security Policy on every Hub response so XSS injected
+    // into any third-party dependency cannot exfiltrate localStorage or call
+    // arbitrary origins. Mirrors the <meta http-equiv> tag in hub/index.html.
+    const HUB_CSP =
+      "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'";
+    server.addHook('onSend', async (request, reply, payload) => {
+      if (request.url === '/hub' || request.url.startsWith('/hub/')) {
+        reply.header('Content-Security-Policy', HUB_CSP);
+      }
+      return payload;
+    });
+
     // Redirect root to /hub/ — Hub IS the landing page for MVP
     server.get('/', async (_request, reply) => {
       return reply.redirect('/hub/');
