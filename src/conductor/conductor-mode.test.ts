@@ -542,3 +542,48 @@ describe('ConductorMode — depth guards and network routing', () => {
     expect(mockedDecompose).toHaveBeenCalled();  // fell back to Rule Engine
   });
 });
+
+// ---------------------------------------------------------------------------
+// Security: conductor signing key must NOT be accepted via params
+// (audit finding CRITICAL-1).
+// ---------------------------------------------------------------------------
+
+describe('ConductorMode — security: conductor_private_key in params', () => {
+  const orchestrateConfig = {
+    id: 'orchestrate',
+    type: 'conductor' as const,
+    name: 'Orchestrate',
+    conductor_skill: 'orchestrate' as const,
+    pricing: { credits_per_call: 5 },
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockedGetCardsByCapabilityType.mockReturnValue([]);
+  });
+
+  it('rejects requests that include conductor_private_key in params', async () => {
+    const mode = createMode();
+    const result = await mode.execute(orchestrateConfig as any, {
+      task: 'write a blog post',
+      // Attempt to inject a signing key via params — must be rejected.
+      conductor_private_key: Buffer.from('attacker-supplied-key'),
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('conductor_private_key');
+    // Decomposition must not run when params guard rejects the request.
+    expect(mockedDecompose).not.toHaveBeenCalled();
+  });
+
+  it('rejects even when conductor_private_key is set to undefined', async () => {
+    const mode = createMode();
+    const result = await mode.execute(orchestrateConfig as any, {
+      task: 'write a blog post',
+      conductor_private_key: undefined,
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('conductor_private_key');
+  });
+});

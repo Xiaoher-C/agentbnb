@@ -5,6 +5,7 @@ import {
   decodeUCAN,
   isExpired,
   setRevocationSet,
+  mintSelfDelegatedSkillToken,
 } from './ucan.js';
 import { UCANRevocationSet } from './ucan-escrow.js';
 import { clearReplayCache } from './ucan-replay.js';
@@ -331,6 +332,53 @@ describe('UCAN Token Engine', () => {
 
       const decoded = decodeUCAN(token);
       expect(decoded.payload.att).toEqual(complexAtts);
+    });
+  });
+
+  describe('mintSelfDelegatedSkillToken', () => {
+    it('issues a self-issued token (iss === aud) that verifies under the holder key', () => {
+      const did = 'did:agentbnb:self0000aaaabbbb';
+      const token = mintSelfDelegatedSkillToken({
+        did,
+        signerKey: keys.privateKey,
+        skillId: 'summarize',
+        ttlSeconds: 60,
+      });
+
+      // 3-segment JWT-like shape
+      expect(token).toMatch(/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/);
+
+      const decoded = decodeUCAN(token);
+      expect(decoded.payload.iss).toBe(did);
+      expect(decoded.payload.aud).toBe(did);
+      expect(decoded.payload.att).toEqual([
+        { with: 'agentbnb://skill/summarize', can: 'invoke' },
+      ]);
+      expect(decoded.payload.exp).toBeGreaterThan(Math.floor(Date.now() / 1000));
+
+      const result = verifyUCAN(token, keys.publicKey);
+      expect(result.valid).toBe(true);
+    });
+
+    it('falls back to wildcard skill scope when skillId is omitted', () => {
+      const did = 'did:agentbnb:self1111';
+      const token = mintSelfDelegatedSkillToken({
+        did,
+        signerKey: keys.privateKey,
+      });
+
+      const decoded = decodeUCAN(token);
+      expect(decoded.payload.att[0]?.with).toBe('agentbnb://skill/*');
+    });
+
+    it('throws when given a malformed signer key', () => {
+      expect(() =>
+        mintSelfDelegatedSkillToken({
+          did: 'did:agentbnb:self2222',
+          signerKey: Buffer.from('not-a-real-der-key'),
+          skillId: 'tts',
+        }),
+      ).toThrow();
     });
   });
 });

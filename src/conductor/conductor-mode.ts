@@ -26,6 +26,22 @@ import { getCardsByCapabilityType } from '../registry/store.js';
 import { requestCapability } from '../gateway/client.js';
 
 /**
+ * Conductor signing identity — the local DID + private key used for UCAN
+ * sub-delegation when an `orchestrate` run produces team members.
+ *
+ * The private key MUST be loaded from the local keystore (e.g. via
+ * `loadOrRepairIdentity()` in `src/identity/identity.ts`). It must NEVER
+ * be accepted as a runtime parameter from external callers — see audit
+ * finding CRITICAL-1.
+ */
+export interface ConductorIdentity {
+  /** DER-encoded Ed25519 private key. Loaded once at boot from local disk. */
+  readonly privateKey: Buffer;
+  /** Optional DID string (`did:agentbnb:...`) for the conductor. */
+  readonly did?: string;
+}
+
+/**
  * Configuration options for ConductorMode.
  */
 export interface ConductorModeOptions {
@@ -41,6 +57,15 @@ export interface ConductorModeOptions {
   resolveAgentUrl: (owner: string) => { url: string; cardId: string };
   /** Maximum budget in credits for orchestration runs. Default 100. */
   maxBudget?: number;
+  /**
+   * Local conductor signing identity. When provided, ConductorMode will
+   * mint delegated UCANs for team members during `orchestrate` runs.
+   * When omitted, sub-delegation is skipped silently.
+   *
+   * The private key must be loaded from the local keystore — never from
+   * caller-supplied params (audit finding CRITICAL-1).
+   */
+  identity?: ConductorIdentity;
 }
 
 /**
@@ -59,6 +84,7 @@ export class ConductorMode implements ExecutorMode {
   private readonly gatewayToken: string;
   private readonly resolveAgentUrl: (owner: string) => { url: string; cardId: string };
   private readonly maxBudget: number;
+  private readonly identity?: ConductorIdentity;
 
   constructor(opts: ConductorModeOptions) {
     this.db = opts.db;
@@ -67,6 +93,7 @@ export class ConductorMode implements ExecutorMode {
     this.gatewayToken = opts.gatewayToken;
     this.resolveAgentUrl = opts.resolveAgentUrl;
     this.maxBudget = opts.maxBudget ?? 100;
+    this.identity = opts.identity;
   }
 
   /**
@@ -90,6 +117,16 @@ export class ConductorMode implements ExecutorMode {
       return {
         success: false,
         error: `Unknown conductor skill: "${conductorSkill}"`,
+      };
+    }
+
+    // Security: reject any caller attempting to inject a signing key via params.
+    // The conductor's signing key is loaded from the local keystore at boot
+    // and never accepted as a runtime parameter (audit finding CRITICAL-1).
+    if (Object.prototype.hasOwnProperty.call(params, 'conductor_private_key')) {
+      return {
+        success: false,
+        error: 'conductor_private_key is not a permitted parameter',
       };
     }
 
@@ -191,10 +228,12 @@ export class ConductorMode implements ExecutorMode {
       });
       onProgress?.({ step: 2, total: 5, message: `Formed team: ${team.matched.length} members, ${team.unrouted.length} unrouted` });
 
-      // Auto-generate delegated UCANs for team members if conductor has a UCAN
+      // Auto-generate delegated UCANs for team members.
+      // Signing key is loaded from the local keystore at boot (this.identity);
+      // it must NEVER be sourced from caller-supplied params (audit CRITICAL-1).
       const conductorUCAN = typeof params.ucan_token === 'string' ? params.ucan_token : undefined;
-      const conductorKey = params.conductor_private_key instanceof Buffer ? params.conductor_private_key as Buffer : undefined;
-      if (conductorUCAN && conductorKey) {
+      const signerKey = this.identity?.privateKey;
+      if (conductorUCAN && signerKey) {
         for (const member of team.matched) {
           try {
             const memberAtts: UCANAttenuation[] = [
@@ -204,7 +243,7 @@ export class ConductorMode implements ExecutorMode {
               parentToken: conductorUCAN,
               newAudienceDid: `did:agentbnb:${member.agent}`,
               narrowedAttenuations: memberAtts,
-              signerKey: conductorKey,
+              signerKey,
             });
             (member as TeamMember & { ucan_token?: string }).ucan_token = memberUCAN;
           } catch {
