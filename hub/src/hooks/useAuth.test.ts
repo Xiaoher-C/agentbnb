@@ -5,12 +5,18 @@
 import { renderHook, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { useAuth } from './useAuth.js';
+import {
+  setHubPrivateKey,
+  getHubPrivateKey,
+  clearHubPrivateKey,
+} from '../lib/authHeaders.js';
 
 const STORAGE_KEY = 'agentbnb_api_key';
 
 describe('useAuth', () => {
   beforeEach(() => {
     localStorage.clear();
+    clearHubPrivateKey();
     vi.restoreAllMocks();
   });
 
@@ -55,5 +61,18 @@ describe('useAuth', () => {
   it('isAuthenticated returns false when null', () => {
     const { result } = renderHook(() => useAuth());
     expect(result.current.isAuthenticated).toBe(false);
+  });
+
+  it('logout() clears the in-memory Hub private key', () => {
+    const fakeKey = { type: 'private', algorithm: { name: 'Ed25519' } } as unknown as CryptoKey;
+    setHubPrivateKey(fakeKey);
+    expect(getHubPrivateKey()).toBe(fakeKey);
+
+    const { result } = renderHook(() => useAuth());
+    act(() => {
+      result.current.logout();
+    });
+
+    expect(getHubPrivateKey()).toBeNull();
   });
 });

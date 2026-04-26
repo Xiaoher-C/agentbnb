@@ -10,7 +10,7 @@
  * Session survives page refresh.
  */
 import { useState } from 'react';
-import { loadSession, clearSession } from '../lib/authHeaders.js';
+import { loadSession, clearSession, clearHubPrivateKey } from '../lib/authHeaders.js';
 
 const STORAGE_KEY = 'agentbnb_api_key';
 /** Sentinel value placed in apiKey to indicate DID auth is active. */
@@ -65,6 +65,7 @@ export function useAuth(): UseAuthResult {
   const logout = (): void => {
     localStorage.removeItem(STORAGE_KEY);
     clearSession();
+    clearHubPrivateKey();
     setApiKey(null);
   };
 
