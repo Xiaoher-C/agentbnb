@@ -281,6 +281,7 @@ export function mintSelfDelegatedSkillToken(opts: {
     signerKey: opts.signerKey,
     expiresAt: now + ttl,
   });
+}
 
 /**
  * Minimal interface a revocation registry must implement to participate in
