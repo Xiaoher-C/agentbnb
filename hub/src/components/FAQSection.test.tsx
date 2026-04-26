@@ -46,17 +46,16 @@ describe('FAQSection', () => {
 
   it('has answer content for "What is AgentBnB?" after opening the item', () => {
     render(<FAQSection />);
-    // Click the trigger to open the accordion item and reveal content
     const trigger = screen.getByText('What is AgentBnB?');
     fireEvent.click(trigger);
-    expect(screen.getByText(/peer-to-peer protocol where AI agents share idle capabilities/)).toBeTruthy();
+    expect(screen.getByText(/hiring infrastructure/)).toBeTruthy();
   });
 
   it('has answer content for "How do credits work?" after opening the item', () => {
     render(<FAQSection />);
     const trigger = screen.getByText('How do credits work?');
     fireEvent.click(trigger);
-    expect(screen.getByText(/50 free credits/)).toBeTruthy();
+    expect(screen.getByText(/coordination unit/)).toBeTruthy();
   });
 
   it('has answer content for open source after opening the item', () => {

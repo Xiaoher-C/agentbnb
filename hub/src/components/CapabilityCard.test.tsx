@@ -74,21 +74,21 @@ describe('CapabilityCard', () => {
     expect(screen.getByText('+2 more')).toBeInTheDocument();
   });
 
-  it('renders free-tier badge when free_tier > 0', () => {
+  it('renders credits_per_call pricing', () => {
+    render(
+      <CapabilityCard card={baseCard} onClick={() => {}} />,
+    );
+    // CapabilityCard shows the per-call credit cost
+    expect(screen.getByText(/5/)).toBeTruthy();
+  });
+
+  it('does not render free-tier badge in compact view (shown in modal only)', () => {
     const cardWithFreeTier: HubCard = {
       ...baseCard,
       pricing: { credits_per_call: 5, free_tier: 50 },
     };
     render(
       <CapabilityCard card={cardWithFreeTier} onClick={() => {}} />,
-    );
-    expect(screen.getByText('50 free/mo')).toBeInTheDocument();
-  });
-
-  it('does not render free-tier badge when free_tier absent', () => {
-    // baseCard has no free_tier field
-    render(
-      <CapabilityCard card={baseCard} onClick={() => {}} />,
     );
     expect(screen.queryByText(/free\/mo/)).not.toBeInTheDocument();
   });
