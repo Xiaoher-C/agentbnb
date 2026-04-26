@@ -285,6 +285,17 @@ export async function creditRoutesPlugin(
         return reply.code(400).send({ error: 'escrowId and recipientOwner are required' });
       }
 
+      // Authorization: only the escrow owner (the consumer who funded the
+      // escrow) can settle it. Without this check any Ed25519-authenticated
+      // agent could redirect a stranger's escrow to an arbitrary recipient.
+      const escrow = getEscrowStatus(creditDb, escrowId);
+      if (!escrow) {
+        return reply.code(404).send({ error: 'Escrow record not found' });
+      }
+      if (escrow.owner !== request.agentId) {
+        return reply.code(403).send({ error: 'forbidden_not_escrow_owner' });
+      }
+
       try {
         settleEscrow(creditDb, escrowId, recipientOwner);
         return reply.send({ ok: true });
@@ -322,6 +333,17 @@ export async function creditRoutesPlugin(
 
       if (!escrowId) {
         return reply.code(400).send({ error: 'escrowId is required' });
+      }
+
+      // Authorization: only the escrow owner (the consumer who funded the
+      // escrow) can refund it. Otherwise any authenticated agent could void
+      // a provider's pending payment after delivery.
+      const escrow = getEscrowStatus(creditDb, escrowId);
+      if (!escrow) {
+        return reply.code(404).send({ error: 'Escrow record not found' });
+      }
+      if (escrow.owner !== request.agentId) {
+        return reply.code(403).send({ error: 'forbidden_not_escrow_owner' });
       }
 
       try {
