@@ -7,6 +7,7 @@ import type { EscrowReceipt } from '../types/index.js';
 // FailureReason is used as a string literal 'overload' in the overload log entry
 import { verifyEscrowReceipt } from '../credit/signing.js';
 import { decodeUCAN, verifyUCAN } from '../auth/ucan.js';
+import { lookupAgent } from '../identity/agent-identity.js';
 import { insertRequestLog } from '../registry/request-log.js';
 
 /**
@@ -37,6 +38,23 @@ export interface GatewayOptions {
 }
 
 const VERSION = '0.0.1';
+
+/**
+ * Extract the 16-char hex agent_id from a `did:agentbnb:<agent_id>` string.
+ * Returns null when the DID is malformed or uses a method we cannot resolve
+ * locally (e.g. did:key, where there is no registry lookup).
+ */
+function extractAgentIdFromDID(did: string): string | null {
+  const prefix = 'did:agentbnb:';
+  if (!did.startsWith(prefix)) {
+    return null;
+  }
+  const id = did.slice(prefix.length);
+  if (!/^[0-9a-f]{16}$/.test(id)) {
+    return null;
+  }
+  return id;
+}
 
 /**
  * Creates a Fastify gateway server for agent-to-agent communication.
@@ -115,25 +133,85 @@ export function createGatewayServer(opts: GatewayOptions): FastifyInstance {
     }
 
     // Phase 3: UCAN token check — Authorization: Bearer ucan.<token>
+    //
+    // The issuer's public key is resolved from the local agent registry using
+    // the DID inside the UCAN payload. We never trust the X-Agent-Public-Key
+    // header to supply the verification key — that would allow anyone to
+    // impersonate any agent by signing with a fresh keypair.
     const authHeader = request.headers.authorization;
     if (authHeader?.startsWith('Bearer ucan.')) {
       const ucanToken = authHeader.slice('Bearer ucan.'.length);
+
+      let decoded;
       try {
-        const decoded = decodeUCAN(ucanToken);
-        // Resolve issuer's public key from x-agent-public-key header
-        const ucanPubKeyHex = request.headers['x-agent-public-key'] as string | undefined;
-        if (ucanPubKeyHex) {
-          const pubKeyBuf = Buffer.from(ucanPubKeyHex, 'hex');
-          const ucanResult = verifyUCAN(ucanToken, pubKeyBuf);
-          if (ucanResult.valid) {
-            (request as unknown as Record<string, unknown>)._authenticated = true;
-            (request as unknown as Record<string, unknown>)._ucanPayload = decoded.payload;
-            return;
-          }
-        }
+        decoded = decodeUCAN(ucanToken);
       } catch {
-        // UCAN verification failed — fall through to unauthorized
+        await reply.status(401).send({
+          jsonrpc: '2.0',
+          id: null,
+          error: { code: -32000, message: 'Unauthorized: malformed UCAN' },
+        });
+        return;
       }
+
+      const issuerDid = decoded.payload.iss;
+      const agentId = extractAgentIdFromDID(issuerDid);
+      if (!agentId) {
+        await reply.status(401).send({
+          jsonrpc: '2.0',
+          id: null,
+          error: { code: -32000, message: 'Unauthorized: malformed issuer DID' },
+        });
+        return;
+      }
+
+      const agentRecord = lookupAgent(creditDb, agentId);
+      if (!agentRecord) {
+        await reply.status(401).send({
+          jsonrpc: '2.0',
+          id: null,
+          error: { code: -32000, message: 'unknown_issuer' },
+        });
+        return;
+      }
+
+      // If the caller supplied X-Agent-Public-Key, it must match the
+      // registry-resolved key. Mismatch is treated as an attempted spoof.
+      const headerPubKeyHex = request.headers['x-agent-public-key'] as string | undefined;
+      if (headerPubKeyHex && headerPubKeyHex.toLowerCase() !== agentRecord.public_key.toLowerCase()) {
+        await reply.status(401).send({
+          jsonrpc: '2.0',
+          id: null,
+          error: { code: -32000, message: 'Unauthorized: public key mismatch' },
+        });
+        return;
+      }
+
+      let pubKeyBuf: Buffer;
+      try {
+        pubKeyBuf = Buffer.from(agentRecord.public_key, 'hex');
+      } catch {
+        await reply.status(401).send({
+          jsonrpc: '2.0',
+          id: null,
+          error: { code: -32000, message: 'Unauthorized: registry key invalid' },
+        });
+        return;
+      }
+
+      const ucanResult = verifyUCAN(ucanToken, pubKeyBuf);
+      if (ucanResult.valid) {
+        (request as unknown as Record<string, unknown>)._authenticated = true;
+        (request as unknown as Record<string, unknown>)._ucanPayload = decoded.payload;
+        return;
+      }
+
+      await reply.status(401).send({
+        jsonrpc: '2.0',
+        id: null,
+        error: { code: -32000, message: `Unauthorized: ${ucanResult.reason ?? 'UCAN invalid'}` },
+      });
+      return;
     }
 
     // No auth method succeeded
