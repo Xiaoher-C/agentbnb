@@ -103,6 +103,20 @@ export async function handleRequest(
       creditDb.pragma('busy_timeout = 5000');
 
       try {
+        // Load local signing identity so AutoRequestor can mint real UCAN
+        // tokens for relay calls (audit finding CRITICAL-2).
+        const { loadOrRepairIdentity } = await import('../../identity/identity.js');
+        let identity: { did: string; privateKey: Buffer } | undefined;
+        try {
+          const loaded = loadOrRepairIdentity(ctx.configDir, ctx.config.owner);
+          if (loaded.identity.did) {
+            identity = { did: loaded.identity.did, privateKey: loaded.keys.privateKey };
+          }
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          console.error(`[mcp:request] failed to load signing identity: ${message}`);
+        }
+
         const budgetManager = new BudgetManager(
           creditDb,
           ctx.config.owner,
@@ -115,6 +129,7 @@ export async function handleRequest(
           autonomyConfig: ctx.config.autonomy ?? DEFAULT_AUTONOMY_CONFIG,
           budgetManager,
           registryUrl: ctx.config.registry,
+          identity,
         });
 
         const result = await requestor.requestWithAutonomy({

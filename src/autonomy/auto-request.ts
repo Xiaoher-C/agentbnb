@@ -16,6 +16,7 @@ import type { CapabilityCard } from '../types/index.js';
 import { fetchRemoteCards } from '../cli/remote-registry.js';
 import { resolveTargetCapability } from '../gateway/resolve-target-capability.js';
 import { resolveCanonicalIdentity } from '../identity/agent-identity.js';
+import { mintSelfDelegatedSkillToken } from '../auth/ucan.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -31,6 +32,18 @@ export interface CapabilityNeed {
   maxCostCredits: number;
   /** Optional input parameters to pass to the capability. */
   params?: Record<string, unknown>;
+}
+
+/**
+ * Local signing identity used by AutoRequestor to mint self-delegated UCAN
+ * tokens for outbound relay calls. The private key MUST be loaded from the
+ * local keystore — never from caller-supplied params (audit CRITICAL-2).
+ */
+export interface AutoRequestorIdentity {
+  /** Issuer/audience DID (e.g. `did:agentbnb:<agent_id>`). */
+  readonly did: string;
+  /** DER-encoded Ed25519 private key matching the DID. */
+  readonly privateKey: Buffer;
 }
 
 /**
@@ -51,6 +64,12 @@ export interface AutoRequestOptions {
   maxSearchResults?: number;
   /** Optional remote registry URL for fallback when local search returns no results. */
   registryUrl?: string;
+  /**
+   * Local signing identity for minting self-delegated UCAN tokens used to
+   * authenticate relay calls. When omitted, relay attempts are skipped and
+   * the auto-request returns `no_peer`.
+   */
+  identity?: AutoRequestorIdentity;
 }
 
 /**
@@ -253,6 +272,7 @@ export class AutoRequestor {
   private readonly autonomyConfig: AutonomyConfig;
   private readonly budgetManager: BudgetManager;
   private readonly registryUrl?: string;
+  private readonly identity?: AutoRequestorIdentity;
 
   /**
    * Creates a new AutoRequestor.
@@ -266,6 +286,34 @@ export class AutoRequestor {
     this.autonomyConfig = opts.autonomyConfig;
     this.budgetManager = opts.budgetManager;
     this.registryUrl = opts.registryUrl;
+    this.identity = opts.identity;
+  }
+
+  /**
+   * Mints a short-lived self-delegated UCAN authorising the auto-request to
+   * invoke `agentbnb://skill/<skillId>` via a relay.
+   *
+   * Returns null on any failure (missing identity, signer error). Callers
+   * MUST treat null as "skip this auto-request" — never fall back to a
+   * placeholder token (audit finding CRITICAL-2).
+   */
+  private mintRelayToken(skillId: string | undefined): string | null {
+    if (!this.identity) {
+      return null;
+    }
+    try {
+      return mintSelfDelegatedSkillToken({
+        did: this.identity.did,
+        signerKey: this.identity.privateKey,
+        skillId,
+        ttlSeconds: 300,
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      // Never log secret material — message only.
+      console.error(`[auto-request] failed to mint UCAN, skipping: ${message}`);
+      return null;
+    }
   }
 
   /**
@@ -473,11 +521,29 @@ export class AutoRequestor {
         return { status: 'no_peer', reason: 'Relay target found but registryUrl is not configured' };
       }
 
+      const relayToken = this.mintRelayToken(selectedSkillId);
+      if (!relayToken) {
+        this.logFailure(
+          'auto_request_failed',
+          selectedCardId,
+          selectedSkillId ?? 'none',
+          tier,
+          selectedCost,
+          selectedPeer,
+          'No signing identity available to mint UCAN for relay'
+        );
+        return {
+          status: 'no_peer',
+          reason: 'No signing identity available to mint UCAN for relay',
+          peer: selectedPeer,
+        };
+      }
+
       try {
         const execResult = await requestViaTemporaryRelay({
           registryUrl: this.registryUrl,
           owner: this.owner,
-          token: 'auto-request-token',
+          token: relayToken,
           targetOwner: selectedPeer,
           cardId: selectedCardId,
           skillId: selectedSkillId,
@@ -553,10 +619,29 @@ export class AutoRequestor {
           return { status: 'no_peer', reason: 'Relay target found but registryUrl is not configured' };
         }
 
+        const freeRelayToken = this.mintRelayToken(selectedSkillId);
+        if (!freeRelayToken) {
+          this.logFailure(
+            'auto_request_failed',
+            selectedCardId,
+            selectedSkillId ?? 'none',
+            tier,
+            selectedCost,
+            selectedPeer,
+            'No signing identity available to mint UCAN for relay'
+          );
+          releaseEscrow(this.creditDb, escrowId);
+          return {
+            status: 'no_peer',
+            reason: 'No signing identity available to mint UCAN for relay',
+            peer: selectedPeer,
+          };
+        }
+
         execResult = await requestViaTemporaryRelay({
           registryUrl: this.registryUrl,
           owner: this.owner,
-          token: 'auto-request-token',
+          token: freeRelayToken,
           targetOwner: selectedPeer,
           cardId: selectedCardId,
           skillId: selectedSkillId,

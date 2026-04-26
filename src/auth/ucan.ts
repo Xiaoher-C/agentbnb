@@ -191,3 +191,40 @@ export function isExpired(token: string): boolean {
   const now = Math.floor(Date.now() / 1000);
   return decoded.payload.exp < now;
 }
+
+/**
+ * Mint a short-lived self-delegated UCAN authorising the holder to invoke
+ * `agentbnb://skill/<skillId>` (or `agentbnb://skill/*` when omitted).
+ *
+ * The token is issued by `did` to `did` (self-issued), signed with the
+ * holder's own Ed25519 private key. This is the standard authorisation
+ * shape for autonomous outbound requests where the agent acts on its
+ * own behalf.
+ *
+ * @param opts - Self-delegation options.
+ * @returns Encoded UCAN token string.
+ */
+export function mintSelfDelegatedSkillToken(opts: {
+  /** Issuer + audience DID (self-delegation). */
+  did: string;
+  /** DER-encoded Ed25519 private key matching the DID. */
+  signerKey: Buffer;
+  /** Optional skill id; when omitted, scope is `agentbnb://skill/*`. */
+  skillId?: string;
+  /** Token TTL in seconds. Defaults to 300 (5 minutes). */
+  ttlSeconds?: number;
+}): string {
+  const ttl = opts.ttlSeconds ?? 300;
+  const now = Math.floor(Date.now() / 1000);
+  const resource = opts.skillId
+    ? `agentbnb://skill/${opts.skillId}`
+    : 'agentbnb://skill/*';
+
+  return createUCAN({
+    issuerDid: opts.did,
+    audienceDid: opts.did,
+    attenuations: [{ with: resource, can: 'invoke' }],
+    signerKey: opts.signerKey,
+    expiresAt: now + ttl,
+  });
+}

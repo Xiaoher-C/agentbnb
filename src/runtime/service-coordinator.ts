@@ -252,6 +252,7 @@ export class ServiceCoordinator {
       skillsYamlPath: opts.skillsYamlPath,
       conductorEnabled: opts.conductorEnabled,
       conductorToken: this.config.token,
+      configDir: getConfigDir(),
     });
     await this.runtime.start();
 

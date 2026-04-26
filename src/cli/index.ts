@@ -840,6 +840,14 @@ program
       creditDb.pragma('busy_timeout = 5000');
 
       try {
+        // Load local signing identity so AutoRequestor can mint real UCAN
+        // tokens for relay calls (audit finding CRITICAL-2).
+        const { loadOrRepairIdentity } = await import('../identity/identity.js');
+        const loaded = loadOrRepairIdentity(getConfigDir(), config.owner);
+        const identity = loaded.identity.did
+          ? { did: loaded.identity.did, privateKey: loaded.keys.privateKey }
+          : undefined;
+
         const budgetManager = new BudgetManager(creditDb, config.owner, config.budget ?? DEFAULT_BUDGET_CONFIG);
         const requestor = new AutoRequestor({
           owner: config.owner,
@@ -848,6 +856,7 @@ program
           autonomyConfig: config.autonomy ?? DEFAULT_AUTONOMY_CONFIG,
           budgetManager,
           registryUrl: config.registry,
+          identity,
         });
 
         const result = await requestor.requestWithAutonomy({

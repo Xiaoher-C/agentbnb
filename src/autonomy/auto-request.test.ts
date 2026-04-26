@@ -6,7 +6,17 @@ import { openCreditDb, bootstrapAgent } from '../credit/ledger.js';
 import { BudgetManager, DEFAULT_BUDGET_CONFIG } from '../credit/budget.js';
 import { DEFAULT_AUTONOMY_CONFIG } from '../autonomy/tiers.js';
 import type { CapabilityCard } from '../types/index.js';
-import { AutoRequestor, minMaxNormalize, scorePeers } from './auto-request.js';
+import { AutoRequestor, minMaxNormalize, scorePeers, type AutoRequestorIdentity } from './auto-request.js';
+import { generateKeyPair } from '../credit/signing.js';
+
+/**
+ * Build a fresh in-memory signing identity for tests that exercise the
+ * relay path. Avoids touching the filesystem.
+ */
+function makeTestIdentity(did = 'did:agentbnb:testagent'): AutoRequestorIdentity {
+  const keys = generateKeyPair();
+  return { did, privateKey: keys.privateKey };
+}
 
 // ---------------------------------------------------------------------------
 // Module mocks
@@ -434,6 +444,7 @@ describe('AutoRequestor.requestWithAutonomy', () => {
       added_at: new Date().toISOString(),
     });
     vi.mocked(requestCapability).mockResolvedValue({ audio_url: 'http://example.com/tts.mp3' });
+    vi.mocked(requestViaTemporaryRelay).mockResolvedValue({ audio_url: 'http://example.com/tts.mp3' });
 
     const requestorWithRemote = new AutoRequestor({
       owner: 'alice',
@@ -442,6 +453,7 @@ describe('AutoRequestor.requestWithAutonomy', () => {
       autonomyConfig: { tier1_max_credits: 100, tier2_max_credits: 200 },
       budgetManager: new BudgetManager(creditDb, 'alice', DEFAULT_BUDGET_CONFIG),
       registryUrl: 'http://registry.example.com',
+      identity: makeTestIdentity(),
     });
 
     const result = await requestorWithRemote.requestWithAutonomy({
@@ -474,6 +486,7 @@ describe('AutoRequestor.requestWithAutonomy', () => {
       autonomyConfig: { tier1_max_credits: 100, tier2_max_credits: 200 },
       budgetManager: new BudgetManager(creditDb, 'alice', DEFAULT_BUDGET_CONFIG),
       registryUrl: 'http://registry.example.com',
+      identity: makeTestIdentity(),
     });
 
     const result = await requestorWithRemote.requestWithAutonomy({
@@ -663,5 +676,165 @@ describe('AutoRequestor.requestWithAutonomy', () => {
       // Agent-a should score higher (loadFactor 1.0 > 0.5)
       expect(scored[0]!.card.owner).toBe('agent-a');
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Security: relay path must use real UCAN, never the literal placeholder
+// (audit finding CRITICAL-2).
+// ---------------------------------------------------------------------------
+
+describe('AutoRequestor — relay UCAN minting', () => {
+  let registryDb: Database.Database;
+  let creditDb: Database.Database;
+
+  /** Matches base64url(header).base64url(payload).base64url(signature). */
+  const UCAN_SHAPE = /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    registryDb = openMemoryRegistryDb();
+    creditDb = openMemoryCreditDb();
+    bootstrapAgent(creditDb, 'alice', 200);
+  });
+
+  afterEach(() => {
+    registryDb.close();
+    creditDb.close();
+  });
+
+  it('sends a real 3-segment UCAN as the relay token, never the literal placeholder', async () => {
+    const relayOnlyCard = makePeerCard({
+      owner: 'relay-provider',
+      name: 'stock analysis',
+      description: 'Analyze stock trends via relay',
+      pricing: { credits_per_call: 12 },
+    }) as CapabilityCard & { gateway_url?: string };
+    relayOnlyCard.gateway_url = '';
+
+    vi.mocked(fetchRemoteCards).mockResolvedValue([relayOnlyCard]);
+    vi.mocked(findPeer).mockReturnValue(null);
+    vi.mocked(requestViaTemporaryRelay).mockResolvedValue({ summary: 'ok' });
+
+    const requestor = new AutoRequestor({
+      owner: 'alice',
+      registryDb,
+      creditDb,
+      autonomyConfig: { tier1_max_credits: 100, tier2_max_credits: 200 },
+      budgetManager: new BudgetManager(creditDb, 'alice', DEFAULT_BUDGET_CONFIG),
+      registryUrl: 'http://registry.example.com',
+      identity: makeTestIdentity('did:agentbnb:alice'),
+    });
+
+    const result = await requestor.requestWithAutonomy({
+      query: 'stock analysis',
+      maxCostCredits: 50,
+    });
+
+    expect(result.status).toBe('success');
+    expect(requestViaTemporaryRelay).toHaveBeenCalledTimes(1);
+    const callArg = vi.mocked(requestViaTemporaryRelay).mock.calls[0]![0]!;
+    expect(callArg.token).not.toBe('auto-request-token');
+    expect(typeof callArg.token).toBe('string');
+    expect(callArg.token).toMatch(UCAN_SHAPE);
+  });
+
+  it('issues a UCAN whose iss/aud match the configured DID (self-delegation)', async () => {
+    const relayOnlyCard = makePeerCard({
+      owner: 'relay-provider',
+      name: 'tts',
+      description: 'tts via relay',
+      pricing: { credits_per_call: 5 },
+    }) as CapabilityCard & { gateway_url?: string };
+    relayOnlyCard.gateway_url = '';
+
+    vi.mocked(fetchRemoteCards).mockResolvedValue([relayOnlyCard]);
+    vi.mocked(findPeer).mockReturnValue(null);
+    vi.mocked(requestViaTemporaryRelay).mockResolvedValue({ ok: true });
+
+    const requestor = new AutoRequestor({
+      owner: 'alice',
+      registryDb,
+      creditDb,
+      autonomyConfig: { tier1_max_credits: 100, tier2_max_credits: 200 },
+      budgetManager: new BudgetManager(creditDb, 'alice', DEFAULT_BUDGET_CONFIG),
+      registryUrl: 'http://registry.example.com',
+      identity: makeTestIdentity('did:agentbnb:alice-1234'),
+    });
+
+    await requestor.requestWithAutonomy({ query: 'tts', maxCostCredits: 50 });
+
+    const callArg = vi.mocked(requestViaTemporaryRelay).mock.calls[0]![0]!;
+    const { decodeUCAN } = await import('../auth/ucan.js');
+    const decoded = decodeUCAN(callArg.token);
+    expect(decoded.payload.iss).toBe('did:agentbnb:alice-1234');
+    expect(decoded.payload.aud).toBe('did:agentbnb:alice-1234');
+    expect(decoded.payload.att.length).toBeGreaterThan(0);
+    expect(decoded.payload.att[0]!.can).toBe('invoke');
+    expect(decoded.payload.att[0]!.with.startsWith('agentbnb://skill/')).toBe(true);
+  });
+
+  it('skips the auto-request when no signing identity is configured (no fake token sent)', async () => {
+    const relayOnlyCard = makePeerCard({
+      owner: 'relay-provider',
+      name: 'tts',
+      description: 'tts via relay',
+      pricing: { credits_per_call: 5 },
+    }) as CapabilityCard & { gateway_url?: string };
+    relayOnlyCard.gateway_url = '';
+
+    vi.mocked(fetchRemoteCards).mockResolvedValue([relayOnlyCard]);
+    vi.mocked(findPeer).mockReturnValue(null);
+
+    const requestor = new AutoRequestor({
+      owner: 'alice',
+      registryDb,
+      creditDb,
+      autonomyConfig: { tier1_max_credits: 100, tier2_max_credits: 200 },
+      budgetManager: new BudgetManager(creditDb, 'alice', DEFAULT_BUDGET_CONFIG),
+      registryUrl: 'http://registry.example.com',
+      // identity intentionally omitted
+    });
+
+    const result = await requestor.requestWithAutonomy({ query: 'tts', maxCostCredits: 50 });
+
+    expect(result.status).toBe('no_peer');
+    expect(requestViaTemporaryRelay).not.toHaveBeenCalled();
+  });
+
+  it('skips the auto-request when UCAN minting throws (no fake token sent)', async () => {
+    const relayOnlyCard = makePeerCard({
+      owner: 'relay-provider',
+      name: 'tts',
+      description: 'tts via relay',
+      pricing: { credits_per_call: 5 },
+    }) as CapabilityCard & { gateway_url?: string };
+    relayOnlyCard.gateway_url = '';
+
+    vi.mocked(fetchRemoteCards).mockResolvedValue([relayOnlyCard]);
+    vi.mocked(findPeer).mockReturnValue(null);
+
+    // Provide a malformed private key buffer that will make signing throw
+    // when the helper tries to call createPrivateKey.
+    const requestor = new AutoRequestor({
+      owner: 'alice',
+      registryDb,
+      creditDb,
+      autonomyConfig: { tier1_max_credits: 100, tier2_max_credits: 200 },
+      budgetManager: new BudgetManager(creditDb, 'alice', DEFAULT_BUDGET_CONFIG),
+      registryUrl: 'http://registry.example.com',
+      identity: { did: 'did:agentbnb:alice', privateKey: Buffer.from('not-a-real-der-key') },
+    });
+
+    // Silence the expected error log for this case.
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const result = await requestor.requestWithAutonomy({ query: 'tts', maxCostCredits: 50 });
+      expect(result.status).toBe('no_peer');
+      expect(requestViaTemporaryRelay).not.toHaveBeenCalled();
+      expect(errSpy).toHaveBeenCalled();
+    } finally {
+      errSpy.mockRestore();
+    }
   });
 });

@@ -58,6 +58,13 @@ export interface RuntimeOptions {
    * When omitted, falls back to dynamic import of loadPeers (backward-compatible).
    */
   peersProvider?: () => PeerEntry[];
+  /**
+   * Optional config directory used to load the conductor's local signing
+   * identity (`identity.json` + `private.key`). Required for ConductorMode
+   * to mint delegated UCANs for team members. When omitted, sub-delegation
+   * is skipped silently.
+   */
+  configDir?: string;
 }
 
 /**
@@ -99,6 +106,7 @@ export class AgentRuntime {
   private readonly conductorEnabled: boolean;
   private readonly conductorToken: string;
   private readonly peersProvider?: () => PeerEntry[];
+  private readonly configDir?: string;
 
   /**
    * Creates a new AgentRuntime instance.
@@ -114,6 +122,7 @@ export class AgentRuntime {
     this.conductorEnabled = options.conductorEnabled ?? false;
     this.conductorToken = options.conductorToken ?? '';
     this.peersProvider = options.peersProvider;
+    this.configDir = options.configDir;
 
     // Open databases with schema migrations (WAL + foreign_keys already applied by these functions)
     this.registryDb = openDatabase(options.registryDbPath);
@@ -213,6 +222,26 @@ export class AgentRuntime {
         return { url: peer.url, cardId };
       };
 
+      // Load the local conductor signing identity from the keystore.
+      // The private key is read once at boot and never accepted from
+      // caller-supplied params (audit finding CRITICAL-1).
+      let conductorIdentity: import('../conductor/conductor-mode.js').ConductorIdentity | undefined;
+      if (this.configDir) {
+        try {
+          const { loadOrRepairIdentity } = await import('../identity/identity.js');
+          const loaded = loadOrRepairIdentity(this.configDir, this.owner);
+          conductorIdentity = {
+            privateKey: loaded.keys.privateKey,
+            did: loaded.identity.did,
+          };
+        } catch (err) {
+          // Identity load failed — sub-delegation will be skipped silently.
+          // Do not log secret material; surface only the error message.
+          const message = err instanceof Error ? err.message : String(err);
+          console.error(`[conductor] failed to load signing identity: ${message}`);
+        }
+      }
+
       // Create and register ConductorMode
       const conductorMode = new ConductorMode({
         db: this.registryDb,
@@ -221,6 +250,7 @@ export class AgentRuntime {
         gatewayToken: this.conductorToken,
         resolveAgentUrl,
         maxBudget: 100,
+        identity: conductorIdentity,
       });
       modes.set('conductor', conductorMode);
 
