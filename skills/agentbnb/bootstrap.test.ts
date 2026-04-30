@@ -6,9 +6,10 @@
  * responsibilities:
  *   - CONFIG_NOT_FOUND when no config exists
  *   - BootstrapContext shape (service, status, startDisposition)
- *   - Signal handler registration and removal
  *   - deactivate() only stops node when startDisposition === 'started'
  *   - deactivate() is idempotent
+ *
+ * Process-exit signal handling is owned by ServiceCoordinator and tested there.
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
@@ -181,8 +182,6 @@ describe('bootstrap activate/deactivate lifecycle', () => {
     expect(ctx).toHaveProperty('service');
     expect(ctx).toHaveProperty('status');
     expect(ctx).toHaveProperty('startDisposition');
-    expect(ctx).toHaveProperty('_removeSignalHandlers');
-    expect(typeof ctx._removeSignalHandlers).toBe('function');
   });
 
   // ---------------------------------------------------------------------------
@@ -209,32 +208,19 @@ describe('bootstrap activate/deactivate lifecycle', () => {
   });
 
   // ---------------------------------------------------------------------------
-  // Test 5: signal handlers registered
+  // Test 5: bootstrap does not register its own signal handlers
   // ---------------------------------------------------------------------------
-  it('activate() registers SIGTERM and SIGINT handlers', async () => {
+  it('activate() does not register its own SIGTERM/SIGINT handlers', async () => {
+    // Process-exit cleanup is owned by ServiceCoordinator. bootstrap.ts must
+    // not register duplicate handlers — that caused the double-handler conflict
+    // documented in the prior TODO.
     const sigtermBefore = process.listenerCount('SIGTERM');
     const sigintBefore = process.listenerCount('SIGINT');
 
     ctx = await activate();
 
-    expect(process.listenerCount('SIGTERM')).toBe(sigtermBefore + 1);
-    expect(process.listenerCount('SIGINT')).toBe(sigintBefore + 1);
-  });
-
-  // ---------------------------------------------------------------------------
-  // Test 6: _removeSignalHandlers removes them
-  // ---------------------------------------------------------------------------
-  it('_removeSignalHandlers() removes SIGTERM and SIGINT handlers', async () => {
-    ctx = await activate();
-    const sigtermAfterActivate = process.listenerCount('SIGTERM');
-    const sigintAfterActivate = process.listenerCount('SIGINT');
-
-    ctx._removeSignalHandlers();
-
-    expect(process.listenerCount('SIGTERM')).toBe(sigtermAfterActivate - 1);
-    expect(process.listenerCount('SIGINT')).toBe(sigintAfterActivate - 1);
-
-    ctx = undefined;
+    expect(process.listenerCount('SIGTERM')).toBe(sigtermBefore);
+    expect(process.listenerCount('SIGINT')).toBe(sigintBefore);
   });
 
   // ---------------------------------------------------------------------------
@@ -275,18 +261,6 @@ describe('bootstrap activate/deactivate lifecycle', () => {
     ctx = undefined;
   });
 
-  // ---------------------------------------------------------------------------
-  // Test 10: deactivate() removes signal handlers
-  // ---------------------------------------------------------------------------
-  it('deactivate() removes signal handlers', async () => {
-    ctx = await activate();
-    const sigtermAfterActivate = process.listenerCount('SIGTERM');
-
-    await deactivate(ctx);
-    ctx = undefined;
-
-    expect(process.listenerCount('SIGTERM')).toBeLessThan(sigtermAfterActivate);
-  });
 });
 
 // ---------------------------------------------------------------------------
