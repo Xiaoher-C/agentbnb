@@ -39,6 +39,16 @@ export interface ConsumerRequestOptions {
   expectedDurationMs?: number;
   /** Provider-published hard timeout used as fallback timeout hint. */
   providerHardTimeoutMs?: number;
+  /**
+   * When true, this request is part of a rental session (ADR-022 / ADR-024).
+   * Privacy contract — provider MUST:
+   * - skip persisting execution metadata to `request_log`
+   * - keep session conversation per-sessionId isolated, not write to main memory
+   * - run via Curated Rental Runner (e.g., Hermes subagent) with RENTAL.md persona
+   *
+   * Default false (legacy capability-call mode).
+   */
+  session_mode?: boolean;
 }
 
 /**

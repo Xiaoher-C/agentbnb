@@ -101,7 +101,97 @@ export type SessionPricingModel = 'per_message' | 'per_minute' | 'per_session';
 /** Why a session ended. */
 export type SessionEndReason = 'completed' | 'timeout' | 'budget_exhausted' | 'error' | 'cancelled';
 
-/** A single message within a session. */
+// ---------------------------------------------------------------------------
+// v10 Rental Session types — Agent Maturity Rental (ADR-022 / ADR-023 / ADR-024)
+// ---------------------------------------------------------------------------
+
+/**
+ * Participant role in a rental session.
+ * Replaces the binary requester/provider model with a richer schema that
+ * supports human + agent on the renter side and observer roles.
+ */
+export type ParticipantRole =
+  | 'renter_human'
+  | 'renter_agent'
+  | 'rented_agent'
+  | 'human_observer';
+
+/** A participant in a session — identified by DID. */
+export interface Participant {
+  did: string;
+  role: ParticipantRole;
+}
+
+/** Interaction mode within a session. UI labels use 「透過我的 agent」/「直接和出租 agent 對話」. */
+export type SessionMode = 'direct' | 'proxy';
+
+/**
+ * A task thread within a session — independent deliverable unit.
+ * Threads separate "negotiation" from "concrete work product" so that
+ * the outcome page can structure deliverables clearly.
+ */
+export interface Thread {
+  id: string;
+  session_id: string;
+  title: string;
+  description: string;
+  status: 'in_progress' | 'completed';
+  created_at: string;
+  completed_at: string | null;
+}
+
+/** A file uploaded within a session, optionally scoped to a thread. */
+export interface FileRef {
+  id: string;
+  session_id: string;
+  thread_id: string | null;
+  uploader_did: string;
+  filename: string;
+  size_bytes: number;
+  mime_type: string;
+  storage_key: string; // local fs path in v1; R2 / S3 in v2
+  created_at: string;
+}
+
+/** Renter rating for a completed session. */
+export interface Rating {
+  session_id: string;
+  rater_did: string;
+  rated_agent_id: string;
+  stars: 1 | 2 | 3 | 4 | 5;
+  comment: string;
+  created_at: string;
+}
+
+/** Outcome page generated when a session ends — public via share_token. */
+export interface OutcomePage {
+  generated_at: string;
+  summary: {
+    messages: number;
+    tasks_done: number;
+    files: number;
+    credit_used: number;
+    credit_refunded: number;
+    duration_seconds: number;
+  };
+  threads: Thread[];
+  participants: Participant[];
+  rating: Rating | null;
+  share_token: string; // GET /o/:share_token public read (no auth)
+}
+
+// ---------------------------------------------------------------------------
+// Existing types (extended with v10 optional fields for backward compatibility)
+// ---------------------------------------------------------------------------
+
+/**
+ * A single message within a session.
+ *
+ * v10 additions (all optional for backward compat):
+ * - thread_id: groups message into a task thread (null = main conversation)
+ * - is_human_intervention: marks human break-in messages (UI shows amber + left bar)
+ * - sender_did + sender_role: replaces binary sender field for rental sessions
+ */
 export interface SessionMessage {
   id: string;
   session_id: string;
@@ -114,9 +204,28 @@ export interface SessionMessage {
     latency_ms?: number;
     tokens_used?: number;
   };
+  // v10 rental session fields (optional for backward compat)
+  thread_id?: string | null;
+  is_human_intervention?: boolean;
+  sender_did?: string;
+  sender_role?: ParticipantRole;
+  attachments?: FileRef[];
 }
 
-/** A full session record. */
+/**
+ * A full session record.
+ *
+ * v10 additions (all optional for backward compat):
+ * - participants: replaces binary requester_id/provider_id with multi-party schema
+ * - threads: task threads created within the session
+ * - files: file uploads in the session
+ * - current_mode: interaction mode (direct/proxy)
+ * - isolated_memory: privacy invariant (always true for rental sessions, see ADR-024)
+ * - outcome: outcome page populated when session ends
+ *
+ * Existing call sites using requester_id / provider_id continue to work.
+ * Rental sessions populate both legacy and new fields during the migration.
+ */
 export interface Session {
   id: string;
   requester_id: string;
@@ -133,6 +242,19 @@ export interface Session {
   updated_at: string;
   ended_at?: string;
   end_reason?: SessionEndReason;
+  // v10 rental session fields (optional for backward compat)
+  participants?: Participant[];
+  threads?: Thread[];
+  files?: FileRef[];
+  current_mode?: SessionMode;
+  /**
+   * Privacy invariant — when true, this session does NOT pollute the rented
+   * agent's main memory (ADR-024). Schema-enforced as `true` for rental
+   * sessions; legacy capability-call sessions may omit this field.
+   */
+  isolated_memory?: true;
+  outcome?: OutcomePage | null;
+  duration_min?: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -202,6 +324,33 @@ export const SessionErrorMessageSchema = z.object({
   message: z.string(),
 });
 
+// ---------------------------------------------------------------------------
+// v10 — Thread / mode-change relay schemas (optional, used in v1.1+)
+// ---------------------------------------------------------------------------
+
+/** Either party → Relay: open a new task thread. */
+export const SessionThreadOpenMessageSchema = z.object({
+  type: z.literal('session_thread_open'),
+  session_id: z.string().uuid(),
+  thread_id: z.string().uuid(),
+  title: z.string().min(1),
+  description: z.string().default(''),
+});
+
+/** Either party → Relay: mark a thread complete. */
+export const SessionThreadCompleteMessageSchema = z.object({
+  type: z.literal('session_thread_complete'),
+  session_id: z.string().uuid(),
+  thread_id: z.string().uuid(),
+});
+
+/** Renter → Relay: switch interaction mode. */
+export const SessionModeChangeMessageSchema = z.object({
+  type: z.literal('session_mode_change'),
+  session_id: z.string().uuid(),
+  mode: z.enum(['direct', 'proxy']),
+});
+
 // Inferred TypeScript types
 export type SessionOpenMessage = z.infer<typeof SessionOpenMessageSchema>;
 export type SessionAckMessage = z.infer<typeof SessionAckMessageSchema>;
@@ -209,6 +358,9 @@ export type SessionMessageMessage = z.infer<typeof SessionMessageMessageSchema>;
 export type SessionEndMessage = z.infer<typeof SessionEndMessageSchema>;
 export type SessionSettledMessage = z.infer<typeof SessionSettledMessageSchema>;
 export type SessionErrorMessage = z.infer<typeof SessionErrorMessageSchema>;
+export type SessionThreadOpenMessage = z.infer<typeof SessionThreadOpenMessageSchema>;
+export type SessionThreadCompleteMessage = z.infer<typeof SessionThreadCompleteMessageSchema>;
+export type SessionModeChangeMessage = z.infer<typeof SessionModeChangeMessageSchema>;
 
 /** Union of all session-related relay messages. */
 export type SessionRelayMessage =
@@ -217,7 +369,10 @@ export type SessionRelayMessage =
   | SessionMessageMessage
   | SessionEndMessage
   | SessionSettledMessage
-  | SessionErrorMessage;
+  | SessionErrorMessage
+  | SessionThreadOpenMessage
+  | SessionThreadCompleteMessage
+  | SessionModeChangeMessage;
 
 /** Discriminating type literal values for session messages. */
 export const SESSION_MESSAGE_TYPES = new Set([
@@ -227,4 +382,7 @@ export const SESSION_MESSAGE_TYPES = new Set([
   'session_end',
   'session_settled',
   'session_error',
+  'session_thread_open',
+  'session_thread_complete',
+  'session_mode_change',
 ]);

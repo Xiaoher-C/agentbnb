@@ -408,14 +408,20 @@ describe('attachSessionHandler', () => {
 // ---------------------------------------------------------------------------
 
 describe('SESSION_MESSAGE_TYPES', () => {
-  it('contains all 6 session message types', () => {
-    expect(SESSION_MESSAGE_TYPES.size).toBe(6);
+  it('contains all 9 session message types (6 v1 + 3 v10 rental)', () => {
+    expect(SESSION_MESSAGE_TYPES.size).toBe(9);
+    // v1 types
     expect(SESSION_MESSAGE_TYPES.has('session_open')).toBe(true);
     expect(SESSION_MESSAGE_TYPES.has('session_ack')).toBe(true);
     expect(SESSION_MESSAGE_TYPES.has('session_message')).toBe(true);
     expect(SESSION_MESSAGE_TYPES.has('session_end')).toBe(true);
     expect(SESSION_MESSAGE_TYPES.has('session_settled')).toBe(true);
     expect(SESSION_MESSAGE_TYPES.has('session_error')).toBe(true);
+    // v10 rental session types (ADR-023): threads + mode toggle
+    expect(SESSION_MESSAGE_TYPES.has('session_thread_open')).toBe(true);
+    expect(SESSION_MESSAGE_TYPES.has('session_thread_complete')).toBe(true);
+    expect(SESSION_MESSAGE_TYPES.has('session_mode_change')).toBe(true);
+    // sanity — non-session relay messages are not in the set
     expect(SESSION_MESSAGE_TYPES.has('relay_request')).toBe(false);
   });
 });

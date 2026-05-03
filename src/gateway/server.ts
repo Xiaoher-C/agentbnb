@@ -35,6 +35,17 @@ export interface GatewayOptions {
    * When absent, the original handlerUrl fetch path is used (backward compat).
    */
   skillExecutor?: SkillExecutor;
+  /**
+   * When true, this gateway instance serves rental sessions (ADR-022 / ADR-024).
+   * Privacy contract — gateway MUST:
+   * - propagate session_mode to all `insertRequestLog` calls so they skip persist
+   * - run capability execution via Curated Rental Runner (Hermes subagent / RENTAL.md)
+   * - never store execution content beyond the in-memory session histories
+   *
+   * Default false. Typically set true only when this gateway is dedicated to
+   * serving a rental session (vs. ordinary capability calls).
+   */
+  sessionMode?: boolean;
 }
 
 const VERSION = '0.0.1';

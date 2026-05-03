@@ -109,12 +109,45 @@ export function createRequestLogTable(db: Database.Database): void {
 }
 
 /**
+ * Options affecting how a request log entry is persisted.
+ */
+export interface InsertRequestLogOptions {
+  /**
+   * When true, this request is part of a rental session (ADR-022 / ADR-024).
+   * The function SKIPS the database insert entirely so no execution metadata
+   * leaks into request_log for rental traffic. This is part of the
+   * three-layer privacy enforcement (architectural + program invariant + test).
+   *
+   * Default false (legacy capability-call mode — entry is persisted).
+   */
+  sessionMode?: boolean;
+}
+
+/**
  * Inserts a request log entry into the request_log table.
+ *
+ * Privacy invariant (ADR-024): when `options.sessionMode === true`, this
+ * function SKIPS persistence to enforce the rental-session privacy contract.
+ * No metadata about rental session execution leaves the in-memory session
+ * histories. See `src/session/privacy.test.ts` for enforcement test.
  *
  * @param db - Open database instance.
  * @param entry - The log entry to insert.
+ * @param options - Optional flags. Set `sessionMode: true` for rental sessions
+ *   to skip persistence entirely.
  */
-export function insertRequestLog(db: Database.Database, entry: RequestLogEntry): void {
+export function insertRequestLog(
+  db: Database.Database,
+  entry: RequestLogEntry,
+  options?: InsertRequestLogOptions,
+): void {
+  if (options?.sessionMode === true) {
+    // Privacy contract (ADR-024): rental session execution leaves no trace
+    // in request_log. Caller is responsible for any session-scoped accounting
+    // (escrow / outcome page) which lives in src/session/* and src/credit/*.
+    return;
+  }
+
   const stmt = db.prepare(`
     INSERT INTO request_log (id, card_id, card_name, requester, status, latency_ms, credits_charged, created_at, skill_id, action_type, tier_invoked, failure_reason, team_id, role, capability_type)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)

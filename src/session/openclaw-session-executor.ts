@@ -31,6 +31,22 @@ interface SoulContent {
  * - SOUL.md layered injection (full on turn 1, summary on turn 2+)
  * - Memory recall on session start and summary write on session end (best-effort)
  * - Multi-agent routing via agent name
+ *
+ * @deprecated **VIOLATES ADR-024 (Privacy Boundary).**
+ *
+ * This executor has three known privacy violations relative to the v10 rental
+ * contract「租用執行能力，不租用 agent 的腦與鑰匙」:
+ * 1. `recallMemory()` reads owner's main brain at session start
+ * 2. `writeSessionSummary()` writes session metadata into owner's main brain at end
+ * 3. `buildPrompt()` injects full SOUL.md into the prompt (potential leak via response)
+ *
+ * v10 supply path is the Hermes plugin (`plugins/agentbnb/`) using a Curated
+ * Rental Runner: spawn an isolated Hermes subagent loaded with owner-curated
+ * RENTAL.md persona + tool whitelist + memory-write hook disabled.
+ *
+ * This executor is retained as backward-compat path for existing OpenClaw
+ * supply only. Do NOT use for new rental session paths. ADR-K (v1.1) will
+ * formalize the OpenClaw rental-mode upgrade.
  */
 export class OpenClawSessionExecutor {
   private histories = new Map<string, ConversationEntry[]>();
@@ -178,6 +194,11 @@ export class OpenClawSessionExecutor {
   /**
    * Attempt to recall relevant memory for this session (best effort).
    * Returns null on any failure.
+   *
+   * @deprecated **VIOLATES ADR-024 Layer 1 (architectural privacy)** —
+   * reads owner agent's main brain context at session start. Rental sessions
+   * MUST NOT touch owner's main memory. New Hermes plugin path replaces this
+   * with isolated subagent spawning.
    */
   private recallMemory(
     agentName: string,
@@ -205,6 +226,11 @@ export class OpenClawSessionExecutor {
 
   /**
    * Write a session summary to agent memory (best effort, catch all errors).
+   *
+   * @deprecated **VIOLATES ADR-024 Layer 1 (architectural privacy)** —
+   * writes session metadata into owner agent's main brain at session end.
+   * Rental sessions MUST NOT pollute owner's main memory. New Hermes plugin
+   * path uses isolated subagent which terminates without writing back.
    */
   private writeSessionSummary(
     agentName: string,
