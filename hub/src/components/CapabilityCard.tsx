@@ -8,7 +8,17 @@
  *
  * Trust signals at the TOP — tier badge and authority source are the first
  * things the eye catches, not an afterthought at the bottom.
+ *
+ * @deprecated v10 Agent Maturity Rental pivot — the unit of trade is now a
+ * rental session of access to a matured agent, not an atomic capability/skill.
+ * Use {@link AgentProfileCard} for any new rental discovery / agent profile
+ * surfaces. CapabilityCard is preserved for backward compatibility with legacy
+ * skill-marketplace surfaces and will be removed once those callers migrate.
+ *
+ * See ADR-022 (docs/adr/022-agent-maturity-rental.md) and ADR-023
+ * (docs/adr/023-session-as-protocol-primitive.md) for the rationale.
  */
+import { useEffect } from 'react';
 import Avatar from 'boring-avatars';
 import { inferCategories } from '../lib/categories.js';
 import { formatCredits } from '../lib/utils.js';
@@ -21,6 +31,9 @@ interface CapabilityCardProps {
   card: HubCard;
   onClick: () => void;
 }
+
+/** Module-level guard so the v10 deprecation warning fires once per session. */
+let deprecationWarningEmitted = false;
 
 const TIER_CONFIG = {
   0: { label: 'Listed',  cls: 'text-hub-text-muted border-hub-border/60 bg-white/[0.02]' },
@@ -35,6 +48,16 @@ const AUTHORITY_CONFIG = {
 } as const;
 
 export default function CapabilityCard({ card, onClick }: CapabilityCardProps) {
+  useEffect(() => {
+    if (!deprecationWarningEmitted) {
+      deprecationWarningEmitted = true;
+      // eslint-disable-next-line no-console
+      console.warn(
+        '[v10] CapabilityCard is deprecated — use AgentProfileCard for rental flows',
+      );
+    }
+  }, []);
+
   const { categories, overflow } = inferCategories(card.metadata);
   const online = card.availability.online;
   const successRate = card.metadata?.success_rate;

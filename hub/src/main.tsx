@@ -35,6 +35,8 @@ import ProviderDashboardPage from './pages/ProviderDashboardPage.js';
 import SignupPage from './pages/SignupPage.js';
 import SessionRoom from './pages/SessionRoom.js';
 import OutcomePage from './pages/OutcomePage.js';
+import MySessionsPage from './pages/MySessionsPage.js';
+import MyOutcomesPage from './pages/MyOutcomesPage.js';
 import SkillsInspectorRoute from './routes/SkillsInspector.js';
 import WorkNetworkRoute from './routes/WorkNetwork.js';
 import type { AppOutletContext } from './types.js';
@@ -100,6 +102,8 @@ const router = createHashRouter([
       // v10 rental session routes (ADR-022 / ADR-023)
       { path: 's/:id', element: <SessionRoom /> },
       { path: 'o/:share_token', element: <OutcomePage /> },
+      { path: 'sessions', element: <MySessionsPage /> },
+      { path: 'outcomes', element: <MyOutcomesPage /> },
       { path: 'skills-inspector', element: <SkillsInspectorRoute /> },
       { path: 'work-network', element: <WorkNetworkRoute /> },
       {

@@ -75,6 +75,21 @@ describe('App layout shell', () => {
     vi.clearAllMocks();
   });
 
+  /**
+   * Scope queries to the desktop nav so we don't collide with the v10 footer,
+   * which deliberately re-exposes Discover / Docs as quick links.
+   */
+  function within() {
+    const nav = screen.getByRole('navigation', { name: /desktop nav/i });
+    return {
+      getLink: (name: RegExp) =>
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+        Array.from(nav.querySelectorAll('a')).find((a) => name.test(a.textContent ?? ''))!,
+      getButton: (name: RegExp) =>
+        Array.from(nav.querySelectorAll('button')).find((b) => name.test(b.textContent ?? '')),
+    };
+  }
+
   it('renders AgentBnB title', () => {
     renderApp();
     expect(screen.getByText('AgentBnB')).toBeInTheDocument();
@@ -82,27 +97,27 @@ describe('App layout shell', () => {
 
   it('renders Discover tab in nav', () => {
     renderApp();
-    expect(screen.getByRole('link', { name: /Discover/i })).toBeInTheDocument();
+    expect(within().getLink(/Discover/i)).toBeDefined();
   });
 
   it('renders Network tab in nav', () => {
     renderApp();
-    expect(screen.getByRole('link', { name: /Network/i })).toBeInTheDocument();
+    expect(within().getLink(/Network/i)).toBeDefined();
   });
 
   it('renders Skill Inspector tab in nav', () => {
     renderApp();
-    expect(screen.getByRole('link', { name: /Skill Inspector/i })).toBeInTheDocument();
+    expect(within().getLink(/Skill Inspector/i)).toBeDefined();
   });
 
   it('renders Docs tab in nav', () => {
     renderApp();
-    expect(screen.getByRole('link', { name: /Docs/i })).toBeInTheDocument();
+    expect(within().getLink(/Docs/i)).toBeDefined();
   });
 
   it('renders For Providers button in nav', () => {
     renderApp();
-    expect(screen.getByRole('button', { name: /For Providers/i })).toBeInTheDocument();
+    expect(within().getButton(/For Providers/i)).toBeDefined();
   });
 
   it('shows "Get Started" CTA link when not authenticated', () => {

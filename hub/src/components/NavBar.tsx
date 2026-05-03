@@ -2,7 +2,13 @@
  * NavBar — Top navigation bar for the AgentBnB Hub SPA.
  *
  * Public (unauthenticated): Discover | Docs | For Providers | Sign in | Get Started
- * Authenticated: Discover | Docs | My Agent [dropdown] | Fleet | Credit Policy | Activity
+ * Authenticated: Discover | My Sessions | My Outcomes | Docs | My Agent [dropdown]
+ *                | Fleet | Credit Policy | Activity
+ *
+ * v10 Agent Maturity Rental: "My Sessions" (`/sessions`) and "My Outcomes"
+ * (`/outcomes`) are the rental-side primary nav entries. The "Publish Skills"
+ * dropdown entry is relabelled to "Publish Agent" — the underlying `/share`
+ * route is preserved for backward compatibility.
  *
  * Mobile: Hamburger button opens a vertical drawer with all nav items flat.
  */
@@ -105,7 +111,7 @@ function MyAgentDropdown(): JSX.Element {
             onClick={() => { setOpen(false); }}
             className="block px-3 py-2 text-sm text-hub-text-secondary hover:text-hub-text-primary hover:bg-white/[0.04] transition-colors"
           >
-            Publish Skills
+            Publish Agent
           </NavLink>
         </div>
       )}
@@ -258,6 +264,18 @@ export default function NavBar({ apiKey, balance, onLogout }: NavBarProps): JSX.
         {isAuthed ? (
           <>
             <NavLink
+              to="/sessions"
+              className={({ isActive }) => navTabClass(isActive)}
+            >
+              My Sessions
+            </NavLink>
+            <NavLink
+              to="/outcomes"
+              className={({ isActive }) => navTabClass(isActive)}
+            >
+              My Outcomes
+            </NavLink>
+            <NavLink
               to="/docs"
               className={({ isActive }) => navTabClass(isActive)}
             >
@@ -333,6 +351,20 @@ export default function NavBar({ apiKey, balance, onLogout }: NavBarProps): JSX.
           {isAuthed ? (
             <>
               <NavLink
+                to="/sessions"
+                onClick={() => setMenuOpen(false)}
+                className={({ isActive }) => `${navTabClass(isActive)} block`}
+              >
+                My Sessions
+              </NavLink>
+              <NavLink
+                to="/outcomes"
+                onClick={() => setMenuOpen(false)}
+                className={({ isActive }) => `${navTabClass(isActive)} block`}
+              >
+                My Outcomes
+              </NavLink>
+              <NavLink
                 to="/docs"
                 onClick={() => setMenuOpen(false)}
                 className={({ isActive }) => `${navTabClass(isActive)} block`}
@@ -351,7 +383,7 @@ export default function NavBar({ apiKey, balance, onLogout }: NavBarProps): JSX.
                 onClick={() => setMenuOpen(false)}
                 className={({ isActive }) => `${navTabClass(isActive)} block`}
               >
-                Publish Skills
+                Publish Agent
               </NavLink>
               <NavLink
                 to="/fleet"

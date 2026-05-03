@@ -17,6 +17,7 @@ import { Outlet } from 'react-router';
 import { useAuth } from './hooks/useAuth.js';
 import type { HubCard, AppOutletContext } from './types.js';
 import NavBar from './components/NavBar.js';
+import Footer from './components/Footer.js';
 import CardModal from './components/CardModal.js';
 
 /**
@@ -58,11 +59,12 @@ export default function App(): JSX.Element {
   }, [apiKey]);
 
   return (
-    <div className="min-h-screen bg-hub-bg text-hub-text-primary">
+    <div className="min-h-screen bg-hub-bg text-hub-text-primary flex flex-col">
       <NavBar apiKey={apiKey} balance={balance} onLogout={logout} />
-      <main className="max-w-7xl mx-auto px-4 py-8 pb-12">
+      <main className="max-w-7xl w-full mx-auto px-4 py-8 pb-12 flex-1">
         <Outlet context={{ apiKey, login, setSelectedCard } satisfies AppOutletContext} />
       </main>
+      <Footer />
       <CardModal card={selectedCard} onClose={() => { setSelectedCard(null); }} />
     </div>
   );
