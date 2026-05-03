@@ -170,4 +170,50 @@ export const registryMigrations: Migration[] = [
       `);
     },
   },
+  {
+    key: 'session_messages_create',
+    description: 'Create session_messages table for paginated v10 rental message reads',
+    up: (db) => {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS session_messages (
+          id TEXT PRIMARY KEY,
+          session_id TEXT NOT NULL,
+          thread_id TEXT,
+          sender_did TEXT NOT NULL,
+          sender_role TEXT NOT NULL,
+          content TEXT NOT NULL,
+          attachments TEXT,
+          is_human_intervention INTEGER NOT NULL DEFAULT 0,
+          created_at INTEGER NOT NULL,
+          FOREIGN KEY (session_id) REFERENCES rental_sessions (id) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS session_messages_session_idx
+          ON session_messages (session_id, created_at, id);
+        CREATE INDEX IF NOT EXISTS session_messages_thread_idx
+          ON session_messages (thread_id, created_at);
+      `);
+    },
+  },
+  {
+    key: 'session_files_create',
+    description: 'Create session_files table for v10 rental file uploads',
+    up: (db) => {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS session_files (
+          id TEXT PRIMARY KEY,
+          session_id TEXT NOT NULL,
+          thread_id TEXT,
+          uploader_did TEXT NOT NULL,
+          filename TEXT NOT NULL,
+          size_bytes INTEGER NOT NULL,
+          mime_type TEXT NOT NULL,
+          storage_key TEXT NOT NULL,
+          created_at TEXT NOT NULL,
+          FOREIGN KEY (session_id) REFERENCES rental_sessions (id) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS session_files_session_idx
+          ON session_files (session_id, created_at);
+      `);
+    },
+  },
 ];

@@ -11,6 +11,9 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import Fastify, { type FastifyInstance } from 'fastify';
 import type Database from 'better-sqlite3';
+import { mkdtempSync, rmSync, readFileSync, existsSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { sessionRoutesPlugin } from './session-routes.js';
 import { openDatabase } from './store.js';
 
@@ -213,5 +216,279 @@ describe('session-routes — v10 rental session lifecycle', () => {
   it('returns 404 for unknown share_token', async () => {
     const res = await server.inject({ method: 'GET', url: '/o/00000000-0000-0000-0000-000000000000' });
     expect(res.statusCode).toBe(404);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// v10 Phase 2 — paginated messages + multipart files (B0 unit)
+// ---------------------------------------------------------------------------
+
+describe('session-routes — paginated messages', () => {
+  let db: Database.Database;
+  let server: FastifyInstance;
+
+  beforeEach(async () => {
+    db = openDatabase(':memory:');
+    const fastify = Fastify({ logger: false });
+    await fastify.register(sessionRoutesPlugin, { registryDb: db });
+    await fastify.ready();
+    server = fastify;
+  });
+
+  afterEach(async () => {
+    await server.close();
+    db.close();
+  });
+
+  async function createSession(): Promise<string> {
+    const res = await server.inject({
+      method: 'POST',
+      url: '/api/sessions',
+      payload: {
+        renter_did: 'did:key:renter',
+        owner_did: 'did:key:owner',
+        agent_id: 'agent-bgm',
+        duration_min: 60,
+        budget_credits: 100,
+      },
+    });
+    return (res.json() as { session_id: string }).session_id;
+  }
+
+  function insertMessages(sessionId: string, count: number): void {
+    const stmt = db.prepare(`
+      INSERT INTO session_messages
+        (id, session_id, thread_id, sender_did, sender_role, content, attachments, is_human_intervention, created_at)
+      VALUES (?, ?, NULL, ?, ?, ?, NULL, 0, ?)
+    `);
+    const baseTime = Date.UTC(2026, 4, 1, 0, 0, 0);
+    for (let i = 0; i < count; i += 1) {
+      const sender = i % 2 === 0 ? 'did:key:renter' : 'did:key:owner';
+      const role = i % 2 === 0 ? 'renter_human' : 'rented_agent';
+      stmt.run(
+        `msg-${String(i).padStart(4, '0')}`,
+        sessionId,
+        sender,
+        role,
+        `message ${i}`,
+        baseTime + i * 1000,
+      );
+    }
+  }
+
+  it('paginates 75 messages across two pages with stable ordering', async () => {
+    const sessionId = await createSession();
+    insertMessages(sessionId, 75);
+
+    const page1 = await server.inject({
+      method: 'GET',
+      url: `/api/sessions/${sessionId}/messages?limit=50`,
+      headers: { 'x-agent-did': 'did:key:renter' },
+    });
+    expect(page1.statusCode).toBe(200);
+    const body1 = page1.json() as { messages: Array<{ id: string; content: string }>; next_cursor: string | null };
+    expect(body1.messages).toHaveLength(50);
+    expect(body1.messages[0].id).toBe('msg-0000');
+    expect(body1.messages[49].id).toBe('msg-0049');
+    expect(body1.next_cursor).toBeTruthy();
+
+    const page2 = await server.inject({
+      method: 'GET',
+      url: `/api/sessions/${sessionId}/messages?limit=50&cursor=${encodeURIComponent(body1.next_cursor!)}`,
+      headers: { 'x-agent-did': 'did:key:renter' },
+    });
+    expect(page2.statusCode).toBe(200);
+    const body2 = page2.json() as { messages: Array<{ id: string }>; next_cursor: string | null };
+    expect(body2.messages).toHaveLength(25);
+    expect(body2.messages[0].id).toBe('msg-0050');
+    expect(body2.messages[24].id).toBe('msg-0074');
+    expect(body2.next_cursor).toBeNull();
+  });
+
+  it('rejects non-participant readers with 403', async () => {
+    const sessionId = await createSession();
+    insertMessages(sessionId, 3);
+
+    const res = await server.inject({
+      method: 'GET',
+      url: `/api/sessions/${sessionId}/messages`,
+      headers: { 'x-agent-did': 'did:key:stranger' },
+    });
+    expect(res.statusCode).toBe(403);
+  });
+
+  it('returns 401 when no DID header is supplied', async () => {
+    const sessionId = await createSession();
+
+    const res = await server.inject({
+      method: 'GET',
+      url: `/api/sessions/${sessionId}/messages`,
+    });
+    expect(res.statusCode).toBe(401);
+  });
+});
+
+describe('session-routes — file upload + download', () => {
+  let db: Database.Database;
+  let server: FastifyInstance;
+  let tmpRoot: string;
+  let originalAgentbnbDir: string | undefined;
+
+  beforeEach(async () => {
+    tmpRoot = mkdtempSync(join(tmpdir(), 'agentbnb-files-test-'));
+    originalAgentbnbDir = process.env['AGENTBNB_DIR'];
+    process.env['AGENTBNB_DIR'] = tmpRoot;
+
+    db = openDatabase(':memory:');
+    const fastify = Fastify({ logger: false });
+    await fastify.register(sessionRoutesPlugin, { registryDb: db });
+    await fastify.ready();
+    server = fastify;
+  });
+
+  afterEach(async () => {
+    await server.close();
+    db.close();
+    rmSync(tmpRoot, { recursive: true, force: true });
+    if (originalAgentbnbDir === undefined) {
+      delete process.env['AGENTBNB_DIR'];
+    } else {
+      process.env['AGENTBNB_DIR'] = originalAgentbnbDir;
+    }
+  });
+
+  async function createSession(): Promise<string> {
+    const res = await server.inject({
+      method: 'POST',
+      url: '/api/sessions',
+      payload: {
+        renter_did: 'did:key:renter',
+        owner_did: 'did:key:owner',
+        agent_id: 'agent-bgm',
+        duration_min: 60,
+        budget_credits: 100,
+      },
+    });
+    return (res.json() as { session_id: string }).session_id;
+  }
+
+  function buildMultipart(filename: string, content: Buffer | string, mimeType = 'text/plain'): {
+    payload: Buffer;
+    headers: Record<string, string>;
+  } {
+    // form-data is a CommonJS module — interop is fine via default require shape.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const FD = require('form-data') as new () => {
+      append(field: string, value: Buffer | string, opts?: { filename: string; contentType: string }): void;
+      getBuffer(): Buffer;
+      getHeaders(): Record<string, string>;
+    };
+    const form = new FD();
+    form.append('file', content, { filename, contentType: mimeType });
+    return { payload: form.getBuffer(), headers: form.getHeaders() };
+  }
+
+  it('uploads a file and persists FileRef + bytes on disk', async () => {
+    const sessionId = await createSession();
+    const content = 'hello v10 rental world';
+    const { payload, headers } = buildMultipart('hello.txt', content);
+
+    const res = await server.inject({
+      method: 'POST',
+      url: `/api/sessions/${sessionId}/files`,
+      headers: { ...headers, 'x-agent-did': 'did:key:renter' },
+      payload,
+    });
+
+    expect(res.statusCode).toBe(201);
+    const body = res.json() as {
+      id: string;
+      session_id: string;
+      uploader_did: string;
+      filename: string;
+      size_bytes: number;
+      mime_type: string;
+      storage_key: string;
+    };
+    expect(body.session_id).toBe(sessionId);
+    expect(body.uploader_did).toBe('did:key:renter');
+    expect(body.filename).toBe('hello.txt');
+    expect(body.size_bytes).toBe(Buffer.byteLength(content));
+    expect(body.mime_type).toContain('text/plain');
+    expect(existsSync(body.storage_key)).toBe(true);
+    expect(readFileSync(body.storage_key, 'utf8')).toBe(content);
+
+    const dbRow = db
+      .prepare('SELECT id, filename, size_bytes FROM session_files WHERE id = ?')
+      .get(body.id) as { id: string; filename: string; size_bytes: number } | undefined;
+    expect(dbRow).toBeDefined();
+    expect(dbRow!.filename).toBe('hello.txt');
+  });
+
+  it('returns 413 for files larger than 10 MB', async () => {
+    const sessionId = await createSession();
+    const big = Buffer.alloc(10 * 1024 * 1024 + 64, 'a');
+    const { payload, headers } = buildMultipart('big.bin', big, 'application/octet-stream');
+
+    const res = await server.inject({
+      method: 'POST',
+      url: `/api/sessions/${sessionId}/files`,
+      headers: { ...headers, 'x-agent-did': 'did:key:renter' },
+      payload,
+    });
+    expect(res.statusCode).toBe(413);
+  });
+
+  it('rejects upload from non-participant with 403', async () => {
+    const sessionId = await createSession();
+    const { payload, headers } = buildMultipart('hi.txt', 'hi');
+
+    const res = await server.inject({
+      method: 'POST',
+      url: `/api/sessions/${sessionId}/files`,
+      headers: { ...headers, 'x-agent-did': 'did:key:stranger' },
+      payload,
+    });
+    expect(res.statusCode).toBe(403);
+  });
+
+  it('downloads an uploaded file (200) and rejects strangers (403) and missing ids (404)', async () => {
+    const sessionId = await createSession();
+    const content = 'download me';
+    const { payload, headers } = buildMultipart('dl.txt', content);
+
+    const upload = await server.inject({
+      method: 'POST',
+      url: `/api/sessions/${sessionId}/files`,
+      headers: { ...headers, 'x-agent-did': 'did:key:owner' },
+      payload,
+    });
+    const fileId = (upload.json() as { id: string }).id;
+
+    // Owner can download
+    const ok = await server.inject({
+      method: 'GET',
+      url: `/api/sessions/${sessionId}/files/${fileId}`,
+      headers: { 'x-agent-did': 'did:key:owner' },
+    });
+    expect(ok.statusCode).toBe(200);
+    expect(ok.body).toBe(content);
+    expect(ok.headers['content-disposition']).toContain('dl.txt');
+
+    // Stranger rejected
+    const blocked = await server.inject({
+      method: 'GET',
+      url: `/api/sessions/${sessionId}/files/${fileId}`,
+      headers: { 'x-agent-did': 'did:key:stranger' },
+    });
+    expect(blocked.statusCode).toBe(403);
+
+    // Missing file id → 404
+    const missing = await server.inject({
+      method: 'GET',
+      url: `/api/sessions/${sessionId}/files/00000000-0000-0000-0000-000000000000`,
+      headers: { 'x-agent-did': 'did:key:owner' },
+    });
+    expect(missing.statusCode).toBe(404);
   });
 });
