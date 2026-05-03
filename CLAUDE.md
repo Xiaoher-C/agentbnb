@@ -1,28 +1,93 @@
 # CLAUDE.md — AgentBnB
 
+## ⚡ v10 Pivot — Agent Maturity Rental (2026-05-04)
+
+> **READ THIS FIRST when starting any new session on this repo.**
+>
+> AgentBnB has pivoted from "skill marketplace" to **Agent Maturity Rental**.
+> The unit of trade is no longer an atomic skill — it is **a session of access
+> to a long-tuned agent** (a renter borrows another user's mature Hermes /
+> OpenClaw agent for a fixed time window).
+
+**One-line product**: 「租一個別人調校了半年的 AI 員工 60 分鐘」.
+
+**Three primitives** (replaced the old "Capability Card" centric model):
+1. **Agent Profile** — public page for a rentable agent: Maturity Evidence + past outcomes + tools + price
+2. **Rental Session** — time-boxed shared workspace with threads, files, mode toggle
+3. **Outcome Page** — auto-generated shareable artifact at `/o/:share_token` (virality + portfolio)
+
+**Canonical integrations** (v1):
+- **Web room** at `/s/{id}` is the canonical UI (NOT Discord/Telegram/Liveblocks/Next.js — all v2)
+- **Hermes plugin** (`hermes-plugin/` — Python, contributed to `nousresearch/hermes-agent`) is the canonical supply integration. Two-command onboarding: `hermes plugin install agentbnb && hermes agentbnb publish`. OpenClaw skill (`skills/agentbnb/`) preserved for backward compat but not actively pushed.
+
+**Privacy contract** (ADR-024 — three-layer enforcement, MUST be honoured by all new code):
+> 「租用執行能力，不租用 agent 的腦與鑰匙」
+- Tools execute on owner machine, renter only sees results
+- Session conversation per-sessionId isolated, NEVER pollutes owner agent's main memory
+- `request_log` skips persistence when `session_mode=true` (verified by `src/session/privacy.test.ts`)
+- Curated Rental Runner spawns isolated subagent loaded with owner-curated `RENTAL.md` (NOT main SOUL/SPIRIT)
+
+**Maturity Evidence > Maturity Score**: never collapse maturity into a single number (would be gamed and lossy). Show evidence categories: platform-observed sessions / completed tasks / repeat renters / artifact examples / verified tools / response reliability / renter rating.
+
+**Authoritative documents**:
+- [`docs/adr/022-agent-maturity-rental.md`](docs/adr/022-agent-maturity-rental.md) — pivot rationale + Maturity Evidence
+- [`docs/adr/023-session-as-protocol-primitive.md`](docs/adr/023-session-as-protocol-primitive.md) — Session primitive + Web room canonical UI + Hermes canonical supply
+- [`docs/adr/024-privacy-boundary.md`](docs/adr/024-privacy-boundary.md) — three-layer privacy enforcement
+- [`docs/hermes-plugin-spec.md`](docs/hermes-plugin-spec.md) — implementation spec for `hermes-plugin/`
+- [`docs/session-smoke-test.md`](docs/session-smoke-test.md) — end-to-end manual verification
+- Plan file (Cheng Wen's local): `~/.claude/plans/memoized-roaming-finch.md`
+
+**Code surface added in v10** (Phase 0+1, branch `feat/v10-rental-mvp`):
+- `src/session/session-types.ts` — extended schema (participants, threads, files, mode, outcome, isolated_memory invariant). Backward compat preserved.
+- `src/session/privacy.test.ts` — privacy contract regression guard (8 tests)
+- `src/sdk/consumer.ts` — `session_mode?: boolean` on ConsumerRequestOptions
+- `src/gateway/server.ts` — `sessionMode?: boolean` on GatewayOptions
+- `src/registry/request-log.ts` — `InsertRequestLogOptions.sessionMode` skip path
+- `src/session/openclaw-session-executor.ts` — three privacy violations marked `@deprecated` (recallMemory / writeSessionSummary / SOUL.md injection). Do NOT extend; new path is Hermes plugin.
+- `src/registry/session-routes.ts` — REST surface (POST /api/sessions, threads, end, rating, GET /o/:share_token public)
+- `src/migrations/registry-migrations.ts` — `rental_sessions`, `rental_threads`, `rental_ratings` tables
+
+**Phase 2 in progress** (3 parallel tracks):
+- **Track A** (Hermes plugin, `hermes-plugin/`) — Python plugin per spec, Curated Rental Runner with privacy hooks, Cheng Wen × Hannah dogfood
+- **Track B** (Hub Session UI) — `hub/src/pages/SessionRoom.tsx` + `OutcomePage.tsx` + WebSocket hook
+- **Track C** (Hub Discovery reframe) — `DiscoverPage` rewrite + `AgentProfileCard` (skill → tags)
+
+**Code conventions added in v10**:
+- New rental code paths MUST set `session_mode: true` / `sessionMode: true` so privacy contract is enforced
+- New code that touches the rental flow MUST NOT extend `OpenClawSessionExecutor` privacy-violating methods
+- New supply integrations MUST use the Curated Rental Runner pattern (RENTAL.md persona, tool whitelist, memory write hook)
+- Hub UI mode toggle MUST use human copy ("透過我的 agent" / "直接和出租 agent 對話"), never expose `direct/proxy` to users
+
+---
+
 ## Project Overview
 
 AgentBnB is a P2P agent capability sharing protocol. Agent owners publish what their agents can do (Capability Cards) and request capabilities from others, with a lightweight credit-based exchange system. Think Airbnb for AI agent pipelines.
+
+**v10 reframe**: the marketing surface is now Agent Maturity Rental (above). The underlying P2P protocol, DID/UCAN/VC identity stack, escrow, and relay all remain — they are now framed as the substrate for rental sessions rather than skill calls.
 
 **Core Insight: The user of AgentBnB is not the human. The user is the agent.** (See [AGENT-NATIVE-PROTOCOL.md](AGENT-NATIVE-PROTOCOL.md) for the full design philosophy.)
 
 **Founder**: Cheng Wen Chen
 **Domain**: agentbnb.dev
 **IP**: © 2026 Cheng Wen Chen, MIT License
-**Primary Language**: TypeScript (Node.js)
-**Package Manager**: pnpm
+**Primary Language**: TypeScript (Node.js) for core; Python 3.11+ for `hermes-plugin/`
+**Package Managers**: pnpm (TS), uv or pip (Python plugin)
 
 ## Current State
 
-- **Version**: 1.0.0 (V1.0 conceptual restart — see [docs/V1.0-RESET.md](docs/V1.0-RESET.md))
-- **Internal lineage** (preserved for context): v1.1 → v2.x → v3.0 (SkillExecutor, Conductor, Signed Escrow) → v3.1 (WebSocket Relay) → v4.0 (Agent Economy Platform) → v5.0 (Genesis Flywheel) → v5.1 (OpenClaw Hardening) → v6.0 (Team Formation Protocol) → v7.0 (Agent Economy Infrastructure) → v8.x (V8 Identity Convergence) → v9.x (Agent Identity Protocol). V1.0 reframes this as one coherent product.
-- **V1.0 capabilities**: Three-layer identity stack (DID + UCAN + Verifiable Credentials) operational
+- **Version**: 1.0.0 (V1.0 conceptual restart — see [docs/V1.0-RESET.md](docs/V1.0-RESET.md)). v10 pivot is layered on top of V1.0 capability stack — does not bump version, treats the existing identity / escrow / relay as substrate for the new rental product.
+- **Active branch**: `feat/v10-rental-mvp` (5-7 week MVP per plan)
+- **Internal lineage** (preserved for context): v1.1 → v2.x → v3.0 (SkillExecutor, Conductor, Signed Escrow) → v3.1 (WebSocket Relay) → v4.0 (Agent Economy Platform) → v5.0 (Genesis Flywheel) → v5.1 (OpenClaw Hardening) → v6.0 (Team Formation Protocol) → v7.0 (Agent Economy Infrastructure) → v8.x (V8 Identity Convergence) → v9.x (Agent Identity Protocol) → **v10 (Agent Maturity Rental, 2026-05-04)**.
+- **V1.0 capabilities**: Three-layer identity stack (DID + UCAN + Verifiable Credentials) operational — repurposed as the trust substrate for v10 rentals.
   - DID Envelope (did:key + did:agentbnb, rotation, revocation, EVM bridge) ✅
   - UCAN Token Engine (create/verify/delegate, escrow binding, gateway/relay/conductor integration) ✅
   - Verifiable Credentials (reputation/skill/team VCs, weekly scheduler, selective disclosure) ✅
   - Cross-Platform Federation (DID rotation, VC presentation, EVM bridge) ✅
   - BLS Team Proofs → roadmap (post-V1.0)
-- **Tests**: 1,800+
+- **v10 Phase 0+1 complete**: ADRs signed; session schema extended; privacy contract wired; REST surface live; Hermes plugin spec ready.
+- **v10 Phase 2 in progress**: Hermes plugin (`hermes-plugin/`), Hub SessionRoom + OutcomePage, Hub Discovery reframe.
+- **Tests**: 2,038 (was 1,800+; +238 v10 additions including 8 privacy + 8 session-routes lifecycle)
 
 ## Tech Stack
 
@@ -65,14 +130,31 @@ src/
 ├── utils/       # Shared utilities (interpolation)
 ├── discovery/   # mDNS peer discovery
 ├── cli/         # CLI: init, publish, discover, request, serve, quickstart, conduct, mcp-server, did, vc (19 files)
+├── session/     # SessionManager + executors + escrow + v10 rental schema (12 files)
 └── types/       # Core TypeScript types + Zod schemas
 
 hub/             # React SPA at /hub (Vite + Tailwind, premium dark theme)
 ├── pages/       # Discover, Agents, CreateAgent, AgentDashboard, Genesis, CreditPolicy
+│                # v10 add: SessionRoom (/s/:id), OutcomePage (/s/:id/outcome) — Phase 2 Track B
 ├── components/  # 40+ components (cards, charts, hero sections, trust badges)
+│                # v10 add: AgentProfileCard, SessionMessage, MessageComposer, ParticipantsPanel, ThreadList, MessageRenderer
 └── hooks/       # useCards, useAuth, useOwnerCards, useRequests
+                 # v10 add: useSessionWebSocket — Phase 2 Track B
 
-skills/agentbnb/ # OpenClaw installable skill package
+hermes-plugin/   # v10 canonical supply integration (Python 3.11+)
+├── plugin.yaml  # Hermes plugin manifest (channel adapter + commands)
+├── agentbnb_plugin/
+│   ├── adapter.py            # BasePlatformAdapter — channel: agentbnb_session
+│   ├── subagent_runner.py    # Curated Rental Runner — isolated subagent per session
+│   ├── rental_md_loader.py   # Parse RENTAL.md (persona + tool whitelist)
+│   ├── hub_client.py         # HTTP/WS client to AgentBnB Hub
+│   ├── memory_hook.py        # Hook into plugins/memory to suppress writes
+│   ├── identity.py           # Ed25519 keypair + DID generation
+│   ├── commands.py           # CLI: install, publish, status, settle
+│   └── plugin_api.py         # FastAPI routes mounted at /api/plugins/agentbnb/*
+└── tests/
+
+skills/agentbnb/ # OpenClaw installable skill package — backward compat path (v10 not main supply)
 ```
 
 ## Capability Card Schema

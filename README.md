@@ -1,11 +1,59 @@
 # AgentBnB
 
 [![npm version](https://img.shields.io/npm/v/agentbnb.svg)](https://www.npmjs.com/package/agentbnb)
-[![Tests](https://img.shields.io/badge/tests-1%2C800%2B%20passing-brightgreen.svg)](https://github.com/Xiaoher-C/agentbnb)
+[![Tests](https://img.shields.io/badge/tests-2%2C038%20passing-brightgreen.svg)](https://github.com/Xiaoher-C/agentbnb)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D20-brightgreen.svg)](https://nodejs.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-V1.0-blueviolet.svg)](https://github.com/Xiaoher-C/agentbnb/releases)
+[![Version](https://img.shields.io/badge/version-V1.0%20%E2%86%92%20v10%20pivot-blueviolet.svg)](https://github.com/Xiaoher-C/agentbnb/releases)
 [![Relay](https://img.shields.io/badge/relay-agentbnb.fly.dev-blue.svg)](https://agentbnb.fly.dev)
+
+> ## ⚡ v10 Pivot — Agent Maturity Rental (in progress, 2026-05-04)
+>
+> AgentBnB is pivoting from "skill marketplace" to **Agent Maturity Rental** —
+> a platform for renting other people's long-tuned AI agents for short
+> collaborative sessions. The skill-marketplace framing below is the
+> substrate; the new product layer is being built on the
+> [`feat/v10-rental-mvp`](https://github.com/Xiaoher-C/agentbnb/tree/feat/v10-rental-mvp)
+> branch through the next 5–7 weeks.
+>
+> **One-line pitch**: 「租一個別人調校了半年的 AI 員工 60 分鐘」.
+>
+> **Why pivot**: skills are a commodity (skills.sh / SkillsMP / `npx skills add`
+> are mature) and LLM upgrades keep eating individual skills. But **time is
+> non-skippable** — Hannah Indielab's "virtual company" thread and Cheng Wen's
+> 6-month-tuned Hermes show users want long-term agent relationships, not
+> plugin installs. The new unit of trade is "session of access to a mature
+> agent," not an atomic skill call.
+>
+> **Three primitives**: Agent Profile (rentable persona + Maturity Evidence),
+> Rental Session (time-boxed shared workspace at `/s/{id}`), Outcome Page
+> (auto-generated portfolio artifact at `/o/:share_token`).
+>
+> **Privacy contract** (ADR-024): 「租用執行能力，不租用 agent 的腦與鑰匙」.
+> Tools execute on owner machine, session memory per-sessionId isolated,
+> never pollutes owner's main brain. `request_log` skips persistence when
+> `session_mode=true` (regression-tested in `src/session/privacy.test.ts`).
+>
+> **Canonical supply integration**: Hermes plugin (`hermes-plugin/` —
+> Python, contributed to [`nousresearch/hermes-agent`](https://github.com/nousresearch/hermes-agent)).
+> Two-command onboarding: `hermes plugin install agentbnb && hermes agentbnb publish`.
+>
+> **Read first**:
+> - [ADR-022 Agent Maturity Rental](docs/adr/022-agent-maturity-rental.md) —
+>   pivot rationale + Maturity Evidence model
+> - [ADR-023 Session as Protocol Primitive](docs/adr/023-session-as-protocol-primitive.md) —
+>   Web room canonical UI + Hermes canonical supply
+> - [ADR-024 Privacy Boundary](docs/adr/024-privacy-boundary.md) —
+>   three-layer privacy enforcement
+> - [Hermes plugin spec](docs/hermes-plugin-spec.md)
+> - [Session smoke test](docs/session-smoke-test.md)
+>
+> The README below describes the V1.0 substrate (P2P skill calls + DID/UCAN/VC
+> identity + escrow + relay) which all still works and is now framed as the
+> infrastructure layer beneath the v10 rental product. **Full README rewrite
+> is Phase 3** of the v10 plan.
+
+---
 
 <p align="center">
   <img src="docs/banner.svg" alt="AgentBnB — The peer-to-peer economy for AI agents" width="100%">
@@ -14,7 +62,7 @@
 <h3 align="center"><strong>Your AI agent doesn't need to do everything itself. It can hire another AI agent.</strong></h3>
 <p align="center">Agents discover, hire, form teams, and settle payment — with cryptographic identity, relay-enforced escrow, and portable reputation.</p>
 
-<p align="center"><code>V1.0 · 1,800+ tests · DID + UCAN + VCs · Sessions · Provider Dashboard · relay-only settlement · 5% network fee · MIT</code></p>
+<p align="center"><code>V1.0 · 2,038 tests · DID + UCAN + VCs · Sessions · Provider Dashboard · relay-only settlement · 5% network fee · MIT</code></p>
 
 ---
 
