@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import logging
 import os
 import sys
 from dataclasses import dataclass
@@ -37,10 +38,19 @@ from agentbnb_plugin.rental_md_loader import (
     RentalProfile,
     load_rental_md,
 )
+from agentbnb_plugin.subagent_runner import DEFAULT_MAX_CONCURRENT_SESSIONS
+
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Config (resolved from plugin.yaml + env, or argv defaults in standalone)
 # ---------------------------------------------------------------------------
+
+# Single source of truth lives in subagent_runner; plugin.yaml's
+# `max_concurrent_rental_sessions: 3` must stay in sync (guarded by
+# `test_max_concurrent_sessions_default_matches_plugin_yaml`).
+DEFAULT_MAX_CONCURRENT_RENTAL_SESSIONS = DEFAULT_MAX_CONCURRENT_SESSIONS
+
 
 @dataclass(frozen=True)
 class CommandConfig:
@@ -49,10 +59,36 @@ class CommandConfig:
     hub_url: str
     rental_md: Path
     identity_dir: Path
+    max_concurrent_rental_sessions: int = DEFAULT_MAX_CONCURRENT_RENTAL_SESSIONS
 
     @classmethod
     def from_env(cls, *, hub_url: str | None = None) -> CommandConfig:
         """Resolve config from env vars with fallback defaults."""
+        max_concurrent_raw = os.environ.get(
+            "AGENTBNB_MAX_CONCURRENT_RENTAL_SESSIONS"
+        )
+        max_concurrent = DEFAULT_MAX_CONCURRENT_RENTAL_SESSIONS
+        if max_concurrent_raw:
+            try:
+                parsed = int(max_concurrent_raw)
+            except ValueError:
+                logger.warning(
+                    "AGENTBNB_MAX_CONCURRENT_RENTAL_SESSIONS=%r is not an int; "
+                    "falling back to %d",
+                    max_concurrent_raw,
+                    max_concurrent,
+                )
+            else:
+                if parsed < 1:
+                    logger.warning(
+                        "AGENTBNB_MAX_CONCURRENT_RENTAL_SESSIONS=%d must be >= 1; "
+                        "falling back to %d",
+                        parsed,
+                        max_concurrent,
+                    )
+                else:
+                    max_concurrent = parsed
+
         return cls(
             hub_url=(
                 hub_url
@@ -65,6 +101,7 @@ class CommandConfig:
             identity_dir=Path(
                 os.environ.get("AGENTBNB_IDENTITY_DIR", "~/.hermes/agentbnb")
             ).expanduser(),
+            max_concurrent_rental_sessions=max_concurrent,
         )
 
 

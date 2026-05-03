@@ -149,6 +149,9 @@ class _RunningSession:
     transcript: list[tuple[str, str]] = field(default_factory=list)
 
 
+DEFAULT_MAX_CONCURRENT_SESSIONS = 3
+
+
 class CuratedRentalRunner:
     """Privacy-preserving runtime for AgentBnB rental sessions.
 
@@ -161,6 +164,11 @@ class CuratedRentalRunner:
     - In-memory transcript that lives ONLY for the duration of the session
       and is discarded on ``end_session``
 
+    The runner enforces ``max_concurrent_sessions`` so a single owner cannot
+    be overwhelmed by concurrent rentals. The default mirrors
+    ``plugin.yaml`` (``max_concurrent_rental_sessions: 3``); the adapter
+    passes the resolved value from ``CommandConfig`` so user overrides win.
+
     The runner does NOT persist anything. Persistence (escrow, outcome,
     rating) is the Hub's responsibility — the runner only handles message
     flow and privacy boundary enforcement.
@@ -171,15 +179,26 @@ class CuratedRentalRunner:
         *,
         spawner: SubagentSpawner = echo_spawner,
         memory_adapter: Any | None = None,
+        max_concurrent_sessions: int = DEFAULT_MAX_CONCURRENT_SESSIONS,
     ) -> None:
+        if max_concurrent_sessions < 1:
+            raise ValueError(
+                "max_concurrent_sessions must be >= 1; "
+                f"got {max_concurrent_sessions}"
+            )
         self._spawner = spawner
         self._memory_adapter = memory_adapter
+        self._max_concurrent_sessions = max_concurrent_sessions
         self._sessions: dict[str, _RunningSession] = {}
         self._lock = asyncio.Lock()
 
     @property
     def active_session_ids(self) -> tuple[str, ...]:
         return tuple(self._sessions.keys())
+
+    @property
+    def max_concurrent_sessions(self) -> int:
+        return self._max_concurrent_sessions
 
     async def open_session(
         self,
@@ -191,10 +210,20 @@ class CuratedRentalRunner:
 
         Idempotent — calling twice with the same id raises so the caller
         can detect duplicate session_open events from the relay.
+
+        Raises ``RuntimeError`` when the active session count is already at
+        ``max_concurrent_sessions``. The check happens while holding the
+        runner lock so two concurrent ``open_session`` calls cannot both
+        slip past the limit (TOCTOU safe).
         """
         async with self._lock:
             if session_id in self._sessions:
                 raise SubagentRunnerError(f"session {session_id} already open")
+            if len(self._sessions) >= self._max_concurrent_sessions:
+                raise RuntimeError(
+                    "max concurrent rental sessions reached: "
+                    f"{self._max_concurrent_sessions}"
+                )
             subagent = await self._spawner(
                 session_id=session_id, rental_profile=rental_profile
             )

@@ -200,6 +200,65 @@ async def test_deliver_message_runs_inside_isolated_memory_context() -> None:
 
 
 # ---------------------------------------------------------------------------
+# max_concurrent_sessions enforcement
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_open_session_allows_up_to_max_concurrent_sessions() -> None:
+    """Up to the configured limit, all openings succeed."""
+    runner = CuratedRentalRunner(
+        spawner=echo_spawner, max_concurrent_sessions=3
+    )
+    for sid in ("a", "b", "c"):
+        await runner.open_session(session_id=sid, rental_profile=_profile())
+    assert set(runner.active_session_ids) == {"a", "b", "c"}
+
+
+@pytest.mark.asyncio
+async def test_open_session_raises_runtime_error_when_at_limit() -> None:
+    """The (limit + 1)-th open_session call raises with the limit in the
+    message, leaving the existing sessions untouched."""
+    runner = CuratedRentalRunner(
+        spawner=echo_spawner, max_concurrent_sessions=3
+    )
+    for sid in ("a", "b", "c"):
+        await runner.open_session(session_id=sid, rental_profile=_profile())
+    with pytest.raises(
+        RuntimeError, match="max concurrent rental sessions reached: 3"
+    ):
+        await runner.open_session(session_id="d", rental_profile=_profile())
+    # The fourth session must NOT have leaked into the runner
+    assert set(runner.active_session_ids) == {"a", "b", "c"}
+
+
+@pytest.mark.asyncio
+async def test_open_session_accepts_new_session_after_one_ends() -> None:
+    """Closing a session frees a slot — the next open_session succeeds."""
+    runner = CuratedRentalRunner(
+        spawner=echo_spawner, max_concurrent_sessions=2
+    )
+    await runner.open_session(session_id="a", rental_profile=_profile())
+    await runner.open_session(session_id="b", rental_profile=_profile())
+    with pytest.raises(RuntimeError, match="max concurrent"):
+        await runner.open_session(session_id="c", rental_profile=_profile())
+    await runner.end_session("a")
+    await runner.open_session(session_id="c", rental_profile=_profile())
+    assert set(runner.active_session_ids) == {"b", "c"}
+
+
+def test_runner_rejects_invalid_max_concurrent_sessions() -> None:
+    with pytest.raises(ValueError, match="max_concurrent_sessions must be >= 1"):
+        CuratedRentalRunner(spawner=echo_spawner, max_concurrent_sessions=0)
+
+
+@pytest.mark.asyncio
+async def test_max_concurrent_sessions_default_matches_plugin_yaml() -> None:
+    """Sanity guard so plugin.yaml and the runner default stay in sync."""
+    runner = CuratedRentalRunner(spawner=echo_spawner)
+    assert runner.max_concurrent_sessions == 3
+
+
+# ---------------------------------------------------------------------------
 # EchoSubagent specifics
 # ---------------------------------------------------------------------------
 

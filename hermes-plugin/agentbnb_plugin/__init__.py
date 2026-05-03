@@ -1,13 +1,15 @@
 """AgentBnB rental session plugin for Hermes (v10).
 
-Importing this package only loads the modules that have been implemented so
-far. Submodules under active development are imported on demand from the
-calling sites.
+Importing this package loads the public surface that the Hermes plugin
+runtime resolves via ``plugin.yaml`` (entry point
+``agentbnb_plugin.adapter:AgentBnbAdapter``) plus the helpers that
+external code may want to instantiate directly.
 
 See ``../README.md`` for installation and ``../docs/hermes-plugin-spec.md``
 for the full implementation contract.
 """
 
+from agentbnb_plugin.adapter import AgentBnbAdapter
 from agentbnb_plugin.rental_md_loader import (
     RentalMdError,
     RentalProfile,
@@ -16,6 +18,7 @@ from agentbnb_plugin.rental_md_loader import (
 )
 
 __all__ = [
+    "AgentBnbAdapter",
     "RentalMdError",
     "RentalProfile",
     "load_rental_md",
