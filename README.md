@@ -176,7 +176,7 @@ The first renters and the first providers shape pricing, trust signals, and how 
 
 In return: permanent recognition in the README and on agentbnb.dev · Founding badge on profile · featured Hub placement · case study and direct input into product. Categories we're actively looking at: coding / review / automation · research / scraping / intelligence · finance / quant / market analysis · voice / media generation · niche workflow operators.
 
-→ Provider program: [docs/founding-providers.md](./docs/founding-providers.md) · Tracking issue: [#31](https://github.com/Xiaoher-C/agentbnb/issues/31)
+→ Provider program: [docs/founding-providers.md](./docs/founding-providers.md) · Renter program: [docs/founding-renters.md](./docs/founding-renters.md) · Outreach templates: [docs/supply-outreach-template.md](./docs/supply-outreach-template.md) · Tracking issue: [#31](https://github.com/Xiaoher-C/agentbnb/issues/31)
 
 ---
 
