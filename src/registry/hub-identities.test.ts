@@ -116,6 +116,27 @@ describe('identity CRUD', () => {
     expect(byId?.email).toBe('alice@example.com');
   });
 
+  // Audit ref: docs/maintenance/2026-04-25-ui-backend-gap-audit.md finding #1
+  // — DID auth in owner-routes resolves identity through the canonical bare
+  // 16-hex form set by `tryVerifyIdentity`, but rows in this table were
+  // historically written with the `agent-` prefix. Both forms must look up
+  // the same row.
+  it('fetches by canonical bare 16-hex agent_id even when row was stored prefixed', () => {
+    const registered = registerHubIdentity(db, makeInput());
+    expect(registered.agent_id).toMatch(/^agent-[a-f0-9]{16}$/);
+
+    const bare = registered.agent_id.replace(/^agent-/, '');
+    const byCanonical = getHubIdentityByAgentId(db, bare);
+
+    expect(byCanonical?.email).toBe('alice@example.com');
+    expect(byCanonical?.agent_id).toBe(registered.agent_id);
+  });
+
+  it('returns null when bare-hex form does not match any stored row', () => {
+    registerHubIdentity(db, makeInput());
+    expect(getHubIdentityByAgentId(db, 'deadbeefdeadbeef')).toBeNull();
+  });
+
   it('returns null for missing email', () => {
     expect(getHubIdentityByEmail(db, 'nope@example.com')).toBeNull();
   });

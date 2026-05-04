@@ -9,6 +9,7 @@ import {
   saveIdentity,
   ensureIdentity,
   deriveAgentId,
+  canonicalizeAgentId,
   issueAgentCertificate,
   verifyAgentCertificate,
 } from './identity.js';
@@ -36,6 +37,40 @@ describe('identity', () => {
       const keys = generateKeyPair();
       const hex = keys.publicKey.toString('hex');
       expect(deriveAgentId(hex)).toBe(deriveAgentId(hex));
+    });
+  });
+
+  describe('canonicalizeAgentId', () => {
+    it('strips a leading agent- prefix', () => {
+      expect(canonicalizeAgentId('agent-abc1234567890def')).toBe('abc1234567890def');
+    });
+
+    it('returns bare hex unchanged', () => {
+      expect(canonicalizeAgentId('abc1234567890def')).toBe('abc1234567890def');
+    });
+
+    it('trims surrounding whitespace before checking the prefix', () => {
+      expect(canonicalizeAgentId('  agent-abc1234567890def  ')).toBe('abc1234567890def');
+      expect(canonicalizeAgentId('  abc1234567890def\n')).toBe('abc1234567890def');
+    });
+
+    it('only strips the prefix once (idempotent re-application)', () => {
+      const once = canonicalizeAgentId('agent-abc1234567890def');
+      const twice = canonicalizeAgentId(once);
+      expect(once).toBe(twice);
+    });
+
+    it('does not strip the prefix from a deeper substring', () => {
+      // Ensure the helper only matches a leading prefix and never an interior occurrence.
+      expect(canonicalizeAgentId('abagent-cdef')).toBe('abagent-cdef');
+    });
+
+    it('matches deriveAgentId output for both header forms', () => {
+      const keys = generateKeyPair();
+      const hex = keys.publicKey.toString('hex');
+      const expected = deriveAgentId(hex);
+      expect(canonicalizeAgentId(expected)).toBe(expected);
+      expect(canonicalizeAgentId(`agent-${expected}`)).toBe(expected);
     });
   });
 

@@ -156,8 +156,31 @@ export function getHubIdentityByEmail(db: Database.Database, email: string): Hub
 
 /**
  * Fetches a Hub identity by agent_id. Returns null if not found.
+ *
+ * Accepts either the historical prefixed form `agent-<16hex>` (what this
+ * module returns from `deriveAgentId`) or the canonical bare `<16hex>` form
+ * (what `src/identity/identity.ts:deriveAgentId` and the rest of the platform
+ * use). When given a bare form for a row that was stored with the prefix,
+ * falls back to looking it up with the prefix re-attached.
+ *
+ * This unblocks the Hub-first DID auth loop where the request handler now
+ * sets `request.agentId` to the canonical bare hex, but rows in
+ * `hub_identities` predate the canonicalization. See
+ * `docs/maintenance/2026-04-25-ui-backend-gap-audit.md` finding #1.
  */
 export function getHubIdentityByAgentId(db: Database.Database, agent_id: string): HubIdentity | null {
-  const row = db.prepare('SELECT * FROM hub_identities WHERE agent_id = ?').get(agent_id) as HubIdentity | undefined;
-  return row ?? null;
+  const trimmed = agent_id.trim();
+  const stmt = db.prepare('SELECT * FROM hub_identities WHERE agent_id = ?');
+
+  const direct = stmt.get(trimmed) as HubIdentity | undefined;
+  if (direct) return direct;
+
+  // If caller passed the bare 16-hex canonical form, also try the prefixed
+  // form that this module historically wrote into the column.
+  if (!trimmed.startsWith('agent-')) {
+    const prefixed = stmt.get(`agent-${trimmed}`) as HubIdentity | undefined;
+    if (prefixed) return prefixed;
+  }
+
+  return null;
 }

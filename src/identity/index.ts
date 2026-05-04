@@ -11,6 +11,7 @@ export {
   type AgentIdentity,
   type AgentCertificate,
   deriveAgentId,
+  canonicalizeAgentId,
   createIdentity,
   loadIdentity,
   saveIdentity,

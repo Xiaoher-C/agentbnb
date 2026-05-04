@@ -11,6 +11,20 @@
  */
 import { signPayload } from './crypto.js';
 
+/**
+ * Strips an optional `agent-` prefix from an agent_id so the Hub can talk to
+ * the backend with the canonical bare 16-hex form expected by
+ * `src/identity/identity.ts:deriveAgentId` (and by the gateway / agents table).
+ *
+ * Older Hub registrations stored the prefixed form in localStorage; this
+ * helper keeps those sessions working without forcing a re-login. See
+ * `docs/maintenance/2026-04-25-ui-backend-gap-audit.md` finding #1.
+ */
+export function canonicalizeAgentId(input: string): string {
+  const trimmed = input.trim();
+  return trimmed.startsWith('agent-') ? trimmed.slice('agent-'.length) : trimmed;
+}
+
 /** Session metadata stored after successful login. Never contains private key bytes. */
 export interface HubSession {
   agentId: string;
@@ -119,19 +133,24 @@ export async function signRequest(
   }
 
   const timestamp = new Date().toISOString();
+  // Canonicalize the agent_id before signing so the signed payload and the
+  // X-Agent-Id header agree with the backend's `deriveAgentId(publicKeyHex)`
+  // which always returns the bare 16-hex form. Defensive: tolerates both
+  // legacy `agent-<hex>` localStorage entries and freshly canonical sessions.
+  const canonicalAgentId = canonicalizeAgentId(session.agentId);
   const payload = {
     method,
     path,
     timestamp,
     publicKey: session.publicKeyHex,
-    agentId: session.agentId,
+    agentId: canonicalAgentId,
     params: body === undefined ? null : body,
   };
 
   const signature = await signPayload(privateKey, payload);
 
   return {
-    'X-Agent-Id': session.agentId,
+    'X-Agent-Id': canonicalAgentId,
     'X-Agent-PublicKey': session.publicKeyHex,
     'X-Agent-Signature': signature,
     'X-Agent-Timestamp': timestamp,

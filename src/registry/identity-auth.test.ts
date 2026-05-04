@@ -236,6 +236,38 @@ describe('identityAuthPlugin', () => {
     expect(response.json()).toEqual({ error: 'Identity does not match requester' });
   });
 
+  // Audit ref: docs/maintenance/2026-04-25-ui-backend-gap-audit.md finding #1
+  // — Hub historically registered agent_id as `agent-<16hex>`. Backend must
+  // canonicalize the incoming X-Agent-Id so legacy Hub sessions don't 401.
+  describe('agent_id canonicalization (audit finding #1)', () => {
+    it('accepts a prefixed agent- header when payload is signed with the canonical bare hex', async () => {
+      const headers = signRequest('GET', '/test', null, keyPair.privateKey, publicKeyHex);
+      const prefixedHeaders = { ...headers, 'X-Agent-Id': `agent-${agentId}` };
+
+      const response = await server.inject({
+        method: 'GET',
+        url: '/test',
+        headers: prefixedHeaders,
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toEqual({ ok: true });
+    });
+
+    it('accepts the bare 16-hex header (canonical path)', async () => {
+      const headers = signRequest('GET', '/test', null, keyPair.privateKey, publicKeyHex);
+      expect(headers['X-Agent-Id']).toBe(agentId);
+
+      const response = await server.inject({
+        method: 'GET',
+        url: '/test',
+        headers,
+      });
+
+      expect(response.statusCode).toBe(200);
+    });
+  });
+
   it('returns 401 when registered agent record public key does not match', async () => {
     const attacker = generateKeyPair();
     const attackerPublicKeyHex = attacker.publicKey.toString('hex');

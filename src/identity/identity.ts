@@ -108,6 +108,28 @@ export function deriveAgentId(publicKeyHex: string): string {
 }
 
 /**
+ * Canonicalizes an agent_id to the bare 16-hex form used by `deriveAgentId`.
+ *
+ * Hub-first registration historically returned `agent-<16hex>` (see
+ * `src/registry/hub-identities.ts:deriveAgentId`), while CLI/identity-auth
+ * verification, the agents table, and the gateway expect bare `<16hex>`.
+ *
+ * This helper strips an optional `agent-` prefix so callers on either side
+ * can converge on a single comparable value without breaking existing
+ * localStorage entries or stored hub_identities rows.
+ *
+ * v10 audit reference:
+ *   docs/maintenance/2026-04-25-ui-backend-gap-audit.md (P0 finding #1).
+ *
+ * @param input - Raw agent_id from a header, body, or storage row.
+ * @returns The same value with any leading `agent-` removed and trimmed.
+ */
+export function canonicalizeAgentId(input: string): string {
+  const trimmed = input.trim();
+  return trimmed.startsWith('agent-') ? trimmed.slice('agent-'.length) : trimmed;
+}
+
+/**
  * Creates a new agent identity. Generates an Ed25519 keypair if one does not
  * already exist. Writes identity.json to the config directory.
  *
