@@ -1,7 +1,9 @@
 {
   "name": "@agentbnb/skill-inspector",
   "version": "0.1.0",
-  "description": "Read-only Skill Inspector for AgentBnB — parses SKILL.md files into a node graph with risk + provenance overlays. 'skill' here means the SKILL.md file format (Claude Code construct), NOT the deprecated AgentBnB marketplace-skill concept.",
+  "private": true,
+  "deprecated": "Deprecated as of AgentBnB v10 (Agent Maturity Rental). Maturity Evidence — not skill graph introspection — is the v10 trust surface. See packages/skill-inspector/README.md.",
+  "description": "[DEPRECATED v10] Read-only Skill Inspector for AgentBnB — parses SKILL.md files into a node graph with risk + provenance overlays. Superseded by Agent Maturity Rental (ADR-022). Kept on best-effort basis until removal milestone.",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
