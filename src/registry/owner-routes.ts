@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import type Database from 'better-sqlite3';
 import { getCard, updateCard } from './store.js';
 import { listPendingRequests, resolvePendingRequest } from '../autonomy/pending-requests.js';
-import { getRequestLog } from './request-log.js';
+import { getRequestLogForAgent } from './request-log.js';
 import type { SincePeriod } from './request-log.js';
 import { createLedger } from '../credit/create-ledger.js';
 import { detectApiKeys, buildDraftCard, KNOWN_API_KEYS } from '../cli/onboarding.js';
@@ -10,6 +10,7 @@ import { AgentBnBError } from '../types/index.js';
 import type { CapabilityCard } from '../types/index.js';
 import { tryVerifyIdentity } from './identity-auth.js';
 import { getHubIdentityByAgentId } from './hub-identities.js';
+import { canonicalizeAgentId, resolveCanonicalIdentity } from '../identity/agent-identity.js';
 
 /** Options for ownerRoutesPlugin. */
 export interface OwnerRoutesOptions {
@@ -41,6 +42,47 @@ export async function ownerRoutesPlugin(
   const { registryDb: db, creditDb, ownerApiKey, ownerName } = options;
 
   /**
+   * Resolves the request's authenticated identity into a canonical agent_id
+   * and a list of legacy owner aliases used for SQL scoping.
+   *
+   * Per-identity dashboard endpoints rely on this to filter rows by a single
+   * canonical key — never by raw `ownerName` (audit P0, findings #3-#5).
+   */
+  function resolveScopingIdentity(authedId: string): {
+    canonicalId: string;
+    ownerAliases: string[];
+  } {
+    const canonicalId = canonicalizeAgentId(db, authedId);
+
+    // Build the list of owner aliases that resolve to the same canonical
+    // identity. We include:
+    //   - The raw authenticated id (in case cards were stored under it directly)
+    //   - The canonical agent_id itself
+    //   - The legacy display name from the agents table (capability_cards
+    //     stored before canonicalization use the display name as `owner`)
+    //   - The static ownerName, only when it matches the authenticated identity
+    //     after canonicalization (Bearer mode uses ownerName as request.agentId)
+    const aliases = new Set<string>();
+    aliases.add(authedId);
+    if (canonicalId !== authedId) aliases.add(canonicalId);
+
+    const resolved = resolveCanonicalIdentity(db, canonicalId);
+    if (resolved.legacy_owner) aliases.add(resolved.legacy_owner);
+
+    if (ownerName) {
+      const ownerCanonical = canonicalizeAgentId(db, ownerName);
+      if (ownerCanonical === canonicalId) {
+        aliases.add(ownerName);
+      }
+    }
+
+    return {
+      canonicalId,
+      ownerAliases: Array.from(aliases),
+    };
+  }
+
+  /**
    * Auth hook: accepts either Bearer token (legacy CLI flow) OR DID auth
    * headers (new Hub flow via registered hub_identities).
    *
@@ -63,8 +105,12 @@ export async function ownerRoutesPlugin(
     // Fall through to DID auth
     const didResult = await tryVerifyIdentity(request, {});
     if (didResult.valid) {
-      // Cross-check: must be a registered Hub identity
-      const hubIdentity = getHubIdentityByAgentId(db, didResult.agentId);
+      // Cross-check: must be a registered Hub identity. Try both the bare
+      // agent_id (CLI convention) and the Hub-prefixed `agent-<hex>` form so
+      // identities registered before/after canonicalization both resolve.
+      const hubIdentity =
+        getHubIdentityByAgentId(db, didResult.agentId) ??
+        getHubIdentityByAgentId(db, `agent-${didResult.agentId}`);
       if (!hubIdentity) {
         return reply.status(401).send({ error: 'Agent not registered on this Hub' });
       }
@@ -91,14 +137,25 @@ export async function ownerRoutesPlugin(
       },
     },
   }, async (request, reply) => {
-    // Use request.agentId set by auth hook (either ownerName for Bearer or agent_id for DID)
-    const identity = request.agentId ?? ownerName;
+    // Use request.agentId set by auth hook (either ownerName for Bearer or
+    // agent_id for DID). Canonicalize so balances are looked up under the
+    // single identity even when the input carried a Hub `agent-` prefix or
+    // legacy display name. The `owner` field in the response keeps the
+    // authenticated label (display name in Bearer mode, canonical agent_id in
+    // DID mode) for backward compatibility with existing CLI consumers.
+    const authedId = request.agentId ?? ownerName;
+    if (!authedId) {
+      return reply.status(401).send({ error: 'Unauthorized' });
+    }
+    const { canonicalId } = resolveScopingIdentity(authedId);
     let balance = 0;
     if (creditDb) {
       const ledger = createLedger({ db: creditDb });
-      balance = await ledger.getBalance(identity);
+      // Lookup balance under the canonical id so credits cannot diverge across
+      // owner aliases (audit P0, finding #5).
+      balance = await ledger.getBalance(canonicalId);
     }
-    return reply.send({ owner: identity, balance });
+    return reply.send({ owner: authedId, balance });
   });
 
   /**
@@ -123,6 +180,10 @@ export async function ownerRoutesPlugin(
       response: { 200: { type: 'object', properties: { items: { type: 'array' }, limit: { type: 'integer' } } } },
     },
   }, async (request, reply) => {
+    const authedId = request.agentId;
+    if (!authedId) {
+      return reply.status(401).send({ error: 'Unauthorized' });
+    }
     const query = request.query as Record<string, string | undefined>;
     const rawLimit = query.limit !== undefined ? parseInt(query.limit, 10) : 10;
     const limit = Math.min(isNaN(rawLimit) || rawLimit < 1 ? 10 : rawLimit, 100);
@@ -131,7 +192,10 @@ export async function ownerRoutesPlugin(
     const since = sinceRaw && validSince.includes(sinceRaw as SincePeriod)
       ? (sinceRaw as SincePeriod)
       : undefined;
-    const items = getRequestLog(db, limit, since);
+    // Per-identity scoping (audit P0, finding #3): only return rows for cards
+    // owned by the authenticated identity, not the global request_log.
+    const { canonicalId, ownerAliases } = resolveScopingIdentity(authedId);
+    const items = getRequestLogForAgent(db, canonicalId, ownerAliases, limit, since);
     return reply.send({ items, limit });
   });
 
@@ -171,6 +235,10 @@ export async function ownerRoutesPlugin(
       },
     },
   }, async (request, reply) => {
+    const authedId = request.agentId;
+    if (!authedId) {
+      return reply.status(401).send({ error: 'Unauthorized' });
+    }
     const { id } = request.params as { id: string };
     const card = getCard(db, id);
     if (!card) {
@@ -178,7 +246,10 @@ export async function ownerRoutesPlugin(
     }
     try {
       const newOnline = !card.availability.online;
-      updateCard(db, id, ownerName, {
+      // Pass authenticated identity to updateCard so its internal
+      // canManageCardByIdentifier check resolves canonical agent_id rather
+      // than the static ownerName (audit P0, finding #5).
+      updateCard(db, id, authedId, {
         availability: { ...card.availability, online: newOnline },
       });
       return reply.send({ ok: true, online: newOnline });
@@ -216,13 +287,18 @@ export async function ownerRoutesPlugin(
       },
     },
   }, async (request, reply) => {
+    const authedId = request.agentId;
+    if (!authedId) {
+      return reply.status(401).send({ error: 'Unauthorized' });
+    }
     const { id } = request.params as { id: string };
     const body = request.body as Partial<Pick<CapabilityCard, 'description' | 'pricing'>>;
     const updates: Partial<CapabilityCard> = {};
     if (body.description !== undefined) updates.description = body.description;
     if (body.pricing !== undefined) updates.pricing = body.pricing;
     try {
-      updateCard(db, id, ownerName, updates);
+      // See comment on /cards/:id/toggle-online — pass authedId, not ownerName.
+      updateCard(db, id, authedId, updates);
       return reply.send({ ok: true });
     } catch (err) {
       if (err instanceof AgentBnBError) {
@@ -319,14 +395,21 @@ export async function ownerRoutesPlugin(
       },
     },
   }, async (request, reply) => {
+    const authedId = request.agentId;
+    if (!authedId) {
+      return reply.status(401).send({ error: 'Unauthorized' });
+    }
     const query = request.query as Record<string, string | undefined>;
     const rawLimit = query.limit !== undefined ? parseInt(query.limit, 10) : 20;
     const limit = Math.min(isNaN(rawLimit) || rawLimit < 1 ? 20 : rawLimit, 100);
     if (!creditDb) {
       return reply.send({ items: [], limit });
     }
+    // Per-identity scoping (audit P0, finding #4): query credits by the
+    // authenticated identity's canonical agent_id, not by the static ownerName.
+    const { canonicalId } = resolveScopingIdentity(authedId);
     const ledger = createLedger({ db: creditDb });
-    const items = await ledger.getHistory(ownerName, limit);
+    const items = await ledger.getHistory(canonicalId, limit);
     return reply.send({ items, limit });
   });
 
@@ -348,13 +431,22 @@ export async function ownerRoutesPlugin(
       },
     },
   }, async (request, reply) => {
+    const authedId = request.agentId;
+    if (!authedId) {
+      return reply.status(401).send({ error: 'Unauthorized' });
+    }
     const { getProviderEvents: getEvents } = await import('./provider-events.js');
     const query = request.query as Record<string, string | undefined>;
     const limit = query.limit ? parseInt(query.limit, 10) : undefined;
+    // Per-identity scoping (audit P0, finding #3): only return events emitted
+    // for the authenticated provider. Legacy events (agent_id = '') are
+    // filtered out by getProviderEvents — they are NOT cross-leaked.
+    const { canonicalId } = resolveScopingIdentity(authedId);
     const events = getEvents(db, {
       limit,
       since: query.since,
       event_type: query.event_type as import('./provider-events.js').ProviderEventType | undefined,
+      agent_id: canonicalId,
     });
     return reply.send({ events });
   });
@@ -373,12 +465,21 @@ export async function ownerRoutesPlugin(
       },
     },
   }, async (request, reply) => {
+    const authedId = request.agentId;
+    if (!authedId) {
+      return reply.status(401).send({ error: 'Unauthorized' });
+    }
     const { getProviderStats: getStats } = await import('./provider-events.js');
     const query = request.query as Record<string, string | undefined>;
     const period = (query.period as '24h' | '7d' | '30d') ?? '7d';
-    const stats = getStats(db, period);
+    // Per-identity scoping (audit P0, finding #5): aggregate only events
+    // emitted under the authenticated provider's canonical id.
+    const { canonicalId } = resolveScopingIdentity(authedId);
+    const stats = getStats(db, period, canonicalId);
 
-    // Compute spending from credit_transactions (outflows: escrow_hold, voucher_hold, network_fee)
+    // Compute spending from credit_transactions (outflows: escrow_hold, voucher_hold, network_fee).
+    // Scope by canonical id, not legacy ownerName, to match the rest of the
+    // dashboard (audit P0, finding #5).
     if (creditDb) {
       const periodMs = { '24h': 86_400_000, '7d': 604_800_000, '30d': 2_592_000_000 }[period];
       const cutoff = new Date(Date.now() - periodMs).toISOString();
@@ -387,7 +488,7 @@ export async function ownerRoutesPlugin(
           SELECT COALESCE(SUM(CASE WHEN amount < 0 AND reason IN ('escrow_hold', 'voucher_hold', 'network_fee') THEN -amount ELSE 0 END), 0) as spent
           FROM credit_transactions
           WHERE owner = ? AND created_at >= ?
-        `).get(ownerName, cutoff) as { spent: number } | undefined;
+        `).get(canonicalId, cutoff) as { spent: number } | undefined;
         stats.total_spending = row?.spent ?? 0;
         stats.net_pnl = stats.total_earnings - stats.total_spending;
       } catch { /* silent — keep zeros */ }

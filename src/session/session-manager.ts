@@ -13,6 +13,7 @@ import {
 import { SessionEscrow } from './session-escrow.js';
 import { emitProviderEvent } from '../registry/provider-events.js';
 import { notifyProviderEvent } from '../gateway/provider-notifier.js';
+import { canonicalizeAgentId } from '../identity/agent-identity.js';
 
 /**
  * Options for constructing a SessionManager.
@@ -132,7 +133,7 @@ export class SessionManager {
     this.startDurationTimer(session.id);
 
     // Emit session.opened event
-    this.emitEvent({
+    this.emitEvent(session, {
       event_type: 'session.opened',
       skill_id: session.skill_id,
       session_id: session.id,
@@ -219,7 +220,7 @@ export class SessionManager {
     });
 
     // Emit session.message event
-    this.emitEvent({
+    this.emitEvent(session, {
       event_type: 'session.message',
       skill_id: session.skill_id,
       session_id: session.id,
@@ -284,11 +285,25 @@ export class SessionManager {
   // Event emission
   // -------------------------------------------------------------------------
 
-  /** Emit a provider event + Telegram notification. Silently no-ops on failure. */
-  private emitEvent(event: Parameters<typeof emitProviderEvent>[1]): void {
+  /**
+   * Emit a provider event + Telegram notification. Silently no-ops on failure.
+   *
+   * Caller must pass the session so the canonical provider agent_id can be
+   * stamped onto the event for per-identity scoping (audit P0). When the
+   * caller supplies an `agent_id` directly on the event, it wins.
+   */
+  private emitEvent(
+    session: Session,
+    event: Parameters<typeof emitProviderEvent>[1],
+  ): void {
     if (!this.registryDb) return;
     try {
-      const emitted = emitProviderEvent(this.registryDb, event);
+      const providerAgentId = event.agent_id
+        ?? canonicalizeAgentId(this.registryDb, session.provider_id);
+      const emitted = emitProviderEvent(this.registryDb, {
+        ...event,
+        agent_id: providerAgentId,
+      });
       notifyProviderEvent(emitted).catch(() => {});
     } catch { /* silent */ }
   }
@@ -338,7 +353,7 @@ export class SessionManager {
         content: m.content.slice(0, 200),
       }));
     }
-    this.emitEvent({
+    this.emitEvent(session, {
       event_type: isFailed ? 'session.failed' : 'session.ended',
       skill_id: session.skill_id,
       session_id: session.id,

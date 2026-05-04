@@ -194,6 +194,78 @@ export const registryMigrations: Migration[] = [
       `);
     },
   },
+  // -- provider_events: per-identity scoping (audit P0, findings #3-#5) --
+  {
+    key: 'provider_events_add_agent_id',
+    description: 'Add agent_id column + index to provider_events for per-identity scoping (audit P0)',
+    up: (db) => {
+      // Ensure the table exists; ensureProviderEventsTable runs eagerly elsewhere
+      // but the migration runner may execute before any route plugin touches it.
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS provider_events (
+          id TEXT PRIMARY KEY,
+          event_type TEXT NOT NULL,
+          skill_id TEXT,
+          session_id TEXT,
+          requester TEXT,
+          credits INTEGER DEFAULT 0,
+          duration_ms INTEGER DEFAULT 0,
+          metadata TEXT,
+          created_at TEXT NOT NULL
+        );
+      `);
+      addColumnIfNotExists(db, 'provider_events', 'agent_id', "TEXT NOT NULL DEFAULT ''");
+      db.exec(`
+        CREATE INDEX IF NOT EXISTS idx_provider_events_agent_id
+          ON provider_events(agent_id, created_at DESC);
+      `);
+
+      // Best-effort backfill: events that match a known card via skill_id can be
+      // attributed to that card's owner -> canonical agent_id. Rows where the
+      // mapping is unclear stay with empty string (safe — they will be filtered
+      // out, not leaked across identities).
+      //
+      // Skip the backfill when capability_cards or agents tables are missing
+      // (fresh test DBs, or DBs that have never registered an agent yet).
+      const hasCards = db
+        .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'capability_cards'")
+        .get() as { name: string } | undefined;
+      const hasAgents = db
+        .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'agents'")
+        .get() as { name: string } | undefined;
+
+      if (hasCards && hasAgents) {
+        db.exec(`
+          UPDATE provider_events
+          SET agent_id = (
+            SELECT COALESCE(a.agent_id, c.owner)
+            FROM capability_cards c
+            LEFT JOIN agents a ON a.legacy_owner = c.owner OR a.agent_id = c.owner
+            WHERE c.id = provider_events.skill_id
+            LIMIT 1
+          )
+          WHERE agent_id = ''
+            AND skill_id IS NOT NULL
+            AND EXISTS (SELECT 1 FROM capability_cards c WHERE c.id = provider_events.skill_id);
+        `);
+      } else if (hasCards) {
+        // No agents table — fall back to using card.owner directly. This is the
+        // pre-V8 stack; canonicalization happens at query time via the route layer.
+        db.exec(`
+          UPDATE provider_events
+          SET agent_id = (
+            SELECT c.owner
+            FROM capability_cards c
+            WHERE c.id = provider_events.skill_id
+            LIMIT 1
+          )
+          WHERE agent_id = ''
+            AND skill_id IS NOT NULL
+            AND EXISTS (SELECT 1 FROM capability_cards c WHERE c.id = provider_events.skill_id);
+        `);
+      }
+    },
+  },
   {
     key: 'session_files_create',
     description: 'Create session_files table for v10 rental file uploads',

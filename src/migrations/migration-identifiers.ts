@@ -18,6 +18,7 @@ export const ALLOWED_MIGRATION_TABLES: ReadonlySet<string> = new Set([
   'credit_escrow',
   'credit_grants',
   'request_log',
+  'provider_events',
 ]);
 
 /** Columns that may be added by `addColumnIfNotExists`. */
@@ -31,6 +32,7 @@ export const ALLOWED_MIGRATION_COLUMNS: ReadonlySet<string> = new Set([
   'team_id',
   'role',
   'capability_type',
+  'agent_id',
 ]);
 
 /**

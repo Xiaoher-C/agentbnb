@@ -29,6 +29,10 @@ export {
   listAgentsByOperator,
   updateAgentRecord,
   resolveIdentifier,
+  resolveCanonicalIdentity,
+  canonicalizeAgentId,
+  sameAgentIdentity,
+  type CanonicalIdentity,
 } from './agent-identity.js';
 
 // Delegation tokens (V8 Phase 3)
