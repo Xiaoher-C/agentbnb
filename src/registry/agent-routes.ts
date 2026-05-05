@@ -499,7 +499,7 @@ export async function agentRoutesPlugin(
       try {
         const placeholders = buildSqlPlaceholders(cardIds.length);
         const row = db
-          .prepare<[], { total: number; clean: number }>(
+          .prepare<string[], { total: number; clean: number }>(
             `SELECT
                COUNT(*) as total,
                SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END) as clean
