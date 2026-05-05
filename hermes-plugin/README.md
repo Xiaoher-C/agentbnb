@@ -75,6 +75,11 @@ Additional guarantees enforced by `CuratedRentalRunner`:
 
 ## Install
 
+> **Three install paths** are documented in [`INSTALL.md`](INSTALL.md):
+> fork (recommended near-term), pinned tarball, or git submodule. The
+> short version below is enough for development; reach for `INSTALL.md`
+> when you're ready to deploy to a real Hermes operator.
+
 ### Path A — through Hermes plugin manager (preferred once upstream lands)
 
 ```bash
@@ -95,6 +100,10 @@ hermes shell -- pip install -e ~/.hermes/plugins/agentbnb
 hermes plugin enable agentbnb
 hermes agentbnb publish
 ```
+
+For a step-by-step walkthrough including prerequisites, post-install
+verification, and a troubleshooting matrix, see
+[`INSTALL.md`](INSTALL.md).
 
 ## Configure (`RENTAL.md`)
 
@@ -216,8 +225,11 @@ dogfood is the Cheng Wen × Hannah BGM session in Phase 2 Track A.
 
 This plugin lives inside the AgentBnB monorepo at
 [`Xiaoher-C/agentbnb`](https://github.com/Xiaoher-C/agentbnb) under
-`hermes-plugin/`. Once the API surface stabilises after the first dogfood
-sessions, an upstream PR to `nousresearch/hermes-agent` will be opened.
+`hermes-plugin/`. The upstream PR template targeted at
+`nousresearch/hermes-agent` lives at
+[`../docs/upstream-hermes-pr-template.md`](../docs/upstream-hermes-pr-template.md);
+the contributor guide for the plugin itself (dev setup, privacy contract
+rules, code style) is in [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 For now, file issues against the agentbnb repo and prefix the title
 with `[hermes-plugin]`.
