@@ -21,6 +21,10 @@ export {
 } from './identity.js';
 
 // Agent records (V8 agents table)
+// Note: agent-identity.ts has its own canonicalizeAgentId(db, id) that is
+// DB-aware (does alias lookup). It is NOT re-exported here to avoid
+// colliding with the simpler string-only canonicalizeAgentId from identity.ts.
+// Callers that need the DB-aware variant import from './agent-identity.js' directly.
 export {
   type AgentRecord,
   ensureAgentsTable,
@@ -31,7 +35,6 @@ export {
   updateAgentRecord,
   resolveIdentifier,
   resolveCanonicalIdentity,
-  canonicalizeAgentId,
   sameAgentIdentity,
   type CanonicalIdentity,
 } from './agent-identity.js';

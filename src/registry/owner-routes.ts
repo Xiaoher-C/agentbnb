@@ -134,6 +134,7 @@ export async function ownerRoutesPlugin(
       security: [{ bearerAuth: [] }],
       response: {
         200: { type: 'object', properties: { owner: { type: 'string' }, balance: { type: 'number' } } },
+        401: { type: 'object', properties: { error: { type: 'string' } } },
       },
     },
   }, async (request, reply) => {
@@ -177,7 +178,10 @@ export async function ownerRoutesPlugin(
           since: { type: 'string', enum: ['24h', '7d', '30d'], description: 'Time window' },
         },
       },
-      response: { 200: { type: 'object', properties: { items: { type: 'array' }, limit: { type: 'integer' } } } },
+      response: {
+        200: { type: 'object', properties: { items: { type: 'array' }, limit: { type: 'integer' } } },
+        401: { type: 'object', properties: { error: { type: 'string' } } },
+      },
     },
   }, async (request, reply) => {
     const authedId = request.agentId;
@@ -230,6 +234,7 @@ export async function ownerRoutesPlugin(
       params: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] },
       response: {
         200: { type: 'object', properties: { ok: { type: 'boolean' }, online: { type: 'boolean' } } },
+        401: { type: 'object', properties: { error: { type: 'string' } } },
         403: { type: 'object', properties: { error: { type: 'string' } } },
         404: { type: 'object', properties: { error: { type: 'string' } } },
       },
@@ -282,6 +287,7 @@ export async function ownerRoutesPlugin(
       },
       response: {
         200: { type: 'object', properties: { ok: { type: 'boolean' } } },
+        401: { type: 'object', properties: { error: { type: 'string' } } },
         403: { type: 'object', properties: { error: { type: 'string' } } },
         404: { type: 'object', properties: { error: { type: 'string' } } },
       },
@@ -392,6 +398,7 @@ export async function ownerRoutesPlugin(
       },
       response: {
         200: { type: 'object', properties: { items: { type: 'array' }, limit: { type: 'integer' } } },
+        401: { type: 'object', properties: { error: { type: 'string' } } },
       },
     },
   }, async (request, reply) => {
