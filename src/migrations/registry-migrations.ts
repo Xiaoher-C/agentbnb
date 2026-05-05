@@ -93,4 +93,127 @@ export const registryMigrations: Migration[] = [
     description: 'Add capability_type column to request_log for capability-first team context',
     up: (db) => addColumnIfNotExists(db, 'request_log', 'capability_type', 'TEXT'),
   },
+
+  // -- v10 rental session metadata (ADR-022 / ADR-023 / ADR-024) --
+  {
+    key: 'rental_sessions_create',
+    description: 'Create rental_sessions table for v10 Agent Maturity Rental sessions',
+    up: (db) => {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS rental_sessions (
+          id TEXT PRIMARY KEY,
+          renter_did TEXT NOT NULL,
+          owner_did TEXT NOT NULL,
+          agent_id TEXT NOT NULL,
+          card_id TEXT,
+          status TEXT NOT NULL CHECK(status IN ('open', 'active', 'paused', 'closing', 'settled', 'closed')),
+          escrow_id TEXT,
+          duration_min INTEGER NOT NULL,
+          budget_credits INTEGER NOT NULL,
+          spent_credits INTEGER NOT NULL DEFAULT 0,
+          current_mode TEXT NOT NULL DEFAULT 'direct' CHECK(current_mode IN ('direct', 'proxy')),
+          created_at TEXT NOT NULL,
+          started_at TEXT,
+          ended_at TEXT,
+          end_reason TEXT,
+          outcome_json TEXT,
+          share_token TEXT UNIQUE
+        );
+        CREATE INDEX IF NOT EXISTS rental_sessions_renter_idx
+          ON rental_sessions (renter_did, created_at DESC);
+        CREATE INDEX IF NOT EXISTS rental_sessions_owner_idx
+          ON rental_sessions (owner_did, created_at DESC);
+        CREATE INDEX IF NOT EXISTS rental_sessions_share_token_idx
+          ON rental_sessions (share_token);
+      `);
+    },
+  },
+  {
+    key: 'rental_ratings_create',
+    description: 'Create rental_ratings table for v10 renter ratings',
+    up: (db) => {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS rental_ratings (
+          id TEXT PRIMARY KEY,
+          session_id TEXT NOT NULL,
+          rater_did TEXT NOT NULL,
+          rated_agent_id TEXT NOT NULL,
+          stars INTEGER NOT NULL CHECK(stars BETWEEN 1 AND 5),
+          comment TEXT NOT NULL DEFAULT '',
+          created_at TEXT NOT NULL,
+          FOREIGN KEY (session_id) REFERENCES rental_sessions (id) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS rental_ratings_agent_idx
+          ON rental_ratings (rated_agent_id, created_at DESC);
+        CREATE INDEX IF NOT EXISTS rental_ratings_session_idx
+          ON rental_ratings (session_id);
+      `);
+    },
+  },
+  {
+    key: 'rental_threads_create',
+    description: 'Create rental_threads table for v10 task threads within sessions',
+    up: (db) => {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS rental_threads (
+          id TEXT PRIMARY KEY,
+          session_id TEXT NOT NULL,
+          title TEXT NOT NULL,
+          description TEXT NOT NULL DEFAULT '',
+          status TEXT NOT NULL DEFAULT 'in_progress' CHECK(status IN ('in_progress', 'completed')),
+          created_at TEXT NOT NULL,
+          completed_at TEXT,
+          FOREIGN KEY (session_id) REFERENCES rental_sessions (id) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS rental_threads_session_idx
+          ON rental_threads (session_id, created_at);
+      `);
+    },
+  },
+  {
+    key: 'session_messages_create',
+    description: 'Create session_messages table for paginated v10 rental message reads',
+    up: (db) => {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS session_messages (
+          id TEXT PRIMARY KEY,
+          session_id TEXT NOT NULL,
+          thread_id TEXT,
+          sender_did TEXT NOT NULL,
+          sender_role TEXT NOT NULL,
+          content TEXT NOT NULL,
+          attachments TEXT,
+          is_human_intervention INTEGER NOT NULL DEFAULT 0,
+          created_at INTEGER NOT NULL,
+          FOREIGN KEY (session_id) REFERENCES rental_sessions (id) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS session_messages_session_idx
+          ON session_messages (session_id, created_at, id);
+        CREATE INDEX IF NOT EXISTS session_messages_thread_idx
+          ON session_messages (thread_id, created_at);
+      `);
+    },
+  },
+  {
+    key: 'session_files_create',
+    description: 'Create session_files table for v10 rental file uploads',
+    up: (db) => {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS session_files (
+          id TEXT PRIMARY KEY,
+          session_id TEXT NOT NULL,
+          thread_id TEXT,
+          uploader_did TEXT NOT NULL,
+          filename TEXT NOT NULL,
+          size_bytes INTEGER NOT NULL,
+          mime_type TEXT NOT NULL,
+          storage_key TEXT NOT NULL,
+          created_at TEXT NOT NULL,
+          FOREIGN KEY (session_id) REFERENCES rental_sessions (id) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS session_files_session_idx
+          ON session_files (session_id, created_at);
+      `);
+    },
+  },
 ];

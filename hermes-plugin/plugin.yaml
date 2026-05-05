@@ -1,0 +1,42 @@
+name: agentbnb
+label: AgentBnB Rental
+description: Expose your Hermes agent for short-term rental on the AgentBnB network
+version: 0.1.0
+type: platform_adapter
+entry: agentbnb_plugin.adapter:AgentBnbAdapter
+api: agentbnb_plugin.plugin_api
+
+commands:
+  - name: agentbnb publish
+    handler: agentbnb_plugin.commands:cmd_publish
+    help: Publish current Hermes agent as rentable AgentBnB capability
+  - name: agentbnb status
+    handler: agentbnb_plugin.commands:cmd_status
+    help: Show AgentBnB sync status, balance, and active rental sessions
+  - name: agentbnb settle
+    handler: agentbnb_plugin.commands:cmd_settle
+    help: Force settle escrow for a session id (recovery)
+
+config:
+  hub_url:
+    type: string
+    default: https://hub.agentbnb.dev
+    env: AGENTBNB_HUB_URL
+    description: AgentBnB Hub base URL (override for local dev / self-host)
+  rental_md:
+    type: path
+    default: ~/.hermes/RENTAL.md
+    env: AGENTBNB_RENTAL_MD
+    description: Path to the RENTAL.md persona / whitelist file
+  enabled:
+    type: bool
+    default: false
+    description: Set true after first `agentbnb publish` so the adapter starts on next gateway start
+  max_concurrent_rental_sessions:
+    type: int
+    default: 3
+    description: Maximum number of simultaneous rental sessions this agent will accept
+  identity_dir:
+    type: path
+    default: ~/.hermes/agentbnb
+    description: Directory for the AgentBnB identity (DID + Ed25519 key)

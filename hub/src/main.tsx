@@ -33,6 +33,8 @@ import CreditPolicyPage from './pages/CreditPolicyPage.js';
 import FleetConsolePage from './pages/FleetConsolePage.js';
 import ProviderDashboardPage from './pages/ProviderDashboardPage.js';
 import SignupPage from './pages/SignupPage.js';
+import SessionRoom from './pages/SessionRoom.js';
+import OutcomePage from './pages/OutcomePage.js';
 import SkillsInspectorRoute from './routes/SkillsInspector.js';
 import WorkNetworkRoute from './routes/WorkNetwork.js';
 import type { AppOutletContext } from './types.js';
@@ -95,6 +97,9 @@ const router = createHashRouter([
       { path: 'dashboard', element: <ProviderDashboardPage /> },
       { path: 'share', element: <SharePageWrapper /> },
       { path: 'myagent', element: <MyAgentWrapper /> },
+      // v10 rental session routes (ADR-022 / ADR-023)
+      { path: 's/:id', element: <SessionRoom /> },
+      { path: 'o/:share_token', element: <OutcomePage /> },
       { path: 'skills-inspector', element: <SkillsInspectorRoute /> },
       { path: 'work-network', element: <WorkNetworkRoute /> },
       {

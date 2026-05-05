@@ -20,6 +20,7 @@ import { identityRoutesPlugin } from './identity-routes.js';
 import { cardRoutesPlugin } from './card-routes.js';
 import { ownerRoutesPlugin } from './owner-routes.js';
 import { skillRoutesPlugin } from './skill-routes.js';
+import { sessionRoutesPlugin } from './session-routes.js';
 import feedbackPlugin from '../feedback/api.js';
 import evolutionPlugin from '../evolution/api.js';
 
@@ -266,6 +267,9 @@ export function createRegistryServer(opts: RegistryServerOptions): RegistryServe
 
   // Skill Inspector v0.1 — read-only SKILL.md parser + risk overlay (skill-routes.ts)
   void api.register(skillRoutesPlugin, { registryDb: db });
+
+  // v10 rental session lifecycle (ADR-022 / ADR-023 / ADR-024) — session-routes.ts
+  void api.register(sessionRoutesPlugin, { registryDb: db });
 
   }); // end of API routes plugin
 

@@ -1,0 +1,64 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "agentbnb-hermes-plugin"
+version = "0.1.0"
+description = "AgentBnB rental session plugin for the Hermes agent runtime — exposes a Hermes agent as rentable on the AgentBnB network"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+authors = [
+  { name = "Cheng Wen Chen" },
+]
+keywords = ["hermes", "agentbnb", "agent", "rental", "p2p", "ai"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Developers",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+]
+dependencies = [
+  "httpx>=0.27",
+  "websockets>=12",
+  "pynacl>=1.5",
+  "pydantic>=2.6",
+  "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0",
+  "pytest-asyncio>=0.24",
+  "pytest-httpx>=0.30",
+  "mypy>=1.10",
+  "ruff>=0.5",
+]
+
+[project.scripts]
+# Bound by Hermes when the plugin is installed; standalone CLI for testing.
+agentbnb-plugin = "agentbnb_plugin.commands:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["agentbnb_plugin*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+addopts = "-ra --strict-markers"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "UP", "B", "RUF"]
+ignore = ["E501"]  # handled by formatter
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+warn_return_any = true
+warn_unused_configs = true
