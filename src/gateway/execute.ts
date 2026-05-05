@@ -10,6 +10,7 @@ import type { SkillExecutor, ProgressCallback } from '../skills/executor.js';
 import { syncCreditsFromRegistry } from '../credit/registry-sync.js';
 import { emitProviderEvent } from '../registry/provider-events.js';
 import { notifyProviderEvent } from './provider-notifier.js';
+import { canonicalizeAgentId } from '../identity/agent-identity.js';
 import { resolveTargetCapability } from './resolve-target-capability.js';
 import type { ResolvedTargetCapability } from './resolve-target-capability.js';
 
@@ -190,6 +191,13 @@ export async function executeCapabilityRequest(opts: ExecuteRequestOptions): Pro
     return { success: false, error: { code: -32602, message: `Card not found: ${cardId}` } };
   }
 
+  // Resolve canonical provider identity once so every emitted event carries
+  // the same agent_id. Used for per-identity scoping on owner dashboards.
+  const providerAgentId = canonicalizeAgentId(
+    registryDb,
+    (card as unknown as { agent_id?: string }).agent_id ?? card.owner,
+  );
+
   // Self-request guard: requester should not be the card owner.
   // This usually indicates AGENTBNB_DIR is not set — the requester is accidentally
   // using the provider's identity instead of their own.
@@ -344,7 +352,7 @@ export async function executeCapabilityRequest(opts: ExecuteRequestOptions): Pro
   if (!isWhitelisted) {
     if (providerBlacklist.includes(requester)) {
       if (escrowId) releaseEscrow(creditDb, escrowId);
-      try { emitProviderEvent(registryDb, { event_type: 'skill.rejected', skill_id: resolvedSkillId ?? null, session_id: null, requester, credits: 0, duration_ms: 0, metadata: { reason: 'blacklisted' } }); } catch { /* silent */ }
+      try { emitProviderEvent(registryDb, { event_type: 'skill.rejected', skill_id: resolvedSkillId ?? null, session_id: null, requester, credits: 0, duration_ms: 0, metadata: { reason: 'blacklisted' }, agent_id: providerAgentId }); } catch { /* silent */ }
       return { success: false, error: { code: -32097, message: 'Requester is blocked by provider' } };
     }
   }
@@ -356,7 +364,7 @@ export async function executeCapabilityRequest(opts: ExecuteRequestOptions): Pro
       const todayCount = countTodayExecutions(registryDb);
       if (todayCount >= providerDailyLimit) {
         if (escrowId) releaseEscrow(creditDb, escrowId);
-        try { emitProviderEvent(registryDb, { event_type: 'skill.rejected', skill_id: resolvedSkillId ?? null, session_id: null, requester, credits: 0, duration_ms: 0, metadata: { reason: 'daily_limit', limit: providerDailyLimit } }); } catch { /* silent */ }
+        try { emitProviderEvent(registryDb, { event_type: 'skill.rejected', skill_id: resolvedSkillId ?? null, session_id: null, requester, credits: 0, duration_ms: 0, metadata: { reason: 'daily_limit', limit: providerDailyLimit }, agent_id: providerAgentId }); } catch { /* silent */ }
         return {
           success: false,
           error: { code: -32099, message: `Provider daily execution limit reached (${providerDailyLimit}/day)` },
@@ -366,7 +374,7 @@ export async function executeCapabilityRequest(opts: ExecuteRequestOptions): Pro
   }
 
   // Emit skill.received event + Telegram notification
-  const receivedEvent = { event_type: 'skill.received' as const, skill_id: resolvedSkillId ?? null, session_id: null, requester, credits: creditsNeeded, duration_ms: 0, metadata: { gate_mode: providerGate } };
+  const receivedEvent = { event_type: 'skill.received' as const, skill_id: resolvedSkillId ?? null, session_id: null, requester, credits: creditsNeeded, duration_ms: 0, metadata: { gate_mode: providerGate }, agent_id: providerAgentId };
   try {
     const emitted = emitProviderEvent(registryDb, receivedEvent);
     notifyProviderEvent(emitted, creditDb, card.owner).catch(() => {});
@@ -406,7 +414,7 @@ export async function executeCapabilityRequest(opts: ExecuteRequestOptions): Pro
 
     // Emit skill.failed event + Telegram notification
     try {
-      const emitted = emitProviderEvent(registryDb, { event_type: 'skill.failed', skill_id: resolvedSkillId ?? null, session_id: null, requester, credits: 0, duration_ms: latencyMs, metadata: { failure_reason: failureReason, error: message } });
+      const emitted = emitProviderEvent(registryDb, { event_type: 'skill.failed', skill_id: resolvedSkillId ?? null, session_id: null, requester, credits: 0, duration_ms: latencyMs, metadata: { failure_reason: failureReason, error: message }, agent_id: providerAgentId });
       notifyProviderEvent(emitted, creditDb, card.owner).catch(() => {});
     } catch { /* silent */ }
 
@@ -435,7 +443,7 @@ export async function executeCapabilityRequest(opts: ExecuteRequestOptions): Pro
 
     // Emit skill.executed event + Telegram notification
     try {
-      const emitted = emitProviderEvent(registryDb, { event_type: 'skill.executed', skill_id: resolvedSkillId ?? null, session_id: null, requester, credits: creditsNeeded, duration_ms: latencyMs, metadata: null });
+      const emitted = emitProviderEvent(registryDb, { event_type: 'skill.executed', skill_id: resolvedSkillId ?? null, session_id: null, requester, credits: creditsNeeded, duration_ms: latencyMs, metadata: null, agent_id: providerAgentId });
       notifyProviderEvent(emitted, creditDb, card.owner).catch(() => {});
     } catch { /* silent */ }
 

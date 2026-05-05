@@ -300,6 +300,73 @@ export function countTodayExecutions(db: Database.Database): number {
   return row.cnt;
 }
 
+/**
+ * Returns request log entries scoped to a specific provider identity.
+ *
+ * Filters request_log to entries for capability_cards owned by the given
+ * agent. Caller MUST pass the canonical agent_id (post-canonicalization) plus
+ * any owner aliases (legacy display name) so cards stored under either form
+ * are resolved correctly. Display-name aliases are matched via JOIN against
+ * the agents table.
+ *
+ * Used by the owner dashboard `/requests` endpoint to enforce per-identity
+ * scoping (audit P0, finding #3). Returns an empty array when `agentId` is
+ * empty.
+ *
+ * @param db - Open registry database instance.
+ * @param agentId - Canonical provider agent_id to scope to.
+ * @param ownerAliases - Optional list of legacy owner display names that
+ *   resolve to the same identity. The caller is responsible for keeping this
+ *   list in sync with the agents table (typically populated from
+ *   `lookupAgent`).
+ * @param limit - Maximum number of entries to return. Defaults to 10.
+ * @param since - Optional time window filter.
+ * @returns Array of RequestLogEntry rows owned by the agent, newest first.
+ */
+export function getRequestLogForAgent(
+  db: Database.Database,
+  agentId: string,
+  ownerAliases: readonly string[] = [],
+  limit = 10,
+  since?: SincePeriod,
+): RequestLogEntry[] {
+  if (!agentId) return [];
+
+  // Build the set of owner identifiers we will accept. Always include the
+  // canonical id; include any aliases (legacy display names) the caller has
+  // supplied. Deduplicated to avoid SQL parameter bloat.
+  const ownerSet = new Set<string>();
+  ownerSet.add(agentId);
+  for (const alias of ownerAliases) {
+    if (alias && alias.length > 0) ownerSet.add(alias);
+  }
+  const owners = Array.from(ownerSet);
+  const placeholders = owners.map(() => '?').join(', ');
+
+  const params: Array<string | number> = [...owners];
+
+  let timeClause = '';
+  if (since !== undefined) {
+    timeClause = 'AND rl.created_at >= ?';
+    params.push(new Date(Date.now() - SINCE_MS[since]).toISOString());
+  }
+
+  params.push(limit);
+
+  const stmt = db.prepare(`
+    SELECT rl.id, rl.card_id, rl.card_name, rl.requester, rl.status, rl.latency_ms,
+           rl.credits_charged, rl.created_at, rl.skill_id, rl.action_type,
+           rl.tier_invoked, rl.failure_reason, rl.team_id, rl.role, rl.capability_type
+    FROM request_log rl
+    INNER JOIN capability_cards cc ON cc.id = rl.card_id
+    WHERE cc.owner IN (${placeholders})
+      ${timeClause}
+    ORDER BY rl.created_at DESC
+    LIMIT ?
+  `);
+  return stmt.all(...params) as RequestLogEntry[];
+}
+
 export function getRequestLog(
   db: Database.Database,
   limit = 10,

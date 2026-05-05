@@ -331,3 +331,62 @@ export function sameAgentIdentity(
 
   return left === right;
 }
+
+/**
+ * Canonicalizes any identifier (Hub-prefixed `agent-<hex>`, bare `<hex>`, or legacy
+ * owner display name) into a single canonical identity string.
+ *
+ * Resolution order:
+ *   1. Strip the optional `agent-` prefix used by Hub-registered DIDs so that
+ *      `agent-abc123` and `abc123` always resolve to the same record.
+ *   2. Look up the resulting string in the agents table by agent_id, then by
+ *      legacy_owner. If found, return the canonical agent_id.
+ *   3. Otherwise return the prefix-stripped input (best-effort fallback for
+ *      tests / unregistered agents). Never returns an empty string.
+ *
+ * Use this in every per-identity scoping query so we never compare the same
+ * agent across the prefix split, and so we never fall back to display-name
+ * aliases (which can collide across agents).
+ *
+ * @param db - Database with the `agents` table (registry or credit DB).
+ * @param identifier - Raw identifier from request.agentId / ownerName / etc.
+ * @returns Canonical identity string. Empty string only if input is empty.
+ */
+export function canonicalizeAgentId(
+  db: Database.Database,
+  identifier: string,
+): string {
+  if (!identifier) return '';
+
+  // Strip the Hub `agent-` prefix so a single-write registration (which stores
+  // `agent-<hex>`) and a CLI-derived id (which stores bare `<hex>`) collapse
+  // to the same canonical key.
+  const stripped = identifier.startsWith('agent-')
+    ? identifier.slice('agent-'.length)
+    : identifier;
+
+  // Defensive: if the supplied DB handle is not a real better-sqlite3 instance
+  // (e.g. a partial test mock), fall back to the prefix-stripped value rather
+  // than crashing. Production / route-level callers always pass a real DB.
+  if (typeof (db as unknown as { exec?: unknown }).exec !== 'function') {
+    return stripped;
+  }
+
+  ensureAgentsTable(db);
+
+  const resolved = resolveCanonicalIdentity(db, stripped);
+  if (resolved.resolved) {
+    return resolved.agent_id;
+  }
+
+  // Also try the original (un-stripped) form in case someone registered an
+  // agent whose canonical id literally starts with `agent-` for some reason.
+  if (stripped !== identifier) {
+    const originalResolved = resolveCanonicalIdentity(db, identifier);
+    if (originalResolved.resolved) {
+      return originalResolved.agent_id;
+    }
+  }
+
+  return stripped;
+}

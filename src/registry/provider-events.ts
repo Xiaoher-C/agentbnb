@@ -15,20 +15,43 @@ const PROVIDER_EVENTS_SCHEMA = `
     credits INTEGER DEFAULT 0,
     duration_ms INTEGER DEFAULT 0,
     metadata TEXT,
-    created_at TEXT NOT NULL
+    created_at TEXT NOT NULL,
+    agent_id TEXT NOT NULL DEFAULT ''
   );
 
   CREATE INDEX IF NOT EXISTS idx_provider_events_type
     ON provider_events(event_type);
   CREATE INDEX IF NOT EXISTS idx_provider_events_created
     ON provider_events(created_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_provider_events_agent_id
+    ON provider_events(agent_id, created_at DESC);
 `;
 
 /**
  * Creates the provider_events table if it does not exist.
+ *
+ * Idempotent: safe to call after the registry migration runner has already
+ * added the agent_id column on existing databases. Tests that construct a
+ * provider_events table directly via this function get the new schema with
+ * the column already present.
  */
 export function ensureProviderEventsTable(db: Database.Database): void {
   db.exec(PROVIDER_EVENTS_SCHEMA);
+
+  // Migration safety: production DBs created before the agent_id column may
+  // already have the table without the column. Add it idempotently.
+  try {
+    const cols = db.prepare("PRAGMA table_info(provider_events)").all() as Array<{ name: string }>;
+    if (!cols.some((c) => c.name === 'agent_id')) {
+      db.exec("ALTER TABLE provider_events ADD COLUMN agent_id TEXT NOT NULL DEFAULT ''");
+      db.exec(`
+        CREATE INDEX IF NOT EXISTS idx_provider_events_agent_id
+          ON provider_events(agent_id, created_at DESC);
+      `);
+    }
+  } catch {
+    // PRAGMA fail is non-fatal — schema CREATE above already enforces the column.
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -58,10 +81,29 @@ export interface ProviderEvent {
   /** JSON-serialized metadata blob. Future-proof for Kizuna and other consumers. */
   metadata: Record<string, unknown> | null;
   created_at: string;
+  /**
+   * Canonical agent_id of the PROVIDER (event owner). Used to filter
+   * /me/events and /me/stats per-identity (audit P0, findings #3-#5).
+   *
+   * Stored as empty string for legacy events written before the column
+   * existed. Empty-string events are NEVER returned by per-identity queries —
+   * they are only visible via internal audit reads.
+   */
+  agent_id: string;
 }
 
-/** Input for emitting a new event (id and created_at are auto-generated). */
-export type EmitEventInput = Omit<ProviderEvent, 'id' | 'created_at'>;
+/**
+ * Input for emitting a new event (id and created_at are auto-generated).
+ *
+ * `agent_id` is optional in the input type for backward compatibility — when
+ * omitted it is stored as the empty string and the event is excluded from
+ * per-identity dashboard queries. NEW production callers MUST always pass
+ * the canonical provider agent_id; only legacy / test callers may rely on
+ * the empty default.
+ */
+export type EmitEventInput = Omit<ProviderEvent, 'id' | 'created_at' | 'agent_id'> & {
+  agent_id?: string;
+};
 
 /** Aggregated provider stats for a time period. */
 export interface ProviderStats {
@@ -94,13 +136,28 @@ export function emitProviderEvent(db: Database.Database, event: EmitEventInput):
   const id = randomUUID();
   const created_at = new Date().toISOString();
   const metadataJson = event.metadata ? JSON.stringify(event.metadata) : null;
+  // agent_id is required for per-identity scoping but defaults to '' for
+  // backward compatibility with legacy callers that have not yet been threaded
+  // through the canonicalize -> emit pipeline.
+  const agentId = event.agent_id ?? '';
 
   db.prepare(`
-    INSERT INTO provider_events (id, event_type, skill_id, session_id, requester, credits, duration_ms, metadata, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(id, event.event_type, event.skill_id, event.session_id, event.requester, event.credits, event.duration_ms, metadataJson, created_at);
+    INSERT INTO provider_events (id, event_type, skill_id, session_id, requester, credits, duration_ms, metadata, created_at, agent_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    id,
+    event.event_type,
+    event.skill_id,
+    event.session_id,
+    event.requester,
+    event.credits,
+    event.duration_ms,
+    metadataJson,
+    created_at,
+    agentId,
+  );
 
-  return { ...event, id, created_at };
+  return { ...event, id, created_at, agent_id: agentId };
 }
 
 // ---------------------------------------------------------------------------
@@ -112,6 +169,16 @@ export interface GetEventsOptions {
   limit?: number;
   since?: string;
   event_type?: ProviderEventType;
+  /**
+   * Canonical agent_id of the provider whose events should be returned.
+   *
+   * REQUIRED for per-identity scoping after audit P0 (findings #3-#5). When
+   * provided, the query filters by `agent_id = ?` AND skips legacy rows whose
+   * agent_id is the empty string. When omitted, the query returns ALL events
+   * regardless of provider — preserve this only for internal admin audit
+   * reads, never for owner dashboards.
+   */
+  agent_id?: string;
 }
 
 /**
@@ -125,6 +192,13 @@ export function getProviderEvents(db: Database.Database, opts: GetEventsOptions 
   const limit = Math.min(opts.limit ?? 50, 200);
   const conditions: string[] = [];
   const params: unknown[] = [];
+
+  if (opts.agent_id !== undefined) {
+    // Empty agent_id is filtered out so legacy unscoped rows never leak across
+    // identities. A caller passing an empty string still gets nothing.
+    conditions.push("agent_id = ? AND agent_id <> ''");
+    params.push(opts.agent_id);
+  }
 
   if (opts.since) {
     conditions.push('created_at > ?');
@@ -159,10 +233,22 @@ const PERIOD_MS: Record<string, number> = {
  *
  * @param db - Registry database instance.
  * @param period - Time window: '24h', '7d', or '30d'.
+ * @param agentId - REQUIRED canonical agent_id for per-identity scoping (audit
+ *   P0). When omitted, the function aggregates across ALL providers — keep
+ *   that path for internal admin reads only, never for owner dashboards.
  * @returns Aggregated stats.
  */
-export function getProviderStats(db: Database.Database, period: '24h' | '7d' | '30d' = '7d'): ProviderStats {
+export function getProviderStats(
+  db: Database.Database,
+  period: '24h' | '7d' | '30d' = '7d',
+  agentId?: string,
+): ProviderStats {
   const cutoff = new Date(Date.now() - (PERIOD_MS[period] ?? PERIOD_MS['7d']!)).toISOString();
+
+  // Per-identity scoping clause — applied to every aggregation query so the
+  // owner dashboard never sees totals from a different identity.
+  const identityClause = agentId !== undefined ? "AND agent_id = ? AND agent_id <> ''" : '';
+  const identityParam: unknown[] = agentId !== undefined ? [agentId] : [];
 
   // Earnings + execution counts
   const summary = db.prepare(`
@@ -172,51 +258,53 @@ export function getProviderStats(db: Database.Database, period: '24h' | '7d' | '
       COUNT(CASE WHEN event_type = 'skill.executed' THEN 1 END) as success_count,
       COUNT(CASE WHEN event_type = 'skill.failed' THEN 1 END) as failure_count
     FROM provider_events
-    WHERE created_at >= ?
-  `).get(cutoff) as { total_earnings: number; total_executions: number; success_count: number; failure_count: number };
+    WHERE created_at >= ? ${identityClause}
+  `).get(cutoff, ...identityParam) as { total_earnings: number; total_executions: number; success_count: number; failure_count: number };
 
   // Active sessions (opened but not ended)
   const activeSessions = db.prepare(`
     SELECT COUNT(DISTINCT session_id) as cnt
     FROM provider_events
     WHERE event_type = 'session.opened'
+      ${identityClause}
       AND session_id NOT IN (
         SELECT DISTINCT session_id FROM provider_events
         WHERE event_type IN ('session.ended', 'session.failed')
           AND session_id IS NOT NULL
+          ${identityClause}
       )
       AND session_id IS NOT NULL
-  `).get() as { cnt: number };
+  `).get(...identityParam, ...identityParam) as { cnt: number };
 
   // Top skills
   const topSkills = db.prepare(`
     SELECT skill_id, COUNT(*) as count, COALESCE(SUM(credits), 0) as earnings
     FROM provider_events
-    WHERE event_type = 'skill.executed' AND created_at >= ? AND skill_id IS NOT NULL
+    WHERE event_type = 'skill.executed' AND created_at >= ? AND skill_id IS NOT NULL ${identityClause}
     GROUP BY skill_id
     ORDER BY count DESC
     LIMIT 10
-  `).all(cutoff) as Array<{ skill_id: string; count: number; earnings: number }>;
+  `).all(cutoff, ...identityParam) as Array<{ skill_id: string; count: number; earnings: number }>;
 
   // Top requesters
   const topRequesters = db.prepare(`
     SELECT requester, COUNT(*) as count
     FROM provider_events
-    WHERE event_type IN ('skill.executed', 'session.opened') AND created_at >= ? AND requester IS NOT NULL
+    WHERE event_type IN ('skill.executed', 'session.opened') AND created_at >= ? AND requester IS NOT NULL ${identityClause}
     GROUP BY requester
     ORDER BY count DESC
     LIMIT 10
-  `).all(cutoff) as Array<{ requester: string; count: number }>;
+  `).all(cutoff, ...identityParam) as Array<{ requester: string; count: number }>;
 
   // Earnings timeline — last 7 days, grouped by date (UTC)
   const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
   const timelineRows = db.prepare(`
     SELECT DATE(created_at) as date, COALESCE(SUM(credits), 0) as earnings
     FROM provider_events
-    WHERE event_type = 'skill.executed' AND created_at >= ?
+    WHERE event_type = 'skill.executed' AND created_at >= ? ${identityClause}
     GROUP BY DATE(created_at)
     ORDER BY date ASC
-  `).all(sevenDaysAgo) as Array<{ date: string; earnings: number }>;
+  `).all(sevenDaysAgo, ...identityParam) as Array<{ date: string; earnings: number }>;
 
   // Fill missing days with 0
   const timelineMap = new Map(timelineRows.map((r) => [r.date, r.earnings]));
@@ -270,5 +358,6 @@ function parseEventRow(row: Record<string, unknown>): ProviderEvent {
     duration_ms: (row['duration_ms'] as number) ?? 0,
     metadata,
     created_at: row['created_at'] as string,
+    agent_id: (row['agent_id'] as string) ?? '',
   };
 }
