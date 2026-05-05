@@ -114,7 +114,9 @@ export default function SkillsInspectorRoute(): JSX.Element {
   );
 
   return (
-    <div className="-mx-4 flex h-[calc(100vh-12rem)] min-h-[600px] animate-hub-fade-up overflow-hidden border-y border-hub-border-hairline">
+    <div className="flex flex-col">
+      <DeprecationBanner />
+      <div className="-mx-4 flex h-[calc(100vh-15rem)] min-h-[560px] animate-hub-fade-up overflow-hidden border-y border-hub-border-hairline">
       {/* Left panel — skill list (sunken back-panel) */}
       <div className="w-[340px] shrink-0 animate-hub-slide-in-left border-r border-hub-border-hairline bg-hub-surface-sunken">
         <SkillList
@@ -173,6 +175,24 @@ export default function SkillsInspectorRoute(): JSX.Element {
           onClose={() => { setSelectedNodeId(null); }}
         />
       )}
+      </div>
+    </div>
+  );
+}
+
+function DeprecationBanner(): JSX.Element {
+  return (
+    <div
+      role="status"
+      className="border-b border-amber-500/30 bg-amber-500/10 px-4 py-2.5 text-[13px] text-amber-100"
+    >
+      <strong className="font-semibold text-amber-50">Deprecated as of v10.</strong>{' '}
+      Skill Inspector is no longer part of the trust surface. AgentBnB v10 ships{' '}
+      <a className="underline decoration-dotted underline-offset-2" href="#/discover">
+        Agent Maturity Rental
+      </a>
+      ; trust now lives on Agent Profiles via Maturity Evidence (ADR-022). This page is kept as a
+      best-effort dev tool until the removal milestone.
     </div>
   );
 }
