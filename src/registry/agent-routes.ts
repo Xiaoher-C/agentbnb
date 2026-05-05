@@ -311,4 +311,249 @@ export async function agentRoutesPlugin(
       },
     });
   });
+
+  /**
+   * GET /api/agents/:agent_id/maturity-evidence — v10 Maturity Evidence (ADR-022).
+   *
+   * Returns the evidence-first signal set used by Hub Agent Profile pages.
+   * Per ADR-022 maturity is NEVER collapsed into a single score — instead we
+   * surface a small set of independently-meaningful evidence categories.
+   *
+   * Public read (no auth) — matches existing GET /api/agents/:owner policy.
+   * Computed on demand (no caching) — v0 is acceptable for current traffic.
+   *
+   * Each rental table query is wrapped in try/catch so an older registry that
+   * has not yet applied the v10 migrations returns zero values instead of 500.
+   */
+  fastify.get('/api/agents/:agent_id/maturity-evidence', {
+    schema: {
+      tags: ['agents'],
+      summary: 'Get v10 Maturity Evidence for an agent (ADR-022)',
+      params: {
+        type: 'object',
+        properties: { agent_id: { type: 'string' } },
+        required: ['agent_id'],
+      },
+      response: {
+        200: { type: 'object', additionalProperties: true },
+        404: { type: 'object', properties: { error: { type: 'string' } } },
+      },
+    },
+  }, async (request, reply) => {
+    const { agent_id } = request.params as { agent_id: string };
+
+    // 404 if agent not found in cards table (matches GET /api/agents/:owner policy).
+    // listCards looks up via both owner column and json_extract(data,'$.agent_id'),
+    // so we accept either form of identifier.
+    const ownerCards = listCards(db, agent_id);
+    if (ownerCards.length === 0) {
+      return reply.code(404).send({ error: 'Agent not found' });
+    }
+
+    const cardIds = ownerCards.map((c) => c.id);
+
+    // --- platform_observed_sessions: ended rental sessions for this agent ---
+    let platformObservedSessions = 0;
+    try {
+      const row = db
+        .prepare<[string], { count: number }>(
+          `SELECT COUNT(*) as count FROM rental_sessions
+           WHERE agent_id = ? AND status IN ('closed', 'settled')`,
+        )
+        .get(agent_id);
+      platformObservedSessions = row?.count ?? 0;
+    } catch {
+      // Table missing on older migrations — treat as zero
+    }
+
+    // --- completed_tasks: completed threads across this agent's sessions ---
+    let completedTasks = 0;
+    try {
+      const row = db
+        .prepare<[string], { count: number }>(
+          `SELECT COUNT(*) as count FROM rental_threads rt
+           INNER JOIN rental_sessions rs ON rs.id = rt.session_id
+           WHERE rs.agent_id = ? AND rt.status = 'completed'`,
+        )
+        .get(agent_id);
+      completedTasks = row?.count ?? 0;
+    } catch {
+      // ignore
+    }
+
+    // --- repeat_renters: distinct renter_did with > 1 session for this agent ---
+    let repeatRenters = 0;
+    try {
+      const row = db
+        .prepare<[string], { count: number }>(
+          `SELECT COUNT(*) as count FROM (
+             SELECT renter_did FROM rental_sessions
+             WHERE agent_id = ?
+             GROUP BY renter_did
+             HAVING COUNT(*) > 1
+           )`,
+        )
+        .get(agent_id);
+      repeatRenters = row?.count ?? 0;
+    } catch {
+      // ignore
+    }
+
+    // --- artifact_examples: top 3 most recently ended outcome pages ---
+    interface ArtifactRow {
+      share_token: string;
+      ended_at: string | null;
+      end_reason: string | null;
+    }
+    let artifactExamples: Array<{
+      share_token: string;
+      ended_at: number;
+      summary: string;
+    }> = [];
+    try {
+      const rows = db
+        .prepare<[string], ArtifactRow>(
+          `SELECT share_token, ended_at, end_reason FROM rental_sessions
+           WHERE agent_id = ? AND status IN ('closed', 'settled') AND share_token IS NOT NULL
+           ORDER BY ended_at DESC
+           LIMIT 3`,
+        )
+        .all(agent_id);
+      artifactExamples = rows.map((r) => ({
+        share_token: r.share_token,
+        ended_at: r.ended_at ? Date.parse(r.ended_at) : 0,
+        summary: r.end_reason ?? 'completed',
+      }));
+    } catch {
+      // ignore
+    }
+
+    // --- verified_tools: distinct tools mentioned in card metadata for this owner ---
+    // Pulls from card-level powered_by[] / metadata.apis_used[] (v1) and from each
+    // skill-level powered_by[] / metadata.apis_used[] (v2). Deduped + sorted.
+    const toolSet = new Set<string>();
+    const collectTools = (
+      poweredBy: ReadonlyArray<{ provider?: string }> | undefined,
+      apisUsed: ReadonlyArray<string> | undefined,
+    ): void => {
+      if (poweredBy) {
+        for (const pb of poweredBy) {
+          if (pb?.provider) toolSet.add(pb.provider);
+        }
+      }
+      if (apisUsed) {
+        for (const api of apisUsed) toolSet.add(api);
+      }
+    };
+
+    for (const card of ownerCards) {
+      collectTools(card.powered_by, card.metadata?.apis_used);
+      const v2Skills = (card as unknown as CapabilityCardV2).skills;
+      if (Array.isArray(v2Skills)) {
+        for (const skill of v2Skills) {
+          collectTools(skill.powered_by, skill.metadata?.apis_used);
+        }
+      }
+    }
+    const verifiedTools = Array.from(toolSet).sort();
+
+    // --- response_reliability: share of completed sessions w/o error end_reason ---
+    let responseReliability = 0;
+    try {
+      const row = db
+        .prepare<[string], { total: number; clean: number }>(
+          `SELECT
+             COUNT(*) as total,
+             SUM(CASE WHEN end_reason IS NULL OR end_reason IN ('completed') THEN 1 ELSE 0 END) as clean
+           FROM rental_sessions
+           WHERE agent_id = ? AND status IN ('closed', 'settled')`,
+        )
+        .get(agent_id);
+      const total = row?.total ?? 0;
+      const clean = row?.clean ?? 0;
+      responseReliability = total > 0 ? clean / total : 0;
+    } catch {
+      // ignore
+    }
+
+    // --- renter rating average + count from rental_ratings ---
+    let renterRatingAvg: number | null = null;
+    let renterRatingCount = 0;
+    try {
+      const row = db
+        .prepare<[string], { avg: number | null; count: number }>(
+          `SELECT AVG(stars) as avg, COUNT(*) as count
+           FROM rental_ratings
+           WHERE rated_agent_id = ?`,
+        )
+        .get(agent_id);
+      renterRatingCount = row?.count ?? 0;
+      renterRatingAvg = renterRatingCount > 0 && row?.avg != null ? row.avg : null;
+    } catch {
+      // ignore
+    }
+
+    // Fallback for fresh agents with no rental sessions: derive response_reliability
+    // from request_log so newly-published agents surface at least one signal.
+    if (platformObservedSessions === 0 && cardIds.length > 0) {
+      try {
+        const placeholders = buildSqlPlaceholders(cardIds.length);
+        const row = db
+          .prepare<string[], { total: number; clean: number }>(
+            `SELECT
+               COUNT(*) as total,
+               SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END) as clean
+             FROM request_log
+             WHERE card_id IN (${placeholders})`,
+          )
+          .get(...cardIds);
+        const total = row?.total ?? 0;
+        const clean = row?.clean ?? 0;
+        if (total > 0) {
+          responseReliability = clean / total;
+        }
+      } catch {
+        // ignore
+      }
+    }
+
+    const evidence = {
+      platform_observed_sessions: platformObservedSessions,
+      completed_tasks: completedTasks,
+      repeat_renters: repeatRenters,
+      artifact_examples: artifactExamples,
+      verified_tools: verifiedTools,
+      response_reliability: responseReliability,
+      renter_rating_avg: renterRatingAvg,
+      renter_rating_count: renterRatingCount,
+    };
+
+    // Flattened evidence_categories for UI rendering. Maturity is intentionally
+    // NOT collapsed into a single number — the UI displays each row as its own
+    // signal (ADR-022).
+    const evidence_categories: Array<{
+      key: string;
+      value: number | string;
+      kind: 'count' | 'rate' | 'avg' | 'list';
+    }> = [
+      { key: 'platform_observed_sessions', value: platformObservedSessions, kind: 'count' },
+      { key: 'completed_tasks', value: completedTasks, kind: 'count' },
+      { key: 'repeat_renters', value: repeatRenters, kind: 'count' },
+      { key: 'artifact_examples', value: artifactExamples.length, kind: 'list' },
+      { key: 'verified_tools', value: verifiedTools.length, kind: 'list' },
+      { key: 'response_reliability', value: responseReliability, kind: 'rate' },
+      {
+        key: 'renter_rating_avg',
+        value: renterRatingAvg ?? 0,
+        kind: 'avg',
+      },
+      { key: 'renter_rating_count', value: renterRatingCount, kind: 'count' },
+    ];
+
+    return reply.send({
+      agent_id,
+      evidence,
+      evidence_categories,
+    });
+  });
 }
