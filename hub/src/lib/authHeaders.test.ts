@@ -17,6 +17,7 @@ import {
   getHubPrivateKey,
   clearHubPrivateKey,
   signRequest,
+  canonicalizeAgentId,
   HubSessionExpiredError,
   type HubSession,
 } from './authHeaders.js';
@@ -133,7 +134,10 @@ describe('authHeaders — signRequest', () => {
 
     const headers = await signRequest('GET', '/me');
     expect(headers).not.toBeNull();
-    expect(headers!['X-Agent-Id']).toBe('agent-abc');
+    // Audit ref: docs/maintenance/2026-04-25-ui-backend-gap-audit.md finding #1.
+    // The wire form must always be the canonical bare 16-hex even when the
+    // session was registered under the historical `agent-<hex>` shape.
+    expect(headers!['X-Agent-Id']).toBe('abc');
     expect(headers!['X-Agent-PublicKey']).toBe('aabbccdd');
     expect(typeof headers!['X-Agent-Signature']).toBe('string');
     expect(typeof headers!['X-Agent-Timestamp']).toBe('string');
@@ -157,6 +161,30 @@ describe('authHeaders — signRequest', () => {
     clearHubPrivateKey();
     await expect(signRequest('GET', '/me')).rejects.toBeInstanceOf(HubSessionExpiredError);
   });
+});
+
+describe('authHeaders — canonicalizeAgentId', () => {
+  it('strips the historical agent- prefix', () => {
+    expect(canonicalizeAgentId('agent-abc1234567890def')).toBe('abc1234567890def');
+  });
+
+  it('returns canonical bare hex unchanged', () => {
+    expect(canonicalizeAgentId('abc1234567890def')).toBe('abc1234567890def');
+  });
+
+  it('is idempotent under repeated application', () => {
+    const once = canonicalizeAgentId('agent-abc1234567890def');
+    expect(canonicalizeAgentId(once)).toBe(once);
+  });
+
+  it('does not strip the prefix when it appears mid-string', () => {
+    expect(canonicalizeAgentId('abagent-cdef')).toBe('abagent-cdef');
+  });
+
+  // The signRequest end-to-end behaviour is asserted in the existing
+  // "signs with the in-memory non-extractable key" test above, which now
+  // expects the canonical bare hex on the wire — wire-format coverage for
+  // the canonicalization fix lives there.
 });
 
 describe('authHeaders — non-extractable import contract', () => {

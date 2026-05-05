@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import type Database from 'better-sqlite3';
 import { verifyEscrowReceipt, signEscrowReceipt } from '../credit/signing.js';
-import { deriveAgentId } from '../identity/identity.js';
+import { canonicalizeAgentId, deriveAgentId } from '../identity/identity.js';
 import { lookupAgent } from '../identity/agent-identity.js';
 
 /** Maximum age of a request timestamp before it is considered expired (5 minutes). */
@@ -108,7 +108,10 @@ async function verifyIdentity(
   const publicKeyHeader = request.headers['x-agent-publickey'] as string | undefined;
   const signatureHeader = request.headers['x-agent-signature'] as string | undefined;
   const timestampHeader = request.headers['x-agent-timestamp'] as string | undefined;
-  const agentId = agentIdHeader?.trim();
+  // Canonicalize incoming agent_id so Hub-first registrations that historically
+  // shipped `agent-<16hex>` still match `deriveAgentId(publicKeyHex)` which
+  // returns the bare 16-hex form. Audit ref: docs/maintenance/2026-04-25-ui-backend-gap-audit.md #1.
+  const agentId = agentIdHeader ? canonicalizeAgentId(agentIdHeader) : undefined;
   const publicKeyHex = publicKeyHeader?.trim();
   const signature = signatureHeader?.trim();
   const timestamp = timestampHeader?.trim();
@@ -295,7 +298,9 @@ export async function tryVerifyIdentity(
   const publicKeyHeader = request.headers['x-agent-publickey'] as string | undefined;
   const signatureHeader = request.headers['x-agent-signature'] as string | undefined;
   const timestampHeader = request.headers['x-agent-timestamp'] as string | undefined;
-  const agentId = agentIdHeader?.trim();
+  // Canonicalize incoming agent_id (strip optional `agent-` prefix). See
+  // canonicalizeAgentId() and the audit doc finding #1 for context.
+  const agentId = agentIdHeader ? canonicalizeAgentId(agentIdHeader) : undefined;
   const publicKeyHex = publicKeyHeader?.trim();
   const signature = signatureHeader?.trim();
   const timestamp = timestampHeader?.trim();
