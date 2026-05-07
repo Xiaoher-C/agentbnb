@@ -1,0 +1,154 @@
+name: Hermes Plugin Release
+
+# Cuts a release of `hermes-plugin/` when a tag of the form
+# `hermes-plugin-vX.Y.Z` is pushed. Builds a tarball, attaches it to a
+# GitHub release, and renders the matching CHANGELOG section as the body.
+#
+# Tag scheme: `hermes-plugin-v0.1.0` (namespaced — does not collide with
+# AgentBnB monorepo main version tags).
+#
+# To cut a release:
+#   1. Bump `version` in `hermes-plugin/pyproject.toml`
+#   2. Add a `## [X.Y.Z]` section in `hermes-plugin/CHANGELOG.md`
+#   3. Commit, then `git tag hermes-plugin-vX.Y.Z && git push origin hermes-plugin-vX.Y.Z`
+#
+# See `hermes-plugin/RELEASE.md` for the full checklist.
+
+on:
+  push:
+    tags:
+      - 'hermes-plugin-v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build and publish hermes-plugin tarball
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Derive version from tag
+        id: version
+        run: |
+          # Tag form: refs/tags/hermes-plugin-vX.Y.Z
+          TAG_NAME="${GITHUB_REF#refs/tags/}"
+          VERSION="${TAG_NAME#hermes-plugin-v}"
+          echo "tag=${TAG_NAME}" >> "$GITHUB_OUTPUT"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "Releasing hermes-plugin v${VERSION} from tag ${TAG_NAME}"
+
+      - name: Verify pyproject.toml version matches tag
+        run: |
+          PYPROJECT_VERSION=$(grep -E '^version\s*=' hermes-plugin/pyproject.toml | head -1 | sed -E 's/.*"([^"]+)".*/\1/')
+          TAG_VERSION="${{ steps.version.outputs.version }}"
+          if [ "$PYPROJECT_VERSION" != "$TAG_VERSION" ]; then
+            echo "::error::pyproject.toml version (${PYPROJECT_VERSION}) does not match tag version (${TAG_VERSION})"
+            exit 1
+          fi
+          echo "Version match confirmed: ${PYPROJECT_VERSION}"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: 'latest'
+
+      - name: Install plugin with dev extras
+        working-directory: hermes-plugin
+        run: uv sync --extra dev
+
+      - name: Run tests
+        working-directory: hermes-plugin
+        run: uv run pytest tests/ -v
+
+      - name: Build release tarball
+        id: build
+        working-directory: hermes-plugin
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          TARBALL="agentbnb-hermes-plugin-${VERSION}.tar.gz"
+          # Stage files under `agentbnb/` so `tar -xzf ... -C $HERMES_PLUGINS_DIR`
+          # extracts to `$HERMES_PLUGINS_DIR/agentbnb/` (matches INSTALL.md path B).
+          STAGE_DIR="$(mktemp -d)/agentbnb"
+          mkdir -p "$STAGE_DIR"
+          cp -R agentbnb_plugin examples "$STAGE_DIR"/
+          cp plugin.yaml pyproject.toml README.md INSTALL.md CONTRIBUTING.md CHANGELOG.md LICENSE "$STAGE_DIR"/
+          tar -czf "${TARBALL}" \
+            --exclude='__pycache__' \
+            --exclude='*.pyc' \
+            --exclude='.pytest_cache' \
+            --exclude='.mypy_cache' \
+            --exclude='.ruff_cache' \
+            --exclude='*.egg-info' \
+            -C "$(dirname "$STAGE_DIR")" \
+            agentbnb
+          ls -lh "${TARBALL}"
+          # Sanity: archive root must contain `agentbnb/plugin.yaml`
+          tar -tzf "${TARBALL}" | grep -q '^agentbnb/plugin.yaml$' || {
+            echo "::error::Tarball layout invalid — expected agentbnb/plugin.yaml at root"
+            exit 1
+          }
+          shasum -a 256 "${TARBALL}" > "${TARBALL}.sha256"
+          cat "${TARBALL}.sha256"
+          echo "tarball_path=hermes-plugin/${TARBALL}" >> "$GITHUB_OUTPUT"
+          echo "sha256_path=hermes-plugin/${TARBALL}.sha256" >> "$GITHUB_OUTPUT"
+
+      - name: Extract release notes from CHANGELOG.md
+        id: notes
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          # Pull the section between `## [VERSION]` and the next `## [`
+          # If awk finds nothing, fall back to a generic body.
+          NOTES=$(awk -v ver="${VERSION}" '
+            $0 ~ "^## \\[" ver "\\]" { capture=1; next }
+            capture && /^## \[/ { capture=0 }
+            capture { print }
+          ' hermes-plugin/CHANGELOG.md)
+          if [ -z "$NOTES" ]; then
+            NOTES="See [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/hermes-plugin/CHANGELOG.md) for details."
+          fi
+          # Persist via heredoc so newlines survive
+          {
+            echo 'body<<EOF'
+            echo "$NOTES"
+            echo ''
+            echo '---'
+            echo ''
+            echo '## Install (pinned tarball)'
+            echo ''
+            echo '```bash'
+            echo "export AGENTBNB_PLUGIN_VERSION=${VERSION}"
+            echo 'curl -fL -o /tmp/agentbnb-hermes-plugin.tar.gz \'
+            echo "  https://github.com/${{ github.repository }}/releases/download/hermes-plugin-v\${AGENTBNB_PLUGIN_VERSION}/agentbnb-hermes-plugin-\${AGENTBNB_PLUGIN_VERSION}.tar.gz"
+            echo 'export HERMES_PLUGINS_DIR=~/.hermes/plugins'
+            echo 'mkdir -p "$HERMES_PLUGINS_DIR"'
+            echo 'tar -xzf /tmp/agentbnb-hermes-plugin.tar.gz -C "$HERMES_PLUGINS_DIR"'
+            echo 'pip install -e "$HERMES_PLUGINS_DIR/agentbnb"'
+            echo '```'
+            echo ''
+            echo "Verify integrity with the accompanying \`agentbnb-hermes-plugin-${VERSION}.tar.gz.sha256\`."
+            echo ''
+            echo 'See [INSTALL.md](https://github.com/${{ github.repository }}/blob/main/hermes-plugin/INSTALL.md) for the fork and submodule install paths.'
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: Hermes Plugin v${{ steps.version.outputs.version }}
+          body: ${{ steps.notes.outputs.body }}
+          draft: false
+          prerelease: ${{ contains(steps.version.outputs.version, '-') }}
+          files: |
+            ${{ steps.build.outputs.tarball_path }}
+            ${{ steps.build.outputs.sha256_path }}
