@@ -258,7 +258,6 @@ export default function DiscoverPage(): JSX.Element {
 
       <RentSessionModal
         agent={rentTarget}
-        renterBalance={null}
         onClose={() => setRentTarget(null)}
       />
     </>
