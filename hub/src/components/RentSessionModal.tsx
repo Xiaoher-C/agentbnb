@@ -1,29 +1,43 @@
 /**
  * RentSessionModal — v10 rental confirmation modal.
  *
- * Renders a duration picker (30 / 60 / 120 min), shows the live cost estimate,
- * checks renter escrow balance, and on confirm POSTs to `/api/sessions` with
- * `session_mode: true` (privacy contract — ADR-024) and navigates to /s/:id.
+ * Renders a duration picker (30 / 60 / 120 min), shows the live cost
+ * breakdown (rate × duration + 10% buffer), enforces a real client-side
+ * escrow balance gate, and on confirm POSTs to `/api/sessions` with
+ * `session_mode: true` (privacy contract — ADR-024) and navigates to
+ * `/s/:id`.
+ *
+ * Balance gate (E4):
+ * - Pulls the spendable balance via `useEscrowBalance()` (calls `/me`).
+ * - Loading → cost row shows a skeleton, Confirm disabled.
+ * - Sufficient → green confirmation with the escrow-hold amount.
+ * - Insufficient → red warning + Topup CTA, Confirm visibly disabled.
+ * - 0 balance → empty-pocket state pointing at provider docs.
+ * - Defensive: even with a passing client-side gate the backend may still
+ *   reject with HTTP 402 if balance changed mid-flight; we surface that as
+ *   an inline error.
  *
  * Dialog UX:
  * - Backdrop click + ESC close the modal
  * - Submit button shows loading state while the request is in flight
- * - Errors surface inline below the action row
  *
- * The `RentableAgent` shape comes from `useRentableAgents`. The `renterDid` is
- * read from the active Hub session — when no session exists, the modal shows
- * a "請先登入" prompt instead of the duration picker.
+ * The `RentableAgent` shape comes from `useRentableAgents`. The `renterDid`
+ * is read from the active Hub session — when no session exists, the modal
+ * shows a "請先登入" prompt instead of the duration picker.
  */
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { X, Shield, Loader2 } from 'lucide-react';
+import { X, Shield, Loader2, AlertTriangle, CheckCircle2, Wallet } from 'lucide-react';
 import { authedFetch, loadSession } from '../lib/authHeaders.js';
+import {
+  BALANCE_CHANGED_EVENT,
+  useEscrowBalance,
+  type EscrowCurrency,
+} from '../hooks/useEscrowBalance.js';
 import type { RentableAgent } from '../hooks/useRentableAgents.js';
 
 interface RentSessionModalProps {
   agent: RentableAgent | null;
-  /** Renter's available credit balance, fetched from /me. null = unknown. */
-  renterBalance?: number | null;
   onClose: () => void;
 }
 
@@ -36,11 +50,43 @@ const DURATION_CHOICES: ReadonlyArray<{ minutes: 30 | 60 | 120; label: string }>
 /** Default fallback rate when an agent has not declared a per-minute price. */
 const FALLBACK_RATE_PER_MINUTE = 1;
 
+/**
+ * Safety buffer applied on top of the literal duration × rate cost. The
+ * backend may settle slightly more than the nominal estimate (rounding,
+ * rate drift inside a session). Holding 10% extra in escrow keeps the
+ * session from dying mid-conversation.
+ */
+export const ESCROW_BUFFER_RATIO = 0.1;
+
+/** Where the user goes to read about earning / topping up credits. */
+const TOPUP_PATH = '/credit-policy';
+
 interface CreateSessionResponse {
   session_id: string;
   share_token: string;
   relay_url: string;
   status: string;
+}
+
+interface CostBreakdown {
+  ratePerMinute: number;
+  duration: 30 | 60 | 120;
+  baseCost: number;
+  buffer: number;
+  total: number;
+}
+
+function computeCost(ratePerMinute: number, duration: 30 | 60 | 120): CostBreakdown {
+  const baseCost = ratePerMinute * duration;
+  // Round buffer up so we never under-hold by a fractional credit.
+  const buffer = Math.ceil(baseCost * ESCROW_BUFFER_RATIO);
+  return {
+    ratePerMinute,
+    duration,
+    baseCost,
+    buffer,
+    total: baseCost + buffer,
+  };
 }
 
 /**
@@ -49,13 +95,15 @@ interface CreateSessionResponse {
  */
 export default function RentSessionModal({
   agent,
-  renterBalance = null,
   onClose,
 }: RentSessionModalProps): JSX.Element | null {
   const navigate = useNavigate();
   const [duration, setDuration] = useState<30 | 60 | 120>(60);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const { balance, loading: balanceLoading, error: balanceError } = useEscrowBalance();
+  const currency: EscrowCurrency = 'credits';
 
   // ESC closes
   useEffect(() => {
@@ -82,18 +130,29 @@ export default function RentSessionModal({
     return agent.pricing.per_minute ?? FALLBACK_RATE_PER_MINUTE;
   }, [agent]);
 
-  const estimatedCost = ratePerMinute * duration;
-  const hasInsufficientBalance =
-    renterBalance !== null && renterBalance >= 0 && estimatedCost > renterBalance;
+  const cost = useMemo(() => computeCost(ratePerMinute, duration), [ratePerMinute, duration]);
 
   const session = loadSession();
   const renterDid = session?.agentId ?? null;
+
+  // Three-state classification — keep `null` as "unknown / loading", treat
+  // 0 as a special empty-pocket case for clearer copy.
+  const balanceUnknown = balance === null;
+  const isEmptyPocket = balance === 0;
+  const isInsufficient = balance !== null && cost.total > balance;
+  const shortfall = isInsufficient && balance !== null ? cost.total - balance : 0;
+  const canConfirm = !submitting && !balanceLoading && !balanceUnknown && !isInsufficient;
 
   if (!agent) return null;
 
   const handleConfirm = async (): Promise<void> => {
     if (!renterDid) {
       setError('請先登入再租用 agent。');
+      return;
+    }
+    if (isInsufficient) {
+      // Defensive — the button should already be disabled.
+      setError(`餘額不足 ${shortfall} credits。`);
       return;
     }
     setSubmitting(true);
@@ -108,11 +167,19 @@ export default function RentSessionModal({
           owner_did: agent.owner_did,
           agent_id: agent.agent_id,
           duration_min: duration,
-          budget_credits: estimatedCost,
+          budget_credits: cost.total,
           // Privacy contract — ADR-024
           session_mode: true,
         }),
       });
+
+      // Race condition: backend may know the renter is broke before we did.
+      if (res.status === 402) {
+        setError('餘額不足以覆蓋這次租用。請先儲值再試。');
+        // Trigger a refresh so the balance row updates.
+        window.dispatchEvent(new Event(BALANCE_CHANGED_EVENT));
+        return;
+      }
 
       if (!res.ok) {
         const text = await res.text();
@@ -120,6 +187,8 @@ export default function RentSessionModal({
       }
 
       const data = (await res.json()) as CreateSessionResponse;
+      // Refresh balance for any other surface watching the credit total.
+      window.dispatchEvent(new Event(BALANCE_CHANGED_EVENT));
       onClose();
       void navigate(`/s/${data.session_id}`);
     } catch (err) {
@@ -202,32 +271,58 @@ export default function RentSessionModal({
             </div>
           </fieldset>
 
-          {/* Cost summary */}
-          <dl className="rounded-lg border border-hub-border bg-white/[0.02] p-4 space-y-2 text-sm">
+          {/* Cost breakdown */}
+          <dl
+            data-testid="rent-cost-breakdown"
+            className="rounded-lg border border-hub-border bg-white/[0.02] p-4 space-y-2 text-sm"
+          >
             <div className="flex items-center justify-between">
               <dt className="text-hub-text-secondary">Rate</dt>
               <dd className="font-mono text-hub-text-primary">
-                cr {ratePerMinute} / min
+                {currency} {cost.ratePerMinute} / min
               </dd>
             </div>
             <div className="flex items-center justify-between">
-              <dt className="text-hub-text-secondary">Estimated cost</dt>
-              <dd className="font-mono text-hub-accent text-base">
-                cr {estimatedCost}
+              <dt className="text-hub-text-secondary">{cost.duration} min × rate</dt>
+              <dd className="font-mono text-hub-text-primary">
+                {currency} {cost.baseCost}
               </dd>
             </div>
-            {renterBalance !== null && (
-              <div className="flex items-center justify-between">
-                <dt className="text-hub-text-secondary">Your balance</dt>
-                <dd
-                  className={`font-mono ${
-                    hasInsufficientBalance ? 'text-amber-400' : 'text-hub-text-primary'
-                  }`}
-                >
-                  cr {renterBalance}
-                </dd>
-              </div>
-            )}
+            <div className="flex items-center justify-between">
+              <dt
+                className="text-hub-text-secondary"
+                title="10% safety buffer held in escrow"
+              >
+                Buffer (10%)
+              </dt>
+              <dd className="font-mono text-hub-text-primary">
+                {currency} {cost.buffer}
+              </dd>
+            </div>
+            <div className="flex items-center justify-between border-t border-hub-border/60 pt-2 mt-1">
+              <dt className="text-hub-text-secondary">Escrow hold</dt>
+              <dd className="font-mono text-hub-accent text-base">
+                {currency} {cost.total}
+              </dd>
+            </div>
+            <div className="flex items-center justify-between">
+              <dt className="text-hub-text-secondary">Your balance</dt>
+              <dd className="font-mono text-hub-text-primary">
+                {balanceLoading ? (
+                  <span
+                    aria-label="Loading balance"
+                    data-testid="balance-skeleton"
+                    className="inline-block h-3 w-16 rounded bg-white/10 animate-pulse"
+                  />
+                ) : balanceUnknown ? (
+                  <span className="text-hub-text-muted">—</span>
+                ) : (
+                  <span className={isInsufficient ? 'text-amber-400' : 'text-hub-text-primary'}>
+                    {currency} {balance}
+                  </span>
+                )}
+              </dd>
+            </div>
           </dl>
 
           {/* Privacy contract reminder */}
@@ -238,12 +333,69 @@ export default function RentSessionModal({
             </span>
           </p>
 
-          {hasInsufficientBalance && (
+          {/* Balance state banner */}
+          {!balanceLoading && balanceError && (
             <p
               role="alert"
               className="text-xs text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded-lg px-3 py-2"
             >
-              餘額不足以涵蓋這次租用。請先儲值或選擇較短的時段。
+              {balanceError}
+            </p>
+          )}
+
+          {!balanceLoading && !balanceUnknown && isEmptyPocket && (
+            <div
+              role="status"
+              data-testid="empty-pocket"
+              className="flex items-start gap-2 text-xs text-amber-200 bg-amber-500/10 border border-amber-500/30 rounded-lg px-3 py-2.5"
+            >
+              <Wallet size={14} className="flex-shrink-0 mt-0.5" />
+              <div className="space-y-1">
+                <p className="font-medium">你的 credit 餘額是 0。</p>
+                <p className="text-amber-200/80 leading-relaxed">
+                  Credits are earned by completing agent work — read the provider guide to start.
+                </p>
+                <a
+                  href={`#${TOPUP_PATH}`}
+                  className="inline-flex items-center gap-1 text-amber-200 hover:text-amber-100 underline underline-offset-2"
+                >
+                  Earn credits →
+                </a>
+              </div>
+            </div>
+          )}
+
+          {!balanceLoading && !balanceUnknown && !isEmptyPocket && isInsufficient && (
+            <div
+              role="alert"
+              data-testid="insufficient-balance"
+              className="flex items-start gap-2 text-xs text-red-200 bg-red-500/10 border border-red-500/40 rounded-lg px-3 py-2.5"
+            >
+              <AlertTriangle size={14} className="flex-shrink-0 mt-0.5 text-red-300" />
+              <div className="space-y-1">
+                <p className="font-medium">
+                  You need {shortfall} more {currency} to start this session.
+                </p>
+                <a
+                  href={`#${TOPUP_PATH}`}
+                  className="inline-flex items-center gap-1 text-red-200 hover:text-red-100 underline underline-offset-2"
+                >
+                  How to top up →
+                </a>
+              </div>
+            </div>
+          )}
+
+          {!balanceLoading && !balanceUnknown && !isInsufficient && (
+            <p
+              data-testid="sufficient-balance"
+              className="flex items-start gap-2 text-xs text-emerald-300 bg-emerald-500/10 border border-emerald-500/30 rounded-lg px-3 py-2"
+            >
+              <CheckCircle2 size={14} className="flex-shrink-0 mt-0.5" />
+              <span>
+                Will hold {cost.total} {currency} in escrow. Unused credits are refunded when the
+                session ends.
+              </span>
             </p>
           )}
 
@@ -269,11 +421,13 @@ export default function RentSessionModal({
           <button
             type="button"
             onClick={() => void handleConfirm()}
-            disabled={submitting || hasInsufficientBalance}
+            disabled={!canConfirm}
+            data-testid="rent-confirm-button"
+            aria-disabled={!canConfirm}
             className="inline-flex items-center gap-2 px-4 py-2 bg-hub-accent text-white text-sm font-medium rounded-lg hover:bg-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             {submitting && <Loader2 size={14} className="animate-spin" />}
-            {submitting ? 'Creating session…' : `Confirm · cr ${estimatedCost}`}
+            {submitting ? 'Creating session…' : `Confirm · ${currency} ${cost.total}`}
           </button>
         </footer>
       </div>
