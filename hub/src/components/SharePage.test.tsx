@@ -16,14 +16,16 @@ describe('SharePage', () => {
     vi.resetAllMocks();
   });
 
-  it('shows "Run agentbnb serve first" when local server unreachable', async () => {
+  it('shows "Local agent runtime not detected" when local server unreachable', async () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('Failed to fetch')));
 
     render(<SharePage apiKey="test-key" />);
 
     await waitFor(() => {
-      // The "Server Not Running" heading appears when unreachable
-      expect(screen.getByText(/Server Not Running/i)).toBeInTheDocument();
+      // v10 reframe: heading no longer says "Server Not Running"
+      expect(
+        screen.getByText(/Local agent runtime not detected/i),
+      ).toBeInTheDocument();
       // The command block contains "agentbnb serve" text
       expect(screen.getAllByText(/agentbnb serve/i).length).toBeGreaterThan(0);
     });
@@ -94,11 +96,16 @@ describe('SharePage', () => {
 
     render(<SharePage apiKey="test-key" />);
 
+    // v10 reframe: publish CTA is "Make my agent rentable"
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: /^Publish$/i })).toBeInTheDocument();
+      expect(
+        screen.getByRole('button', { name: /Make my agent rentable/i }),
+      ).toBeInTheDocument();
     });
 
-    await userEvent.click(screen.getByRole('button', { name: /^Publish$/i }));
+    await userEvent.click(
+      screen.getByRole('button', { name: /Make my agent rentable/i }),
+    );
 
     await waitFor(() => {
       const publishCall = fetchMock.mock.calls.find((c) => {
@@ -122,6 +129,52 @@ describe('SharePage', () => {
     await waitFor(() => {
       expect(screen.getByText(/No draft cards detected/i)).toBeInTheDocument();
     });
+  });
+
+  it('renders the v10 rental framing — heading, privacy contract, RENTAL.md link', async () => {
+    const draftCard = {
+      id: 'draft-1',
+      owner: 'alice',
+      name: 'My GPT Tool',
+      description: 'A great tool',
+      level: 1,
+      inputs: [],
+      outputs: [],
+      pricing: { credits_per_call: 5 },
+      availability: { online: false },
+      metadata: {},
+    };
+
+    const fetchMock = vi.fn();
+    fetchMock.mockResolvedValueOnce({ ok: true, json: async () => ({ status: 'ok' }) });
+    fetchMock.mockResolvedValueOnce({ ok: true, json: async () => ({ cards: [draftCard] }) });
+
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<SharePage apiKey="test-key" />);
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('heading', { name: /Publish your rentable agent/i }),
+      ).toBeInTheDocument();
+    });
+
+    // Privacy contract callout
+    expect(screen.getByText(/租用執行能力，不租用 agent 的腦與鑰匙/)).toBeInTheDocument();
+    expect(screen.getByText(/Tools execute on your machine/i)).toBeInTheDocument();
+
+    // RENTAL.md reference
+    const rentalLink = screen.getByRole('link', { name: /see the example/i });
+    expect(rentalLink).toHaveAttribute(
+      'href',
+      expect.stringContaining('hermes-plugin/examples/RENTAL.md'),
+    );
+
+    // Per-session pricing copy
+    expect(screen.getByText(/Credits per 60-min session/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Price per rental session, not per call/i),
+    ).toBeInTheDocument();
   });
 
   it('uses DID auth flow for draft fetches', async () => {

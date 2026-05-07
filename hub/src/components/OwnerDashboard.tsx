@@ -162,16 +162,16 @@ export default function OwnerDashboard({ apiKey }: OwnerDashboardProps): JSX.Ele
         <EarningsChart requests={requests30d} />
       </div>
 
-      {/* Three-section layout: Published Cards / Recent Requests / Credit Transactions */}
+      {/* Three-section layout: Published Agents / Recent Requests / Credit Transactions */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        {/* Published cards list */}
+        {/* Published agent profiles */}
         <div className="space-y-3">
-          <h3 className="text-sm font-semibold text-hub-text-secondary uppercase tracking-wide">Published Cards</h3>
+          <h3 className="text-sm font-semibold text-hub-text-secondary uppercase tracking-wide">Published Agents</h3>
           {cards.length === 0 ? (
             <div
               className="rounded-lg border border-hub-border px-4 py-6 text-center bg-hub-surface"
             >
-              <p className="text-sm text-hub-text-tertiary">No cards published yet</p>
+              <p className="text-sm text-hub-text-tertiary">No agent published yet</p>
             </div>
           ) : (
             <div className="space-y-2">

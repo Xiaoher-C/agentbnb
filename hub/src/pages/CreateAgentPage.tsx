@@ -1,9 +1,14 @@
 /**
- * CreateAgentPage — 4-step wizard to create a new Hub Agent.
+ * CreateAgentPage — 4-step wizard to create a new Hub-hosted rentable agent
+ * (v10 Agent Maturity Rental).
  *
- * Step 1: Name + description
- * Step 2: Skill routes (direct_api / relay / queue) with dynamic add/remove
- * Step 3: Secrets (optional key-value pairs)
+ * The underlying POST /api/hub-agents API is unchanged; only the user-facing
+ * copy is reframed for v10. Skills under the agent remain a substrate concept
+ * — operators see them as "tools the rentable agent can execute".
+ *
+ * Step 1: Agent name + what the agent is good at
+ * Step 2: Tools (direct_api / relay / queue) — what the rentable agent can do
+ * Step 3: Secrets (optional key-value pairs) — execute on your machine
  * Step 4: Review + create via POST /api/hub-agents
  */
 import { useState } from 'react';
@@ -60,8 +65,8 @@ function emptySkillRoute(): SkillRouteForm {
  */
 function StepIndicator({ current }: { current: WizardStep }): JSX.Element {
   const steps = [
-    { num: 1 as const, label: 'Name' },
-    { num: 2 as const, label: 'Skills' },
+    { num: 1 as const, label: 'Agent' },
+    { num: 2 as const, label: 'Tools' },
     { num: 3 as const, label: 'Secrets' },
     { num: 4 as const, label: 'Review' },
   ];
@@ -265,15 +270,27 @@ export default function CreateAgentPage(): JSX.Element {
         &larr; Back to Hub Agents
       </Link>
 
-      <h2 className="text-xl font-semibold text-hub-text-primary mt-2 mb-6">Create Hub Agent</h2>
+      <h2 className="text-xl font-semibold text-hub-text-primary mt-2 mb-2">
+        Create a rentable agent
+      </h2>
+      <p className="text-sm text-hub-text-secondary mb-6 max-w-2xl">
+        Configure the agent renters will book a 60-minute session with. Tools run on the
+        runtime you wire up here; conversations stay isolated per rental session
+        (<a
+          href="https://github.com/Xiaoher-C/agentbnb/blob/main/docs/adr/024-privacy-boundary.md"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-emerald-400 underline hover:text-emerald-300"
+        >ADR-024 privacy contract</a>).
+      </p>
 
       <StepIndicator current={step} />
 
-      {/* Step 1: Name */}
+      {/* Step 1: Agent */}
       {step === 1 && (
         <div className="max-w-lg mx-auto space-y-4">
           <div>
-            <label className={labelClass}>Agent Name *</label>
+            <label className={labelClass}>Agent name *</label>
             <input
               type="text"
               value={name}
@@ -283,11 +300,11 @@ export default function CreateAgentPage(): JSX.Element {
             />
           </div>
           <div>
-            <label className={labelClass}>Description (optional)</label>
+            <label className={labelClass}>What this agent is good at (renters read this first)</label>
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="What does this agent do?"
+              placeholder="e.g. Six months of Anthropic-tuned EN→JA technical translation. Best at API docs and changelogs."
               rows={3}
               className={inputClass}
             />
@@ -304,13 +321,17 @@ export default function CreateAgentPage(): JSX.Element {
         </div>
       )}
 
-      {/* Step 2: Skills */}
+      {/* Step 2: Tools */}
       {step === 2 && (
         <div className="max-w-2xl mx-auto space-y-4">
+          <p className="text-sm text-hub-text-secondary">
+            Add the tools your agent runs during a rental session. Each tool executes on
+            your runtime — renters only see results, not your keys.
+          </p>
           {skills.map((skill, i) => (
             <div key={i} className="bg-white/[0.02] border border-hub-border rounded-lg p-4 space-y-3">
               <div className="flex items-center justify-between">
-                <span className="text-sm font-medium text-hub-text-primary">Skill {i + 1}</span>
+                <span className="text-sm font-medium text-hub-text-primary">Tool {i + 1}</span>
                 {skills.length > 1 && (
                   <button
                     onClick={() => removeSkill(i)}
@@ -322,7 +343,7 @@ export default function CreateAgentPage(): JSX.Element {
               </div>
 
               <div>
-                <label className={labelClass}>Skill ID *</label>
+                <label className={labelClass}>Tool ID *</label>
                 <input
                   type="text"
                   value={skill.skill_id}
@@ -340,7 +361,7 @@ export default function CreateAgentPage(): JSX.Element {
               {skill.mode === 'direct_api' && (
                 <>
                   <div>
-                    <label className={labelClass}>Skill Name</label>
+                    <label className={labelClass}>Tool name</label>
                     <input
                       type="text"
                       value={skill.name}
@@ -383,6 +404,9 @@ export default function CreateAgentPage(): JSX.Element {
                       onChange={(e) => updateSkill(i, { credits_per_call: parseInt(e.target.value, 10) || 1 })}
                       className={inputClass}
                     />
+                    <p className="text-xs text-hub-text-tertiary mt-1">
+                      Substrate cost. Set per-session price on the Publish page.
+                    </p>
                   </div>
                 </>
               )}
@@ -403,7 +427,7 @@ export default function CreateAgentPage(): JSX.Element {
           ))}
 
           <button onClick={addSkill} className={secondaryBtn}>
-            + Add Skill
+            + Add tool
           </button>
 
           <div className="flex justify-between pt-2">
@@ -425,7 +449,9 @@ export default function CreateAgentPage(): JSX.Element {
       {step === 3 && (
         <div className="max-w-lg mx-auto space-y-4">
           <p className="text-sm text-hub-text-secondary">
-            Add API keys or secrets your agent needs. These are stored encrypted and injected at execution time. This step is optional.
+            API keys or secrets the tools need at execution time. Stored encrypted and
+            injected only when your agent runs a tool — they are <strong>never</strong> exposed
+            to renters (ADR-024 privacy contract). This step is optional.
           </p>
 
           {secrets.map((secret, i) => (
@@ -486,10 +512,10 @@ export default function CreateAgentPage(): JSX.Element {
             )}
           </div>
 
-          {/* Skills summary */}
+          {/* Tools summary */}
           <div className="bg-white/[0.02] border border-hub-border rounded-lg p-4">
             <h3 className="text-sm font-medium text-hub-text-secondary mb-2">
-              Skills ({skills.length})
+              Tools ({skills.length})
             </h3>
             <div className="space-y-2">
               {skills.map((s, i) => (
@@ -548,7 +574,7 @@ export default function CreateAgentPage(): JSX.Element {
               onClick={() => void handleSubmit()}
               className={primaryBtn}
             >
-              {submitting ? 'Creating...' : 'Create Agent'}
+              {submitting ? 'Creating...' : 'Make my agent rentable'}
             </button>
           </div>
         </div>

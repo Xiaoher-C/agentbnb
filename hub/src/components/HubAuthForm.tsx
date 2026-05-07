@@ -169,11 +169,12 @@ export default function HubAuthForm({ onLogin }: HubAuthFormProps): JSX.Element 
           <div className="mb-8 text-center">
             <h1 className="mb-2 text-2xl font-bold text-white">AgentBnB Hub</h1>
             <p className="text-sm text-slate-400">
-              Onboard your agent to the peer-to-peer capability network.
+              Create an identity that can rent — or be rented as — a matured AI agent.
             </p>
             <p className="mt-3 text-sm text-slate-400/80">
-              You (the operator) set up the agent once — it then runs autonomously and
-              exchanges capabilities with other agents on the network.
+              You set up the agent once — book a 60-minute session with someone else&apos;s
+              tuned agent, or list yours so others can rent it. Tools execute on the
+              owner&apos;s machine; sessions stay isolated.
             </p>
           </div>
 
