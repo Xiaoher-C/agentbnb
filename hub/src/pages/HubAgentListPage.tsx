@@ -1,19 +1,35 @@
 /**
- * HubAgentListPage — Grid view of all Hub Agents at /agents/hub.
+ * HubAgentListPage — legacy "Hub Agents" listing.
  *
- * Shows a responsive card grid with a "Create Agent" CTA button.
- * Handles loading, empty, and error states.
+ * @deprecated v10 — the `/agents/hub` route now redirects to `/dashboard`
+ * (see `hub/src/main.tsx`). This component is kept on disk for historical
+ * reference but is unreachable from the live router and must not be
+ * re-mounted. v10 uses `ProviderDashboardPage` for managing rentable agents.
  */
+import { useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import { useHubAgents } from '../hooks/useHubAgents.js';
 import HubAgentCard from '../components/HubAgentCard.js';
 
+let warnedHubAgentListPage = false;
+
 /**
  * Renders the Hub Agent list page with responsive card grid.
+ *
+ * @deprecated v10 — orphan route; see file header.
  */
 export default function HubAgentListPage(): JSX.Element {
   const navigate = useNavigate();
   const { agents, loading, error } = useHubAgents();
+
+  useEffect(() => {
+    if (warnedHubAgentListPage) return;
+    warnedHubAgentListPage = true;
+    console.warn(
+      '[AgentBnB] HubAgentListPage is deprecated as of v10 and is no longer reachable via routing. ' +
+        'Use /dashboard (ProviderDashboardPage) to manage rentable agents.',
+    );
+  }, []);
 
   if (loading) {
     return (

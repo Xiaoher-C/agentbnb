@@ -1,6 +1,9 @@
 /**
- * FleetAgentCard — Displays per-agent metrics in the Fleet Console.
- * Shows health status, success rate, earnings, and failure breakdown.
+ * FleetAgentCard — per-agent tile in My Agent Fleet.
+ *
+ * v10 reframe: shows whether an agent is currently rentable (online + accepting
+ * sessions) or paused, plus session-derived metrics (success rate, hires,
+ * credits earned). Field names on the API are preserved for backward compat.
  */
 
 interface FleetAgentCardProps {
@@ -48,7 +51,7 @@ export default function FleetAgentCard({ agent }: FleetAgentCardProps) {
         <span className={`text-xs px-2 py-0.5 rounded-full ${
           agent.online ? 'bg-emerald-500/10 text-emerald-400' : 'bg-zinc-700/50 text-zinc-400'
         }`}>
-          {agent.online ? 'Online' : 'Offline'}
+          {agent.online ? 'Rentable' : 'Paused'}
         </span>
       </div>
 

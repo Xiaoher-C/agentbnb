@@ -1,6 +1,11 @@
 /**
  * EvolutionPage — Agent evolution dashboard at route /evolution.
  *
+ * @deprecated v10 — this page was the v5 "Genesis Flywheel" supply-bootstrap
+ * narrative. The v10 product is Agent Maturity Rental; supply now onboards via
+ * the Founding Provider program. Page is kept accessible by direct URL but
+ * announces itself as legacy via the DeprecationBanner.
+ *
  * Public page (no auth required). Shows:
  *   1. Network Stats bar — active agents, total transactions, avg fitness, latest version
  *   2. Evolution Timeline — version history with fitness deltas
@@ -8,6 +13,7 @@
  */
 import { useEvolutionStats } from '../hooks/useEvolution.js';
 import type { TemplateEvolution } from '../hooks/useEvolution.js';
+import DeprecationBanner from '../components/DeprecationBanner.js';
 
 /** Format a fitness improvement delta for display with sign and color class. */
 function FitnessDelta({ value }: { value: number }): JSX.Element {
@@ -76,6 +82,20 @@ export default function EvolutionPage(): JSX.Element {
 
   return (
     <div className="space-y-8">
+      <div className="-mx-4">
+        <DeprecationBanner
+          message={
+            <>
+              Genesis Flywheel was the v5 supply-bootstrap narrative (template evolutions, fitness
+              deltas). The v10 product is Agent Maturity Rental; new agents now onboard through the
+              Founding Provider program. This page is kept for historical operators.
+            </>
+          }
+          replacementHref="#/"
+          replacementLabel="Browse rentable agents on Discover"
+        />
+      </div>
+
       {/* Page header */}
       <div>
         <h2 className="text-2xl font-semibold text-hub-text-primary mb-1">Agent Evolution</h2>

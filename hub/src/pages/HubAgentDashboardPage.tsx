@@ -1,14 +1,19 @@
 /**
- * HubAgentDashboardPage — Single Hub Agent operations dashboard at /agents/hub/:agentId.
+ * HubAgentDashboardPage — legacy single-agent operations dashboard.
  *
- * Shows agent header, stats row, skill routes, recent jobs, and delete button.
- * Polls agent data every 30s and jobs every 10s.
+ * @deprecated v10 — the `/agents/hub/:agentId` route now redirects to
+ * `/dashboard` (see `hub/src/main.tsx`). This component is kept on disk for
+ * historical reference but is unreachable from the live router and must not
+ * be re-mounted. v10 uses `ProviderDashboardPage` for managing rentable
+ * agents.
  */
 import { useEffect } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import Avatar from 'boring-avatars';
 import { useHubAgent, useHubAgentJobs } from '../hooks/useHubAgents.js';
 import type { HubAgentJob } from '../types.js';
+
+let warnedHubAgentDashboardPage = false;
 
 /**
  * Converts a date string to a human-readable relative time string.
@@ -60,12 +65,24 @@ function modeBadge(mode: string): { label: string; classes: string } {
 
 /**
  * Renders the Hub Agent operations dashboard.
+ *
+ * @deprecated v10 — orphan route; see file header.
  */
 export default function HubAgentDashboardPage(): JSX.Element {
   const { agentId } = useParams<{ agentId: string }>();
   const navigate = useNavigate();
   const { agent, loading: agentLoading, error: agentError } = useHubAgent(agentId ?? '');
   const { jobs, loading: jobsLoading } = useHubAgentJobs(agentId ?? '');
+
+  // One-time deprecation warning so any stray import surfaces in dev consoles.
+  useEffect(() => {
+    if (warnedHubAgentDashboardPage) return;
+    warnedHubAgentDashboardPage = true;
+    console.warn(
+      '[AgentBnB] HubAgentDashboardPage is deprecated as of v10 and is no longer reachable via routing. ' +
+        'Use /dashboard (ProviderDashboardPage) to manage rentable agents.',
+    );
+  }, []);
 
   // Redirect if no agentId
   useEffect(() => {

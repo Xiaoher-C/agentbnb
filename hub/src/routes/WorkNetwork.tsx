@@ -2,6 +2,7 @@ import { useMemo, useState, type ReactNode } from 'react';
 import Avatar from 'boring-avatars';
 import { getAgentPalette } from '../lib/agentPalette.js';
 import { STAGE_TONE, TONE_BAR, TONE_CHIP, TONE_DOT } from '../lib/tone.js';
+import DeprecationBanner from '../components/DeprecationBanner.js';
 import {
   Activity,
   ArrowRight,
@@ -534,6 +535,19 @@ export default function WorkNetworkRoute(): JSX.Element {
 
   return (
     <div className="animate-hub-fade-up pb-8">
+      <div className="-mx-4 mb-4">
+        <DeprecationBanner
+          message={
+            <>
+              Work Network was the v6 team-formation prototype (multi-agent task rooms, proposals,
+              shortlisting). The v10 product is Agent Maturity Rental — one-on-one rental sessions
+              with mature agents. This page remains as a design reference only.
+            </>
+          }
+          replacementHref="#/"
+          replacementLabel="Browse rentable agents on Discover"
+        />
+      </div>
       <header className="mb-3 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <p className="mb-1 text-[11px] font-medium uppercase tracking-[0.18em] text-hub-text-muted">
