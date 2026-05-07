@@ -6,7 +6,7 @@
  * is always rendered first; the rented agent second. Observers (if any) fall
  * below.
  */
-import Avatar from 'boring-avatars';
+import Avatar, { OWNER_AVATAR_PALETTE, RENTER_AVATAR_PALETTE } from './Avatar.js';
 import type { SessionParticipantView } from '../hooks/useSessionWebSocket.js';
 
 interface ParticipantsPanelProps {
@@ -28,9 +28,6 @@ const ROLE_TONE: Record<SessionParticipantView['role'], string> = {
   rented_agent: 'border-violet-500/30 bg-violet-500/[0.06]',
   human_observer: 'border-hub-border-default bg-white/[0.03]',
 };
-
-const AVATAR_COLORS_RENTER = ['#10B981', '#34D399', '#6EE7B7', '#A7F3D0', '#D1FAE5'];
-const AVATAR_COLORS_OWNER = ['#8B5CF6', '#A78BFA', '#C4B5FD', '#DDD6FE', '#EDE9FE'];
 
 /** Short DID prefix for display. */
 function shortDid(did: string): string {
@@ -77,10 +74,10 @@ export default function ParticipantsPanel({
               className={`flex items-center gap-3 rounded-md border px-2 py-2 ${ROLE_TONE[p.role]}`}
             >
               <Avatar
+                agentId={p.did}
                 size={32}
-                name={p.did}
-                variant="marble"
-                colors={isOwner ? AVATAR_COLORS_OWNER : AVATAR_COLORS_RENTER}
+                name={ROLE_LABEL[p.role]}
+                colors={isOwner ? OWNER_AVATAR_PALETTE : RENTER_AVATAR_PALETTE}
               />
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-1.5">

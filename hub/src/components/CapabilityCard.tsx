@@ -19,10 +19,10 @@
  * (docs/adr/023-session-as-protocol-primitive.md) for the rationale.
  */
 import { useEffect } from 'react';
-import Avatar from 'boring-avatars';
 import { inferCategories } from '../lib/categories.js';
 import { formatCredits } from '../lib/utils.js';
 import type { HubCard } from '../types.js';
+import Avatar from './Avatar.js';
 import CategoryChip from './CategoryChip.js';
 import LevelBadge from './LevelBadge.js';
 import StatusDot from './StatusDot.js';
@@ -76,7 +76,7 @@ export default function CapabilityCard({ card, onClick }: CapabilityCardProps) {
       {/* Header: avatar + name + tier badge */}
       <div className="flex items-start gap-3">
         <div className="flex-shrink-0 mt-0.5">
-          <Avatar size={32} name={card.id} variant="beam" />
+          <Avatar agentId={card.id} size={32} name={card.name} />
         </div>
         <div className="flex-1 min-w-0">
           {/* Row 1: name (left) + tier badge (right) */}

@@ -10,8 +10,8 @@
  * The actual message body is rendered through `MessageRenderer`, which only
  * accepts a strict markdown subset (no raw HTML).
  */
-import Avatar from 'boring-avatars';
 import { useMemo } from 'react';
+import Avatar, { OWNER_AVATAR_PALETTE, RENTER_AVATAR_PALETTE } from './Avatar.js';
 import MessageRenderer from './MessageRenderer.js';
 import HumanInterventionBubble from './HumanInterventionBubble.js';
 import type { SessionMessageView } from '../hooks/useSessionWebSocket.js';
@@ -19,9 +19,6 @@ import type { SessionMessageView } from '../hooks/useSessionWebSocket.js';
 interface SessionMessageProps {
   message: SessionMessageView;
 }
-
-const AVATAR_COLORS_RENTER = ['#10B981', '#34D399', '#6EE7B7', '#A7F3D0', '#D1FAE5'];
-const AVATAR_COLORS_OWNER = ['#8B5CF6', '#A78BFA', '#C4B5FD', '#DDD6FE', '#EDE9FE'];
 
 /** Format an ISO timestamp into a short HH:mm value, falling back to raw input. */
 function formatTime(iso: string): string {
@@ -56,7 +53,7 @@ export default function SessionMessage({ message }: SessionMessageProps): JSX.El
   }, [isProvider, message.is_human_intervention, message.sender_role]);
 
   const avatarSeed = message.sender_did ?? message.sender;
-  const avatarColors = isProvider ? AVATAR_COLORS_OWNER : AVATAR_COLORS_RENTER;
+  const avatarColors = isProvider ? OWNER_AVATAR_PALETTE : RENTER_AVATAR_PALETTE;
 
   // Human intervention: full-width amber treatment, sender label still visible
   if (message.is_human_intervention) {
@@ -78,9 +75,9 @@ export default function SessionMessage({ message }: SessionMessageProps): JSX.El
       <div className={`flex max-w-[85%] gap-2 ${isProvider ? '' : 'flex-row-reverse'}`}>
         <div className="shrink-0 pt-1">
           <Avatar
+            agentId={avatarSeed}
             size={28}
-            name={avatarSeed}
-            variant="marble"
+            name={senderLabel}
             colors={avatarColors}
           />
         </div>

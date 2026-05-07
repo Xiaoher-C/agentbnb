@@ -9,7 +9,7 @@
  */
 import { useEffect } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
-import Avatar from 'boring-avatars';
+import Avatar from '../components/Avatar.js';
 import { useHubAgent, useHubAgentJobs } from '../hooks/useHubAgents.js';
 import type { HubAgentJob } from '../types.js';
 
@@ -157,12 +157,7 @@ export default function HubAgentDashboardPage(): JSX.Element {
 
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 mt-4 mb-6">
-        <Avatar
-          size={48}
-          name={agent.agent_id}
-          variant="beam"
-          colors={['#10B981', '#059669', '#047857', '#065F46', '#064E3B']}
-        />
+        <Avatar agentId={agent.agent_id} size={48} name={agent.name} />
         <div>
           <div className="flex items-center gap-3">
             <h2 className="text-xl font-semibold text-hub-text-primary">{agent.name}</h2>
