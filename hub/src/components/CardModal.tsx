@@ -16,10 +16,10 @@
  */
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
-import Avatar from 'boring-avatars';
 import { inferCategories } from '../lib/categories.js';
 import { formatCredits } from '../lib/utils.js';
 import type { HubCard, RawSkill } from '../types.js';
+import Avatar from './Avatar.js';
 import CategoryChip from './CategoryChip.js';
 import StatusDot from './StatusDot.js';
 import CopyButton from './CopyButton.js';
@@ -258,7 +258,7 @@ export default function CardModal({ card, onClose }: CardModalProps) {
         {/* Header: 48px identicon + name/owner/status */}
         <div className="flex items-start gap-4">
           <div className="flex-shrink-0">
-            <Avatar size={48} name={card.id} variant="beam" />
+            <Avatar agentId={card.id} size={48} name={card.name} />
           </div>
           <div className="flex-1 min-w-0">
             {/* Name row + tier badge */}

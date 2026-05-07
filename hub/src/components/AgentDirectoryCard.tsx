@@ -7,7 +7,7 @@
  * Clicks navigate to `/agents/:owner`. Chips and the tier badge are optional — the tile
  * degrades gracefully when the cross-referenced /cards data is missing.
  */
-import Avatar from 'boring-avatars';
+import Avatar from './Avatar.js';
 import CategoryChip from './CategoryChip.js';
 import type { AgentProfile, Category } from '../types.js';
 
@@ -50,12 +50,7 @@ export default function AgentDirectoryCard({
       {/* Header: avatar + name + optional tier badge */}
       <div className="flex items-start gap-3">
         <div className="flex-shrink-0 mt-0.5">
-          <Avatar
-            size={32}
-            name={agent.owner}
-            variant="marble"
-            colors={['#10B981', '#059669', '#047857', '#065F46', '#064E3B']}
-          />
+          <Avatar agentId={agent.owner} size={32} name={agent.owner} />
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center justify-between gap-2">

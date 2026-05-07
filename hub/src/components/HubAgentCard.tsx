@@ -4,7 +4,7 @@
  * Shows agent name, status badge, skill count with routing mode badges,
  * and creation date. Uses the same dark SaaS aesthetic as CapabilityCard.
  */
-import Avatar from 'boring-avatars';
+import Avatar from './Avatar.js';
 import type { HubAgentSummary } from '../types.js';
 
 interface HubAgentCardProps {
@@ -41,12 +41,7 @@ export default function HubAgentCard({ agent, onClick }: HubAgentCardProps): JSX
       {/* Header: identicon + name + status */}
       <div className="flex items-start gap-3">
         <div className="flex-shrink-0 mt-0.5">
-          <Avatar
-            size={32}
-            name={agent.agent_id}
-            variant="beam"
-            colors={['#10B981', '#059669', '#047857', '#065F46', '#064E3B']}
-          />
+          <Avatar agentId={agent.agent_id} size={32} name={agent.name} />
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">

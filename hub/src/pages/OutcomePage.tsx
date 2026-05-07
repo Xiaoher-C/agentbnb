@@ -14,7 +14,6 @@
  */
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import { useParams } from 'react-router';
-import Avatar from 'boring-avatars';
 import {
   Check,
   CheckCircle2,
@@ -28,6 +27,7 @@ import {
   Star,
   Wallet,
 } from 'lucide-react';
+import Avatar, { OWNER_AVATAR_PALETTE, RENTER_AVATAR_PALETTE } from '../components/Avatar.js';
 import { authedFetch, loadSession } from '../lib/authHeaders.js';
 
 interface OutcomeThread {
@@ -64,9 +64,6 @@ interface OutcomePayload {
   rating: OutcomeRating | null;
   share_token: string;
 }
-
-const AVATAR_COLORS_RENTER = ['#10B981', '#34D399', '#6EE7B7', '#A7F3D0', '#D1FAE5'];
-const AVATAR_COLORS_OWNER = ['#8B5CF6', '#A78BFA', '#C4B5FD', '#DDD6FE', '#EDE9FE'];
 
 function formatDuration(totalSec: number): string {
   if (totalSec < 60) return `${totalSec}s`;
@@ -278,7 +275,7 @@ export default function OutcomePage(): JSX.Element {
           <div className="flex items-center gap-3">
             {renter ? (
               <div className="flex flex-col items-center text-center">
-                <Avatar size={56} name={renter.did} variant="marble" colors={AVATAR_COLORS_RENTER} />
+                <Avatar agentId={renter.did} size={56} name="Renter" colors={RENTER_AVATAR_PALETTE} />
                 <p className="mt-2 text-[11px] uppercase tracking-wider text-hub-text-muted">租用人</p>
                 <p className="font-mono text-[11px] text-hub-text-secondary">{shortDid(renter.did)}</p>
               </div>
@@ -286,7 +283,7 @@ export default function OutcomePage(): JSX.Element {
             <div className="text-2xl text-hub-text-tertiary" aria-hidden="true">×</div>
             {owner ? (
               <div className="flex flex-col items-center text-center">
-                <Avatar size={56} name={owner.did} variant="marble" colors={AVATAR_COLORS_OWNER} />
+                <Avatar agentId={owner.did} size={56} name="Rented agent" colors={OWNER_AVATAR_PALETTE} />
                 <p className="mt-2 text-[11px] uppercase tracking-wider text-hub-text-muted">出租 agent</p>
                 <p className="font-mono text-[11px] text-hub-text-secondary">{shortDid(owner.did)}</p>
               </div>

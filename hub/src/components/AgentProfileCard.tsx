@@ -20,10 +20,10 @@
  *   Tags       skills demoted to chips
  *   Footer     pricing summary       [租用]
  */
-import Avatar from 'boring-avatars';
 import { Star, ExternalLink, Sparkles, Calendar } from 'lucide-react';
 import type { RentableAgent } from '../hooks/useRentableAgents.js';
 import { useMaturityEvidence } from '../hooks/useMaturityEvidence.js';
+import Avatar from './Avatar.js';
 import { Skeleton } from './Skeleton.js';
 
 interface AgentProfileCardProps {
@@ -39,8 +39,6 @@ const RUNTIME_CONFIG = {
   openclaw: { label: 'OpenClaw', cls: 'text-blue-300 border-blue-400/30 bg-blue-400/[0.08]' },
   unknown: { label: '—', cls: 'text-hub-text-muted border-hub-border/60 bg-white/[0.02]' },
 } as const;
-
-const AVATAR_COLORS = ['#10B981', '#059669', '#047857', '#065F46', '#064E3B'];
 
 const MAX_OUTCOMES = 3;
 const MAX_TOOL_CHIPS = 5;
@@ -149,7 +147,7 @@ export default function AgentProfileCard({
       {/* Header: avatar + name + runtime + rating */}
       <header className="flex items-start gap-3">
         <div className="flex-shrink-0 mt-0.5">
-          <Avatar size={36} name={agent.agent_id} variant="marble" colors={AVATAR_COLORS} />
+          <Avatar agentId={agent.agent_id} size={36} name={agent.name} />
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center justify-between gap-2">

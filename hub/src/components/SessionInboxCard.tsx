@@ -10,12 +10,9 @@
  */
 import { useCallback, useState } from 'react';
 import { Link } from 'react-router';
-import Avatar from 'boring-avatars';
 import { ArrowRight, Check, Copy, ExternalLink, Pin } from 'lucide-react';
+import Avatar, { OWNER_AVATAR_PALETTE, RENTER_AVATAR_PALETTE } from './Avatar.js';
 import type { MySessionRow } from '../hooks/useMySessions.js';
-
-const RENTER_PALETTE = ['#10B981', '#34D399', '#6EE7B7', '#A7F3D0', '#D1FAE5'];
-const OWNER_PALETTE = ['#8B5CF6', '#A78BFA', '#C4B5FD', '#DDD6FE', '#EDE9FE'];
 
 const ACTIVE_STATUSES = new Set(['open', 'active', 'paused']);
 
@@ -126,10 +123,20 @@ export default function SessionInboxCard({
         <div className="flex items-start gap-3">
           <div className="flex -space-x-2">
             <span className="rounded-full ring-2 ring-hub-surface-0">
-              <Avatar size={36} name={row.renter_did} variant="beam" colors={RENTER_PALETTE} />
+              <Avatar
+                agentId={row.renter_did}
+                size={36}
+                name="Renter"
+                colors={RENTER_AVATAR_PALETTE}
+              />
             </span>
             <span className="rounded-full ring-2 ring-hub-surface-0">
-              <Avatar size={36} name={row.owner_did} variant="beam" colors={OWNER_PALETTE} />
+              <Avatar
+                agentId={row.owner_did}
+                size={36}
+                name={row.agent_id}
+                colors={OWNER_AVATAR_PALETTE}
+              />
             </span>
           </div>
           <div className="min-w-0">
