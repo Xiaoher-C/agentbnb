@@ -328,6 +328,253 @@ describe('session-routes — paginated messages', () => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// v10 E3 — GET /api/sessions/list (renter/owner inbox endpoint)
+// ---------------------------------------------------------------------------
+
+describe('session-routes — list sessions (E3)', () => {
+  let db: Database.Database;
+  let server: FastifyInstance;
+
+  beforeEach(async () => {
+    db = openDatabase(':memory:');
+    server = await buildServer(db);
+  });
+
+  afterEach(async () => {
+    await server.close();
+    db.close();
+  });
+
+  /** Inserts a session row directly so we can control timestamps & status. */
+  function insertSession(opts: {
+    id: string;
+    renter_did: string;
+    owner_did: string;
+    agent_id?: string;
+    status?: 'open' | 'active' | 'paused' | 'closing' | 'settled' | 'closed';
+    created_at: string;
+    ended_at?: string | null;
+    outcome_json?: string | null;
+  }): void {
+    db.prepare(`
+      INSERT INTO rental_sessions
+        (id, renter_did, owner_did, agent_id, card_id, status, escrow_id,
+         duration_min, budget_credits, spent_credits, current_mode,
+         created_at, started_at, ended_at, end_reason, outcome_json, share_token)
+      VALUES (?, ?, ?, ?, NULL, ?, NULL, 60, 100, 0, 'direct', ?, ?, ?, NULL, ?, ?)
+    `).run(
+      opts.id,
+      opts.renter_did,
+      opts.owner_did,
+      opts.agent_id ?? 'agent-x',
+      opts.status ?? 'active',
+      opts.created_at,
+      opts.created_at,
+      opts.ended_at ?? null,
+      opts.outcome_json ?? null,
+      `share-${opts.id}`,
+    );
+  }
+
+  it('returns 401 when no caller identity header is supplied', async () => {
+    const res = await server.inject({ method: 'GET', url: '/api/sessions/list' });
+    expect(res.statusCode).toBe(401);
+  });
+
+  it('returns only sessions where caller is a participant (privacy contract)', async () => {
+    insertSession({
+      id: 's-1', renter_did: 'did:key:renter-A', owner_did: 'did:key:owner-A',
+      created_at: '2026-05-01T10:00:00.000Z',
+    });
+    insertSession({
+      id: 's-2', renter_did: 'did:key:renter-A', owner_did: 'did:key:owner-B',
+      created_at: '2026-05-02T10:00:00.000Z',
+    });
+    insertSession({
+      id: 's-3', renter_did: 'did:key:renter-B', owner_did: 'did:key:owner-B',
+      created_at: '2026-05-03T10:00:00.000Z',
+    });
+
+    const res = await server.inject({
+      method: 'GET',
+      url: '/api/sessions/list',
+      headers: { 'x-agent-did': 'did:key:renter-A' },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as { sessions: Array<{ id: string }>; next_cursor: string | null };
+    const ids = body.sessions.map(s => s.id);
+    expect(ids).toEqual(['s-2', 's-1']); // newest first
+    expect(ids).not.toContain('s-3');
+  });
+
+  it('filters by role=renter vs role=owner', async () => {
+    insertSession({
+      id: 's-r', renter_did: 'did:key:alice', owner_did: 'did:key:bob',
+      created_at: '2026-05-01T10:00:00.000Z',
+    });
+    insertSession({
+      id: 's-o', renter_did: 'did:key:bob', owner_did: 'did:key:alice',
+      created_at: '2026-05-02T10:00:00.000Z',
+    });
+
+    const asRenter = await server.inject({
+      method: 'GET',
+      url: '/api/sessions/list?role=renter',
+      headers: { 'x-agent-did': 'did:key:alice' },
+    });
+    expect(asRenter.statusCode).toBe(200);
+    const renterBody = asRenter.json() as { sessions: Array<{ id: string }> };
+    expect(renterBody.sessions.map(s => s.id)).toEqual(['s-r']);
+
+    const asOwner = await server.inject({
+      method: 'GET',
+      url: '/api/sessions/list?role=owner',
+      headers: { 'x-agent-did': 'did:key:alice' },
+    });
+    expect(asOwner.statusCode).toBe(200);
+    const ownerBody = asOwner.json() as { sessions: Array<{ id: string }> };
+    expect(ownerBody.sessions.map(s => s.id)).toEqual(['s-o']);
+  });
+
+  it('filters by status=active vs status=ended', async () => {
+    insertSession({
+      id: 's-active', renter_did: 'did:key:me', owner_did: 'did:key:o',
+      status: 'active', created_at: '2026-05-01T10:00:00.000Z',
+    });
+    insertSession({
+      id: 's-paused', renter_did: 'did:key:me', owner_did: 'did:key:o',
+      status: 'paused', created_at: '2026-05-02T10:00:00.000Z',
+    });
+    insertSession({
+      id: 's-closed', renter_did: 'did:key:me', owner_did: 'did:key:o',
+      status: 'closed', created_at: '2026-05-03T10:00:00.000Z',
+      ended_at: '2026-05-03T11:00:00.000Z',
+      outcome_json: JSON.stringify({ summary: { tasks_done: 1 } }),
+    });
+
+    const active = await server.inject({
+      method: 'GET',
+      url: '/api/sessions/list?status=active',
+      headers: { 'x-agent-did': 'did:key:me' },
+    });
+    const activeBody = active.json() as { sessions: Array<{ id: string; has_outcome: boolean }> };
+    expect(activeBody.sessions.map(s => s.id).sort()).toEqual(['s-active', 's-paused']);
+
+    const ended = await server.inject({
+      method: 'GET',
+      url: '/api/sessions/list?status=ended',
+      headers: { 'x-agent-did': 'did:key:me' },
+    });
+    const endedBody = ended.json() as { sessions: Array<{ id: string; has_outcome: boolean; share_token: string | null }> };
+    expect(endedBody.sessions.map(s => s.id)).toEqual(['s-closed']);
+    expect(endedBody.sessions[0].has_outcome).toBe(true);
+    expect(endedBody.sessions[0].share_token).toBe('share-s-closed');
+  });
+
+  it('paginates with cursor across two pages', async () => {
+    for (let i = 0; i < 5; i += 1) {
+      insertSession({
+        id: `s-${i}`,
+        renter_did: 'did:key:p',
+        owner_did: 'did:key:o',
+        created_at: `2026-05-0${i + 1}T10:00:00.000Z`,
+      });
+    }
+
+    const page1 = await server.inject({
+      method: 'GET',
+      url: '/api/sessions/list?limit=2',
+      headers: { 'x-agent-did': 'did:key:p' },
+    });
+    expect(page1.statusCode).toBe(200);
+    const body1 = page1.json() as { sessions: Array<{ id: string }>; next_cursor: string | null };
+    expect(body1.sessions.map(s => s.id)).toEqual(['s-4', 's-3']);
+    expect(body1.next_cursor).toBeTruthy();
+
+    const page2 = await server.inject({
+      method: 'GET',
+      url: `/api/sessions/list?limit=2&cursor=${encodeURIComponent(body1.next_cursor!)}`,
+      headers: { 'x-agent-did': 'did:key:p' },
+    });
+    const body2 = page2.json() as { sessions: Array<{ id: string }>; next_cursor: string | null };
+    expect(body2.sessions.map(s => s.id)).toEqual(['s-2', 's-1']);
+    expect(body2.next_cursor).toBeTruthy();
+
+    const page3 = await server.inject({
+      method: 'GET',
+      url: `/api/sessions/list?limit=2&cursor=${encodeURIComponent(body2.next_cursor!)}`,
+      headers: { 'x-agent-did': 'did:key:p' },
+    });
+    const body3 = page3.json() as { sessions: Array<{ id: string }>; next_cursor: string | null };
+    expect(body3.sessions.map(s => s.id)).toEqual(['s-0']);
+    expect(body3.next_cursor).toBeNull();
+  });
+
+  it('returns empty list + null cursor when caller has no sessions', async () => {
+    insertSession({
+      id: 's-other', renter_did: 'did:key:other', owner_did: 'did:key:o',
+      created_at: '2026-05-01T10:00:00.000Z',
+    });
+
+    const res = await server.inject({
+      method: 'GET',
+      url: '/api/sessions/list',
+      headers: { 'x-agent-did': 'did:key:nobody' },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as { sessions: unknown[]; next_cursor: string | null };
+    expect(body.sessions).toEqual([]);
+    expect(body.next_cursor).toBeNull();
+  });
+
+  it('includes a summary line for ended sessions, null for active ones', async () => {
+    insertSession({
+      id: 's-active', renter_did: 'did:key:me', owner_did: 'did:key:o',
+      status: 'active', created_at: '2026-05-01T10:00:00.000Z',
+    });
+    insertSession({
+      id: 's-done', renter_did: 'did:key:me', owner_did: 'did:key:o',
+      status: 'closed', created_at: '2026-05-02T10:00:00.000Z',
+      ended_at: '2026-05-02T10:30:00.000Z',
+      outcome_json: '{}',
+    });
+    db.prepare(`
+      INSERT INTO rental_threads (id, session_id, title, description, status, created_at, completed_at)
+      VALUES ('t-1', 's-done', 'task', '', 'completed', '2026-05-02T10:05:00.000Z', '2026-05-02T10:25:00.000Z')
+    `).run();
+
+    const res = await server.inject({
+      method: 'GET',
+      url: '/api/sessions/list',
+      headers: { 'x-agent-did': 'did:key:me' },
+    });
+    const body = res.json() as { sessions: Array<{ id: string; summary: string | null; has_outcome: boolean }> };
+    const done = body.sessions.find(s => s.id === 's-done');
+    const active = body.sessions.find(s => s.id === 's-active');
+    expect(done?.summary).toContain('1/1 task');
+    expect(done?.summary).toContain('30 min');
+    expect(done?.has_outcome).toBe(true);
+    expect(active?.summary).toBeNull();
+  });
+
+  it('also accepts x-agent-id header (Hub authedFetch flow)', async () => {
+    insertSession({
+      id: 's-hub', renter_did: 'agent-1234', owner_did: 'did:key:o',
+      created_at: '2026-05-01T10:00:00.000Z',
+    });
+
+    const res = await server.inject({
+      method: 'GET',
+      url: '/api/sessions/list',
+      headers: { 'x-agent-id': 'agent-1234' },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as { sessions: Array<{ id: string }> };
+    expect(body.sessions.map(s => s.id)).toEqual(['s-hub']);
+  });
+});
+
 describe('session-routes — file upload + download', () => {
   let db: Database.Database;
   let server: FastifyInstance;

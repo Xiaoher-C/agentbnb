@@ -144,6 +144,41 @@ interface CreateSessionInput {
   current_mode?: SessionMode;
 }
 
+/**
+ * Filter values for `GET /api/sessions/list?role=...`.
+ *
+ * - `renter` — sessions where the authed identity is `renter_did`
+ * - `owner`  — sessions where the authed identity is `owner_did`
+ * - `either` — sessions where the authed identity is on either side (default)
+ */
+type ListRoleFilter = 'renter' | 'owner' | 'either';
+
+/**
+ * Filter values for `GET /api/sessions/list?status=...`.
+ *
+ * - `active` — sessions that are still live (`open`, `active`, `paused`)
+ * - `ended`  — sessions that have terminated (`closing`, `settled`, `closed`)
+ * - `all`    — no status filter (default)
+ */
+type ListStatusFilter = 'active' | 'ended' | 'all';
+
+/** Row shape returned by `GET /api/sessions/list`. */
+interface SessionListRow {
+  id: string;
+  status: RentalSessionRow['status'];
+  agent_id: string;
+  owner_did: string;
+  renter_did: string;
+  created_at: string;
+  started_at: string | null;
+  ended_at: string | null;
+  duration_min: number;
+  has_outcome: boolean;
+  share_token: string | null;
+  /** One-line summary for ended sessions (e.g. tasks_done + duration). */
+  summary: string | null;
+}
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -269,8 +304,9 @@ function getSessionFilesDir(sessionId: string): string {
 /**
  * Extracts the caller DID from a request.
  *
- * Accepts either:
+ * Accepts (in priority order):
  *   - `x-agent-did: <did>` header (preferred — used by Hub WS clients)
+ *   - `x-agent-id: <id>` header (used by Hub authedFetch — DID auth flow)
  *   - `Authorization: Bearer <did>` (legacy — UCAN/JWT may live here in v2)
  *
  * Returns `null` when no DID can be parsed. Callers must enforce policy.
@@ -279,6 +315,10 @@ function extractCallerDid(request: FastifyRequest): string | null {
   const headerDid = request.headers['x-agent-did'];
   if (typeof headerDid === 'string' && headerDid.length > 0) {
     return headerDid;
+  }
+  const headerAgentId = request.headers['x-agent-id'];
+  if (typeof headerAgentId === 'string' && headerAgentId.length > 0) {
+    return headerAgentId;
   }
   const authz = request.headers.authorization;
   if (typeof authz === 'string' && authz.startsWith('Bearer ')) {
@@ -375,6 +415,90 @@ function decodeCursor(cursor: string | undefined): DecodedCursor | null {
   } catch {
     return null;
   }
+}
+
+// ---------------------------------------------------------------------------
+// Session list helpers (GET /api/sessions/list)
+// ---------------------------------------------------------------------------
+
+const DEFAULT_LIST_LIMIT = 20;
+const MAX_LIST_LIMIT = 100;
+
+/**
+ * Cursor format for the session list: base64url of `${createdAtMs}:${id}`.
+ * Pivots on `created_at` so it aligns with the existing
+ * `rental_sessions_renter_idx` / `rental_sessions_owner_idx` indexes.
+ */
+function encodeListCursor(createdAtIso: string, id: string): string {
+  const ms = Date.parse(createdAtIso);
+  return Buffer.from(`${ms}:${id}`, 'utf8').toString('base64url');
+}
+
+interface DecodedListCursor {
+  createdAtIso: string;
+  id: string;
+}
+
+function decodeListCursor(cursor: string | undefined): DecodedListCursor | null {
+  if (!cursor) return null;
+  try {
+    const decoded = Buffer.from(cursor, 'base64url').toString('utf8');
+    const colon = decoded.indexOf(':');
+    if (colon <= 0) return null;
+    const ms = Number(decoded.slice(0, colon));
+    const id = decoded.slice(colon + 1);
+    if (!Number.isFinite(ms) || !id) return null;
+    return { createdAtIso: new Date(ms).toISOString(), id };
+  } catch {
+    return null;
+  }
+}
+
+const ACTIVE_STATUSES: ReadonlyArray<RentalSessionRow['status']> = ['open', 'active', 'paused'];
+const ENDED_STATUSES: ReadonlyArray<RentalSessionRow['status']> = ['closing', 'settled', 'closed'];
+
+/**
+ * Builds a brief summary line for ended sessions ("3/4 tasks · 42 min").
+ * Returns `null` for active sessions — the UI shows live state instead.
+ */
+function buildSessionSummary(
+  session: RentalSessionRow,
+  threadCount: number,
+  completedCount: number,
+): string | null {
+  if (!ENDED_STATUSES.includes(session.status)) return null;
+
+  const startMs = session.started_at
+    ? Date.parse(session.started_at)
+    : Date.parse(session.created_at);
+  const endMs = session.ended_at ? Date.parse(session.ended_at) : Date.now();
+  const durationMin = Math.max(0, Math.round((endMs - startMs) / 60_000));
+
+  const tasksLabel = threadCount === 0
+    ? '0 tasks'
+    : `${completedCount}/${threadCount} task${threadCount === 1 ? '' : 's'}`;
+  return `${tasksLabel} · ${durationMin} min`;
+}
+
+function rowToListRow(
+  row: RentalSessionRow,
+  threadCount: number,
+  completedCount: number,
+): SessionListRow {
+  return {
+    id: row.id,
+    status: row.status,
+    agent_id: row.agent_id,
+    owner_did: row.owner_did,
+    renter_did: row.renter_did,
+    created_at: row.created_at,
+    started_at: row.started_at,
+    ended_at: row.ended_at,
+    duration_min: row.duration_min,
+    has_outcome: row.outcome_json !== null && row.outcome_json !== '',
+    share_token: row.share_token,
+    summary: buildSessionSummary(row, threadCount, completedCount),
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -478,6 +602,119 @@ export async function sessionRoutesPlugin(
       relay_url: options.relayBaseUrl ?? '/ws',
       status: 'open',
     });
+  });
+
+  // GET /api/sessions/list — list sessions for the authed identity.
+  // Registered BEFORE the `:id` param route so the literal `list` segment is
+  // matched deterministically.
+  fastify.get('/api/sessions/list', {
+    schema: {
+      tags: ['rental-sessions'],
+      summary: 'List rental sessions where the authed identity participates',
+      querystring: {
+        type: 'object',
+        properties: {
+          role: { type: 'string', enum: ['renter', 'owner', 'either'] },
+          status: { type: 'string', enum: ['active', 'ended', 'all'] },
+          limit: { type: 'integer', minimum: 1, maximum: MAX_LIST_LIMIT },
+          cursor: { type: 'string' },
+        },
+      },
+    },
+  }, async (request, reply) => {
+    const callerDid = extractCallerDid(request);
+    if (!callerDid) {
+      return reply.code(401).send({ error: 'Caller identity required (x-agent-did, x-agent-id, or Bearer)' });
+    }
+
+    const query = (request.query ?? {}) as {
+      role?: ListRoleFilter;
+      status?: ListStatusFilter;
+      limit?: number;
+      cursor?: string;
+    };
+    const role: ListRoleFilter = query.role ?? 'either';
+    const status: ListStatusFilter = query.status ?? 'all';
+    const limit = Math.min(query.limit ?? DEFAULT_LIST_LIMIT, MAX_LIST_LIMIT);
+    const decoded = decodeListCursor(query.cursor);
+
+    // Privacy contract (ADR-024): every query is scoped to the authed
+    // identity — a caller can never read sessions they did not participate in.
+    const whereClauses: string[] = [];
+    const params: Array<string | number> = [];
+
+    if (role === 'renter') {
+      whereClauses.push('renter_did = ?');
+      params.push(callerDid);
+    } else if (role === 'owner') {
+      whereClauses.push('owner_did = ?');
+      params.push(callerDid);
+    } else {
+      whereClauses.push('(renter_did = ? OR owner_did = ?)');
+      params.push(callerDid, callerDid);
+    }
+
+    if (status === 'active') {
+      const placeholders = ACTIVE_STATUSES.map(() => '?').join(', ');
+      whereClauses.push(`status IN (${placeholders})`);
+      params.push(...ACTIVE_STATUSES);
+    } else if (status === 'ended') {
+      const placeholders = ENDED_STATUSES.map(() => '?').join(', ');
+      whereClauses.push(`status IN (${placeholders})`);
+      params.push(...ENDED_STATUSES);
+    }
+
+    if (decoded) {
+      // Stable cursor on (created_at DESC, id DESC) — fetch rows strictly
+      // older than the cursor row so identical timestamps sort by id.
+      whereClauses.push('(created_at < ? OR (created_at = ? AND id < ?))');
+      params.push(decoded.createdAtIso, decoded.createdAtIso, decoded.id);
+    }
+
+    const where = `WHERE ${whereClauses.join(' AND ')}`;
+
+    const allParams: Array<string | number> = [...params, limit + 1];
+    const rows = db
+      .prepare<Array<string | number>, RentalSessionRow>(
+        `SELECT * FROM rental_sessions
+         ${where}
+         ORDER BY created_at DESC, id DESC
+         LIMIT ?`,
+      )
+      .all(...allParams);
+
+    const hasMore = rows.length > limit;
+    const page = hasMore ? rows.slice(0, limit) : rows;
+
+    // Aggregate thread counts in a single query (avoids N+1).
+    let threadAggregates: Map<string, { total: number; completed: number }> = new Map();
+    if (page.length > 0) {
+      const ids = page.map(r => r.id);
+      const placeholders = ids.map(() => '?').join(', ');
+      const aggRows = db
+        .prepare<string[], { session_id: string; total: number; completed: number }>(
+          `SELECT session_id,
+                  COUNT(*) AS total,
+                  SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) AS completed
+           FROM rental_threads
+           WHERE session_id IN (${placeholders})
+           GROUP BY session_id`,
+        )
+        .all(...ids);
+      threadAggregates = new Map(
+        aggRows.map(r => [r.session_id, { total: r.total, completed: r.completed }]),
+      );
+    }
+
+    const sessions: SessionListRow[] = page.map(row => {
+      const agg = threadAggregates.get(row.id) ?? { total: 0, completed: 0 };
+      return rowToListRow(row, agg.total, agg.completed);
+    });
+
+    const last = page[page.length - 1];
+    const nextCursor = hasMore && last ? encodeListCursor(last.created_at, last.id) : null;
+
+    return reply.send({ sessions, next_cursor: nextCursor });
   });
 
   // GET /api/sessions/:id — read session metadata
