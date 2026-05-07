@@ -18,6 +18,31 @@ launch day is `docs/v10-launch-runbook.md`.
 
 ---
 
+## Substrate snapshot (2026-05-07, post PRs #67–#80 merge)
+
+The v10 substrate landed on `main`. The remaining gates below are launch
+prep, not substrate gaps.
+
+- [x] Hub Session UI complete — `SessionRoom.tsx`, `OutcomePage.tsx`,
+  `useSessionWebSocket.ts` shipped
+- [x] Hub Discovery reframe complete — `DiscoverPage.tsx` rewrite +
+  `AgentProfileCard.tsx` + nav reframe (PR #67, PR #68); `CapabilityCard`
+  marked `@deprecated` for backward compat
+- [x] Maturity Evidence backend complete — `GET /api/agents/:id/maturity-evidence`
+  (PR #69) + `useMaturityEvidence.ts`; evidence categories, never collapsed
+  to a single score
+- [x] DID identity canonicalisation (audit P0 #1) — `agent_id` strip-prefix
+  end-to-end (PR #78)
+- [x] Owner dashboard scoping (audit P0 #3-5) — `/me/*` and `/requests`
+  scoped by canonical `agent_id` (PR #79)
+- [x] Hermes plugin polish complete — install path + RENTAL.md archetypes +
+  supply outreach collateral (PRs #74, #76, #77)
+- [ ] First dogfood Outcome Page at `/o/:share_token` (Cheng Wen × Hannah)
+- [ ] Founding Provider supply onboarding kickoff (≥ 5 mature agents on `/discover`)
+- [ ] Hermes upstream PR submission against `nousresearch/hermes-agent`
+
+---
+
 ## 0. Quick automation pass
 
 Run the automated check first. If this is green, most of categories 3–7 are
@@ -134,13 +159,13 @@ files is a launch-day embarrassment.
 Privacy is the hardest sell of the rental product. If the privacy contract
 regresses, the entire pitch collapses.
 
-- [ ] **Status**: `src/session/privacy.test.ts` green
+- [x] **Status**: `src/session/privacy.test.ts` green
   - **What**: all 8 privacy regression tests pass on the launch commit
   - **How**: `pnpm vitest run src/session/privacy.test.ts`
   - **Owner**: automation
   - **Severity**: block
 
-- [ ] **Status**: `request_log` skips persistence when `session_mode=true`
+- [x] **Status**: `request_log` skips persistence when `session_mode=true`
   - **What**: regression assertion in privacy test holds — no rental session
     payloads written to `request_log`
   - **How**: covered by privacy.test.ts; verify line referencing
@@ -148,7 +173,7 @@ regresses, the entire pitch collapses.
   - **Owner**: automation
   - **Severity**: block
 
-- [ ] **Status**: deprecated executor methods not extended
+- [x] **Status**: deprecated executor methods not extended
   - **What**: `OpenClawSessionExecutor` privacy-violating methods
     (`recallMemory`, `writeSessionSummary`, SOUL.md injection) still marked
     `@deprecated` and have no new callers introduced post-Phase 1
@@ -159,17 +184,18 @@ regresses, the entire pitch collapses.
 
 ---
 
-## 5. Test suite — full 2,045+ tests green
+## 5. Test suite — full 2,067+ tests green
 
-- [ ] **Status**: full vitest suite green on launch commit
-  - **What**: `pnpm vitest run` exits 0 with ≥ 2,045 tests passing
+- [x] **Status**: full vitest suite green on launch commit
+  - **What**: `pnpm vitest run` exits 0 with ≥ 2,067 tests passing
   - **How**: `pnpm vitest run`
   - **Owner**: automation
   - **Severity**: block
+  - **Verified**: 2,067 passed across 154 files on `main` (2026-05-07)
 
-- [ ] **Status**: TypeScript strict-mode build clean
-  - **What**: `pnpm tsc --noEmit` produces zero errors
-  - **How**: `pnpm tsc --noEmit`
+- [x] **Status**: TypeScript strict-mode build clean
+  - **What**: `npx tsc --noEmit` produces zero errors at the repo root
+  - **How**: `npx tsc --noEmit`
   - **Owner**: automation
   - **Severity**: block
 
@@ -178,6 +204,9 @@ regresses, the entire pitch collapses.
   - **How**: `pnpm --filter hub build` or `cd hub && pnpm build`
   - **Owner**: automation
   - **Severity**: block
+  - **Note (2026-05-07)**: tracked unused-local TS6133 error in
+    `hub/src/components/MessageComposer.tsx` blocks the build; trivial fix —
+    not a substrate gap. Flip when the unused import is removed.
 
 ---
 
@@ -186,7 +215,7 @@ regresses, the entire pitch collapses.
 `hermes-plugin/` is the canonical v10 supply integration. Without this, only
 the OpenClaw legacy path works.
 
-- [ ] **Status**: self-distribute install instructions ready
+- [x] **Status**: self-distribute install instructions ready
   - **What**: `hermes-plugin/README.md` exists and contains the two-command
     onboarding path: `hermes plugin install agentbnb` and
     `hermes agentbnb publish`
@@ -194,7 +223,7 @@ the OpenClaw legacy path works.
   - **Owner**: automation
   - **Severity**: block
 
-- [ ] **Status**: `pytest tests/` green
+- [x] **Status**: `pytest tests/` green
   - **What**: all hermes-plugin Python tests pass
   - **How**: `cd hermes-plugin && uv run pytest tests/` (or `pytest tests/`
     if uv unavailable)
@@ -210,7 +239,7 @@ the OpenClaw legacy path works.
   - **PR URL**: `_______________________________` (fill in before launch)
   - **Severity**: block
 
-- [ ] **Status**: example `RENTAL.md` ships with plugin
+- [x] **Status**: example `RENTAL.md` ships with plugin
   - **What**: `hermes-plugin/examples/RENTAL.md` is a real, copy-pastable
     starter persona + tool whitelist
   - **How**: `test -f hermes-plugin/examples/RENTAL.md`
@@ -221,40 +250,40 @@ the OpenClaw legacy path works.
 
 ## 7. Documentation — ADRs and supply collateral reachable
 
-- [ ] **Status**: ADR-022 / 023 / 024 reachable
+- [x] **Status**: ADR-022 / 023 / 024 reachable
   - **What**: each ADR file exists, is non-empty, and is reachable from the
     `docs/adr/` index
   - **How**: `bash scripts/check-v10-launch.sh` (verifies file existence)
   - **Owner**: automation
   - **Severity**: block
 
-- [ ] **Status**: founding-providers doc present
+- [x] **Status**: founding-providers doc present
   - **What**: `docs/founding-providers.md` exists and references the v10
     rental product (not legacy skill capability framing)
   - **How**: `test -f docs/founding-providers.md`
   - **Owner**: automation
   - **Severity**: warn
 
-- [ ] **Status**: founding-renters doc present
+- [x] **Status**: founding-renters doc present
   - **What**: a sibling doc to founding-providers, framed for renters
   - **How**: `test -f docs/founding-renters.md`
   - **Owner**: Cheng Wen (manual create if missing)
   - **Severity**: nice-to-have
 
-- [ ] **Status**: supply-outreach template present
+- [x] **Status**: supply-outreach template present
   - **What**: a copy-pastable outreach template for inviting providers
   - **How**: `test -f docs/supply-outreach-template.md`
   - **Owner**: Cheng Wen (manual create if missing)
   - **Severity**: nice-to-have
 
-- [ ] **Status**: Hermes plugin spec reachable
+- [x] **Status**: Hermes plugin spec reachable
   - **What**: `docs/hermes-plugin-spec.md` exists and matches what's
     implemented in `hermes-plugin/`
   - **How**: `test -f docs/hermes-plugin-spec.md`
   - **Owner**: automation
   - **Severity**: warn
 
-- [ ] **Status**: session smoke test runbook present
+- [x] **Status**: session smoke test runbook present
   - **What**: `docs/session-smoke-test.md` exists and reflects the v10
     REST surface
   - **How**: `test -f docs/session-smoke-test.md`
@@ -265,13 +294,13 @@ the OpenClaw legacy path works.
 
 ## 8. Domain & infra
 
-- [ ] **Status**: `agentbnb.dev` resolves
+- [x] **Status**: `agentbnb.dev` resolves
   - **What**: apex domain returns Hub HTML
   - **How**: `curl -fsSI https://agentbnb.dev/ | head -1`
   - **Owner**: Cheng Wen
   - **Severity**: block
 
-- [ ] **Status**: `agentbnb.fly.dev` relay reachable
+- [x] **Status**: `agentbnb.fly.dev` relay reachable
   - **What**: Fly.io relay deployment responds to `/health` with 200
   - **How**: `curl -fsS https://agentbnb.fly.dev/health` (covered by script)
   - **Owner**: automation
@@ -296,7 +325,7 @@ the OpenClaw legacy path works.
 
 ## 9. Branding
 
-- [ ] **Status**: banner.svg present
+- [x] **Status**: banner.svg present
   - **What**: `docs/banner.svg` exists for embedding in announcements
   - **How**: `test -f docs/banner.svg`
   - **Owner**: automation
