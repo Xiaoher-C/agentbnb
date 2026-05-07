@@ -1,7 +1,7 @@
 # AgentBnB
 
 [![npm version](https://img.shields.io/npm/v/agentbnb.svg)](https://www.npmjs.com/package/agentbnb)
-[![Tests](https://img.shields.io/badge/tests-2%2C045%20passing-brightgreen.svg)](https://github.com/Xiaoher-C/agentbnb)
+[![Tests](https://img.shields.io/badge/tests-2%2C067%20passing-brightgreen.svg)](https://github.com/Xiaoher-C/agentbnb)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D20-brightgreen.svg)](https://nodejs.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Version](https://img.shields.io/badge/version-v10%20Agent%20Maturity%20Rental-blueviolet.svg)](https://github.com/Xiaoher-C/agentbnb/releases)
@@ -20,7 +20,7 @@
   AgentBnB lets you rent the months of tuning that turn a generic LLM into a coworker.
 </p>
 
-<p align="center"><code>v10 · 2,045 tests · DID + UCAN + VCs · Time-boxed sessions · Privacy-contracted · MIT</code></p>
+<p align="center"><code>v10 · 2,067 tests · DID + UCAN + VCs · Time-boxed sessions · Privacy-contracted · MIT</code></p>
 
 ---
 
@@ -212,7 +212,7 @@ skills/agentbnb/    # OpenClaw plugin (backward-compat supply path)
 
 ```bash
 pnpm install
-pnpm test:run         # 2,045 TypeScript tests
+pnpm test:run         # 2,067 TypeScript tests
 pnpm typecheck
 pnpm build:all
 

@@ -37,7 +37,7 @@
 - [`docs/session-smoke-test.md`](docs/session-smoke-test.md) — end-to-end manual verification
 - Plan file (Cheng Wen's local): `~/.claude/plans/memoized-roaming-finch.md`
 
-**Code surface added in v10** (Phase 0+1, branch `feat/v10-rental-mvp`):
+**Code surface added in v10** (Phase 0+1+2 substrate now on `main` as of 2026-05-05):
 - `src/session/session-types.ts` — extended schema (participants, threads, files, mode, outcome, isolated_memory invariant). Backward compat preserved.
 - `src/session/privacy.test.ts` — privacy contract regression guard (8 tests)
 - `src/sdk/consumer.ts` — `session_mode?: boolean` on ConsumerRequestOptions
@@ -45,12 +45,16 @@
 - `src/registry/request-log.ts` — `InsertRequestLogOptions.sessionMode` skip path
 - `src/session/openclaw-session-executor.ts` — three privacy violations marked `@deprecated` (recallMemory / writeSessionSummary / SOUL.md injection). Do NOT extend; new path is Hermes plugin.
 - `src/registry/session-routes.ts` — REST surface (POST /api/sessions, threads, end, rating, GET /o/:share_token public)
+- `src/registry/agent-routes.ts` — `GET /api/agents/:id/maturity-evidence` (PR #69), agent_id canonicalisation (PR #78), `/me/*` and `/requests` scoping (PR #79)
 - `src/migrations/registry-migrations.ts` — `rental_sessions`, `rental_threads`, `rental_ratings` tables
+- `hermes-plugin/` — Python plugin shipped with self-distribute install path + RENTAL.md archetypes (PRs #74, #76, #77)
+- `hub/src/pages/SessionRoom.tsx`, `OutcomePage.tsx`, `DiscoverPage.tsx` rewrite, `AgentProfileCard.tsx`, `useSessionWebSocket.ts`, `useMaturityEvidence.ts` — Hub Session UI + Discovery reframe + nav reframe (PRs #67, #68)
 
-**Phase 2 in progress** (3 parallel tracks):
-- **Track A** (Hermes plugin, `hermes-plugin/`) — Python plugin per spec, Curated Rental Runner with privacy hooks, Cheng Wen × Hannah dogfood
-- **Track B** (Hub Session UI) — `hub/src/pages/SessionRoom.tsx` + `OutcomePage.tsx` + WebSocket hook
-- **Track C** (Hub Discovery reframe) — `DiscoverPage` rewrite + `AgentProfileCard` (skill → tags)
+**Phase 3 launch prep in progress** (substrate complete, going public):
+- First Cheng Wen × Hannah dogfood outcome page at `/o/:share_token` (gates discovery surface readiness)
+- Founding Provider supply onboarding kickoff (≥ 5 mature agents on `/discover` per launch checklist §1)
+- Hermes upstream PR submission against `nousresearch/hermes-agent` (per launch checklist §6)
+- See [`docs/v10-launch-checklist.md`](docs/v10-launch-checklist.md) for the full pre-launch gate
 
 **Code conventions added in v10**:
 - New rental code paths MUST set `session_mode: true` / `sessionMode: true` so privacy contract is enforced
@@ -77,7 +81,7 @@ AgentBnB is a P2P agent capability sharing protocol. Agent owners publish what t
 ## Current State
 
 - **Version**: 1.0.0 (V1.0 conceptual restart — see [docs/V1.0-RESET.md](docs/V1.0-RESET.md)). v10 pivot is layered on top of V1.0 capability stack — does not bump version, treats the existing identity / escrow / relay as substrate for the new rental product.
-- **Active branch**: `feat/v10-rental-mvp` (5-7 week MVP per plan)
+- **Active branch**: `main` — v10 substrate landed via PRs #67-#80 (merged 2026-05-05). Per-feature branches now cut from `main` (e.g. `feat/v10-e2-*`, `fix/v10-*`).
 - **Internal lineage** (preserved for context): v1.1 → v2.x → v3.0 (SkillExecutor, Conductor, Signed Escrow) → v3.1 (WebSocket Relay) → v4.0 (Agent Economy Platform) → v5.0 (Genesis Flywheel) → v5.1 (OpenClaw Hardening) → v6.0 (Team Formation Protocol) → v7.0 (Agent Economy Infrastructure) → v8.x (V8 Identity Convergence) → v9.x (Agent Identity Protocol) → **v10 (Agent Maturity Rental, 2026-05-04)**.
 - **V1.0 capabilities**: Three-layer identity stack (DID + UCAN + Verifiable Credentials) operational — repurposed as the trust substrate for v10 rentals.
   - DID Envelope (did:key + did:agentbnb, rotation, revocation, EVM bridge) ✅
@@ -85,9 +89,9 @@ AgentBnB is a P2P agent capability sharing protocol. Agent owners publish what t
   - Verifiable Credentials (reputation/skill/team VCs, weekly scheduler, selective disclosure) ✅
   - Cross-Platform Federation (DID rotation, VC presentation, EVM bridge) ✅
   - BLS Team Proofs → roadmap (post-V1.0)
-- **v10 Phase 0+1 complete**: ADRs signed; session schema extended; privacy contract wired; REST surface live; Hermes plugin spec ready.
-- **v10 Phase 2 in progress**: Hermes plugin (`hermes-plugin/`), Hub SessionRoom + OutcomePage, Hub Discovery reframe.
-- **Tests**: 2,038 (was 1,800+; +238 v10 additions including 8 privacy + 8 session-routes lifecycle)
+- **v10 Phase 0+1+2 substrate complete** (merged to `main` 2026-05-05): ADRs signed; session schema extended; privacy contract wired; REST surface live; Hermes plugin shipped; Hub SessionRoom + OutcomePage + Discovery reframe live; Maturity Evidence backend (`/api/agents/:id/maturity-evidence`) live; DID identity canonicalisation + owner dashboard scoping (audit P0 #1, #3-5) shipped.
+- **v10 Phase 3 launch prep in progress**: first dogfood outcome page, supply onboarding (Founding Providers cohort), Hermes upstream PR. Gate is [`docs/v10-launch-checklist.md`](docs/v10-launch-checklist.md).
+- **Tests**: 2,067 passing across 154 files (verified `pnpm vitest run` on `main`; +267 v10 additions including 8 privacy + 8 session-routes lifecycle + maturity evidence + agent-id canonicalisation + owner scoping coverage)
 
 ## Tech Stack
 
