@@ -6,9 +6,9 @@
  *                | Fleet | Credit Policy | Activity
  *
  * v10 Agent Maturity Rental: "My Sessions" (`/sessions`) and "My Outcomes"
- * (`/outcomes`) are the rental-side primary nav entries. The "Publish Skills"
- * dropdown entry is relabelled to "Publish Agent" — the underlying `/share`
- * route is preserved for backward compatibility.
+ * (`/outcomes`) are the rental-side primary nav entries. The dropdown entry
+ * "Publish Agent" (formerly "Publish Skills" pre-v10) — keeps the underlying
+ * `/share` route for backward compatibility.
  *
  * Mobile: Hamburger button opens a vertical drawer with all nav items flat.
  */

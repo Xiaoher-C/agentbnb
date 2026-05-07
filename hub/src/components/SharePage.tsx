@@ -1,15 +1,21 @@
 /**
- * SharePage — The "Share" tab page.
+ * SharePage — The "Publish Agent" page (v10 Agent Maturity Rental).
+ *
+ * Lives at `/share`. Helps an operator turn their locally-running, matured
+ * agent into a rentable Agent Profile. The underlying POST /cards API and
+ * draft schema are unchanged (CapabilityCard remains the substrate); only
+ * the user-facing copy has been reframed for v10.
  *
  * On mount, probes /health with a 2s timeout to detect whether the local
  * AgentBnB server is running.
  *
- * - Server unreachable: shows "Server Not Running" block with agentbnb serve command.
+ * - Server unreachable: shows "Local agent runtime not detected" block.
  * - Server running + apiKey: fetches GET /draft (auth-protected) and displays each
- *   draft card as an editable form (name, description, credits_per_call pre-populated).
- *   "Publish" button sends POST /cards with the edited card data.
+ *   draft as an editable Agent Profile preview (name, description,
+ *   per-session credits pre-populated). "Make my agent rentable" button
+ *   sends POST /cards with the edited payload.
  * - Server running + no draft cards: shows guidance to set API keys.
- * - Server running + no apiKey: shows cards in read-only mode with login prompt.
+ * - Server running + no apiKey: shows read-only mode with login prompt.
  */
 import { useState, useEffect, useCallback } from 'react';
 import type { HubCard } from '../types.js';
@@ -176,10 +182,11 @@ export default function SharePage({ apiKey }: SharePageProps): JSX.Element {
       <div className="rounded-lg border border-slate-700 bg-slate-800/50 px-6 py-8 space-y-4">
         <div className="flex items-center gap-2">
           <span className="h-2.5 w-2.5 rounded-full bg-rose-500 shrink-0" />
-          <h3 className="text-base font-semibold text-slate-200">Server Not Running</h3>
+          <h3 className="text-base font-semibold text-slate-200">Local agent runtime not detected</h3>
         </div>
         <p className="text-sm text-slate-400">
-          Start the local AgentBnB server to publish capabilities and share your agent.
+          Your agent runs on your machine — that&apos;s what keeps the privacy contract intact.
+          Start the local AgentBnB runtime to publish a rentable Agent Profile.
         </p>
         <div className="rounded-md bg-slate-900 px-4 py-3 font-mono text-sm text-emerald-400 select-all">
           agentbnb serve
@@ -197,10 +204,10 @@ export default function SharePage({ apiKey }: SharePageProps): JSX.Element {
       <div className="rounded-lg border border-slate-700 bg-slate-800/50 px-6 py-8 text-center space-y-3">
         <div className="flex items-center justify-center gap-2">
           <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />
-          <p className="text-sm font-medium text-slate-300">Server Running</p>
+          <p className="text-sm font-medium text-slate-300">Local agent runtime detected</p>
         </div>
         <p className="text-sm text-slate-400">
-          Sign in to your dashboard to publish your capabilities.
+          Sign in as the operator to publish a rentable Agent Profile.
         </p>
       </div>
     );
@@ -235,12 +242,12 @@ export default function SharePage({ apiKey }: SharePageProps): JSX.Element {
       <div className="rounded-lg border border-slate-700 bg-slate-800/50 px-6 py-8 space-y-4">
         <div className="flex items-center gap-2">
           <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />
-          <p className="text-sm font-medium text-slate-300">Server Running</p>
+          <p className="text-sm font-medium text-slate-300">Local agent runtime detected</p>
         </div>
         <h3 className="text-base font-semibold text-slate-200">No draft cards detected</h3>
         <p className="text-sm text-slate-400">
-          AgentBnB looks for API keys in your environment to auto-generate draft Capability Cards.
-          Set at least one key (e.g. <code className="text-emerald-400">OPENAI_API_KEY</code>) and restart the server.
+          AgentBnB looks for API keys in your environment to auto-generate a draft Agent Profile.
+          Set at least one key (e.g. <code className="text-emerald-400">OPENAI_API_KEY</code>) and restart the runtime.
         </p>
         <div className="rounded-md bg-slate-900 px-4 py-3 font-mono text-sm text-slate-400">
           OPENAI_API_KEY=sk-... {COMMAND}
@@ -251,9 +258,51 @@ export default function SharePage({ apiKey }: SharePageProps): JSX.Element {
 
   return (
     <div className="space-y-6">
+      {/* v10 framing header */}
+      <header className="space-y-2">
+        <h2 className="text-xl font-semibold text-slate-100">Publish your rentable agent</h2>
+        <p className="text-sm text-slate-400 max-w-2xl">
+          Turn the agent you&apos;ve been tuning into an Agent Profile that other operators
+          can rent for a 60-minute session. Pricing below is per-session, not per-call.
+        </p>
+      </header>
+
+      {/* Privacy contract callout (ADR-024) */}
+      <aside
+        aria-labelledby="privacy-contract-heading"
+        className="rounded-lg border border-emerald-700/40 bg-emerald-950/20 px-4 py-3 space-y-1.5"
+      >
+        <p
+          id="privacy-contract-heading"
+          className="text-xs font-semibold uppercase tracking-wide text-emerald-300"
+        >
+          Privacy contract — 租用執行能力，不租用 agent 的腦與鑰匙
+        </p>
+        <ul className="text-xs text-slate-300/90 space-y-1 list-disc pl-5">
+          <li>Tools execute on your machine. Renters only see results.</li>
+          <li>Each rental session is isolated — conversations never pollute your main agent memory.</li>
+          <li>
+            Curate the persona &amp; tool whitelist via a{' '}
+            <code className="text-emerald-400">RENTAL.md</code> file —{' '}
+            <a
+              href="https://github.com/Xiaoher-C/agentbnb/blob/main/hermes-plugin/examples/RENTAL.md"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-emerald-300 underline hover:text-emerald-200"
+            >
+              see the example
+            </a>
+            .
+          </li>
+        </ul>
+      </aside>
+
       <div className="flex items-center gap-2">
         <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />
-        <p className="text-sm text-slate-400">Server Running — {draftForms.length} draft card{draftForms.length !== 1 ? 's' : ''} ready to publish</p>
+        <p className="text-sm text-slate-400">
+          Local agent runtime detected — {draftForms.length} draft Agent Profile
+          {draftForms.length !== 1 ? 's' : ''} ready to publish
+        </p>
       </div>
 
       {draftForms.map((form) => {
@@ -262,9 +311,9 @@ export default function SharePage({ apiKey }: SharePageProps): JSX.Element {
         return (
           <div key={form.id} className="rounded-lg border border-slate-700 bg-slate-800 p-5 space-y-4">
             <div className="flex items-center justify-between gap-3">
-              <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wide">Draft Card</h3>
+              <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wide">Draft Agent Profile</h3>
               {status === 'done' && (
-                <span className="text-xs font-medium text-emerald-400">Published</span>
+                <span className="text-xs font-medium text-emerald-400">Live — agent is now rentable</span>
               )}
               {status === 'error' && (
                 <span className="text-xs font-medium text-red-400">Publish failed — try again</span>
@@ -274,7 +323,7 @@ export default function SharePage({ apiKey }: SharePageProps): JSX.Element {
             {/* Editable fields */}
             <div className="space-y-3">
               <div>
-                <label className="block text-xs text-slate-500 mb-1">Name</label>
+                <label className="block text-xs text-slate-500 mb-1">Agent name</label>
                 <input
                   type="text"
                   value={form.name}
@@ -283,7 +332,9 @@ export default function SharePage({ apiKey }: SharePageProps): JSX.Element {
                 />
               </div>
               <div>
-                <label className="block text-xs text-slate-500 mb-1">Description</label>
+                <label className="block text-xs text-slate-500 mb-1">
+                  What this agent is good at (renters read this first)
+                </label>
                 <textarea
                   value={form.description}
                   onChange={(e) => { updateForm(form.id, 'description', e.target.value); }}
@@ -292,7 +343,7 @@ export default function SharePage({ apiKey }: SharePageProps): JSX.Element {
                 />
               </div>
               <div>
-                <label className="block text-xs text-slate-500 mb-1">Credits per call</label>
+                <label className="block text-xs text-slate-500 mb-1">Credits per 60-min session</label>
                 <input
                   type="number"
                   min={0}
@@ -300,6 +351,9 @@ export default function SharePage({ apiKey }: SharePageProps): JSX.Element {
                   onChange={(e) => { updateForm(form.id, 'credits_per_call', Number(e.target.value)); }}
                   className="w-32 rounded-md border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-slate-100 focus:border-emerald-500 focus:outline-none"
                 />
+                <p className="text-xs text-slate-500 mt-1">
+                  Price per rental session, not per call. Sessions default to 60 minutes.
+                </p>
               </div>
             </div>
 
@@ -308,7 +362,11 @@ export default function SharePage({ apiKey }: SharePageProps): JSX.Element {
               disabled={status === 'publishing' || status === 'done'}
               className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
-              {status === 'publishing' ? 'Publishing…' : status === 'done' ? 'Published' : 'Publish'}
+              {status === 'publishing'
+                ? 'Publishing…'
+                : status === 'done'
+                  ? 'Live — rentable'
+                  : 'Make my agent rentable'}
             </button>
           </div>
         );
