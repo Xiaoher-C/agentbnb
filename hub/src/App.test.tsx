@@ -100,14 +100,14 @@ describe('App layout shell', () => {
     expect(within().getLink(/Discover/i)).toBeDefined();
   });
 
-  it('renders Network tab in nav', () => {
+  it('does not render the legacy Network tab in top nav (v10 cleanup)', () => {
     renderApp();
-    expect(within().getLink(/Network/i)).toBeDefined();
+    expect(within().getLink(/Network/i)).toBeUndefined();
   });
 
-  it('renders Skill Inspector tab in nav', () => {
+  it('does not render the legacy Skill Inspector tab in top nav (v10 cleanup)', () => {
     renderApp();
-    expect(within().getLink(/Skill Inspector/i)).toBeDefined();
+    expect(within().getLink(/Skill Inspector/i)).toBeUndefined();
   });
 
   it('renders Docs tab in nav', () => {

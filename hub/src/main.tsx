@@ -38,7 +38,6 @@ import OutcomePage from './pages/OutcomePage.js';
 import MySessionsPage from './pages/MySessionsPage.js';
 import MyOutcomesPage from './pages/MyOutcomesPage.js';
 import SkillsInspectorRoute from './routes/SkillsInspector.js';
-import WorkNetworkRoute from './routes/WorkNetwork.js';
 import type { AppOutletContext } from './types.js';
 
 /** Wrapper: reads apiKey from outlet context and passes it to SharePage */
@@ -105,7 +104,9 @@ const router = createHashRouter([
       { path: 'sessions', element: <MySessionsPage /> },
       { path: 'outcomes', element: <MyOutcomesPage /> },
       { path: 'skills-inspector', element: <SkillsInspectorRoute /> },
-      { path: 'work-network', element: <WorkNetworkRoute /> },
+      // /work-network was the v9 predecessor of Discover — redirect to /
+      // (the canonical v10 Discover surface) so existing direct links don't 404.
+      { path: 'work-network', element: <Navigate to="/" replace /> },
       {
         path: 'settings',
         element: <Navigate to="/dashboard" replace />,
