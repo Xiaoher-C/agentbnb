@@ -6,6 +6,7 @@ import { getPricingStats } from './pricing.js';
 import { AgentBnBError, AnyCardSchema } from '../types/index.js';
 import type { CapabilityCard } from '../types/index.js';
 import { tryVerifyIdentity } from './identity-auth.js';
+import { canonicalizeAgentId } from '../identity/identity.js';
 
 // Tier threshold constants — used for trust/reputation tier computation
 const TIER_1_MIN_EXEC = 10;
@@ -414,13 +415,29 @@ export async function cardRoutesPlugin(
       },
     },
   }, async (request: FastifyRequest, reply: FastifyReply) => {
-    // Identity verification — only authenticated agents can publish cards
-    const authResult = await tryVerifyIdentity(request, { agentDb: db });
-    if (!authResult.valid) {
-      return reply.code(401).send({ error: 'Missing or invalid identity headers' });
+    // Accept DID identity headers (Hub flow) or admin Bearer token (legacy CLI
+    // flow). Mirrors /api/request/batch in batch-routes.ts.
+    let authedIdentity: string | null = null;
+    let authMode: 'did' | 'bearer' | null = null;
+
+    const didResult = await tryVerifyIdentity(request, { agentDb: db });
+    if (didResult.valid) {
+      authedIdentity = didResult.agentId;
+      authMode = 'did';
+      request.agentId = didResult.agentId;
+      request.agentPublicKey = didResult.publicKey;
+    } else {
+      const auth = request.headers.authorization;
+      const token = auth?.startsWith('Bearer ') ? auth.slice(7).trim() : null;
+      if (token && ownerApiKey && token === ownerApiKey && ownerName) {
+        authedIdentity = ownerName;
+        authMode = 'bearer';
+      }
     }
-    request.agentId = authResult.agentId;
-    request.agentPublicKey = authResult.publicKey;
+
+    if (!authedIdentity || !authMode) {
+      return reply.code(401).send({ error: 'Valid DID identity headers or admin Bearer token required' });
+    }
 
     const body = request.body as Record<string, unknown>;
     // Default spec_version to '1.0' if missing (AnyCardSchema requires discriminator)
@@ -438,35 +455,44 @@ export async function cardRoutesPlugin(
 
     const card = result.data;
 
-    // Verify the card's owner matches the authenticated agent identity
-    if (card.owner !== authResult.agentId) {
-      return reply.code(401).send({ error: 'Card owner does not match authenticated identity' });
+    // Canonicalize both sides so `agent-<hex>` and bare `<hex>` collapse to the
+    // same key. In Bearer mode also accept the legacy display-name owner.
+    const canonicalAuthedId = canonicalizeAgentId(authedIdentity);
+    const canonicalCardOwner = canonicalizeAgentId(card.owner);
+    const ownerMatchesIdentity = canonicalCardOwner === canonicalAuthedId;
+    const ownerMatchesDisplay = authMode === 'bearer' && card.owner === ownerName;
+    if (!ownerMatchesIdentity && !ownerMatchesDisplay) {
+      return reply.code(403).send({ error: 'Card owner does not match authenticated identity' });
     }
+
+    // Persist `owner` as the canonical authenticated id so owner-scoped queries
+    // resolve consistently. Bearer mode keeps the display name (legacy alias).
+    const ownedCard = { ...card, owner: authMode === 'did' ? canonicalAuthedId : authedIdentity };
     const now = new Date().toISOString();
 
     // Card quality gate — prevent garbage cards on the registry
-    if (card.spec_version === '2.0') {
-      if (!card.skills || card.skills.length === 0) {
+    if (ownedCard.spec_version === '2.0') {
+      if (!ownedCard.skills || ownedCard.skills.length === 0) {
         return reply.code(400).send({ error: 'Card must have at least 1 skill' });
       }
-      const badSkill = card.skills.find((s) => !s.description || s.description.length < 20);
+      const badSkill = ownedCard.skills.find((s) => !s.description || s.description.length < 20);
       if (badSkill) {
         return reply.code(400).send({ error: `Skill "${badSkill.id}" must have a description (20+ chars)` });
       }
-      if (card.agent_name === card.owner || /^[0-9a-f]{16}$/.test(card.agent_name)) {
+      if (ownedCard.agent_name === ownedCard.owner || /^[0-9a-f]{16}$/.test(ownedCard.agent_name)) {
         return reply.code(400).send({ error: 'agent_name must be a readable name, not an ID' });
       }
     } else {
-      if (!card.description || card.description.length < 20) {
+      if (!ownedCard.description || ownedCard.description.length < 20) {
         return reply.code(400).send({ error: 'Card must have a description (20+ chars)' });
       }
     }
 
-    if (card.spec_version === '2.0') {
+    if (ownedCard.spec_version === '2.0') {
       // v2.0 card — raw SQL INSERT OR REPLACE (insertCard only supports v1.0)
       const cardWithTimestamps = attachCanonicalAgentId(db, {
-        ...card,
-        created_at: card.created_at ?? now,
+        ...ownedCard,
+        created_at: ownedCard.created_at ?? now,
         updated_at: now,
       });
       db.prepare(
@@ -482,7 +508,7 @@ export async function cardRoutesPlugin(
     } else {
       // v1.0 card — use existing insertCard with Zod validation
       try {
-        insertCard(db, card);
+        insertCard(db, ownedCard);
       } catch (err) {
         if (err instanceof AgentBnBError && err.code === 'VALIDATION_ERROR') {
           return reply.code(400).send({ error: err.message });
@@ -491,7 +517,7 @@ export async function cardRoutesPlugin(
       }
     }
 
-    return reply.code(201).send({ ok: true, id: card.id });
+    return reply.code(201).send({ ok: true, id: ownedCard.id });
   });
 
   /**
