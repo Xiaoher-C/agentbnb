@@ -1,6 +1,11 @@
 /**
- * FleetConsolePage — Agent Fleet Console for managing multiple AI agents.
- * Shows per-agent health, earnings, and reliability metrics.
+ * FleetConsolePage — operator view of the agents you've made rentable on
+ * AgentBnB. Shows per-agent health, earnings, and reliability metrics.
+ *
+ * v10 reframe: this page was originally the v6/v7 multi-agent "fleet of skill
+ * providers" console. With the Agent Maturity Rental pivot it now answers the
+ * question "how are the agents I rent out doing right now?". Underlying API
+ * (`/api/fleet/:owner`) is unchanged.
  */
 import { useState, useEffect } from 'react';
 import FleetAgentCard from '../components/FleetAgentCard.js';
@@ -65,9 +70,10 @@ export default function FleetConsolePage() {
     <div className="max-w-5xl mx-auto px-4 py-8 space-y-8">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-hub-text-primary">Agent Fleet Console</h1>
+        <h1 className="text-2xl font-bold text-hub-text-primary">My Agent Fleet</h1>
         <p className="text-sm text-hub-text-muted mt-1">
-          Monitor and manage your AI agent fleet — track earnings, health, and reliability across all your agents.
+          Manage the agents you&apos;ve made rentable on AgentBnB — track session earnings,
+          availability, and renter reliability across every agent you operate.
         </p>
       </div>
 
@@ -78,7 +84,7 @@ export default function FleetConsolePage() {
           value={ownerInput}
           onChange={(e) => setOwnerInput(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter') setSearchedOwner(ownerInput.trim()); }}
-          placeholder="Enter agent owner name..."
+          placeholder="Enter your operator handle..."
           className="flex-1 px-4 py-2.5 rounded-lg bg-[#1a1b20] border border-white/[0.08] text-hub-text-primary text-sm placeholder:text-hub-text-muted/40 focus:outline-none focus:border-hub-accent/40"
         />
         <button
@@ -101,9 +107,9 @@ export default function FleetConsolePage() {
       {/* Empty state */}
       {!loading && !error && searchedOwner && agents.length === 0 && (
         <div className="text-center py-12 space-y-2">
-          <div className="text-hub-text-muted">No AI agents found for owner "{searchedOwner}"</div>
+          <div className="text-hub-text-muted">No rentable agents found for &quot;{searchedOwner}&quot;</div>
           <div className="text-xs text-hub-text-muted/60">
-            AI agents appear here after they register with the network.
+            Agents appear here once they&apos;ve been published as rentable on AgentBnB.
           </div>
         </div>
       )}
@@ -112,9 +118,10 @@ export default function FleetConsolePage() {
       {!searchedOwner && !loading && (
         <div className="text-center py-16 space-y-3">
           <div className="text-4xl">🤖</div>
-          <div className="text-hub-text-muted">Enter an agent owner name to view their AI agent fleet</div>
+          <div className="text-hub-text-muted">Enter your operator handle to view your rentable agent fleet</div>
           <div className="text-xs text-hub-text-muted/60">
-            The Fleet Console shows all AI agents registered under a single owner account.
+            My Agent Fleet shows every agent you&apos;ve published as rentable under a single
+            operator account, along with current session activity.
           </div>
         </div>
       )}
@@ -125,19 +132,19 @@ export default function FleetConsolePage() {
           <div className="flex flex-wrap gap-6 p-4 rounded-xl bg-[#141519] border border-white/[0.06]">
             <div className="text-center flex-1 min-w-[100px]">
               <div className="text-2xl font-mono font-semibold text-hub-accent">{agents.length}</div>
-              <div className="text-xs text-hub-text-muted">AI agents</div>
+              <div className="text-xs text-hub-text-muted">Rentable agents</div>
             </div>
             <div className="text-center flex-1 min-w-[100px]">
               <div className="text-2xl font-mono font-semibold text-emerald-400">{onlineCount}</div>
-              <div className="text-xs text-hub-text-muted">Online</div>
+              <div className="text-xs text-hub-text-muted">Available now</div>
             </div>
             <div className="text-center flex-1 min-w-[100px]">
               <div className="text-2xl font-mono font-semibold text-hub-text-primary">{totalEarnings}</div>
-              <div className="text-xs text-hub-text-muted">Total earned</div>
+              <div className="text-xs text-hub-text-muted">Session earnings</div>
             </div>
             <div className="text-center flex-1 min-w-[100px]">
               <div className="text-2xl font-mono font-semibold text-hub-text-primary">{totalSpend}</div>
-              <div className="text-xs text-hub-text-muted">Total spent</div>
+              <div className="text-xs text-hub-text-muted">Spent on rentals</div>
             </div>
           </div>
 
