@@ -14,7 +14,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { HubCard } from '../types.js';
 import { Skeleton } from './Skeleton.js';
-import { authedFetch } from '../lib/authHeaders.js';
+import { authedFetch, canonicalizeAgentId, loadSession } from '../lib/authHeaders.js';
 
 export interface SharePageProps {
   /** Current API key from useAuth(). null when not authenticated. */
@@ -115,14 +115,20 @@ export default function SharePage({ apiKey }: SharePageProps): JSX.Element {
     setPublishStatus((prev) => ({ ...prev, [form.id]: 'publishing' }));
 
     try {
+      const isDid = apiKey === '__did__';
+      // /draft built the card with the server's ownerName. In DID mode the
+      // backend now requires card.owner === authenticated agent_id, so rewrite
+      // it before POSTing.
+      const session = isDid ? loadSession() : null;
+      const owner = session ? canonicalizeAgentId(session.agentId) : form.original.owner;
       const cardPayload: Omit<HubCard, 'id'> = {
         ...form.original,
+        owner,
         name: form.name,
         description: form.description,
         pricing: { ...form.original.pricing, credits_per_call: form.credits_per_call },
       };
 
-      const isDid = apiKey === '__did__';
       const res = isDid
         ? await authedFetch('/cards', {
             method: 'POST',
