@@ -78,7 +78,10 @@ export interface UseSessionWebSocketResult {
   settled: SessionSettlement | null;
   error: string | null;
   /** Send a message in the current session. No-op if socket isn't open. */
-  sendMessage: (content: string, opts?: { threadId?: string | null; isHumanIntervention?: boolean }) => void;
+  sendMessage: (
+    content: string,
+    opts?: { threadId?: string | null; isHumanIntervention?: boolean; attachments?: string[] },
+  ) => void;
   /** Switch interaction mode mid-session. */
   changeMode: (mode: 'direct' | 'proxy') => void;
   /** End the session locally + remotely. */
@@ -327,11 +330,14 @@ export function useSessionWebSocket(
   // -------------------------------------------------------------------------
   const sendMessage = useCallback((
     content: string,
-    opts?: { threadId?: string | null; isHumanIntervention?: boolean },
+    opts?: { threadId?: string | null; isHumanIntervention?: boolean; attachments?: string[] },
   ): void => {
     const ws = wsRef.current;
     if (!ws || ws.readyState !== WebSocket.OPEN) return;
-    if (!content.trim()) return;
+    // Allow attachment-only messages (no text body).
+    const hasContent = content.trim().length > 0;
+    const hasAttachments = (opts?.attachments?.length ?? 0) > 0;
+    if (!hasContent && !hasAttachments) return;
     const payload: Record<string, unknown> = {
       type: 'session_message',
       session_id: sessionId,
@@ -340,6 +346,7 @@ export function useSessionWebSocket(
     };
     if (opts?.threadId) payload.thread_id = opts.threadId;
     if (opts?.isHumanIntervention) payload.is_human_intervention = true;
+    if (hasAttachments) payload.attachments = opts!.attachments;
     ws.send(JSON.stringify(payload));
 
     // Optimistically reflect outbound message in local state

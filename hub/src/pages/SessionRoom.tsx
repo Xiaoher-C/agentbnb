@@ -335,10 +335,14 @@ export default function SessionRoom(): JSX.Element {
             </div>
             <MessageComposer
               sessionId={sessionId}
+              callerDid={session.renter_did}
               disabled={isClosed || ws.status !== 'open'}
               isHumanInterventionMode={mode === 'direct'}
-              onSend={(content) => {
-                ws.sendMessage(content, { isHumanIntervention: mode === 'direct' });
+              onSend={(content, attachments) => {
+                ws.sendMessage(content, {
+                  isHumanIntervention: mode === 'direct',
+                  attachments: attachments.map(a => a.id),
+                });
               }}
             />
           </div>
