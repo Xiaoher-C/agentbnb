@@ -4,11 +4,17 @@
  * Premium dark-SaaS card showing one rentable agent. Per ADR-022, maturity
  * shows up as evidence categories — we never collapse it into a single score.
  *
+ * Evidence is fetched live per card via `useMaturityEvidence` against the
+ * D1 endpoint `GET /api/agents/:agent_id/maturity-evidence`. The upstream
+ * `agent.evidence` (synthesised by `useRentableAgents`) is used as a fallback
+ * while the live fetch is loading or returns 404 (fresh agent).
+ *
  * Layout:
  *   Header     [Avatar] Name · runtime badge        ★ rating
  *              tagline · @owner
- *   Evidence   - platform sessions / completed tasks / repeat renters
- *              - response reliability / renter rating
+ *   Evidence   - past rentals / tasks done / repeat renters
+ *              - response reliability
+ *              - renter rating (avg + count)
  *              - verified tools (chips, max 5)
  *   Outcomes   3 most-recent /o/:share_token links
  *   Tags       skills demoted to chips
@@ -17,6 +23,8 @@
 import Avatar from 'boring-avatars';
 import { Star, ExternalLink, Sparkles, Calendar } from 'lucide-react';
 import type { RentableAgent } from '../hooks/useRentableAgents.js';
+import { useMaturityEvidence } from '../hooks/useMaturityEvidence.js';
+import { Skeleton } from './Skeleton.js';
 
 interface AgentProfileCardProps {
   agent: RentableAgent;
@@ -64,36 +72,71 @@ function formatPricing(pricing: RentableAgent['pricing']): string {
   return parts.length > 0 ? parts.join(' · ') : 'pricing on request';
 }
 
+/** Surface "12" as "12 past rentals" / "1 past rental"; null when zero. */
+function pluralCount(value: number | null, singular: string, plural: string): string | null {
+  if (value === null || value === undefined || value === 0) return null;
+  return `${value} ${value === 1 ? singular : plural}`;
+}
+
 export default function AgentProfileCard({
   agent,
   onRent,
   onView,
 }: AgentProfileCardProps): JSX.Element {
   const runtime = RUNTIME_CONFIG[agent.runtime];
-  const reliabilityPct =
-    agent.evidence.response_reliability != null
-      ? `${Math.round(agent.evidence.response_reliability * 100)}%`
-      : null;
-  const ratingDisplay =
-    agent.evidence.renter_rating != null ? agent.evidence.renter_rating.toFixed(1) : null;
 
-  const tools = agent.evidence.verified_tools.slice(0, MAX_TOOL_CHIPS);
-  const toolsOverflow = agent.evidence.verified_tools.length - tools.length;
+  const {
+    evidence: liveEvidence,
+    loading: evidenceLoading,
+    error: evidenceError,
+  } = useMaturityEvidence(agent.agent_id);
+
+  // Prefer live data; fall back to upstream synthesised evidence while the
+  // per-card request is in-flight or returns a graceful 404 (fresh agent).
+  const platformSessions =
+    liveEvidence?.platform_observed_sessions ?? agent.evidence.platform_sessions;
+  const completedTasks = liveEvidence?.completed_tasks ?? agent.evidence.completed_tasks;
+  const repeatRenters = liveEvidence?.repeat_renters ?? agent.evidence.repeat_renters;
+  const reliability =
+    liveEvidence?.response_reliability ?? agent.evidence.response_reliability;
+  const ratingAvg = liveEvidence?.renter_rating_avg ?? agent.evidence.renter_rating;
+  const ratingCount = liveEvidence?.renter_rating_count ?? 0;
+  const verifiedTools = liveEvidence?.verified_tools ?? agent.evidence.verified_tools;
+  const artifactTokens =
+    liveEvidence?.artifact_examples.map((a) => a.share_token) ?? agent.recent_outcomes;
+
+  const reliabilityPct =
+    reliability != null && reliability > 0 ? `${Math.round(reliability * 100)}%` : null;
+
+  const ratingDisplay = ratingAvg != null ? ratingAvg.toFixed(1) : null;
+  const ratingFullDisplay =
+    ratingDisplay !== null
+      ? ratingCount > 0
+        ? `${ratingDisplay}★ (${ratingCount} rating${ratingCount === 1 ? '' : 's'})`
+        : `${ratingDisplay}★`
+      : 'No ratings yet';
+
+  const tools = verifiedTools.slice(0, MAX_TOOL_CHIPS);
+  const toolsOverflow = verifiedTools.length - tools.length;
 
   const hasAnyEvidence =
-    agent.evidence.platform_sessions !== null ||
-    agent.evidence.completed_tasks !== null ||
-    agent.evidence.repeat_renters !== null ||
-    reliabilityPct !== null ||
-    ratingDisplay !== null ||
-    tools.length > 0;
+    (platformSessions ?? 0) > 0 ||
+    (completedTasks ?? 0) > 0 ||
+    (repeatRenters ?? 0) > 0 ||
+    (reliability ?? 0) > 0 ||
+    (ratingAvg ?? 0) > 0 ||
+    tools.length > 0 ||
+    artifactTokens.length > 0;
 
-  const outcomes = agent.recent_outcomes.slice(0, MAX_OUTCOMES);
+  const outcomes = artifactTokens.slice(0, MAX_OUTCOMES);
+  const outcomesOverflow = artifactTokens.length - outcomes.length;
   const tags = agent.tags.slice(0, MAX_TAG_CHIPS);
   const tagsOverflow = agent.tags.length - tags.length;
 
   // Determine whether to render the outer click handler — disabled if onView is absent
   const cardInteractive = typeof onView === 'function';
+
+  const showEmptyState = !evidenceLoading && !hasAnyEvidence;
 
   return (
     <article
@@ -144,40 +187,68 @@ export default function AgentProfileCard({
         <p className="text-[10px] uppercase tracking-wider text-hub-text-muted">
           Maturity evidence
         </p>
-        <dl className="space-y-1">
-          <EvidenceRow label="Platform sessions" value={agent.evidence.platform_sessions} />
-          <EvidenceRow label="Completed tasks" value={agent.evidence.completed_tasks} />
-          <EvidenceRow label="Repeat renters" value={agent.evidence.repeat_renters} />
-          <EvidenceRow label="Response reliability" value={reliabilityPct} />
-          <EvidenceRow label="Renter rating" value={ratingDisplay} />
-        </dl>
 
-        {tools.length > 0 && (
-          <div className="flex flex-wrap gap-1 pt-1">
-            {tools.map((tool) => (
-              <span
-                key={tool}
-                className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20 text-emerald-300/80"
-              >
-                {tool}
-              </span>
-            ))}
-            {toolsOverflow > 0 && (
-              <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/[0.04] border border-hub-border text-hub-text-muted">
-                +{toolsOverflow}
-              </span>
-            )}
+        {evidenceLoading ? (
+          <div className="space-y-1.5">
+            <Skeleton className="h-3 w-full" />
+            <Skeleton className="h-3 w-3/4" />
+            <Skeleton className="h-3 w-5/6" />
           </div>
+        ) : showEmptyState ? (
+          <p className="text-[11px] text-hub-text-muted italic">
+            New to AgentBnB — no rentals yet.
+          </p>
+        ) : (
+          <>
+            <dl className="space-y-1">
+              <EvidenceRow
+                label="Past rentals"
+                value={pluralCount(platformSessions, 'past rental', 'past rentals')}
+              />
+              <EvidenceRow
+                label="Tasks done"
+                value={pluralCount(completedTasks, 'task done', 'tasks done')}
+              />
+              <EvidenceRow
+                label="Repeat renters"
+                value={pluralCount(repeatRenters, 'repeat renter', 'repeat renters')}
+              />
+              <EvidenceRow
+                label="Response reliability"
+                value={reliabilityPct ?? 'N/A'}
+              />
+              <EvidenceRow label="Renter rating" value={ratingFullDisplay} />
+            </dl>
+
+            {tools.length > 0 && (
+              <div className="flex flex-wrap gap-1 pt-1" aria-label="Verified tools">
+                {tools.map((tool) => (
+                  <span
+                    key={tool}
+                    className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20 text-emerald-300/80"
+                  >
+                    {tool}
+                  </span>
+                ))}
+                {toolsOverflow > 0 && (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/[0.04] border border-hub-border text-hub-text-muted">
+                    +{toolsOverflow}
+                  </span>
+                )}
+              </div>
+            )}
+          </>
         )}
 
-        {!hasAnyEvidence && (
-          <p className="text-[11px] text-hub-text-muted italic">
-            No execution history yet — be the first renter.
+        {/* Surface evidence-fetch errors quietly — UI still renders fallback data */}
+        {evidenceError && !evidenceLoading && (
+          <p className="text-[10px] text-amber-400/70" role="status">
+            Evidence preview is stale.
           </p>
         )}
       </section>
 
-      {/* Recent outcomes */}
+      {/* Recent outcomes — links to /o/:share_token */}
       {outcomes.length > 0 && (
         <section aria-label="Recent outcomes" className="space-y-1.5">
           <p className="text-[10px] uppercase tracking-wider text-hub-text-muted">
@@ -196,6 +267,17 @@ export default function AgentProfileCard({
                 </a>
               </li>
             ))}
+            {outcomesOverflow > 0 && (
+              <li>
+                <a
+                  href={`#/agents/${encodeURIComponent(agent.owner_did)}`}
+                  onClick={(e) => e.stopPropagation()}
+                  className="inline-flex items-center gap-0.5 text-[11px] text-hub-text-muted hover:text-emerald-300 transition-colors"
+                >
+                  View more →
+                </a>
+              </li>
+            )}
           </ul>
         </section>
       )}
